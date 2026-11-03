@@ -157,8 +157,8 @@ final class GoLiveController extends ChangeNotifier {
   /// The texture the sender's own picture is drawn on, decoded from what the
   /// encoder produces (ADR-0001, ADR-0009). Empty between shares, and on a
   /// build that cannot decode.
-  Stream<VideoTexture> get previewTextures =>
-      _preview?.textures ?? const Stream<VideoTexture>.empty();
+  Stream<VideoTexture?> get previewTextures =>
+      _preview?.textures ?? const Stream<VideoTexture?>.empty();
 
   /// Why the sender has no picture of their own share, or null while they
   /// have or could have one.

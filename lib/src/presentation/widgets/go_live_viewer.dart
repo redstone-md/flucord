@@ -155,8 +155,9 @@ class GoLiveTextureViewer extends StatefulWidget {
     super.key,
   });
 
-  /// The texture, each time its picture changes size.
-  final Stream<VideoTexture> textures;
+  /// The texture, each time its picture changes size, or null while there is
+  /// no picture to draw.
+  final Stream<VideoTexture?> textures;
 
   /// Whose stream this is, shown until the first picture arrives.
   final String label;
@@ -166,7 +167,7 @@ class GoLiveTextureViewer extends StatefulWidget {
 }
 
 class _GoLiveTextureViewerState extends State<GoLiveTextureViewer> {
-  StreamSubscription<VideoTexture>? _subscription;
+  StreamSubscription<VideoTexture?>? _subscription;
   VideoTexture? _texture;
 
   @override

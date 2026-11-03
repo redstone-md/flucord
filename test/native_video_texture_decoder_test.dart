@@ -15,7 +15,9 @@ final class _Textures implements NativeVideoTextures {
 
   final bool refuse;
   final List<int> disposed = [];
-  Completer<NativeVideoTexture>? pending;
+
+  /// When set, a texture is ready only once the test completes this.
+  Completer<void>? pending;
   var _next = 7;
 
   @override
@@ -73,7 +75,7 @@ void main() {
 
     final starting = decoder.start();
     await decoder.stop();
-    textures.pending!.complete((id: 0, surface: 0));
+    textures.pending!.complete();
     await starting;
 
     expect(textures.disposed, [7]);

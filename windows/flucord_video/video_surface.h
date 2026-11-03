@@ -1,9 +1,8 @@
 // A decoded picture the interface draws without it passing through Dart.
 //
 // One shared Direct3D texture: a decoder draws each picture into it, and
-// Flutter's engine opens it by its handle and draws it as a texture widget.
-// Copying every 1080p picture through Dart cost 8 MB a frame and could not
-// keep up with 60 frames a second (ADR-0009).
+// Flutter's engine opens it by its handle and draws it as a texture widget
+// (ADR-0009).
 
 #ifndef FLUCORD_VIDEO_SURFACE_H_
 #define FLUCORD_VIDEO_SURFACE_H_

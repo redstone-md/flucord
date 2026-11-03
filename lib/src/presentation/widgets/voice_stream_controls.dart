@@ -12,7 +12,7 @@ import '../../domain/video_decoder.dart';
 final class VoiceSelfPreview {
   const VoiceSelfPreview({required this.textures, this.error});
 
-  final Stream<VideoTexture> textures;
+  final Stream<VideoTexture?> textures;
   final Object? error;
 }
 

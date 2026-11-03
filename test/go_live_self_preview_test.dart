@@ -40,7 +40,7 @@ void main() {
     expect(decoder.submitted, isEmpty);
 
     // The tile comes on screen: the decoder opens and pictures flow.
-    final seen = <VideoTexture>[];
+    final seen = <VideoTexture?>[];
     final watching = preview.textures.listen(seen.add);
     await Future<void>.delayed(Duration.zero);
     expect(preview.isRunning, isTrue);
@@ -146,6 +146,53 @@ void main() {
     decoder.drop(4);
     await Future<void>.delayed(Duration.zero);
     expect(asked, 3);
+  });
+
+  test('a tile that arrives while another still listens is given the '
+      'texture at once', () async {
+    final decoder = FakeVideoDecoder();
+    final preview = GoLiveSelfPreview(decoderFactory: () => decoder);
+    addTearDown(preview.dispose);
+    await preview.start(const Stream.empty());
+    final first = <VideoTexture?>[];
+    final leaving = preview.textures.listen(first.add);
+    await Future<void>.delayed(Duration.zero);
+    decoder.show(_texture);
+    await Future<void>.delayed(Duration.zero);
+
+    // The tile moves from the grid to the stage: the new one listens before
+    // the old one lets go, and the texture's size does not change.
+    final second = <VideoTexture?>[];
+    final arriving = preview.textures.listen(second.add);
+    addTearDown(arriving.cancel);
+    await leaving.cancel();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(second, [_texture]);
+    expect(decoder.started, 1);
+  });
+
+  test('a closed decoder takes its texture off the tile', () async {
+    final decoder = FakeVideoDecoder();
+    final window = WindowVisible();
+    final preview = GoLiveSelfPreview(
+      decoderFactory: () => decoder,
+      window: window,
+    );
+    addTearDown(preview.dispose);
+    await preview.start(const Stream.empty());
+    final seen = <VideoTexture?>[];
+    final watching = preview.textures.listen(seen.add);
+    addTearDown(watching.cancel);
+    await Future<void>.delayed(Duration.zero);
+    decoder.show(_texture);
+    await Future<void>.delayed(Duration.zero);
+
+    // The texture is given back with the decoder; drawing its old id would
+    // show a blank tile instead of a waiting one.
+    window.setFocused(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(seen, [_texture, null]);
   });
 
   test('a window behind the game, or minimized, pays no decoder', () async {

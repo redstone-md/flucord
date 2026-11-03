@@ -303,46 +303,55 @@ void main() {
   });
 
   group('texture viewer', () {
-    testWidgets('waits for its first picture, then draws the texture at the '
-        'picture\'s size', (tester) async {
-      // Delivered at once, so each pump draws what was just shown.
-      final textures = StreamController<VideoTexture>.broadcast(sync: true);
-      addTearDown(textures.close);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: GoLiveTextureViewer(
-            textures: textures.stream,
-            label: 'your stream',
+    testWidgets(
+      'waits for its first picture, draws the texture at the picture\'s '
+      'size, and stops when it is given back',
+      (tester) async {
+        // Delivered at once, so each pump draws what was just shown.
+        final textures = StreamController<VideoTexture?>.broadcast(sync: true);
+        addTearDown(textures.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: FlucordTheme.dark,
+            home: GoLiveTextureViewer(
+              textures: textures.stream,
+              label: 'your stream',
+            ),
           ),
-        ),
-      );
-      expect(find.text('Waiting for your stream'), findsOneWidget);
+        );
+        expect(find.text('Waiting for your stream'), findsOneWidget);
 
-      textures.add(const VideoTexture(id: 5, width: 1920, height: 1080));
-      await tester.pump();
-      final texture = tester.widget<Texture>(find.byType(Texture));
-      expect(texture.textureId, 5);
-      final picture = tester.getSize(
-        find.ancestor(
-          of: find.byType(Texture),
-          matching: find.byType(SizedBox),
-        ),
-      );
-      expect(picture, const Size(1920, 1080));
-
-      // A resize keeps the texture and changes the shape.
-      textures.add(const VideoTexture(id: 5, width: 1280, height: 720));
-      await tester.pump();
-      expect(
-        tester.getSize(
+        textures.add(const VideoTexture(id: 5, width: 1920, height: 1080));
+        await tester.pump();
+        final texture = tester.widget<Texture>(find.byType(Texture));
+        expect(texture.textureId, 5);
+        final picture = tester.getSize(
           find.ancestor(
             of: find.byType(Texture),
             matching: find.byType(SizedBox),
           ),
-        ),
-        const Size(1280, 720),
-      );
-    });
+        );
+        expect(picture, const Size(1920, 1080));
+
+        // A resize keeps the texture and changes the shape.
+        textures.add(const VideoTexture(id: 5, width: 1280, height: 720));
+        await tester.pump();
+        expect(
+          tester.getSize(
+            find.ancestor(
+              of: find.byType(Texture),
+              matching: find.byType(SizedBox),
+            ),
+          ),
+          const Size(1280, 720),
+        );
+
+        // A texture given back is not drawn: its id names nothing any more.
+        textures.add(null);
+        await tester.pump();
+        expect(find.byType(Texture), findsNothing);
+        expect(find.text('Waiting for your stream'), findsOneWidget);
+      },
+    );
   });
 }

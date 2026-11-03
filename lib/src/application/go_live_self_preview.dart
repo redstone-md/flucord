@@ -15,9 +15,7 @@ import 'window_visible.dart';
 /// never answered, so the preview is what left the encoder, and the pace line
 /// is what says whether it also left the machine.
 ///
-/// The pictures are drawn on a texture, never handed to Dart: a 1080p picture
-/// is 8 MB, and sixty of them a second through the main isolate is what made
-/// the preview fall apart at 60 fps (ADR-0009).
+/// The pictures are drawn on a texture, never handed to Dart (ADR-0009).
 ///
 /// Decoded only while somebody is listening on [textures] and the window is
 /// being looked at: a sender who has moved to another channel, or who is in
@@ -50,22 +48,31 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       onListen: _wanted,
       onCancel: _unwanted,
     );
-    textures = _textures.stream;
+    // Each listener hears the current texture first: a tile that moves from
+    // the grid to the stage listens again before the old one lets go, and
+    // the texture is only announced when its size changes.
+    textures = Stream.multi((listener) {
+      final current = _current;
+      if (current != null) listener.add(current);
+      listener.addStream(_textures.stream).whenComplete(listener.close);
+    });
     _window?.addListener(_windowChanged);
   }
 
   final VideoTextureDecoder Function() _decoderFactory;
   final WindowVisible? _window;
   final Duration Function() _now;
-  late final StreamController<VideoTexture> _textures;
+  late final StreamController<VideoTexture?> _textures;
 
-  /// The texture the running share is drawn on, once it has a picture, and
-  /// again when the picture changes size. Empty between shares, and while
-  /// nobody listens.
+  /// The texture the running share is drawn on: the current one when a tile
+  /// starts listening, then each change. Null while there is no picture to
+  /// draw, including after the decoder closed and gave its texture back.
   ///
   /// One object for the life of the preview, so a tile that re-listens when
   /// its stream changes identity keeps its subscription across rebuilds.
-  late final Stream<VideoTexture> textures;
+  late final Stream<VideoTexture?> textures;
+
+  VideoTexture? _current;
 
   /// The running share's output, while there is one.
   ({
@@ -184,9 +191,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       await decoder.stop();
       return;
     }
-    _decoded = decoder.textures.listen((texture) {
-      if (!_textures.isClosed) _textures.add(texture);
-    });
+    _decoded = decoder.textures.listen(_show);
     _drops = decoder.droppedAccessUnits.listen((_) {
       _broken = true;
       _awaitingKeyframe = true;
@@ -212,9 +217,16 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     });
   }
 
+  void _show(VideoTexture? texture) {
+    if (texture == _current) return;
+    _current = texture;
+    if (!_textures.isClosed) _textures.add(texture);
+  }
+
   Future<void> _close() async {
     final decoder = _decoder;
     _decoder = null;
+    _show(null);
     // Not awaited: a broadcast subscription's cancel completes on the root
     // zone, and awaiting it from inside a widget test's fake clock strands
     // everything after it.
