@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flucord/src/application/remote_camera_controller.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
-import 'package:flucord/src/presentation/widgets/camera_picture.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'support/fake_video_decoder.dart';
@@ -15,55 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('a frame with nothing in it', () {
-    test('is not drawn in place of an avatar', () {
-      final empty = DecodedVideoFrame(
-        pixels: Uint8List(4 * 4 * 4),
-        width: 4,
-        height: 4,
-        timestamp: Duration.zero,
-      );
-
-      // All zero is not black. Converted from YUV with no chroma it comes out
-      // a flat, violent green, which is what the room showed in place of a
-      // face.
-      expect(empty.isComplete, isTrue);
-      expect(empty.hasPicture, isFalse);
-    });
-
-    test('a picture with content is drawn', () {
-      final pixels = Uint8List(4 * 4 * 4);
-      pixels[pixels.length - 1] = 7;
-      final frame = DecodedVideoFrame(
-        pixels: pixels,
-        width: 4,
-        height: 4,
-        timestamp: Duration.zero,
-      );
-
-      expect(frame.hasPicture, isTrue);
-    });
-
-    test('a buffer that does not match its dimensions is neither', () {
-      final short = DecodedVideoFrame(
-        pixels: Uint8List(8),
-        width: 4,
-        height: 4,
-        timestamp: Duration.zero,
-      );
-
-      expect(short.hasPicture, isFalse);
-    });
-  });
-
-  setUp(() async {
-    // Real engine images, one per conversion: the widget disposes what it is
-    // handed, and handing the same image twice would ask it to draw one that
-    // has already been released.
-    _images = [for (var index = 0; index < 4; index++) await _decodeOnePixel()];
-    _next = 0;
-  });
-
   group('receiving other cameras', () {
     test('a picture is rebuilt per sender, not across them', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
@@ -152,12 +101,11 @@ void main() {
 
       packets.add(('user-a', _frame([0x65, 1], marker: true)));
       await Future<void>.delayed(Duration.zero);
-      decoders.single.emit(_picture(width: 4, height: 2));
+      decoders.single.show(_texture(width: 4));
       await Future<void>.delayed(Duration.zero);
 
-      expect(controller.frameFor('user-a')?.width, 4);
-      expect(controller.frameFor('user-b'), isNull);
-      expect(controller.senders, ['user-a']);
+      expect(controller.textureFor('user-a')?.width, 4);
+      expect(controller.textureFor('user-b'), isNull);
       expect(controller.isReceiving, isTrue);
     });
 
@@ -178,16 +126,16 @@ void main() {
       controller.listen();
       first.add(('user-a', _frame([0x65, 1], marker: true)));
       await Future<void>.delayed(Duration.zero);
-      decoders.single.emit(_picture());
+      decoders.single.show(_texture());
       await Future<void>.delayed(Duration.zero);
-      expect(controller.frameFor('user-a'), isNotNull);
+      expect(controller.textureFor('user-a'), isNotNull);
 
       current = second;
       controller.listen();
 
       // The SSRCs the old cameras were built around belong to a socket that
       // has gone, so nothing from it is still drawn.
-      expect(controller.frameFor('user-a'), isNull);
+      expect(controller.textureFor('user-a'), isNull);
       expect(decoders.single.stopped, 1);
       expect(controller.isListening, isTrue);
 
@@ -218,7 +166,7 @@ void main() {
 
       expect(decoders.single.stopped, 1);
       expect(controller.isListening, isFalse);
-      expect(controller.senders, isEmpty);
+      expect(controller.textureFor('user-a'), isNull);
     });
 
     test(
@@ -292,18 +240,17 @@ void main() {
         controller.listen();
         packets.add(('user-a', _frame([0x65, 1], marker: true)));
         await Future<void>.delayed(Duration.zero);
-        decoders.single.emit(_picture(width: 4, height: 2));
+        decoders.single.show(_texture());
         await Future<void>.delayed(Duration.zero);
-        expect(controller.frameFor('user-a'), isNotNull);
+        expect(controller.textureFor('user-a'), isNotNull);
 
         controller.forget('user-a');
 
-        // Their decoder stops and the last picture is not held onto: a camera
-        // that stayed behind for the rest of the session was a decoder and a
-        // frame buffer kept open for nobody.
+        // Their decoder stops and the texture goes with it: a camera that
+        // stayed behind for the rest of the session was a decoder and a
+        // texture kept open for nobody.
         expect(decoders.single.stopped, 1);
-        expect(controller.frameFor('user-a'), isNull);
-        expect(controller.senders, isEmpty);
+        expect(controller.textureFor('user-a'), isNull);
         expect(controller.isReceiving, isFalse);
 
         // Forgetting somebody with no camera says nothing happened.
@@ -332,7 +279,7 @@ void main() {
       // packets are still counted, so the room knows who is sending.
       expect(decoders, isEmpty);
       expect(controller.packetsFrom('user-a'), 1);
-      expect(controller.frameFor('user-a'), isNull);
+      expect(controller.textureFor('user-a'), isNull);
 
       // The window back means a fresh decoder and a keyframe first.
       controller.setSuspended(false);
@@ -341,56 +288,54 @@ void main() {
       expect(controller.isSuspended, isFalse);
     });
 
-    test(
-      'the first picture announces the camera, the rest go to the tile',
-      () async {
-        final packets = StreamController<(String, DiscordRtpFrame)>();
-        final decoders = <FakeVideoDecoder>[];
-        final controller = RemoteCameraController(
-          packetsProvider: () => packets.stream,
-          decoderFactory: () {
-            final decoder = FakeVideoDecoder();
-            decoders.add(decoder);
-            return decoder;
-          },
-        );
-        addTearDown(controller.dispose);
-        var notifications = 0;
-        controller.addListener(() => notifications++);
-        controller.listen();
-        await Future<void>.delayed(Duration.zero);
-        expect(notifications, 1, reason: 'listening is announced once');
+    test('the room hears when a camera texture changes, not each '
+        'picture', () async {
+      final packets = StreamController<(String, DiscordRtpFrame)>();
+      final decoders = <FakeVideoDecoder>[];
+      final controller = RemoteCameraController(
+        packetsProvider: () => packets.stream,
+        decoderFactory: () {
+          final decoder = FakeVideoDecoder();
+          decoders.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.listen();
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 1, reason: 'listening is announced once');
 
-        packets.add(('user-a', _frame([0x65, 1], marker: true)));
-        await Future<void>.delayed(Duration.zero);
+      packets.add(('user-a', _frame([0x65, 1], marker: true)));
+      await Future<void>.delayed(Duration.zero);
+      decoders.single.show(_texture(width: 4));
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 2);
 
-        final pictures = <DecodedVideoFrame>[];
-        controller.framesFor('user-a')!.listen(pictures.add);
-        decoders.single.emit(_picture(width: 4, height: 2));
-        await Future<void>.delayed(Duration.zero);
-        // One announcement, when the tile appears.
-        expect(notifications, 2);
-        expect(pictures.single.width, 4);
+      // A texture is announced again only when it changes size; the pictures
+      // themselves never reach Dart (ADR-0009).
+      decoders.single.show(_texture(width: 4));
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 2);
+      decoders.single.show(_texture(width: 6));
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 3);
+      expect(controller.textureFor('user-a')?.width, 6);
 
-        // The next pictures reach the tile through its own subscription, not
-        // through the room: a notification per picture rebuilt the whole
-        // conversation pane, timeline included, at the camera's frame rate.
-        final notifiedAfterFirst = notifications;
-        decoders.single.emit(_picture(width: 6, height: 2));
-        await Future<void>.delayed(Duration.zero);
-
-        expect(notifications, notifiedAfterFirst);
-        expect(pictures.map((picture) => picture.width), [4, 6]);
-        expect(controller.frameFor('user-a')?.width, 6);
-      },
-    );
+      // Suspending gives the texture back, and the tile goes with it.
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 4);
+      expect(controller.textureFor('user-a'), isNull);
+    });
   });
 
   group('the tile', () {
     testWidgets('a camera replaces the avatar, and its absence restores it', (
       tester,
     ) async {
-      DecodedVideoFrame? frame;
+      VideoTexture? texture;
       await tester.pumpWidget(
         MaterialApp(
           theme: FlucordTheme.dark,
@@ -413,13 +358,13 @@ void main() {
                       ],
                       currentMemberId: 'user-b',
                       spaceId: 'guild-1',
-                      cameraFrameFor: (_) => frame,
+                      cameraTextureFor: (_) => texture,
                     ),
                   ),
                   TextButton(
                     key: const ValueKey('flip'),
                     onPressed: () => setState(
-                      () => frame = frame == null ? _picture() : null,
+                      () => texture = texture == null ? _texture() : null,
                     ),
                     child: const Text('flip'),
                   ),
@@ -436,134 +381,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('flip')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('voice-camera-user-a')), findsOneWidget);
+      expect(tester.widget<Texture>(find.byType(Texture)).textureId, 11);
 
       await tester.tap(find.byKey(const ValueKey('flip')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('voice-camera-user-a')), findsNothing);
     });
-
-    testWidgets('a frame is drawn, and replaced by the next one', (
-      tester,
-    ) async {
-      final converted = <DecodedVideoFrame>[];
-      var frame = _picture(width: 2, height: 2);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StatefulBuilder(
-            builder: (context, setState) => Column(
-              children: [
-                CameraPicture(
-                  frame: frame,
-                  converter: (source, onDecoded) {
-                    converted.add(source);
-                    onDecoded(_image);
-                  },
-                ),
-                TextButton(
-                  key: const ValueKey('next'),
-                  onPressed: () =>
-                      setState(() => frame = _picture(width: 2, height: 2)),
-                  child: const Text('next'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('camera-picture')), findsOneWidget);
-      expect(converted.length, 1);
-
-      await tester.tap(find.byKey(const ValueKey('next')));
-      await tester.pumpAndSettle();
-      expect(converted.length, 2);
-    });
-
-    testWidgets('a frame that does not hold what it claims is not drawn', (
-      tester,
-    ) async {
-      var converted = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CameraPicture(
-            // Two pixels claimed, one supplied: the engine would read past the
-            // end of the buffer.
-            frame: DecodedVideoFrame(
-              pixels: Uint8List(4),
-              width: 2,
-              height: 1,
-              timestamp: Duration.zero,
-            ),
-            converter: (_, _) => converted++,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(converted, 0);
-      expect(find.byKey(const ValueKey('camera-picture')), findsNothing);
-    });
-
-    testWidgets('a conversion that lands after the frame changed is dropped', (
-      tester,
-    ) async {
-      final pending = <ValueChanged<ui.Image>>[];
-      var frame = _picture(width: 2, height: 2);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StatefulBuilder(
-            builder: (context, setState) => Column(
-              children: [
-                CameraPicture(
-                  frame: frame,
-                  converter: (_, onDecoded) => pending.add(onDecoded),
-                ),
-                TextButton(
-                  key: const ValueKey('next'),
-                  onPressed: () =>
-                      setState(() => frame = _picture(width: 2, height: 2)),
-                  child: const Text('next'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('next')));
-      await tester.pumpAndSettle();
-      // The first conversion answers last: it belongs to a frame nobody is
-      // showing any more.
-      pending.first(_image);
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('camera-picture')), findsNothing);
-
-      pending.last(_image);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('camera-picture')), findsOneWidget);
-    });
   });
-}
-
-late List<ui.Image> _images;
-late int _next;
-
-/// The next unused image. Each is drawn once and disposed by the widget.
-ui.Image get _image => _images[_next++];
-
-Future<ui.Image> _decodeOnePixel() {
-  final completer = Completer<ui.Image>();
-  ui.decodeImageFromPixels(
-    Uint8List(4),
-    1,
-    1,
-    ui.PixelFormat.bgra8888,
-    completer.complete,
-  );
-  return completer.future;
 }
 
 DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
@@ -578,16 +402,6 @@ DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
       payload: Uint8List.fromList(payload),
     );
 
-/// A frame with something in it.
-///
-/// Filled rather than zeroed: an all-zero buffer is what a decoder produces
-/// when it has been handed nothing usable, and the room now treats it as no
-/// picture at all rather than drawing it as flat green.
-DecodedVideoFrame _picture({int width = 2, int height = 2}) =>
-    DecodedVideoFrame(
-      pixels: Uint8List(width * height * 4)
-        ..fillRange(0, width * height * 4, 9),
-      width: width,
-      height: height,
-      timestamp: Duration.zero,
-    );
+/// The texture a camera is drawn on, at [width] by [height].
+VideoTexture _texture({int width = 2, int height = 2}) =>
+    VideoTexture(id: 11, width: width, height: height);

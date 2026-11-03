@@ -523,8 +523,7 @@ final class AppComposition {
     streamViewer = _register(
       StreamViewerController(
         repositoryProvider: () => chat.goLive,
-        decoderFactory: () =>
-            bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        decoderFactory: NativeVideoTextureDecoder.new,
         // A stopped watch takes its connection with it.
         onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
         // One audio receiver per watched session (ADR-0004).
@@ -612,8 +611,7 @@ final class AppComposition {
         packetsProvider: () =>
             liveVoiceSignaling?.remoteVideo ??
             const Stream<(String, DiscordRtpFrame)>.empty(),
-        decoderFactory: () =>
-            bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        decoderFactory: NativeVideoTextureDecoder.new,
         groupDecryptorProvider: () {
           final signaling = liveVoiceSignaling;
           if (signaling == null) return null;

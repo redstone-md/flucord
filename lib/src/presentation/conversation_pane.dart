@@ -381,7 +381,7 @@ class ConversationPaneState extends State<ConversationPane> {
       final key = channel.streamKeyFor(userId);
       if (!viewer.isWatching(key)) return null;
       return GoLiveViewer(
-        frames: viewer.framesFor(key),
+        textures: viewer.texturesFor(key),
         label: userId,
         error: viewer.errorFor(key),
       );
@@ -459,8 +459,7 @@ class ConversationPaneState extends State<ConversationPane> {
             channelId: channel.id,
             channelName: channel.name,
             controller: voice,
-            cameraFrameFor: cameras.frameFor,
-            cameraFramesFor: cameras.framesFor,
+            cameraTextureFor: cameras.textureFor,
             members: widget.workspace.members,
             currentMemberId: widget.workspace.currentMemberId,
           )
@@ -491,8 +490,7 @@ class ConversationPaneState extends State<ConversationPane> {
               channelId: channel.id,
               channelName: channel.name,
               controller: voice,
-              cameraFrameFor: cameras.frameFor,
-              cameraFramesFor: cameras.framesFor,
+              cameraTextureFor: cameras.textureFor,
               members: widget.workspace.members,
               currentMemberId: widget.workspace.currentMemberId,
             ),

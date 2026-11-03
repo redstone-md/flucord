@@ -27,7 +27,7 @@ typedef CameraGroupDecryptor =
 final class RemoteCameraController extends ChangeNotifier {
   RemoteCameraController({
     required Stream<(String, DiscordRtpFrame)> Function() packetsProvider,
-    required VideoDecoderService Function() decoderFactory,
+    required VideoTextureDecoder Function() decoderFactory,
 
     /// Decrypts a whole picture for the room's group, when there is one.
     /// Asked for on every picture rather than bound once: a reconnect
@@ -44,7 +44,7 @@ final class RemoteCameraController extends ChangeNotifier {
        _requestKeyframe = requestKeyframe;
 
   final Stream<(String, DiscordRtpFrame)> Function() _packetsProvider;
-  final VideoDecoderService Function() _decoderFactory;
+  final VideoTextureDecoder Function() _decoderFactory;
   final CameraGroupDecryptor? Function()? _groupDecryptorProvider;
   final void Function(int mediaSsrc)? _requestKeyframe;
 
@@ -58,29 +58,19 @@ final class RemoteCameraController extends ChangeNotifier {
   bool _suspended = false;
   bool _disposed = false;
 
-  /// Who is currently sending a picture this client has drawn at least once.
-  List<String> get senders => [
-    for (final entry in _cameras.entries)
-      if (entry.value.frame != null) entry.key,
-  ];
-
-  /// The latest picture from [userId], or `null` if none has decoded yet.
-  DecodedVideoFrame? frameFor(String userId) => _cameras[userId]?.frame;
-
-  /// The live pictures from [userId], for a tile that follows them itself.
-  /// Null while this client holds no camera for them. This is the road the
-  /// pictures travel once their tile exists: announcing each one through
-  /// [notifyListeners] rebuilt the whole conversation pane, timeline
-  /// included, at the camera's frame rate.
-  Stream<DecodedVideoFrame>? framesFor(String userId) =>
-      _cameras[userId]?.pipeline.frames;
+  /// The texture [userId]'s camera is drawn on, or null while it has no
+  /// picture. A change is announced through [notifyListeners]: that happens
+  /// when the camera opens, closes or changes size, never per picture
+  /// (ADR-0009).
+  VideoTexture? textureFor(String userId) => _cameras[userId]?.pipeline.texture;
 
   /// How many payloads have arrived from [userId], which separates "somebody
   /// is sending" from "something has decoded".
   int packetsFrom(String userId) =>
       _cameras[userId]?.pipeline.stats.receivedPackets ?? 0;
 
-  bool get isReceiving => _cameras.values.any((camera) => camera.frame != null);
+  bool get isReceiving =>
+      _cameras.values.any((camera) => camera.pipeline.texture != null);
 
   /// Starts reading from the live voice session.
   ///
@@ -138,13 +128,7 @@ final class RemoteCameraController extends ChangeNotifier {
         paced: false,
       ),
     );
-    camera.frames = camera.pipeline.frames.listen((picture) {
-      final first = camera.frame == null;
-      camera.frame = picture;
-      // One announcement, when the tile appears. The rest of the pictures go
-      // to that tile alone, through [framesFor].
-      if (first) _notify();
-    });
+    camera.textures = camera.pipeline.textures.listen((_) => _notify());
     // Suspended cameras keep counting packets and open their decoder when
     // the window comes back (ADR-0003).
     if (!_suspended) _setDecoding(userId, camera, on: true);
@@ -164,8 +148,8 @@ final class RemoteCameraController extends ChangeNotifier {
     );
   }
 
-  /// Releases one sender's camera: their decoder stops and their last
-  /// decoded picture goes with it. A no-op for a sender this client holds no
+  /// Releases one sender's camera: their decoder stops and their texture
+  /// goes with it. A no-op for a sender this client holds no
   /// camera for.
   void forget(String userId) {
     final camera = _cameras.remove(userId);
@@ -192,7 +176,7 @@ final class RemoteCameraController extends ChangeNotifier {
   }
 
   void _close(_RemoteCamera camera) {
-    unawaited(camera.frames?.cancel());
+    unawaited(camera.textures?.cancel());
     unawaited(camera.pipeline.close());
   }
 
@@ -220,8 +204,7 @@ final class _RemoteCamera {
   _RemoteCamera(this.pipeline);
 
   final WatchedSessionPipeline pipeline;
-  StreamSubscription<DecodedVideoFrame>? frames;
-  DecodedVideoFrame? frame;
+  StreamSubscription<VideoTexture?>? textures;
 
   /// The SSRC this sender's pictures arrive on, which is what a keyframe ask
   /// names.

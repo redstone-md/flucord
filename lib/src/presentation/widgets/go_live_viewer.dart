@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -7,50 +6,25 @@ import '../../domain/video_decoder.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
-/// Draws somebody else's Go Live stream.
+/// Draws a Go Live stream: somebody else's, or the sender's own preview.
 ///
-/// Frames arrive as raw BGRA rather than an encoded image, so they go through
-/// `decodeImageFromPixels` instead of `Image.memory`: there is no PNG header
-/// here, and the pixels are already what a texture wants.
-/// Turns a decoded frame into something the tree can draw.
-///
-/// Injected so the widget's own behaviour — dropping a frame that arrives
-/// mid-conversion, replacing the picture, surviving a teardown — can be tested
-/// without the engine's image pipeline and its own timing.
-typedef PictureConverter =
-    void Function(DecodedVideoFrame frame, ValueChanged<ui.Image> onDecoded);
-
-/// The default converter: the engine's own BGRA decode.
-///
-/// Named rather than private because the participant tiles draw the same
-/// pictures and would otherwise each need their own copy of it.
-void decodePictureWithEngine(
-  DecodedVideoFrame frame,
-  ValueChanged<ui.Image> onDecoded,
-) => ui.decodeImageFromPixels(
-  frame.pixels,
-  frame.width,
-  frame.height,
-  ui.PixelFormat.bgra8888,
-  onDecoded,
-);
-
+/// The stream is decoded onto a texture (ADR-0009). The pictures never pass
+/// through Dart; only the texture's id and size do.
 class GoLiveViewer extends StatefulWidget {
   const GoLiveViewer({
-    required this.frames,
+    required this.textures,
     this.label = '',
-    this.converter = decodePictureWithEngine,
     this.showProgress = true,
     this.error,
     super.key,
   });
 
-  final Stream<DecodedVideoFrame> frames;
+  /// The texture, each time it changes, or null while there is no picture
+  /// to draw.
+  final Stream<VideoTexture?> textures;
 
   /// Whose stream this is, shown until the first picture arrives.
   final String label;
-
-  final PictureConverter converter;
 
   /// A compact tile can use a static waiting state so a room settling does not
   /// leave an animation running forever while Discord has not answered yet.
@@ -67,9 +41,8 @@ class GoLiveViewer extends StatefulWidget {
 }
 
 class _GoLiveViewerState extends State<GoLiveViewer> {
-  StreamSubscription<DecodedVideoFrame>? _subscription;
-  ui.Image? _image;
-  bool _converting = false;
+  StreamSubscription<VideoTexture?>? _subscription;
+  VideoTexture? _texture;
 
   @override
   void initState() {
@@ -80,37 +53,20 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
   @override
   void didUpdateWidget(covariant GoLiveViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.frames, widget.frames)) _listen();
+    if (!identical(oldWidget.textures, widget.textures)) _listen();
   }
 
   void _listen() {
     unawaited(_subscription?.cancel());
-    _subscription = widget.frames.listen(_accept);
-  }
-
-  void _accept(DecodedVideoFrame frame) {
-    // A frame whose buffer does not match its dimensions would be drawn as
-    // garbage, and one arriving mid-conversion is simply dropped: showing the
-    // newest picture matters more than showing every picture.
-    if (!frame.isComplete || _converting) return;
-    _converting = true;
-    widget.converter(frame, (image) {
-      _converting = false;
-      if (!mounted) {
-        image.dispose();
-        return;
-      }
-      setState(() {
-        _image?.dispose();
-        _image = image;
-      });
-    });
+    _texture = null;
+    _subscription = widget.textures.listen(
+      (texture) => setState(() => _texture = texture),
+    );
   }
 
   @override
   void dispose() {
     unawaited(_subscription?.cancel());
-    _image?.dispose();
     super.dispose();
   }
 
@@ -134,94 +90,24 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
         ),
       ]);
     }
-    final image = _image;
-    if (image == null) {
-      return _waiting(context, widget.label, showProgress: widget.showProgress);
-    }
-    return _picture(
-      image.width,
-      image.height,
-      RawImage(image: image, fit: BoxFit.contain),
-    );
-  }
-}
-
-/// Draws a stream decoded onto a texture (ADR-0009): the pictures never pass
-/// through Dart, only the texture's id and size do.
-class GoLiveTextureViewer extends StatefulWidget {
-  const GoLiveTextureViewer({
-    required this.textures,
-    this.label = '',
-    super.key,
-  });
-
-  /// The texture, each time its picture changes size, or null while there is
-  /// no picture to draw.
-  final Stream<VideoTexture?> textures;
-
-  /// Whose stream this is, shown until the first picture arrives.
-  final String label;
-
-  @override
-  State<GoLiveTextureViewer> createState() => _GoLiveTextureViewerState();
-}
-
-class _GoLiveTextureViewerState extends State<GoLiveTextureViewer> {
-  StreamSubscription<VideoTexture?>? _subscription;
-  VideoTexture? _texture;
-
-  @override
-  void initState() {
-    super.initState();
-    _listen();
-  }
-
-  @override
-  void didUpdateWidget(covariant GoLiveTextureViewer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.textures, widget.textures)) _listen();
-  }
-
-  void _listen() {
-    unawaited(_subscription?.cancel());
-    _subscription = widget.textures.listen(
-      (texture) => setState(() => _texture = texture),
-    );
-  }
-
-  @override
-  void dispose() {
-    unawaited(_subscription?.cancel());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     final texture = _texture;
     if (texture == null) {
-      return _waiting(context, widget.label, showProgress: false);
+      return _waiting(context, widget.label, showProgress: widget.showProgress);
     }
-    return _picture(
-      texture.width,
-      texture.height,
-      Texture(textureId: texture.id),
+    return ColoredBox(
+      key: const ValueKey('go-live-picture'),
+      color: Colors.black,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(
+          width: texture.width.toDouble(),
+          height: texture.height.toDouble(),
+          child: Texture(textureId: texture.id),
+        ),
+      ),
     );
   }
 }
-
-/// A picture of its own size, scaled to fit the tile on a black ground.
-Widget _picture(int width, int height, Widget picture) => ColoredBox(
-  key: const ValueKey('go-live-picture'),
-  color: Colors.black,
-  child: FittedBox(
-    fit: BoxFit.contain,
-    child: SizedBox(
-      width: width.toDouble(),
-      height: height.toDouble(),
-      child: picture,
-    ),
-  ),
-);
 
 /// What a tile shows before its first picture.
 Widget _waiting(

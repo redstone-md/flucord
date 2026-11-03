@@ -90,18 +90,17 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     packets.add(('user-a', _cameraFrame([0x65, 1])));
     await Future<void>.delayed(Duration.zero);
-    decoders.single.emit(_picture());
+    decoders.single.show(const VideoTexture(id: 1, width: 2, height: 2));
     await Future<void>.delayed(Duration.zero);
-    expect(cameras.frameFor('user-a'), isNotNull);
+    expect(cameras.textureFor('user-a'), isNotNull);
 
     // The room's controller hears the departure and lets the camera go: its
-    // decoder stops and the last picture it decoded is not held onto.
+    // decoder stops and its texture goes with it.
     signaling.emit(const VoiceUserDisconnectedEvent('user-a'));
     await Future<void>.delayed(Duration.zero);
 
     expect(decoders.single.stopped, 1);
-    expect(cameras.frameFor('user-a'), isNull);
-    expect(cameras.senders, isEmpty);
+    expect(cameras.textureFor('user-a'), isNull);
   });
 
   test('watched streams end with the room', () async {
@@ -474,12 +473,4 @@ DiscordRtpFrame _cameraFrame(List<int> payload) => DiscordRtpFrame(
     marker: true,
   ),
   payload: Uint8List.fromList(payload),
-);
-
-/// A picture with something in it, as a decoder would produce.
-DecodedVideoFrame _picture() => DecodedVideoFrame(
-  pixels: Uint8List(2 * 2 * 4)..fillRange(0, 2 * 2 * 4, 9),
-  width: 2,
-  height: 2,
-  timestamp: Duration.zero,
 );
