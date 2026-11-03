@@ -33,7 +33,7 @@ class OAuthGuildRail extends StatelessWidget {
     return Container(
       key: const ValueKey('oauth-guild-rail'),
       width: RailMetrics.width,
-      color: context.surfaces.rail,
+      decoration: BoxDecoration(color: context.surfaces.rail),
       child: Column(
         children: [
           const SizedBox(height: RailMetrics.gap),
