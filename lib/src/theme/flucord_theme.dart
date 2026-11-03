@@ -200,9 +200,7 @@ abstract final class FlucordTheme {
                 : text,
           ),
           foregroundColor: WidgetStatePropertyAll(rail),
-          minimumSize: const WidgetStatePropertyAll(
-            Size(0, _controlHeight),
-          ),
+          minimumSize: const WidgetStatePropertyAll(Size(0, _controlHeight)),
           padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(horizontal: 12),
           ),

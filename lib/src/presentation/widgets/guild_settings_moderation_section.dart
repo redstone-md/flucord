@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
@@ -60,7 +62,7 @@ class _GuildSettingsModerationSectionState
           controller: _search,
           decoration: const InputDecoration(
             isDense: true,
-            prefixIcon: Icon(Icons.search, size: 18),
+            prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
             hintText: 'Search bans',
           ),
           onSubmitted: (value) => unawaited(controller.searchBans(value)),
@@ -72,7 +74,7 @@ class _GuildSettingsModerationSectionState
           for (final ban in bans)
             GuildSettingsRow(
               key: ValueKey('guild-ban-${ban.userId}'),
-              leading: const Icon(Icons.person_off_outlined, size: 16),
+              leading: const FlucordIcon(FlucordIcons.block, size: 16),
               title: ban.displayName,
               subtitle: ban.reason ?? 'No reason recorded',
               trailing: TextButton(

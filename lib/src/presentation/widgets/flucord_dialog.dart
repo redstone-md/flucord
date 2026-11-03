@@ -294,4 +294,3 @@ class FlucordDialogHeader extends StatelessWidget {
     ],
   );
 }
-

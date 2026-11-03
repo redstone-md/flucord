@@ -146,6 +146,30 @@ abstract final class FlucordIcons {
   static const friends = FlucordIconData(HugeIcons.strokeRoundedUserMultiple);
   static const plugin = FlucordIconData(HugeIcons.strokeRoundedPlug01);
 
+  // Settings lists and forms.
+  static const moveUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp01);
+  static const moveDown = FlucordIconData(HugeIcons.strokeRoundedArrowDown01);
+  static const refresh = FlucordIconData(HugeIcons.strokeRoundedRefresh);
+  static const radioOn = FlucordIconData(HugeIcons.strokeRoundedRadioButton);
+  static const radioOff = FlucordIconData(HugeIcons.strokeRoundedCircle);
+  static const checkCircle = FlucordIconData(
+    HugeIcons.strokeRoundedCheckmarkCircle02,
+  );
+  static const addCircle = FlucordIconData(HugeIcons.strokeRoundedAddCircle);
+  static const removeCircle = FlucordIconData(
+    HugeIcons.strokeRoundedRemoveCircle,
+  );
+  static const noColour = FlucordIconData(HugeIcons.strokeRoundedCircleOff);
+  static const erase = FlucordIconData(HugeIcons.strokeRoundedEraser01);
+  static const keyword = FlucordIconData(HugeIcons.strokeRoundedTextFont);
+  static const filter = FlucordIconData(HugeIcons.strokeRoundedFilter);
+  static const listRemove = FlucordIconData(HugeIcons.strokeRoundedNoteRemove);
+  static const policy = FlucordIconData(HugeIcons.strokeRoundedPolicy);
+  static const help = FlucordIconData(HugeIcons.strokeRoundedHelpCircle);
+  static const music = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
+  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
+  static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
+
   // Server settings pages.
   static const overview = FlucordIconData(
     HugeIcons.strokeRoundedDashboardSquare01,

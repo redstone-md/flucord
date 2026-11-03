@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/user_profile_controller.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/user_profile.dart';
@@ -86,7 +88,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
     if (!controller.isSupported) {
       return const ProfileNotice(
         key: ValueKey('user-profile-unavailable'),
-        icon: Icons.cloud_off_outlined,
+        icon: FlucordIcons.offline,
         message:
             'Connect a Discord account to edit its profile. The demo and bot '
             'transports have no profile behind them.',
@@ -107,7 +109,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const ProfileNotice(
-                  icon: Icons.error_outline,
+                  icon: FlucordIcons.error,
                   message: 'Discord did not return your profile.',
                 ),
                 const SizedBox(height: 12),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
@@ -197,7 +199,7 @@ class ProfileImageActions extends StatelessWidget {
       _Button(
         buttonKey: ValueKey('profile-pick-$label'),
         tooltip: 'Change $label',
-        icon: Icons.edit_outlined,
+        icon: FlucordIcons.edit,
         compact: compact,
         onPressed: onPick,
       ),
@@ -206,7 +208,7 @@ class ProfileImageActions extends StatelessWidget {
         _Button(
           buttonKey: ValueKey('profile-remove-$label'),
           tooltip: 'Remove $label',
-          icon: Icons.close,
+          icon: FlucordIcons.clear,
           compact: compact,
           onPressed: onRemove!,
         ),
@@ -226,7 +228,7 @@ class _Button extends StatelessWidget {
 
   final Key buttonKey;
   final String tooltip;
-  final IconData icon;
+  final FlucordIconData icon;
   final bool compact;
   final VoidCallback onPressed;
 
@@ -245,7 +247,11 @@ class _Button extends StatelessWidget {
           child: SizedBox(
             width: size,
             height: size,
-            child: Icon(icon, size: compact ? 13 : 15, color: Colors.white),
+            child: FlucordIcon(
+              icon,
+              size: compact ? 13 : 15,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -287,8 +293,8 @@ class ProfileAccentPicker extends StatelessWidget {
             swatchKey: const ValueKey('profile-accent-none'),
             selected: value == null,
             onPressed: () => onChanged(null),
-            child: Icon(
-              Icons.format_color_reset_outlined,
+            child: FlucordIcon(
+              FlucordIcons.noColour,
               size: 15,
               color: context.surfaces.muted,
             ),
@@ -464,14 +470,14 @@ class ProfileSaveBar extends StatelessWidget {
 class ProfileNotice extends StatelessWidget {
   const ProfileNotice({required this.icon, required this.message, super.key});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String message;
 
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 18, color: context.surfaces.muted),
+      FlucordIcon(icon, size: 18, color: context.surfaces.muted),
       const SizedBox(width: 10),
       Expanded(
         child: Text(

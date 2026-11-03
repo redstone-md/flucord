@@ -398,7 +398,7 @@ class _Body extends StatelessWidget {
       if (keybinds == null) {
         return const ProfileNotice(
           key: ValueKey('user-keybinds-unavailable'),
-          icon: Icons.keyboard_outlined,
+          icon: FlucordIcons.keyboard,
           message: 'Keybinds are unavailable in this build.',
         );
       }
@@ -409,7 +409,7 @@ class _Body extends StatelessWidget {
       if (streamer == null) {
         return const ProfileNotice(
           key: ValueKey('user-streamer-unavailable'),
-          icon: Icons.videocam_off_outlined,
+          icon: FlucordIcons.cameraOff,
           message: 'Streamer mode is unavailable in this build.',
         );
       }
@@ -422,7 +422,7 @@ class _Body extends StatelessWidget {
       if (accessibility == null) {
         return const ProfileNotice(
           key: ValueKey('user-accessibility-unavailable'),
-          icon: Icons.accessibility_new,
+          icon: FlucordIcons.accessibility,
           message: 'Accessibility settings are unavailable in this build.',
         );
       }
@@ -434,7 +434,7 @@ class _Body extends StatelessWidget {
       if (voice == null && quality == null) {
         return const ProfileNotice(
           key: ValueKey('user-voice-unavailable'),
-          icon: Icons.mic_off_outlined,
+          icon: FlucordIcons.micOff,
           message: 'Voice is unavailable in this build.',
         );
       }
@@ -455,7 +455,7 @@ class _Body extends StatelessWidget {
       if (themes == null) {
         return const ProfileNotice(
           key: ValueKey('user-themes-unavailable'),
-          icon: Icons.brush_outlined,
+          icon: FlucordIcons.themes,
           message: 'Themes are unavailable in this build.',
         );
       }
@@ -581,7 +581,7 @@ class _Body extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const ProfileNotice(
-            icon: Icons.error_outline,
+            icon: FlucordIcons.error,
             message: 'Discord did not return your settings.',
           ),
           const SizedBox(height: 12),
@@ -653,7 +653,7 @@ class _NeedsAccountNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ProfileNotice(
-    icon: Icons.cloud_off_outlined,
+    icon: FlucordIcons.offline,
     message:
         'Connect a Discord account to $toDo. Demo mode and bot accounts have '
         'no account behind them.',

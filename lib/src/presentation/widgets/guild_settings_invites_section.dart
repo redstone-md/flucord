@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
@@ -47,7 +49,7 @@ class GuildSettingsInvitesSection extends StatelessWidget {
           for (final invite in invites)
             GuildSettingsRow(
               key: ValueKey('guild-invite-${invite.code}'),
-              leading: const Icon(Icons.link, size: 16),
+              leading: const FlucordIcon(FlucordIcons.link, size: 16),
               title: invite.code,
               subtitle: _describe(invite),
               trailing: TextButton(

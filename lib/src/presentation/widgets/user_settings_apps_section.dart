@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/app_authorisation_controller.dart';
 import '../../domain/app_authorisation.dart';
 import '../../theme/flucord_radius.dart';
@@ -410,8 +412,8 @@ class _GuildChoice extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              FlucordIcon(
+                selected ? FlucordIcons.radioOn : FlucordIcons.radioOff,
                 size: 16,
                 color: selected
                     ? Theme.of(context).colorScheme.primary
