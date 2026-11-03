@@ -17,7 +17,7 @@ void main() {
     expect(surfaces.surface, isNot(surfaces.canvas));
   });
 
-  test('desktop controls resolve quiet default and blurple focus states', () {
+  test('icon buttons resolve a quiet default and a violet focus', () {
     final theme = FlucordTheme.dark;
     final surfaces = theme.extension<FlucordSurfaceTheme>()!;
     final style = theme.iconButtonTheme.style!;
@@ -30,12 +30,6 @@ void main() {
     expect(
       style.overlayColor!.resolve({WidgetState.focused}),
       surfaces.brand.withValues(alpha: 0.2),
-    );
-    final filled = theme.filledButtonTheme.style!;
-    expect(filled.backgroundColor!.resolve({}), surfaces.brand);
-    expect(
-      filled.backgroundColor!.resolve({WidgetState.pressed}),
-      surfaces.brandPressed,
     );
   });
 
@@ -169,18 +163,14 @@ void main() {
     });
   });
 
-  testWidgets('an installed theme paints buttons in its own brand', (
+  testWidgets('an installed theme paints the primary button in its own text', (
     tester,
   ) async {
-    const brand = Color(0xff2a9d8f);
-    const pressed = Color(0xff1f776c);
+    const text = Color(0xfff2e9d8);
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.fromPalette(
-          FlucordPalette.dark.copyWith(
-            brand: brand.toARGB32(),
-            brandPressed: pressed.toARGB32(),
-          ),
+          FlucordPalette.dark.copyWith(text: text.toARGB32()),
         ),
         home: Scaffold(
           body: Column(
@@ -201,15 +191,8 @@ void main() {
         )
         .color!;
 
-    expect(fill('Save'), brand);
-    expect(fill('Off'), brand.withValues(alpha: 0.38));
-
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.text('Save')),
-    );
-    await tester.pumpAndSettle();
-    expect(fill('Save'), pressed);
-    await gesture.up();
+    expect(fill('Save'), text);
+    expect(fill('Off'), text.withValues(alpha: 0.38));
   });
 
   group('WCAG AA contrast', () {
@@ -408,5 +391,62 @@ void main() {
         }
       });
     }
+  });
+
+  group('the shared controls (Figma component sheet)', () {
+    final theme = FlucordTheme.dark;
+    final surfaces = theme.extension<FlucordSurfaceTheme>()!;
+
+    test('the primary button is light, with the label in the rail colour', () {
+      final filled = theme.filledButtonTheme.style!;
+
+      expect(filled.backgroundColor!.resolve({}), surfaces.text);
+      expect(filled.foregroundColor!.resolve({}), surfaces.rail);
+      expect(filled.minimumSize!.resolve({})!.height, 32);
+      expect(
+        filled.padding!.resolve({}),
+        const EdgeInsets.symmetric(horizontal: 12),
+      );
+    });
+
+    test('a field is recessed, with a thin border and the control corner', () {
+      final input = theme.inputDecorationTheme;
+      final enabled = input.enabledBorder! as OutlineInputBorder;
+
+      expect(input.filled, isTrue);
+      expect(input.fillColor, surfaces.inset);
+      expect(enabled.borderRadius, FlucordRadius.control);
+      expect(enabled.borderSide, BorderSide(color: surfaces.border));
+    });
+
+    test('a field in error draws a 2 px danger border', () {
+      final input = theme.inputDecorationTheme;
+      final danger = BorderSide(color: surfaces.danger, width: 2);
+
+      expect(input.errorBorder!.borderSide, danger);
+      expect(input.focusedErrorBorder!.borderSide, danger);
+    });
+
+    test('a dialog sits on the raised colour with a border and 12 px corners', () {
+      final dialog = theme.dialogTheme;
+
+      expect(dialog.backgroundColor, surfaces.raised);
+      expect(
+        dialog.shape,
+        RoundedRectangleBorder(
+          borderRadius: FlucordRadius.large,
+          side: BorderSide(color: surfaces.border),
+        ),
+      );
+      expect(dialog.barrierColor, Colors.black.withValues(alpha: 0.6));
+    });
+
+    test('a slider has a 4 px track filled in the accent', () {
+      final slider = theme.sliderTheme;
+
+      expect(slider.trackHeight, 4);
+      expect(slider.activeTrackColor, surfaces.brand);
+      expect(slider.thumbColor, Colors.white);
+    });
   });
 }

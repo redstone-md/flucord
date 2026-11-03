@@ -12,6 +12,19 @@ abstract final class FlucordTheme {
   static const _nonTextContrast = 3.0;
   static const _focusRingWidth = 2.0;
 
+  /// Buttons, tabs and selects are this tall; a field is [_controlFieldHeight].
+  static const _controlHeight = 32.0;
+  static const _controlFieldHeight = 36.0;
+
+  /// A field's text is the body role, 21 px a line.
+  static const _fieldLineHeight = 21.0;
+
+  static OutlineInputBorder fieldBorder(Color color, double width) =>
+      OutlineInputBorder(
+        borderRadius: FlucordRadius.control,
+        borderSide: BorderSide(color: color, width: width),
+      );
+
   static ThemeData get dark => fromPalette(FlucordPalette.dark);
 
   static ThemeData get light => fromPalette(FlucordPalette.light);
@@ -177,15 +190,23 @@ abstract final class FlucordTheme {
           ),
         ),
       ),
+      // The primary button is light, with the label in the rail colour:
+      // white on the violet accent does not reach 4.5:1.
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) {
-              return brand.withValues(alpha: 0.38);
-            }
-            return states.contains(WidgetState.pressed) ? brandPressed : brand;
-          }),
-          foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? text.withValues(alpha: 0.38)
+                : text,
+          ),
+          foregroundColor: WidgetStatePropertyAll(rail),
+          minimumSize: const WidgetStatePropertyAll(
+            Size(0, _controlHeight),
+          ),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 12),
+          ),
+          textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
           side: focusSide,
           shape: const WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: FlucordRadius.control),
@@ -197,14 +218,21 @@ abstract final class FlucordTheme {
         style: ButtonStyle(side: focusSide),
       ),
       // Every dialog is a FlucordDialog, which takes its frame from here:
-      // one barrier, one background and one corner, in every theme.
+      // one barrier, one background and one corner, in every theme. It sits
+      // one layer up, like a menu.
       dialogTheme: DialogThemeData(
-        barrierColor: Colors.black.withValues(alpha: 0.58),
-        backgroundColor: surface,
+        barrierColor: Colors.black.withValues(alpha: 0.6),
+        backgroundColor: raised,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black,
+        elevation: 24,
         insetPadding: const EdgeInsets.all(24),
-        shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.medium),
-        titleTextStyle: textTheme.titleLarge,
-        contentTextStyle: textTheme.bodyMedium,
+        shape: RoundedRectangleBorder(
+          borderRadius: FlucordRadius.large,
+          side: BorderSide(color: border),
+        ),
+        titleTextStyle: FlucordTextRole.heading.style.copyWith(color: text),
+        contentTextStyle: FlucordTextRole.label.style.copyWith(color: muted),
       ),
       // Every menu opens one layer up from where it was opened, the same
       // frame a popover has. The rows are FlucordMenuItem.
@@ -228,21 +256,33 @@ abstract final class FlucordTheme {
         textStyle: FlucordTextRole.caption.style.copyWith(color: text),
         waitDuration: const Duration(milliseconds: 450),
       ),
+      // Fields are recessed: darker than what they sit on, with a thin
+      // border, so it is plain where to type.
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: control,
-        border: OutlineInputBorder(
-          borderRadius: FlucordRadius.medium,
-          borderSide: BorderSide.none,
+        fillColor: inset,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: (_controlFieldHeight - _fieldLineHeight) / 2,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: FlucordRadius.medium,
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: FlucordRadius.medium,
-          borderSide: BorderSide(color: focusRing, width: _focusRingWidth),
-        ),
+        hintStyle: FlucordTextRole.body.style.copyWith(color: captionText),
+        errorStyle: FlucordTextRole.caption.style.copyWith(color: errorText),
+        border: fieldBorder(border, 1),
+        enabledBorder: fieldBorder(border, 1),
+        disabledBorder: fieldBorder(border, 1),
+        focusedBorder: fieldBorder(focusRing, _focusRingWidth),
+        errorBorder: fieldBorder(danger, _focusRingWidth),
+        focusedErrorBorder: fieldBorder(danger, _focusRingWidth),
+      ),
+      sliderTheme: SliderThemeData(
+        trackHeight: 4,
+        activeTrackColor: brand,
+        inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+        thumbColor: Colors.white,
+        overlayColor: brand.withValues(alpha: 0.24),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+        trackShape: const RoundedRectSliderTrackShape(),
       ),
       extensions: [
         FlucordSurfaceTheme(
@@ -428,4 +468,11 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
 extension FlucordThemeContext on BuildContext {
   FlucordSurfaceTheme get surfaces =>
       Theme.of(this).extension<FlucordSurfaceTheme>()!;
+}
+
+/// Fills drawn from a role rather than stored, so a theme never sets them.
+extension FlucordFills on FlucordSurfaceTheme {
+  /// A selected row or tab, a secondary button, a close button: the text
+  /// colour at 6%, which is white at 6% in the dark theme.
+  Color get quietFill => text.withValues(alpha: 0.06);
 }
