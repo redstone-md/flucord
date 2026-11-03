@@ -30,6 +30,14 @@ class MessageEmbedView extends StatelessWidget {
   /// The card's fill: the text colour, so white on a dark theme, at 3%.
   static const _fillAlpha = 0.03;
 
+  /// The barely raised card every embed in a message sits on.
+  static BoxDecoration cardDecoration(FlucordSurfaceTheme surfaces) =>
+      BoxDecoration(
+        color: surfaces.text.withValues(alpha: _fillAlpha),
+        border: Border.all(color: surfaces.border),
+        borderRadius: FlucordRadius.medium,
+      );
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -42,11 +50,7 @@ class MessageEmbedView extends StatelessWidget {
       child: Container(
         key: const ValueKey('embed-card'),
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: surfaces.text.withValues(alpha: _fillAlpha),
-          border: Border.all(color: surfaces.border),
-          borderRadius: FlucordRadius.medium,
-        ),
+        decoration: cardDecoration(surfaces),
         child: Stack(
           children: [
             Positioned(

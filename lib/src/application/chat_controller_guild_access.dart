@@ -27,6 +27,23 @@ extension ChatControllerGuildAccess on ChatController {
     return repository.previewInvite(code);
   }
 
+  /// [previewInvite] for an invite card in a message: asked once per code
+  /// for the session, so the same link in many messages costs one request.
+  ///
+  /// A refusal is an answer and stays cached. Any other failure is dropped,
+  /// so the next card that asks tries again.
+  Future<InvitePreview> cachedInvitePreview(String code) =>
+      _invitePreviews.putIfAbsent(code, () async {
+        try {
+          return await previewInvite(code);
+        } on GuildAccessException {
+          rethrow;
+        } on Object {
+          _invitePreviews.remove(code);
+          rethrow;
+        }
+      });
+
   /// Joins the server an invite names. Answers the joined space's id, or
   /// null when the join was refused.
   ///

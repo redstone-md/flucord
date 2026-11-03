@@ -18,6 +18,7 @@ void _serverAccessCases() {
           },
           'channel': {'id': '500000000000000001', 'name': 'general'},
           'approximate_member_count': 1204,
+          'approximate_presence_count': 312,
         }),
       ]);
       final preview = await _repository(transport).previewInvite('aurora');
@@ -26,6 +27,7 @@ void _serverAccessCases() {
       expect(preview.name, 'Aurora Labs');
       expect(preview.guildId, '444444444444444444');
       expect(preview.approximateMemberCount, 1204);
+      expect(preview.approximatePresenceCount, 312);
       expect(preview.channelName, 'general');
       expect(preview.iconUrl, contains('/icons/444444444444444444/'));
       expect(transport.requests.single.uri.path, endsWith('/invites/aurora'));

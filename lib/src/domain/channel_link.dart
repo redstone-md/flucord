@@ -65,6 +65,25 @@ final class InviteLink {
     return code;
   }
 
+  /// Link-shaped runs in message text on an invite host. The scheme is
+  /// optional because people paste `discord.gg/x` bare. The host must start
+  /// the run, so `notdiscord.gg/x` is not one, and trailing punctuation stays
+  /// out of the match.
+  static final _linkInText = RegExp(
+    r'(?<![\w.\-/])(?:https?://)?'
+    r'(?:discord\.gg|(?:ptb\.)?discord\.com)/[\w\-/?#=&]+',
+    caseSensitive: false,
+  );
+
+  /// The distinct invite codes linked in [text], in the order they appear.
+  static List<String> codesIn(String text) => {
+    for (final match in _linkInText.allMatches(text))
+      ?_codeFromUri(Uri.tryParse(_withScheme(match[0]!))),
+  }.toList();
+
+  static String _withScheme(String link) =>
+      link.contains('://') ? link : 'https://$link';
+
   static String? _codeFromUri(Uri? uri) {
     if (uri == null || !uri.hasScheme) return null;
     final host = uri.host.toLowerCase();

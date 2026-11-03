@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../domain/channel_link.dart';
+import '../../domain/guild_management.dart';
 
 /// Publishes the server-access surface to widgets deep in the tree.
 ///
@@ -15,6 +16,7 @@ final class GuildAccessScope extends InheritedWidget {
     required this.onOpenInvite,
     required this.onOpenMessageLink,
     required super.child,
+    this.previewInvite,
     super.key,
   });
 
@@ -27,10 +29,15 @@ final class GuildAccessScope extends InheritedWidget {
   final void Function(BuildContext context, DiscordMessageLink link)?
   onOpenMessageLink;
 
+  /// Resolves an invite linked in a message, for its card. Null when the host
+  /// cannot look invites up, which leaves the link without a card.
+  final Future<InvitePreview> Function(String code)? previewInvite;
+
   @override
   bool updateShouldNotify(GuildAccessScope oldWidget) =>
       oldWidget.onOpenInvite != onOpenInvite ||
-      oldWidget.onOpenMessageLink != onOpenMessageLink;
+      oldWidget.onOpenMessageLink != onOpenMessageLink ||
+      oldWidget.previewInvite != previewInvite;
 
   static GuildAccessScope? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<GuildAccessScope>();

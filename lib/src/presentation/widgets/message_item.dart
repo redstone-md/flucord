@@ -30,6 +30,7 @@ import 'message_action_bar.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
+import 'message_invite_cards.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
 import 'message_preview_text.dart';
@@ -510,6 +511,11 @@ class _MessageItemState extends State<MessageItem> {
             workspace: widget.workspace,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
+          ),
+        if (!widget.isEditing && message.body.isNotEmpty)
+          MessageInviteCards(
+            body: message.body,
+            sentByMe: widget.isCurrentUser,
           ),
         for (var index = 0; index < message.snapshots.length; index++)
           Padding(

@@ -192,6 +192,65 @@ void main() {
     });
   });
 
+  group('invite previews in messages', () {
+    test('each code is looked up once for the session', () async {
+      final access = _FakeGuildManagement()
+        ..previewFailure = const GuildAccessException(
+          refusal: GuildAccessRefusal.invalid,
+          message: 'This invite is not valid.',
+        );
+      final controller = ChatController(_Repository(guildManagement: access));
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await expectLater(
+        controller.cachedInvitePreview('gone'),
+        throwsA(isA<GuildAccessException>()),
+      );
+      await expectLater(
+        controller.cachedInvitePreview('gone'),
+        throwsA(isA<GuildAccessException>()),
+      );
+      await controller.cachedInvitePreview('aurora');
+      final preview = await controller.cachedInvitePreview('aurora');
+
+      expect(preview.name, 'Aurora Labs');
+      expect(access.previewedCodes, ['gone', 'aurora']);
+    });
+
+    test('a lookup that failed in transit is asked again', () async {
+      final access = _FakeGuildManagement()
+        ..previewFailure = StateError('offline');
+      final controller = ChatController(_Repository(guildManagement: access));
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await expectLater(
+        controller.cachedInvitePreview('aurora'),
+        throwsStateError,
+      );
+      final preview = await controller.cachedInvitePreview('aurora');
+
+      expect(preview.name, 'Aurora Labs');
+      expect(access.previewedCodes, ['aurora', 'aurora']);
+    });
+
+    test('a new session looks the code up again', () async {
+      final first = _FakeGuildManagement();
+      final second = _FakeGuildManagement();
+      final controller = ChatController(_Repository(guildManagement: first));
+      addTearDown(controller.dispose);
+      await controller.load();
+      await controller.cachedInvitePreview('aurora');
+
+      await controller.useRepository(_Repository(guildManagement: second));
+      await controller.cachedInvitePreview('aurora');
+
+      expect(first.previewedCodes, ['aurora']);
+      expect(second.previewedCodes, ['aurora']);
+    });
+  });
+
   group('create', () {
     test(
       'names the server, and it survives a restart from the cache',
@@ -621,17 +680,27 @@ final class _FakeGuildManagement implements GuildManagementRepository {
   final GuildAccessException? joinRefusal;
   final GuildAccessException? leaveRefusal;
 
+  /// Thrown by the next preview, then cleared.
+  Object? previewFailure;
+
+  final List<String> previewedCodes = [];
   final List<String> joinedCodes = [];
   final List<String> createdNames = [];
   final List<String> leftGuildIds = [];
 
   @override
-  Future<InvitePreview> previewInvite(String code) async => const InvitePreview(
-    code: 'aurora',
-    name: 'Aurora Labs',
-    guildId: '444444444444444444',
-    approximateMemberCount: 1204,
-  );
+  Future<InvitePreview> previewInvite(String code) async {
+    previewedCodes.add(code);
+    final failure = previewFailure;
+    previewFailure = null;
+    if (failure != null) throw failure;
+    return const InvitePreview(
+      code: 'aurora',
+      name: 'Aurora Labs',
+      guildId: '444444444444444444',
+      approximateMemberCount: 1204,
+    );
+  }
 
   @override
   Future<JoinedGuild> joinGuild(String code) async {

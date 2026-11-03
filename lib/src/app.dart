@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'application/chat_controller.dart';
 import 'application/voice_channel_surface.dart';
 import 'app_bootstrap.dart';
 import 'app_composition.dart';
@@ -280,6 +281,7 @@ class _FlucordAppState extends State<FlucordApp> {
     onOpenInvite: (context, code) => unawaited(
       showJoinServerDialog(context, chat: _composition.chat, code: code),
     ),
+    previewInvite: _composition.chat.cachedInvitePreview,
     onOpenMessageLink: (context, link) {
       // The workspace is read here rather than captured, because the shell
       // below may outlive a session that replaced it.

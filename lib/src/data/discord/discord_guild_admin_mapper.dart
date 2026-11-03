@@ -193,6 +193,7 @@ abstract final class DiscordGuildAdminMapper {
       bannerUrl: banner == null ? null : DiscordCdn.guildBanner(id, banner),
       channelName: channel is Map ? _string(channel['name']) : null,
       approximateMemberCount: _int(payload['approximate_member_count']),
+      approximatePresenceCount: _int(payload['approximate_presence_count']),
     );
   }
 
