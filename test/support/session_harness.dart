@@ -252,7 +252,24 @@ final class SessionHarness {
   Future<void> _end() async {
     await _tester.pumpWidget(const SizedBox());
     await settle();
-    await _tester.runAsync(() => _navigationMemory.lastWrite);
+    await _settleWhile(() => _navigationMemory.isWriting, 'the last write');
+  }
+
+  /// Lets real time pass and pumps in turns while [busy] holds, for work that
+  /// waits on a real file.
+  ///
+  /// A file write finishes on the real event loop, but the code after each
+  /// of its awaits runs on the test's fake clock. Awaiting the write inside
+  /// one `runAsync` would hang when the file answers late: the rest of the
+  /// write waits for a pump, and the pump waits for `runAsync`.
+  Future<void> _settleWhile(bool Function() busy, String what) async {
+    for (var attempt = 0; attempt < 500 && busy(); attempt++) {
+      await _tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await _tester.pump();
+    }
+    expect(busy(), isFalse, reason: 'The app never finished $what.');
   }
 
   /// Quits the app and opens it again, signed in as [accountId], up to READY.
@@ -720,22 +737,29 @@ final class _HeldNavigationMemory implements NavigationMemoryRepository {
   Future<void> clear() async => _held = null;
 }
 
-/// Knows when the last write ended, because a write to a real file finishes on
-/// the real event loop, and a relaunch must find it done.
+/// Knows whether a write is still running, because a write to a real file
+/// finishes on the real event loop, and a relaunch must find it done.
 final class _WatchedNavigationMemory implements NavigationMemoryRepository {
   _WatchedNavigationMemory(this._inner);
 
   final NavigationMemoryRepository _inner;
-  Future<void> lastWrite = Future.value();
+  int _writes = 0;
+
+  bool get isWriting => _writes > 0;
 
   @override
   Future<NavigationMemory?> load() => _inner.load();
 
   @override
-  Future<void> save(NavigationMemory memory) => lastWrite = _inner.save(memory);
+  Future<void> save(NavigationMemory memory) => _watch(_inner.save(memory));
 
   @override
-  Future<void> clear() => lastWrite = _inner.clear();
+  Future<void> clear() => _watch(_inner.clear());
+
+  Future<void> _watch(Future<void> write) {
+    _writes++;
+    return write.whenComplete(() => _writes--);
+  }
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
