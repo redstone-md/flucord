@@ -53,7 +53,7 @@ void main() {
   });
 
   testSession('the user settings dialog', (tester, session) async {
-    await tester.tap(find.byTooltip('User settings'));
+    await tester.tap(find.byKey(const ValueKey('account-settings')));
     await session.settle();
 
     expectTextOnTypeScale(tester);

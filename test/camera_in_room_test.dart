@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/theme/flucord_icons.dart';
+
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
 const _session = VoiceTransportSession(
@@ -255,7 +258,7 @@ void main() {
 
         expect(room.cameraTransport.announcements, [true]);
         expect(find.byTooltip('Turn camera off'), findsOneWidget);
-        expect(find.byIcon(Icons.videocam), findsOneWidget);
+        expect(findFlucordIcon(FlucordIcons.camera), findsOneWidget);
 
         await tester.tap(button);
         await tester.pumpAndSettle();
