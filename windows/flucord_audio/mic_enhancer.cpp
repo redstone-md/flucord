@@ -24,6 +24,7 @@
 #include "flucord_audio.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <new>
@@ -130,8 +131,12 @@ constexpr GUID kFormatWaveFormatEx = {0x05589f81,
 // the Windows headers.
 class MediaBuffer final : public IMediaBuffer {
  public:
-  static MediaBuffer* Create(size_t bytes) {
-    return new (std::nothrow) MediaBuffer(bytes);
+  // Owned by the answer alone: the buffer starts with the one reference the
+  // ComPtr holds, so it is freed once the DMO lets go of it too.
+  static ComPtr<MediaBuffer> Create(size_t bytes) {
+    ComPtr<MediaBuffer> buffer;
+    buffer.Attach(new (std::nothrow) MediaBuffer(bytes));
+    return buffer;
   }
 
   // IUnknown:
@@ -181,7 +186,7 @@ class MediaBuffer final : public IMediaBuffer {
 
   std::vector<BYTE> storage_;
   size_t filled_ = 0;
-  ULONG refs_ = 1;
+  std::atomic<ULONG> refs_{1};
 };
 
 // A DMO media type holding one WAVEFORMATEX, so the streams can be given
@@ -385,43 +390,18 @@ void Downmix(const int16_t* samples,
   }
 }
 
-// Hands the DMO one internal frame of microphone, and one of speaker when
-// the echo stage is running. Answers whether the DMO took it.
-bool FeedDmo(EnhancerState* state, const int16_t* mono) {
-  ComPtr<MediaBuffer> mic(MediaBuffer::Create(
-      static_cast<size_t>(kInternalFrame * sizeof(int16_t))));
-  if (mic == nullptr) return false;
-  CopyMemory(mic->samples(), mono, kInternalFrame * sizeof(int16_t));
-  mic->SetLength(kInternalFrame * sizeof(int16_t));
-  if (FAILED(state->dmo->ProcessInput(0, mic.Get(), 0, 0, 0))) return false;
-
-  if (state->echo_cancellation) {
-    int16_t speaker_frame[kInternalFrame];
-    ReadSpeakerFrame(state, speaker_frame);
-    ComPtr<MediaBuffer> speaker(MediaBuffer::Create(
-        static_cast<size_t>(kInternalFrame * sizeof(int16_t))));
-    if (speaker == nullptr) return false;
-    CopyMemory(speaker->samples(), speaker_frame,
-               kInternalFrame * sizeof(int16_t));
-    speaker->SetLength(kInternalFrame * sizeof(int16_t));
-    if (FAILED(state->dmo->ProcessInput(1, speaker.Get(), 0, 0, 0))) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Pulls whatever the DMO has answered into the pending answer.
-bool DrainDmo(EnhancerState* state) {
+HRESULT DrainDmo(EnhancerState* state) {
   for (;;) {
-    ComPtr<MediaBuffer> out(MediaBuffer::Create(
-        static_cast<size_t>(kOutputSamples * sizeof(int16_t))));
-    if (out == nullptr) return false;
+    ComPtr<MediaBuffer> out =
+        MediaBuffer::Create(static_cast<size_t>(kOutputSamples * sizeof(int16_t)));
+    if (out == nullptr) return E_OUTOFMEMORY;
     DMO_OUTPUT_DATA_BUFFER buffer = {};
     buffer.pBuffer = out.Get();
-    const HRESULT hr = state->dmo->ProcessOutput(0, 1, &buffer, nullptr);
+    DWORD status = 0;
+    const HRESULT hr = state->dmo->ProcessOutput(0, 1, &buffer, &status);
     // S_FALSE is "nothing answered", not a failure.
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) return hr;
     DWORD length = 0;
     out->GetBufferAndLength(nullptr, &length);
     const size_t count = length / sizeof(int16_t);
@@ -432,9 +412,48 @@ bool DrainDmo(EnhancerState* state) {
     }
     // More is waiting when this buffer says so.
     if ((buffer.dwStatus & DMO_OUTPUT_DATA_BUFFERF_INCOMPLETE) == 0) {
-      return true;
+      return S_OK;
     }
   }
+}
+
+// Hands [buffer] to one input stream of the DMO. A stream still holding
+// earlier input refuses more until its output is read, so that is read
+// first, as the DMO contract asks.
+HRESULT FeedStream(EnhancerState* state, DWORD stream, IMediaBuffer* buffer) {
+  DWORD flags = 0;
+  HRESULT hr = state->dmo->GetInputStatus(stream, &flags);
+  if (SUCCEEDED(hr) && (flags & DMO_INPUT_STATUSF_ACCEPT_DATA) == 0) {
+    hr = DrainDmo(state);
+  }
+  if (SUCCEEDED(hr)) hr = state->dmo->ProcessInput(stream, buffer, 0, 0, 0);
+  return hr;
+}
+
+// Hands the DMO one internal frame of microphone, and one of speaker when
+// the echo stage is running. On a refusal, [failed_stage] says which.
+HRESULT FeedDmo(EnhancerState* state,
+                const int16_t* mono,
+                int32_t* failed_stage) {
+  *failed_stage = FLUCORD_AUDIO_ENHANCER_STAGE_MICROPHONE_INPUT;
+  ComPtr<MediaBuffer> mic =
+      MediaBuffer::Create(static_cast<size_t>(kInternalFrame * sizeof(int16_t)));
+  if (mic == nullptr) return E_OUTOFMEMORY;
+  CopyMemory(mic->samples(), mono, kInternalFrame * sizeof(int16_t));
+  mic->SetLength(kInternalFrame * sizeof(int16_t));
+  HRESULT hr = FeedStream(state, 0, mic.Get());
+  if (FAILED(hr) || !state->echo_cancellation) return hr;
+
+  *failed_stage = FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT;
+  int16_t speaker_frame[kInternalFrame];
+  ReadSpeakerFrame(state, speaker_frame);
+  ComPtr<MediaBuffer> speaker =
+      MediaBuffer::Create(static_cast<size_t>(kInternalFrame * sizeof(int16_t)));
+  if (speaker == nullptr) return E_OUTOFMEMORY;
+  CopyMemory(speaker->samples(), speaker_frame,
+             kInternalFrame * sizeof(int16_t));
+  speaker->SetLength(kInternalFrame * sizeof(int16_t));
+  return FeedStream(state, 1, speaker.Get());
 }
 
 // Rebuilds one frame of the pipeline's rate and width from the pending
@@ -666,8 +685,16 @@ flucord_audio_enhance_frame(FlucordAudioEnhancer* enhancer,
 
   int16_t mono[kInternalFrame];
   Downmix(samples, sample_count_per_channel, channels, mono);
-  if (!FeedDmo(state, mono)) return FLUCORD_AUDIO_ERROR_STATE;
-  if (!DrainDmo(state)) return FLUCORD_AUDIO_ERROR_STATE;
+  int32_t stage = FLUCORD_AUDIO_ENHANCER_STAGE_MICROPHONE_INPUT;
+  HRESULT hr = FeedDmo(state, mono, &stage);
+  if (SUCCEEDED(hr)) {
+    stage = FLUCORD_AUDIO_ENHANCER_STAGE_OUTPUT;
+    hr = DrainDmo(state);
+  }
+  if (FAILED(hr)) {
+    RecordEnhancerFailure(stage, hr);
+    return FLUCORD_AUDIO_ERROR_DEVICE;
+  }
   // Nothing to say yet: the frame goes out as captured, and the pipeline's
   // gate hangs over the tail of a word the stages still hold.
   FillFrame(state, samples, sample_count_per_channel, channels);

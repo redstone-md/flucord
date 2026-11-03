@@ -72,7 +72,8 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     }
   }
 
-  /// The steps of an open, by the number the module reports them with.
+  /// The steps of an open and of a frame, by the number the module reports
+  /// them with.
   static const List<String> _stages = [
     'none',
     'COM',
@@ -81,6 +82,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     'stage formats',
     'default speakers',
     'speaker loopback',
+    'microphone input',
+    'speaker input',
+    'enhanced output',
   ];
 
   /// The module handed in rather than opened, so a test can drive the
@@ -124,7 +128,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     scratch.asTypedList(frame.length).setAll(0, frame);
     final status = _enhance(enhancer, scratch, samples, channels);
     if (status != 0) {
-      throw StateError('The echo and gain stages failed on a frame');
+      throw StateError(
+        'The echo and gain stages failed on a frame${_describeFailure()}',
+      );
     }
     frame.setAll(0, scratch.asTypedList(frame.length));
   }
@@ -151,8 +157,8 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     }
   }
 
-  /// Which step of the open failed and what Windows answered, as a suffix
-  /// for the error, or empty when the module cannot say.
+  /// Which step of the open or frame failed and what Windows answered, as a
+  /// suffix for the error, or empty when the module cannot say.
   String _describeFailure() {
     final failure = _failure;
     if (failure == null) return '';
