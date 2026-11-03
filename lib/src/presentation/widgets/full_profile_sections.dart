@@ -48,7 +48,10 @@ class FullProfileSections extends StatelessWidget {
           _section(
             context,
             'MUTUAL SERVERS',
-            ProfileMutualServerRows(servers: profile.mutualServers),
+            ProfileMutualServerRows(
+              servers: profile.mutualServers,
+              nameOf: controller.serverName,
+            ),
           ),
         ],
         if (profile.mutualFriends.isNotEmpty) ...[
@@ -211,12 +214,19 @@ class ProfileConnectionRows extends StatelessWidget {
   );
 }
 
-/// The mutual servers, one row each, with the client's own name for the
-/// server where it knows one and the raw id where it does not.
+/// The mutual servers, one row each: the server's name as the workspace
+/// knows it, and the user's nickname there when Discord reports one.
 class ProfileMutualServerRows extends StatelessWidget {
-  const ProfileMutualServerRows({required this.servers, super.key});
+  const ProfileMutualServerRows({
+    required this.servers,
+    required this.nameOf,
+    super.key,
+  });
 
   final List<MutualServer> servers;
+
+  /// The workspace's name for a guild id, or null for a server not loaded.
+  final String? Function(String guildId) nameOf;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -230,12 +240,26 @@ class ProfileMutualServerRows extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  server.nickname ?? server.id,
+                  nameOf(server.id) ?? 'Unknown server',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: FlucordType.caption),
+                  style: FlucordTextRole.label.style,
                 ),
               ),
+              if (server.nickname case final nickname?)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      nickname,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        color: context.surfaces.captionText,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

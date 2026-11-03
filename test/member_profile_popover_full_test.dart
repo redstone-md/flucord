@@ -42,6 +42,40 @@ void main() {
     );
   });
 
+  testWidgets('a mutual server is listed by its name, not its id', (
+    tester,
+  ) async {
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(
+        profile: const OtherUserProfile(
+          userId: '222222222222222222',
+          mutualServers: [
+            MutualServer(id: '666666666666666666', nickname: 'mira-dev'),
+            MutualServer(id: '777777777777777777'),
+          ],
+        ),
+      ),
+      notesProvider: () => _FakeNotesRepository(),
+      serverNameOf: (id) => id == '666666666666666666' ? 'Flucord Dev' : null,
+    );
+    addTearDown(controller.dispose);
+    await controller.open('222');
+    await _pumpPopover(tester, controller);
+
+    final servers = find.byKey(const ValueKey('profile-mutual-servers'));
+    expect(
+      find.descendant(of: servers, matching: find.text('Flucord Dev')),
+      findsOne,
+    );
+    // A server the workspace has not loaded still reads as words.
+    expect(
+      find.descendant(of: servers, matching: find.text('Unknown server')),
+      findsOne,
+    );
+    expect(find.textContaining('666666666666666666'), findsNothing);
+    expect(find.textContaining('777777777777777777'), findsNothing);
+  });
+
   testWidgets('a note can be edited and saved from the popover', (
     tester,
   ) async {
