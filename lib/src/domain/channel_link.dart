@@ -78,8 +78,7 @@ final class InviteLink {
   /// The distinct invite codes linked in [text], in the order they appear.
   static List<String> codesIn(String text) => {
     for (final match in _linkInText.allMatches(text))
-      if (_codeFromUri(Uri.tryParse(_withScheme(match[0]!))) case final code?)
-        code,
+      ?_codeFromUri(Uri.tryParse(_withScheme(match[0]!))),
   }.toList();
 
   static String _withScheme(String link) =>
