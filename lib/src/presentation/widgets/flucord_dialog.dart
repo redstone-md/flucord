@@ -34,7 +34,8 @@ class FlucordDialog extends StatelessWidget {
   }) : child = null,
        maxHeight = null,
        alignment = null,
-       insetPadding = null;
+       insetPadding = null,
+       fullWindow = false;
 
   /// The frame alone, with [child] inside it at the size it asks for, within
   /// [maxWidth] and [maxHeight].
@@ -52,7 +53,22 @@ class FlucordDialog extends StatelessWidget {
        description = null,
        content = null,
        actions = null,
-       onConfirm = null;
+       onConfirm = null,
+       fullWindow = false;
+
+  /// [child] over the whole window on the rail colour, for a screen that
+  /// replaces the app while it is open, such as settings.
+  const FlucordDialog.fullWindow({required Widget this.child, super.key})
+    : title = null,
+      description = null,
+      content = null,
+      actions = null,
+      onConfirm = null,
+      maxWidth = double.infinity,
+      maxHeight = null,
+      alignment = null,
+      insetPadding = null,
+      fullWindow = true;
 
   final Widget? title;
 
@@ -69,6 +85,7 @@ class FlucordDialog extends StatelessWidget {
   final double? maxHeight;
   final AlignmentGeometry? alignment;
   final EdgeInsets? insetPadding;
+  final bool fullWindow;
 
   static const _padding = 20.0;
   static const _gap = 16.0;
@@ -76,6 +93,12 @@ class FlucordDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final child = this.child;
+    if (fullWindow && child != null) {
+      return Dialog.fullscreen(
+        backgroundColor: context.surfaces.rail,
+        child: child,
+      );
+    }
     return Dialog(
       alignment: alignment,
       insetPadding: insetPadding,

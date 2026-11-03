@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/stream_quality_controller.dart';
@@ -15,6 +16,7 @@ import 'package:flucord/src/presentation/widgets/flucord_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 import 'support/developer_terms.dart';
 import 'support/fake_video_encoder.dart';
@@ -36,6 +38,42 @@ void main() {
     expect(repository.applied.single.theme, UserSettingsTheme.light);
     expect(controller.settings, isNotNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('heads the page in the title role and groups the pages', (
+    tester,
+  ) async {
+    await _pumpDialog(tester, _Repository());
+
+    final title = tester
+        .renderObject<RenderParagraph>(
+          find.descendant(
+            // The card's top bar: the row that holds the close button.
+            of: find
+                .ancestor(
+                  of: find.byKey(const ValueKey('user-settings-close')),
+                  matching: find.byType(Row),
+                )
+                .first,
+            matching: find.text('Appearance'),
+          ),
+        )
+        .text
+        .style!;
+    expect(title.fontSize, FlucordTextRole.title.size);
+    expect(title.fontWeight, FontWeight.w500);
+    expect(find.text('User settings'), findsOneWidget);
+    expect(find.text('App settings'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('settings-nav-profile'))).dy,
+      lessThan(tester.getTopLeft(find.text('App settings')).dy),
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('settings-nav-appearance')))
+          .dy,
+      greaterThan(tester.getTopLeft(find.text('App settings')).dy),
+    );
   });
 
   testWidgets('leaves a theme Flucord cannot draw unselectable', (

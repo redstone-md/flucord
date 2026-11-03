@@ -105,6 +105,48 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedLogout03,
     matchTextDirection: true,
   );
+
+  // User settings pages.
+  static const profile = FlucordIconData(HugeIcons.strokeRoundedUserCircle);
+  static const appearance = FlucordIconData(HugeIcons.strokeRoundedPaintBoard);
+  static const chat = FlucordIconData(HugeIcons.strokeRoundedComment01);
+  static const notifications = FlucordIconData(
+    HugeIcons.strokeRoundedNotification01,
+  );
+  static const privacy = FlucordIconData(HugeIcons.strokeRoundedShield01);
+  static const standing = FlucordIconData(
+    HugeIcons.strokeRoundedJusticeScale01,
+  );
+  static const family = FlucordIconData(HugeIcons.strokeRoundedUserMultiple02);
+  static const devices = FlucordIconData(
+    HugeIcons.strokeRoundedComputerPhoneSync,
+  );
+  static const entitlements = FlucordIconData(HugeIcons.strokeRoundedAward01);
+  static const twoFactor = FlucordIconData(HugeIcons.strokeRoundedKey01);
+  static const ageVerification = FlucordIconData(
+    HugeIcons.strokeRoundedIdVerified,
+  );
+  static const apps = FlucordIconData(HugeIcons.strokeRoundedRobot01);
+  static const download = FlucordIconData(HugeIcons.strokeRoundedDownload01);
+  static const keyboard = FlucordIconData(HugeIcons.strokeRoundedKeyboard);
+  static const streamerMode = FlucordIconData(HugeIcons.strokeRoundedTv01);
+  static const accessibility = FlucordIconData(
+    HugeIcons.strokeRoundedAccessibility,
+  );
+  static const themes = FlucordIconData(HugeIcons.strokeRoundedPaintBrush01);
+  static const language = FlucordIconData(HugeIcons.strokeRoundedTranslate);
+
+  // Server settings pages.
+  static const overview = FlucordIconData(
+    HugeIcons.strokeRoundedDashboardSquare01,
+  );
+  static const roles = FlucordIconData(HugeIcons.strokeRoundedShield02);
+  static const ban = FlucordIconData(HugeIcons.strokeRoundedHammer);
+  static const automod = FlucordIconData(HugeIcons.strokeRoundedRobotic);
+  static const invite = FlucordIconData(HugeIcons.strokeRoundedUserAdd01);
+  static const webhooks = FlucordIconData(HugeIcons.strokeRoundedWebhook);
+  static const expressions = FlucordIconData(HugeIcons.strokeRoundedSticker);
+  static const auditLog = FlucordIconData(HugeIcons.strokeRoundedNote01);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
