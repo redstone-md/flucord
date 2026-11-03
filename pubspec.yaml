@@ -62,18 +62,16 @@ flutter:
     - assets/sounds/call_hang_up.wav
     - assets/spellcheck/en.txt
     # The font licence ships beside the font, as the SIL OFL asks.
-    - assets/fonts/inter/LICENSE.txt
-  # One font on every platform. Inter is under the SIL Open Font License 1.1;
-  # see assets/fonts/inter/LICENSE.txt and NOTICE.
+    - assets/fonts/golos_text/OFL.txt
+  # One font on every platform. Golos Text is under the SIL Open Font License
+  # 1.1; see assets/fonts/golos_text/OFL.txt and NOTICE. Static faces, not the
+  # variable font: Flutter picks a face by weight, but it does not set a
+  # variable font's weight axis from FontWeight on its own.
   fonts:
-    - family: Inter
+    - family: Golos Text
       fonts:
-        - asset: assets/fonts/inter/Inter-Regular.ttf
-        - asset: assets/fonts/inter/Inter-Italic.ttf
-          style: italic
-        - asset: assets/fonts/inter/Inter-Medium.ttf
+        - asset: assets/fonts/golos_text/GolosText-Regular.ttf
+        - asset: assets/fonts/golos_text/GolosText-Medium.ttf
           weight: 500
-        - asset: assets/fonts/inter/Inter-SemiBold.ttf
+        - asset: assets/fonts/golos_text/GolosText-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/inter/Inter-Bold.ttf
-          weight: 700

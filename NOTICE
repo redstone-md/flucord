@@ -24,7 +24,7 @@ the inflection database built with the WordNet 1.6 database, Copyright 1997
 Princeton University. Permission to use, copy, modify and distribute is
 granted provided this notice is preserved.
 
-The Inter font in assets/fonts/inter is Copyright (c) 2016 The Inter Project
-Authors (https://github.com/rsms/inter). It is licensed under the SIL Open Font
-License, Version 1.1, whose full text is in assets/fonts/inter/LICENSE.txt and
-ships inside the app with the font.
+The Golos Text font in assets/fonts/golos_text is Copyright 2019 The Golos Text
+Project Authors (https://github.com/googlefonts/golos-text). It is licensed
+under the SIL Open Font License, Version 1.1, whose full text is in
+assets/fonts/golos_text/OFL.txt and ships inside the app with the font.

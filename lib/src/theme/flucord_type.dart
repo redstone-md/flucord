@@ -6,9 +6,10 @@ import 'package:flutter/material.dart';
 /// five sizes rather than one per widget. Nothing is under 12 px. The font
 /// dial in Accessibility then scales all of them together.
 abstract final class FlucordType {
-  /// Bundled with the app (see `assets/fonts/inter`), so text looks the same
-  /// on Windows, macOS and Linux. A system font would exist on one of them.
-  static const family = 'Inter';
+  /// Bundled with the app (see `assets/fonts/golos_text`), so text looks the
+  /// same on Windows, macOS and Linux. A system font would exist on one of
+  /// them. Its Cyrillic is drawn for interfaces: a `б` never reads as a `6`.
+  static const family = 'Golos Text';
 
   /// Timestamps, badges, counters, section labels and hints. The smallest.
   static const caption = 12.0;
