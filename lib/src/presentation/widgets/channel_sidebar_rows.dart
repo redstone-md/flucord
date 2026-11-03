@@ -1,5 +1,41 @@
 part of 'channel_sidebar.dart';
 
+/// The channel list's sizes, from the FLUCORD-68 design.
+abstract final class _SidebarMetrics {
+  static const headerHeight = 48.0;
+  static const rowHeight = 30.0;
+
+  /// The space between rows, so two filled rows never touch.
+  static const rowGap = 2.0;
+
+  /// How far the list sits in from the sidebar's edges.
+  static const listInset = 8.0;
+
+  /// A row's padding on either side of its content.
+  static const rowPadding = 8.0;
+  static const iconSize = 16.0;
+  static const iconGap = 8.0;
+
+  /// Where a row's name starts, measured from the row's start.
+  static const nameStart = rowPadding + iconSize + iconGap;
+
+  /// How much further in a nested row starts.
+  static const nestedIndent = 16.0;
+
+  static const labelGapAbove = 16.0;
+  static const labelGapBelow = 4.0;
+  static const categoryChevronSize = 12.0;
+
+  static const seatAvatarSize = 20.0;
+  static const speakingRingWidth = 2.0;
+
+  /// The unread marker on the sidebar's edge.
+  static const unreadMarker = Size(4, 8);
+
+  /// The selected row's fill: the text colour, faintly.
+  static const selectedAlpha = 0.06;
+}
+
 /// A server's sidebar header: its name, and every action on the server in the
 /// one menu the name opens, the way Discord's own header works.
 ///
@@ -39,11 +75,15 @@ class _ServerHeader extends StatelessWidget {
       onSelected: (action) => _perform(context, action),
       itemBuilder: (_) => entries,
       child: SizedBox(
-        height: 40,
+        height: _SidebarMetrics.headerHeight,
         child: Row(
           children: [
             Expanded(child: title),
-            const Icon(Icons.expand_more, size: 18),
+            FlucordIcon(
+              FlucordIcons.chevronDown,
+              size: _SidebarMetrics.iconSize,
+              color: context.surfaces.muted,
+            ),
           ],
         ),
       ),
@@ -283,47 +323,55 @@ class _CategorySection extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Column(
+  Widget build(BuildContext context) {
+    final color = context.surfaces.captionText;
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          container: true,
-          // The name as written. Capitals are only how it is drawn, and some
-          // screen readers would spell them out.
-          label: category.name,
-          button: true,
-          expanded: !collapsed,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              key: ValueKey('category-${category.id}'),
-              onTap: onToggle,
-              borderRadius: FlucordRadius.small,
-              child: ExcludeSemantics(
-                child: SizedBox(
-                  height: 28,
-                  child: Row(
-                    children: [
-                      Icon(
-                        collapsed ? Icons.chevron_right : Icons.expand_more,
-                        size: 16,
-                        color: context.surfaces.muted,
-                      ),
-                      const SizedBox(width: 2),
-                      Expanded(
-                        child: Text(
-                          category.name.toUpperCase(),
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.surfaces.muted,
-                            fontSize: FlucordType.caption,
-                            fontWeight: FontWeight.w700,
+        Padding(
+          padding: const EdgeInsets.only(
+            top: _SidebarMetrics.labelGapAbove,
+            bottom: _SidebarMetrics.labelGapBelow,
+          ),
+          child: Semantics(
+            container: true,
+            // The name as written. Capitals are only how it is drawn, and
+            // some screen readers would spell them out.
+            label: category.name,
+            button: true,
+            expanded: !collapsed,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: ValueKey('category-${category.id}'),
+                onTap: onToggle,
+                borderRadius: FlucordRadius.small,
+                child: ExcludeSemantics(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: _SidebarMetrics.rowPadding,
+                    ),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            category.name.toUpperCase(),
+                            overflow: TextOverflow.ellipsis,
+                            style: FlucordTextRole.caption.style.copyWith(
+                              color: color,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        FlucordIcon(
+                          collapsed
+                              ? FlucordIcons.chevronRight
+                              : FlucordIcons.chevronDown,
+                          size: _SidebarMetrics.categoryChevronSize,
+                          color: color,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -332,10 +380,11 @@ class _CategorySection extends StatelessWidget {
         ),
         ...children,
       ],
-    ),
-  );
+    );
+  }
 }
 
+/// A group heading with no toggle, such as "Text channels".
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
 
@@ -344,13 +393,16 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 8, 6),
+      padding: const EdgeInsets.fromLTRB(
+        _SidebarMetrics.rowPadding,
+        _SidebarMetrics.labelGapAbove,
+        _SidebarMetrics.rowPadding,
+        _SidebarMetrics.labelGapBelow,
+      ),
       child: Text(
         label,
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w600,
+        style: FlucordTextRole.caption.style.copyWith(
+          color: context.surfaces.captionText,
         ),
       ),
     );
@@ -382,100 +434,125 @@ class _ChannelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final strong = selected || showsUnread;
     // A muted channel reads as quieter than a plain read one, which is how the
     // official client tells the two apart at a glance.
     final foreground = muted && !selected
-        ? context.surfaces.muted.withValues(alpha: 0.6)
-        : selected
-        ? Theme.of(context).colorScheme.onSurface
-        : showsUnread
-        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.88)
-        : context.surfaces.muted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Semantics(
-        container: true,
-        label: activityLabel(
-          channel.name,
-          mentionCount: channel.mentionCount,
-          muted: muted,
-          unread: showsUnread,
-        ),
-        button: true,
-        selected: selected,
-        child: Material(
-          color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: FlucordRadius.small,
-          child: InkWell(
-            key: ValueKey('channel-${channel.id}'),
-            onTap: onPressed,
-            onSecondaryTapDown: onNotificationRequest == null
-                ? null
-                : (details) => _openMenu(context, details.globalPosition),
-            borderRadius: FlucordRadius.small,
-            // The label above already says all of this. The badge alone would
-            // read as a bare number.
-            child: ExcludeSemantics(
-              child: SizedBox(
-                height: 34,
-                child: Row(
-                  children: [
-                    SizedBox(width: indented ? 18 : 10),
-                    if (recipient != null)
-                      MemberAvatar(member: recipient!, size: 24)
-                    else
-                      Icon(
-                        channel.isDirectMessage
-                            ? Icons.person_outline
-                            : channel.isThread
-                            ? Icons.forum_outlined
-                            : switch (channel.kind) {
-                                ChannelKind.text => Icons.tag,
-                                ChannelKind.voice => Icons.volume_up_outlined,
-                                ChannelKind.forum => Icons.forum_outlined,
-                                ChannelKind.media => Icons.perm_media_outlined,
-                              },
-                        size: 17,
+        ? surfaces.captionText
+        : strong
+        ? surfaces.text
+        : surfaces.muted;
+    final row = Semantics(
+      container: true,
+      label: activityLabel(
+        channel.name,
+        mentionCount: channel.mentionCount,
+        muted: muted,
+        unread: showsUnread,
+      ),
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected
+            ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
+            : Colors.transparent,
+        borderRadius: FlucordRadius.control,
+        child: InkWell(
+          key: ValueKey('channel-${channel.id}'),
+          onTap: onPressed,
+          onSecondaryTapDown: onNotificationRequest == null
+              ? null
+              : (details) => _openMenu(context, details.globalPosition),
+          borderRadius: FlucordRadius.control,
+          // The label above already says all of this. The badge alone would
+          // read as a bare number.
+          child: ExcludeSemantics(
+            child: SizedBox(
+              height: _SidebarMetrics.rowHeight,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: indented
+                        ? _SidebarMetrics.rowPadding +
+                              _SidebarMetrics.nestedIndent
+                        : _SidebarMetrics.rowPadding,
+                  ),
+                  if (recipient != null)
+                    MemberAvatar(member: recipient!, size: 24)
+                  else
+                    FlucordIcon(
+                      _iconFor(channel),
+                      size: _SidebarMetrics.iconSize,
+                      color: foreground,
+                    ),
+                  const SizedBox(width: _SidebarMetrics.iconGap),
+                  Expanded(
+                    child: Text(
+                      channel.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.label.style.copyWith(
                         color: foreground,
-                      ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        channel.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: FlucordType.label,
-                          fontWeight: showsUnread || selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
+                        fontWeight: strong ? FontWeight.w500 : FontWeight.w400,
                       ),
                     ),
-                    if (muted)
-                      Padding(
-                        key: ValueKey('channel-muted-${channel.id}'),
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Icon(
-                          Icons.notifications_off_outlined,
-                          size: 14,
-                          color: foreground,
-                        ),
+                  ),
+                  if (muted)
+                    Padding(
+                      key: ValueKey('channel-muted-${channel.id}'),
+                      padding: const EdgeInsetsDirectional.only(end: 4),
+                      child: FlucordIcon(
+                        FlucordIcons.silent,
+                        size: _SidebarMetrics.iconSize,
+                        color: foreground,
                       ),
-                    if (channel.mentionCount > 0)
-                      CountBadge(
-                        key: ValueKey('channel-mention-${channel.id}'),
-                        count: channel.mentionCount,
-                      ),
-                    const SizedBox(width: 8),
-                  ],
-                ),
+                    ),
+                  if (channel.mentionCount > 0)
+                    CountBadge(
+                      key: ValueKey('channel-mention-${channel.id}'),
+                      count: channel.mentionCount,
+                    ),
+                  const SizedBox(width: _SidebarMetrics.rowPadding),
+                ],
               ),
             ),
           ),
         ),
       ),
     );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _SidebarMetrics.rowGap),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          row,
+          // The selected row is read the moment it opens, so only the others
+          // carry the marker.
+          if (showsUnread && !selected)
+            PositionedDirectional(
+              start: -_SidebarMetrics.listInset,
+              top:
+                  (_SidebarMetrics.rowHeight -
+                      _SidebarMetrics.unreadMarker.height) /
+                  2,
+              child: _UnreadMarker(
+                key: ValueKey('channel-unread-${channel.id}'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static FlucordIconData _iconFor(ConversationChannel channel) {
+    if (channel.isDirectMessage) return FlucordIcons.person;
+    if (channel.isThread) return FlucordIcons.threads;
+    return switch (channel.kind) {
+      ChannelKind.text => FlucordIcons.textChannel,
+      ChannelKind.voice => FlucordIcons.voiceChannel,
+      ChannelKind.forum => FlucordIcons.forum,
+      ChannelKind.media => FlucordIcons.image,
+    };
   }
 
   Future<void> _openMenu(BuildContext context, Offset position) async {
@@ -495,6 +572,24 @@ class _ChannelRow extends StatelessWidget {
   }
 }
 
+/// The small bar on the sidebar's edge that marks an unread channel.
+class _UnreadMarker extends StatelessWidget {
+  const _UnreadMarker({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: _SidebarMetrics.unreadMarker.width,
+    height: _SidebarMetrics.unreadMarker.height,
+    decoration: BoxDecoration(
+      color: context.surfaces.text,
+      // Flat against the edge, round on the side facing the row.
+      borderRadius: BorderRadiusDirectional.horizontal(
+        end: FlucordRadius.small.topRight,
+      ),
+    ),
+  );
+}
+
 /// One person seated in a voice channel, shown under its sidebar row.
 ///
 /// Discord puts the occupants directly beneath the channel, and that placement
@@ -507,6 +602,7 @@ class VoiceSeatRow extends StatelessWidget {
     required this.state,
     required this.member,
     required this.spaceId,
+    this.speaking = false,
     this.indented = false,
     this.onOpenProfile,
     super.key,
@@ -515,6 +611,9 @@ class VoiceSeatRow extends StatelessWidget {
   final VoiceParticipantStateEvent state;
   final Member? member;
   final String spaceId;
+
+  /// Whether their voice is arriving right now, which rings the avatar.
+  final bool speaking;
   final bool indented;
 
   /// Opens whoever this row is. Discord opens a profile from these rows with
@@ -527,64 +626,46 @@ class VoiceSeatRow extends StatelessWidget {
     final name = member?.displayName ?? 'Unknown user';
     final silenced = state.selfMuted || state.serverMuted;
     final deafened = state.selfDeafened || state.serverDeafened;
-    final row = Padding(
-      padding: EdgeInsets.fromLTRB(indented ? 34 : 22, 1, 8, 1),
-      child: Row(
-        children: [
-          if (member case final resolved?)
-            MemberAvatar(member: resolved, size: 18, spaceId: spaceId)
-          else
-            Icon(Icons.person_outline, size: 16, color: surfaces.muted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: FlucordType.caption,
-                color: silenced || deafened
-                    ? surfaces.muted
-                    : Theme.of(context).colorScheme.onSurface,
+    final nameColor = speaking
+        ? surfaces.text
+        : silenced || deafened
+        ? surfaces.captionText
+        : surfaces.muted;
+    final row = SizedBox(
+      height: _SidebarMetrics.rowHeight,
+      child: Padding(
+        // The avatar lines up with the channel's name above it.
+        padding: EdgeInsetsDirectional.only(
+          start:
+              _SidebarMetrics.nameStart +
+              (indented ? _SidebarMetrics.nestedIndent : 0),
+          end: _SidebarMetrics.rowPadding,
+        ),
+        child: Row(
+          children: [
+            _SeatAvatar(
+              userId: state.userId,
+              member: member,
+              spaceId: spaceId,
+              speaking: speaking,
+            ),
+            const SizedBox(width: _SidebarMetrics.iconGap),
+            Expanded(
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.style.copyWith(color: nameColor),
               ),
             ),
-          ),
-          if (state.isStreaming)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.screen_share_outlined,
-                size: 13,
-                color: surfaces.muted,
-              ),
-            ),
-          if (state.isVideoEnabled)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.videocam_outlined,
-                size: 13,
-                color: surfaces.muted,
-              ),
-            ),
-          if (deafened)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.headset_off_outlined,
-                size: 13,
-                color: surfaces.muted,
-              ),
-            )
-          else if (silenced)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.mic_off_outlined,
-                size: 13,
-                color: surfaces.muted,
-              ),
-            ),
-        ],
+            if (state.isStreaming)
+              const _SeatStateIcon(FlucordIcons.screenShare),
+            if (state.isVideoEnabled) const _SeatStateIcon(FlucordIcons.camera),
+            if (deafened)
+              const _SeatStateIcon(FlucordIcons.headphonesOff)
+            else if (silenced)
+              const _SeatStateIcon(FlucordIcons.micOff),
+          ],
+        ),
       ),
     );
     final open = onOpenProfile;
@@ -595,7 +676,88 @@ class VoiceSeatRow extends StatelessWidget {
       // that ignores it is the one place in the app where the mouse stops
       // working.
       onSecondaryTap: () => open(state.userId),
+      borderRadius: FlucordRadius.control,
       child: row,
     );
   }
+}
+
+/// A seat's avatar, with the speaking ring drawn around it. The ring sits
+/// outside the avatar's box, so the row does not move when it comes and goes.
+class _SeatAvatar extends StatelessWidget {
+  const _SeatAvatar({
+    required this.userId,
+    required this.member,
+    required this.spaceId,
+    required this.speaking,
+  });
+
+  final String userId;
+  final Member? member;
+  final String spaceId;
+  final bool speaking;
+
+  @override
+  Widget build(BuildContext context) {
+    const ring = _SidebarMetrics.speakingRingWidth;
+    return SizedBox.square(
+      key: ValueKey('voice-seat-avatar-$userId'),
+      dimension: _SidebarMetrics.seatAvatarSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: switch (member) {
+              final resolved? => MemberAvatar(
+                member: resolved,
+                size: _SidebarMetrics.seatAvatarSize,
+                spaceId: spaceId,
+                // The ring is this row's signal; a presence dot would crowd it.
+                showPresence: false,
+              ),
+              null => FlucordIcon(
+                FlucordIcons.person,
+                size: _SidebarMetrics.iconSize,
+                color: context.surfaces.muted,
+              ),
+            },
+          ),
+          if (speaking)
+            Positioned.fill(
+              left: -ring,
+              top: -ring,
+              right: -ring,
+              bottom: -ring,
+              child: Container(
+                key: ValueKey('voice-seat-ring-$userId'),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.surfaces.success,
+                    width: ring,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small state mark at the end of a seat: muted, deafened, video, stream.
+class _SeatStateIcon extends StatelessWidget {
+  const _SeatStateIcon(this.icon);
+
+  final FlucordIconData icon;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.only(start: 4),
+    child: FlucordIcon(
+      icon,
+      size: _SidebarMetrics.iconSize,
+      color: context.surfaces.muted,
+    ),
+  );
 }

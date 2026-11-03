@@ -8,6 +8,7 @@ import '../../domain/chat_repository.dart';
 import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -63,6 +64,7 @@ class ChannelSidebar extends StatelessWidget {
     this.onReportServer,
     this.friends,
     this.seatedByChannel = const {},
+    this.speakingUserIds = const {},
     this.voiceConnectionBar,
     super.key,
   });
@@ -74,6 +76,10 @@ class ChannelSidebar extends StatelessWidget {
   /// it here rather than from the voice connection is what lets the sidebar
   /// answer for channels this client has never joined.
   final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
+
+  /// Who is speaking right now, by user id. Only known for the room this
+  /// client is in, so a seat elsewhere never shows the speaking ring.
+  final Set<String> speakingUserIds;
 
   /// The strip that keeps a live voice connection reachable, or null when
   /// there is none. Passed in rather than built here so the sidebar does not
@@ -176,15 +182,12 @@ class ChannelSidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // No line under the header: the rail side of the window has no
+          // dividers, only the canvas card has edges.
           Container(
-            height: 58,
+            height: _SidebarMetrics.headerHeight,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: context.surfaces.border),
-              ),
-            ),
             child: isDirect
                 ? _directMessagesHeader(context)
                 : _ServerHeader(
@@ -210,7 +213,12 @@ class ChannelSidebar extends StatelessWidget {
                     presenceOf: (userId) => memberOf(userId)?.presence,
                   )
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
+                    padding: const EdgeInsets.fromLTRB(
+                      _SidebarMetrics.listInset,
+                      0,
+                      _SidebarMetrics.listInset,
+                      _SidebarMetrics.listInset,
+                    ),
                     children: _navigationEntries(order),
                   ),
           ),
@@ -248,22 +256,18 @@ class ChannelSidebar extends StatelessWidget {
         child: Text(
           space.name,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w600,
-            color: _spaceMuted
-                ? context.surfaces.muted
-                : Theme.of(context).colorScheme.onSurface,
+          style: FlucordTextRole.heading.style.copyWith(
+            color: _spaceMuted ? context.surfaces.muted : context.surfaces.text,
           ),
         ),
       ),
       if (_spaceMuted)
         Padding(
           key: const ValueKey('space-muted'),
-          padding: const EdgeInsets.only(right: 4),
-          child: Icon(
-            Icons.notifications_off_outlined,
-            size: 15,
+          padding: const EdgeInsetsDirectional.only(end: 4),
+          child: FlucordIcon(
+            FlucordIcons.silent,
+            size: _SidebarMetrics.iconSize,
             color: context.surfaces.muted,
           ),
         ),
@@ -352,7 +356,6 @@ class ChannelSidebar extends StatelessWidget {
       if (uncategorized.isNotEmpty) ...[
         const _SectionLabel(label: 'Channels'),
         for (final channel in uncategorized) _rowFor(channel),
-        const SizedBox(height: 10),
       ],
       for (final category in order.categories)
         // A category whose every channel was filtered out is dropped whole.
@@ -376,7 +379,6 @@ class ChannelSidebar extends StatelessWidget {
             ],
           ),
       if (order.threads.isNotEmpty) ...[
-        const SizedBox(height: 10),
         const _SectionLabel(label: 'Active threads'),
         for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
@@ -424,13 +426,15 @@ class ChannelSidebar extends StatelessWidget {
       return const [];
     }
     return [
-      GuildEventsSidebarButton(
-        count: scheduledEventCount,
-        isLoading: isLoadingScheduledEvents,
-        hasError: scheduledEventsError != null,
-        onPressed: onOpenEvents ?? () {},
+      Padding(
+        padding: const EdgeInsets.only(top: _SidebarMetrics.listInset),
+        child: GuildEventsSidebarButton(
+          count: scheduledEventCount,
+          isLoading: isLoadingScheduledEvents,
+          hasError: scheduledEventsError != null,
+          onPressed: onOpenEvents ?? () {},
+        ),
       ),
-      const SizedBox(height: 10),
     ];
   }
 
@@ -444,17 +448,14 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in text) _rowFor(channel),
       ],
       if (order.threads.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Active threads'),
         for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
       if (forums.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Forums'),
         for (final channel in forums) _rowFor(channel),
       ],
       if (voice.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Voice channels'),
         for (final channel in voice) ..._voiceEntry(channel),
       ],
@@ -473,6 +474,7 @@ class ChannelSidebar extends StatelessWidget {
         state: seat,
         member: memberOf(seat.userId),
         spaceId: space.id,
+        speaking: speakingUserIds.contains(seat.userId),
         indented: indented,
         onOpenProfile: onOpenMemberProfile,
       ),
