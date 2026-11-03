@@ -74,11 +74,7 @@ void main() {
   ) async {
     final badge = await pumpBadge(
       tester,
-      CountBadge(
-        count: 4,
-        color: surfaces.control,
-        textColor: surfaces.text,
-      ),
+      CountBadge(count: 4, color: surfaces.control, textColor: surfaces.text),
     );
 
     expect(decorationOf(tester, badge).color, surfaces.control);

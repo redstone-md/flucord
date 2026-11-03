@@ -60,6 +60,10 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+  static const link = FlucordIconData(HugeIcons.strokeRoundedLink01);
+  static const lightTheme = FlucordIconData(HugeIcons.strokeRoundedSun03);
+  static const darkTheme = FlucordIconData(HugeIcons.strokeRoundedMoon02);
+  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
