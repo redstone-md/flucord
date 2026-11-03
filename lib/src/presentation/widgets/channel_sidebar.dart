@@ -186,10 +186,13 @@ class ChannelSidebar extends StatelessWidget {
           // dividers, only the canvas card has edges.
           Container(
             height: _SidebarMetrics.headerHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            // The DM search lines up with the rows under it.
+            padding: EdgeInsets.symmetric(
+              horizontal: isDirect ? _SidebarMetrics.listInset : 16,
+            ),
             alignment: Alignment.centerLeft,
             child: isDirect
-                ? _directMessagesHeader(context)
+                ? _DirectMessageSearch(onPressed: onNewDirectMessage)
                 : _ServerHeader(
                     title: _spaceTitle(context),
                     onOpenSettings: onOpenServerSettings,
@@ -200,6 +203,19 @@ class ChannelSidebar extends StatelessWidget {
                         : _openSpaceNotifications,
                   ),
           ),
+          if (friends case final friends? when isDirect)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _SidebarMetrics.listInset,
+              ),
+              child: _SidebarNavRow(
+                key: const ValueKey('toggle-friends'),
+                icon: FlucordIcons.members,
+                label: 'Friends',
+                selected: friends.isPanelOpen,
+                onPressed: friends.togglePanel,
+              ),
+            ),
           Expanded(
             child: isDirect && (friends?.isPanelOpen ?? false)
                 // The friend graph takes the whole pane rather than sitting
@@ -219,7 +235,7 @@ class ChannelSidebar extends StatelessWidget {
                       _SidebarMetrics.listInset,
                       _SidebarMetrics.listInset,
                     ),
-                    children: _navigationEntries(order),
+                    children: _navigationEntries(context, order),
                   ),
           ),
           // On a short window a tall bar scrolls, so the channels and the
@@ -274,40 +290,40 @@ class ChannelSidebar extends StatelessWidget {
     ],
   );
 
-  /// Direct messages have no server menu: their actions start a conversation
-  /// or swap the list, so they stay one click away.
-  Widget _directMessagesHeader(BuildContext context) => Row(
-    children: [
-      Expanded(child: _spaceTitle(context)),
-      if (friends case final friends?)
-        IconButton(
-          key: const ValueKey('toggle-friends'),
-          onPressed: friends.togglePanel,
-          icon: Icon(
-            friends.isPanelOpen
-                ? Icons.forum_outlined
-                : Icons.people_alt_outlined,
-            size: 18,
+  /// What sits beside the "Direct messages" label: the mark of a muted
+  /// space and the space's notification menu. Null when there is neither.
+  Widget? _directMessagesLabelTrailing(BuildContext context) {
+    final onRequest = onNotificationRequest;
+    if (!_spaceMuted && onRequest == null) return null;
+    final color = context.surfaces.captionText;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_spaceMuted)
+          FlucordIcon(
+            key: const ValueKey('space-muted'),
+            FlucordIcons.silent,
+            size: _SidebarMetrics.labelIconSize,
+            color: color,
           ),
-          tooltip: friends.isPanelOpen ? 'Conversations' : 'Friends',
-        ),
-      IconButton(
-        key: const ValueKey('new-direct-message'),
-        onPressed: onNewDirectMessage,
-        icon: const Icon(Icons.edit_square),
-        tooltip: 'New message',
-      ),
-      if (onNotificationRequest case final onRequest?)
-        PopupMenuButton<NotificationMenuRequest>(
-          key: const ValueKey('space-notification-menu'),
-          tooltip: 'Notification settings',
-          icon: const Icon(Icons.more_vert, size: 18),
-          padding: EdgeInsets.zero,
-          onSelected: (request) => onRequest(request, null),
-          itemBuilder: (context) => _spaceNotificationItems,
-        ),
-    ],
-  );
+        if (onRequest != null)
+          PopupMenuButton<NotificationMenuRequest>(
+            key: const ValueKey('space-notification-menu'),
+            tooltip: 'Notification settings',
+            iconSize: _SidebarMetrics.labelIconSize,
+            style: IconButton.styleFrom(
+              fixedSize: const Size.square(_SidebarMetrics.labelButtonSize),
+              minimumSize: const Size.square(_SidebarMetrics.labelButtonSize),
+              padding: EdgeInsets.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: FlucordIcon(FlucordIcons.more, color: color),
+            onSelected: (request) => onRequest(request, null),
+            itemBuilder: (context) => _spaceNotificationItems,
+          ),
+      ],
+    );
+  }
 
   List<PopupMenuEntry<NotificationMenuRequest>> get _spaceNotificationItems =>
       notificationMenuItems(
@@ -345,8 +361,11 @@ class ChannelSidebar extends StatelessWidget {
   bool _showsUnread(ConversationChannel channel) =>
       _readState.showsUnread(channel);
 
-  List<Widget> _navigationEntries(ChannelSidebarOrder order) {
-    if (space.isDirectMessages) return _directMessageEntries(order);
+  List<Widget> _navigationEntries(
+    BuildContext context,
+    ChannelSidebarOrder order,
+  ) {
+    if (space.isDirectMessages) return _directMessageEntries(context, order);
     if (order.categories.isEmpty) {
       return [..._eventEntries(), ..._uncategorizedEntries(order)];
     }
@@ -391,10 +410,14 @@ class ChannelSidebar extends StatelessWidget {
   /// A request never sits in the main list. Discord hides it there until the
   /// account answers it, which is the whole point of the folder, so the split
   /// happens here rather than in whatever built the channel list.
-  List<Widget> _directMessageEntries(ChannelSidebarOrder order) {
+  List<Widget> _directMessageEntries(
+    BuildContext context,
+    ChannelSidebarOrder order,
+  ) {
     final requests = order.messageRequests;
     return [
       _DirectMessagesFolder(
+        labelTrailing: _directMessagesLabelTrailing(context),
         requests: requests,
         conversationRows: [
           for (final channel in order.conversations) _rowFor(channel),

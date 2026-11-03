@@ -66,7 +66,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Direct Messages'), findsOneWidget);
+      expect(find.text('Direct messages'), findsOneWidget);
       expect(find.text('Jack'), findsOneWidget);
       expect(find.text('Flucord Bot'), findsOneWidget);
       expect(find.byKey(const ValueKey('server-rail')), findsOneWidget);

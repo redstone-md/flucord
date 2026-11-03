@@ -3,11 +3,17 @@ import 'package:flucord/src/application/friends_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
+import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/app_font.dart';
+import 'support/flucord_icon_finder.dart';
 
 // What the direct-messages sidebar looks like in direction B (FLUCORD-82):
 // people on 40 px rows with a 28 px avatar, quiet at rest and full strength
@@ -16,6 +22,61 @@ import 'package:flutter_test/flutter_test.dart';
 final _surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
 
 void main() {
+  testWidgets('the header is a search field that is never cut off', (
+    tester,
+  ) async {
+    await loadAppFont(tester);
+    var opened = 0;
+    await _pumpSidebar(tester, onNewDirectMessage: () => opened++);
+
+    const hint = 'Find or start a conversation';
+    final paragraph = tester.renderObject<RenderParagraph>(find.text(hint));
+    expect(paragraph.didExceedMaxLines, isFalse);
+    expect(
+      paragraph.size.width,
+      greaterThanOrEqualTo(paragraph.getMaxIntrinsicWidth(double.infinity)),
+      reason: 'the whole hint is drawn, not an ellipsis',
+    );
+    final field = find.byKey(const ValueKey('new-direct-message'));
+    expect(tester.getSize(field).height, 28);
+
+    await tester.tap(field);
+    expect(opened, 1);
+  });
+
+  testWidgets('Friends sits above the DMs and is filled while open', (
+    tester,
+  ) async {
+    final friends = FriendsController(() => null);
+    addTearDown(friends.dispose);
+    await _pumpSidebar(tester, friends: friends);
+
+    final row = find.byKey(const ValueKey('toggle-friends'));
+    expect(
+      find.descendant(of: row, matching: find.text('Friends')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: row, matching: findFlucordIcon(FlucordIcons.members)),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(row).bottom,
+      lessThan(tester.getRect(find.text('Direct messages')).top),
+    );
+
+    await tester.tap(row);
+    await tester.pump();
+
+    expect(find.byType(FriendsPanel), findsOneWidget);
+    final fill = tester
+        .widget<Material>(
+          find.descendant(of: row, matching: find.byType(Material)).first,
+        )
+        .color;
+    expect(fill, _surfaces.text.withValues(alpha: 0.06));
+  });
+
   testWidgets('a DM row is 40 high with a 28 px avatar and a status dot', (
     tester,
   ) async {

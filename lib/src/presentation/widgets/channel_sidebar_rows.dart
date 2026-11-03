@@ -31,6 +31,14 @@ abstract final class _SidebarMetrics {
   static const labelGapBelow = 4.0;
   static const categoryChevronSize = 12.0;
 
+  /// An icon on a group label, and the button around it, kept small so the
+  /// label line does not grow.
+  static const labelIconSize = 14.0;
+  static const labelButtonSize = 18.0;
+
+  /// The DM search in the header.
+  static const searchHeight = 28.0;
+
   static const seatAvatarSize = 20.0;
   static const speakingRingWidth = 2.0;
 
@@ -141,11 +149,15 @@ class _DirectMessagesFolder extends StatefulWidget {
     required this.requests,
     required this.conversationRows,
     required this.requestRows,
+    this.labelTrailing,
   });
 
   final List<ConversationChannel> requests;
   final List<Widget> conversationRows;
   final List<Widget> requestRows;
+
+  /// What sits at the end of the "Direct messages" label, if anything.
+  final Widget? labelTrailing;
 
   @override
   State<_DirectMessagesFolder> createState() => _DirectMessagesFolderState();
@@ -160,76 +172,137 @@ class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel(label: 'Messages'),
-        if (requests.isNotEmpty) ...[
-          _FolderRow(
+        _SectionLabel(label: 'Direct messages', trailing: widget.labelTrailing),
+        if (requests.isNotEmpty)
+          _SidebarNavRow(
             key: const ValueKey('message-requests-folder'),
+            icon: _showingRequests
+                ? FlucordIcons.directMessages
+                : FlucordIcons.inbox,
             label: _showingRequests ? 'Back to messages' : 'Message requests',
-            count: requests.length,
-            open: _showingRequests,
+            trailing: CountBadge(
+              key: const ValueKey('message-requests-count'),
+              count: requests.length,
+            ),
             onPressed: () =>
                 setState(() => _showingRequests = !_showingRequests),
           ),
-          const SizedBox(height: 4),
-        ],
         ...(_showingRequests ? widget.requestRows : widget.conversationRows),
       ],
     );
   }
 }
 
-/// The row that opens and closes the request folder.
-class _FolderRow extends StatelessWidget {
-  const _FolderRow({
-    required this.label,
-    required this.count,
-    required this.open,
-    required this.onPressed,
-    super.key,
-  });
+/// The DM header's search: a recessed box that opens the dialog to find
+/// somebody, or start a conversation with them.
+class _DirectMessageSearch extends StatelessWidget {
+  const _DirectMessageSearch({required this.onPressed});
 
-  final String label;
-  final int count;
-  final bool open;
+  static const _hint = 'Find or start a conversation';
+
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+    final surfaces = context.surfaces;
+    return Semantics(
+      button: true,
+      label: _hint,
       child: Material(
-        color: Colors.transparent,
-        borderRadius: FlucordRadius.small,
+        color: surfaces.inset,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: surfaces.border),
+          borderRadius: FlucordRadius.control,
+        ),
         child: InkWell(
+          key: const ValueKey('new-direct-message'),
           onTap: onPressed,
-          borderRadius: FlucordRadius.small,
-          child: SizedBox(
-            height: 34,
-            child: Row(
-              children: [
-                const SizedBox(width: 10),
-                Icon(
-                  open ? Icons.expand_less : Icons.inbox_outlined,
-                  size: 17,
-                  color: context.surfaces.muted,
+          borderRadius: FlucordRadius.control,
+          child: ExcludeSemantics(
+            child: Container(
+              height: _SidebarMetrics.searchHeight,
+              padding: const EdgeInsets.symmetric(
+                horizontal: _SidebarMetrics.rowPadding,
+              ),
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                _hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.style.copyWith(
+                  color: surfaces.captionText,
                 ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.surfaces.muted,
-                      fontSize: FlucordType.label,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row that opens a place rather than a channel, such as Friends or the
+/// message requests: an icon, a label and an optional count at the end.
+class _SidebarNavRow extends StatelessWidget {
+  const _SidebarNavRow({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.selected = false,
+    this.trailing,
+    super.key,
+  });
+
+  final FlucordIconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool selected;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final foreground = selected ? surfaces.text : surfaces.muted;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _SidebarMetrics.rowGap),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected
+              ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
+              : Colors.transparent,
+          borderRadius: FlucordRadius.control,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: FlucordRadius.control,
+            child: SizedBox(
+              height: _SidebarMetrics.rowHeight,
+              child: Row(
+                children: [
+                  const SizedBox(width: _SidebarMetrics.rowPadding),
+                  FlucordIcon(
+                    icon,
+                    size: _SidebarMetrics.iconSize,
+                    color: foreground,
+                  ),
+                  const SizedBox(width: _SidebarMetrics.iconGap),
+                  Expanded(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.label.style.copyWith(
+                        color: foreground,
+                        fontWeight: selected
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-                CountBadge(
-                  key: const ValueKey('message-requests-count'),
-                  count: count,
-                ),
-                const SizedBox(width: 8),
-              ],
+                  ?trailing,
+                  const SizedBox(width: _SidebarMetrics.rowPadding),
+                ],
+              ),
             ),
           ),
         ),
@@ -389,11 +462,13 @@ class _CategorySection extends StatelessWidget {
   }
 }
 
-/// A group heading with no toggle, such as "Text channels".
+/// A group heading with no toggle, such as "Text channels", with room for a
+/// small control at its end.
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, this.trailing});
 
   final String label;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -404,11 +479,25 @@ class _SectionLabel extends StatelessWidget {
         _SidebarMetrics.rowPadding,
         _SidebarMetrics.labelGapBelow,
       ),
-      child: Text(
-        label,
-        style: FlucordTextRole.caption.style.copyWith(
-          color: context.surfaces.captionText,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: FlucordTextRole.caption.style.copyWith(
+                color: context.surfaces.captionText,
+              ),
+            ),
+          ),
+          // The label's own line height, so a control never pushes the rows
+          // down.
+          if (trailing case final trailing?)
+            SizedBox(
+              height: FlucordTextRole.caption.lineHeight,
+              child: trailing,
+            ),
+        ],
       ),
     );
   }
