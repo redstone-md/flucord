@@ -9,6 +9,8 @@ import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
+import 'support/flucord_icon_finder.dart';
+
 /// The composer reads as the place to type: a recessed 44 px box with 16 px
 /// around it, the attach button on the left and the expression buttons on
 /// the right, all 28 px.
@@ -91,12 +93,7 @@ void main() {
     ]) {
       expect(tester.getSize(button), const Size.square(28));
       expect(
-        find.descendant(
-          of: button,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is FlucordIcon && widget.icon == icon,
-          ),
-        ),
+        find.descendant(of: button, matching: findFlucordIcon(icon)),
         findsOneWidget,
       );
     }

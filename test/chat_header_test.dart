@@ -11,6 +11,8 @@ import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
+import 'support/flucord_icon_finder.dart';
+
 /// The chat header is one clean 48 px line: the channel, a muted one-line
 /// topic, 28 px buttons and a recessed search field that teaches its
 /// shortcut.
@@ -156,15 +158,8 @@ void main() {
 
     final avatar = tester.getRect(find.byKey(const ValueKey('dm-avatar')));
     expect(avatar.right, lessThan(tester.getRect(find.text('Jack')).left));
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is FlucordIcon &&
-            (widget.icon == FlucordIcons.textChannel ||
-                widget.icon == FlucordIcons.person),
-      ),
-      findsNothing,
-    );
+    expect(findFlucordIcon(FlucordIcons.textChannel), findsNothing);
+    expect(findFlucordIcon(FlucordIcons.person), findsNothing);
   });
 }
 
