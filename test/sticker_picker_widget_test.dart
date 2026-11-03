@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/widgets/flucord_icon_button.dart';
 import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -132,7 +133,7 @@ void main() {
     await tester.pumpWidget(
       _PickerApp(sections: const [], onSend: (_) async => true),
     );
-    final button = tester.widget<IconButton>(
+    final button = tester.widget<FlucordIconButton>(
       find.byKey(const ValueKey('open-sticker-picker')),
     );
     expect(button.onPressed, isNull);

@@ -6,10 +6,12 @@ import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/gif_picker.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'expression_favorite_star.dart';
+import 'flucord_icon_button.dart';
 
 /// The composer's GIF button, and the sheet it opens.
 class GifPickerButton extends StatelessWidget {
@@ -31,7 +33,7 @@ class GifPickerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!controller.isSupported) return const SizedBox.shrink();
-    return IconButton(
+    return FlucordIconButton(
       key: const ValueKey('gif-picker-open'),
       tooltip: 'GIF',
       onPressed: () => unawaited(
@@ -42,7 +44,7 @@ class GifPickerButton extends StatelessWidget {
           favorites: favorites,
         ),
       ),
-      icon: const Icon(Icons.gif_box_outlined),
+      icon: FlucordIcons.gif,
     );
   }
 }

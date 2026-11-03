@@ -182,22 +182,21 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
         height: widget.dimension,
       ),
       padding: EdgeInsets.zero,
+      // [EmojiPickerButton.dimension] is the button's size, with no extra
+      // touch padding around it.
+      style: IconButton.styleFrom(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
       tooltip: controller.isOpen
           ? widget.purpose.closeTooltip
           : widget.purpose.openTooltip,
-      icon: widget.purpose == EmojiPickerPurpose.reaction
-          ? FlucordIcon(
-              FlucordIcons.addReaction,
-              size: widget.iconSize,
-              color: controller.isOpen ? context.surfaces.accentIcon : null,
-            )
-          : Icon(
-              controller.isOpen
-                  ? Icons.emoji_emotions
-                  : Icons.emoji_emotions_outlined,
-              size: widget.iconSize,
-              color: controller.isOpen ? context.surfaces.accentIcon : null,
-            ),
+      icon: FlucordIcon(
+        widget.purpose == EmojiPickerPurpose.reaction
+            ? FlucordIcons.addReaction
+            : FlucordIcons.emoji,
+        size: widget.iconSize,
+        color: controller.isOpen ? context.surfaces.accentIcon : null,
+      ),
     ),
   );
 }

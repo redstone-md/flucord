@@ -57,6 +57,18 @@ abstract final class FlucordIcons {
   // The chat header and the composer.
   static const call = FlucordIconData(HugeIcons.strokeRoundedCall02);
   static const channels = FlucordIconData(HugeIcons.strokeRoundedMenu01);
+  static const attach = FlucordIconData(HugeIcons.strokeRoundedAddCircle);
+  static const upload = FlucordIconData(HugeIcons.strokeRoundedFileUpload);
+  static const poll = FlucordIconData(HugeIcons.strokeRoundedChartBarLine);
+  static const notify = FlucordIconData(HugeIcons.strokeRoundedNotification01);
+  static const gif = FlucordIconData(HugeIcons.strokeRoundedGif01);
+  static const sticker = FlucordIconData(HugeIcons.strokeRoundedSticker);
+  static const send = FlucordIconData(
+    HugeIcons.strokeRoundedSent,
+    matchTextDirection: true,
+  );
+  static const slowmode = FlucordIconData(HugeIcons.strokeRoundedTimer02);
+  static const readOnly = FlucordIconData(HugeIcons.strokeRoundedUnavailable);
   static const explore = FlucordIconData(HugeIcons.strokeRoundedDiscoverCircle);
   static const more = FlucordIconData(HugeIcons.strokeRoundedMoreHorizontal);
   // Hugeicons' plain "signal" is the messenger logo; these are the bars.

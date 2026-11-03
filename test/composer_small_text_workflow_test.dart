@@ -1,4 +1,5 @@
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,11 +32,11 @@ void main() {
   ) async {
     await _openDemo(tester);
 
-    IconData? iconOf(String key) => tester
-        .widget<Icon>(
+    FlucordIconData iconOf(String key) => tester
+        .widget<FlucordIcon>(
           find.descendant(
             of: find.byKey(ValueKey(key)),
-            matching: find.byType(Icon),
+            matching: find.byType(FlucordIcon),
           ),
         )
         .icon;

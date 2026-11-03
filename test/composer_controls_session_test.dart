@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/proto/proto_message.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/expression_favorites.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';
@@ -390,7 +391,13 @@ void main() {
       await session.openChannel(SessionHarness.channelId);
 
       expect(find.byTooltip('Add attachment'), findsNothing);
-      expect(find.byIcon(Icons.add_circle_outline), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is FlucordIcon && widget.icon == FlucordIcons.attach,
+        ),
+        findsNothing,
+      );
       await tester.tap(find.byKey(const ValueKey('composer-menu')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('add-attachment')), findsNothing);

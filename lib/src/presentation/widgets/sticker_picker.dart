@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'accessibility_dials.dart';
 import 'expression_favorite_star.dart';
+import 'flucord_icon_button.dart';
 import 'message_sticker_view.dart';
 
 typedef SendStickersCallback = Future<bool> Function(List<String> stickerIds);
@@ -171,12 +173,10 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
         ),
       ),
     ],
-    builder: (context, controller, child) => IconButton(
+    builder: (context, controller, child) => FlucordIconButton(
       key: const ValueKey('open-sticker-picker'),
-      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-      padding: EdgeInsets.zero,
       onPressed: widget.isSending || _allStickers.isEmpty ? null : _toggleMenu,
-      icon: const Icon(Icons.sticky_note_2_outlined, size: 19),
+      icon: FlucordIcons.sticker,
       tooltip: 'Stickers',
     ),
   );
