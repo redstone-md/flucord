@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -66,44 +67,105 @@ class ActivityEmojiView extends StatelessWidget {
   }
 }
 
-/// The one-line activity summary shown under a name in a member row.
-class ActivitySummaryLine extends StatelessWidget {
-  const ActivitySummaryLine({
-    required this.activity,
-    this.fontSize = FlucordType.caption,
-    this.color,
-    super.key,
+/// What the line under a member's name says, the way Discord's member list
+/// puts it: a kind icon for what they are doing, then their custom status if
+/// they set one, or else the activity's name with no verb.
+@immutable
+final class ActivitySummary {
+  const ActivitySummary._({
+    required this.text,
+    this.kind,
+    this.emoji,
+    this.more = 0,
   });
 
-  final UserActivity activity;
-  final double fontSize;
-  final Color? color;
+  /// The summary of [activities], or null when there is nothing to show.
+  ///
+  /// [inVoice] stands in when the member is doing nothing else: a speaker
+  /// and "In voice".
+  static ActivitySummary? of(
+    Iterable<UserActivity> activities, {
+    bool inVoice = false,
+  }) {
+    UserActivity? custom;
+    final doing = <UserActivity>[];
+    for (final activity in activities) {
+      switch (activity.type) {
+        case ActivityType.hangStatus:
+          continue;
+        case ActivityType.customStatus:
+          custom ??= activity;
+        default:
+          doing.add(activity);
+      }
+    }
+    final main = doing.firstOrNull;
+    final kind = main != null
+        ? _kindIcon(main.type)
+        : inVoice
+        ? FlucordIcons.voiceChannel
+        : null;
+    final status = custom?.state ?? '';
+    if (custom != null && (status.isNotEmpty || custom.emoji != null)) {
+      return ActivitySummary._(kind: kind, emoji: custom.emoji, text: status);
+    }
+    if (main != null) {
+      return ActivitySummary._(
+        kind: kind,
+        text: main.subject,
+        more: doing.length - 1,
+      );
+    }
+    if (inVoice) return ActivitySummary._(kind: kind, text: 'In voice');
+    return null;
+  }
+
+  static FlucordIconData? _kindIcon(ActivityType type) => switch (type) {
+    ActivityType.playing => FlucordIcons.game,
+    ActivityType.streaming => FlucordIcons.streaming,
+    ActivityType.listening => FlucordIcons.listening,
+    ActivityType.watching => FlucordIcons.watching,
+    ActivityType.competing => FlucordIcons.competing,
+    ActivityType.customStatus ||
+    ActivityType.hangStatus ||
+    ActivityType.unrecognised => null,
+  };
+
+  /// What the member is doing, drawn first. Null for a custom status alone.
+  final FlucordIconData? kind;
+  final ActivityEmoji? emoji;
+  final String text;
+
+  /// How many activities there are beyond the one named.
+  final int more;
+}
+
+/// An [ActivitySummary] on one caption line, cut with an ellipsis.
+class ActivitySummaryLine extends StatelessWidget {
+  const ActivitySummaryLine({required this.summary, super.key});
+
+  final ActivitySummary summary;
 
   @override
   Widget build(BuildContext context) {
-    final emoji = activity.emoji;
-    final text = activity.summary;
-    final style = TextStyle(
-      color: color ?? context.surfaces.muted,
-      fontSize: fontSize,
-    );
-    if (emoji == null) {
-      return Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-      );
-    }
+    final surfaces = context.surfaces;
+    final style = FlucordTextRole.caption.style.copyWith(color: surfaces.muted);
+    final ActivitySummary(:kind, :emoji, :text, :more) = summary;
+    const gap = SizedBox(width: 4);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ActivityEmojiView(emoji: emoji, size: fontSize + 2),
-        if (text.isNotEmpty) ...[
-          const SizedBox(width: 4),
-          // Flexible rather than Expanded: in a narrow panel the emoji keeps
-          // its size and the sentence is what gives way, which is the only way
-          // the row can shrink without overflowing.
+        if (kind != null) ...[
+          FlucordIcon(kind, size: FlucordType.caption, color: surfaces.success),
+          gap,
+        ],
+        if (emoji != null) ...[
+          ActivityEmojiView(emoji: emoji, size: FlucordType.body),
+          if (text.isNotEmpty) gap,
+        ],
+        // Flexible rather than Expanded: in a narrow panel the icons and the
+        // count keep their size and the text is what gives way.
+        if (text.isNotEmpty)
           Flexible(
             child: Text(
               text,
@@ -112,7 +174,7 @@ class ActivitySummaryLine extends StatelessWidget {
               style: style,
             ),
           ),
-        ],
+        if (more > 0) ...[gap, Text('+$more', style: style)],
       ],
     );
   }
