@@ -24,12 +24,12 @@ import 'voice_pcm_framer.dart';
 /// chain is still long is dropped rather than delayed (a live microphone
 /// cannot afford a queue).
 ///
-/// Echo cancellation and gain control sit at the same place, ahead of the
-/// noise filter: they belong to the machine's own audio layer, which sees
-/// what the speakers are playing while the microphone hears it, and the
-/// filter would rather clean a microphone that is already free of the room
-/// coming back through the speakers. One open enhancer serves both switches,
-/// and turning both off closes it.
+/// Echo cancellation and gain control sit on either side of the noise
+/// filter, in WebRTC's own order. Echo goes first: the filter would rather
+/// clean a microphone that is already free of the room coming back through
+/// the speakers. Gain goes last: judged before the filter, it lifted the
+/// noise with the voice. One open enhancer serves both switches, and
+/// turning both off closes it.
 ///
 /// Only speech goes out. A frame is sent while the [VoiceActivityGate] hears
 /// the cleaned microphone above the room's noise floor, and for the gate's
@@ -337,7 +337,7 @@ final class VoiceAudioPipeline {
   /// One frame's whole turn: enhanced, cleaned, gated, encoded, sent. Never
   /// throws, so one bad frame cannot break the chain behind it.
   ///
-  /// The enhance and clean steps only await when there is real work: an
+  /// The stages only await when there is real work: an
   /// awaited call that does nothing still costs a turn of the event loop
   /// per frame, and a microphone that arrives faster than the empty turns
   /// drain would be dropped for no reason.
@@ -345,10 +345,8 @@ final class VoiceAudioPipeline {
     final transport = _transport;
     if (_disposed || transport == null) return;
     try {
-      final enhancement = _enhancement(frame);
-      if (enhancement != null) await enhancement;
-      final cleaning = _suppression(frame);
-      if (cleaning != null) await cleaning;
+      final processing = _process(frame);
+      if (processing != null) await processing;
       final speech = _gate.accept(_rmsDbfs(frame));
       if (speech) {
         _setSpeaking(true);
@@ -397,20 +395,41 @@ final class VoiceAudioPipeline {
     return 20 * math.log(rms) / math.ln10;
   }
 
-  /// Enhances [frame] while an enhancer is open and either switch is on,
-  /// or answers null when there is nothing to do.
+  /// Runs [frame] through every stage that is on, in order: echo, noise,
+  /// gain. Each starts when the one before it is done; null when none of
+  /// them had work.
+  Future<void>? _process(Int16List frame) {
+    final echo = _enhancement(frame, gain: false);
+    return echo == null
+        ? _cleanThenGain(frame)
+        : echo.then((_) => _cleanThenGain(frame));
+  }
+
+  Future<void>? _cleanThenGain(Int16List frame) {
+    final cleaning = _suppression(frame);
+    return cleaning == null
+        ? _enhancement(frame, gain: true)
+        : cleaning.then((_) => _enhancement(frame, gain: true));
+  }
+
+  /// Runs the gain or the echo step on [frame] while an enhancer is open and
+  /// that switch is on, or answers null when there is nothing to do.
   ///
   /// An enhancer that throws is dropped and both switches turned off: the
   /// frame goes out as captured, the failure is reported once, and
   /// switching on again opens a fresh one.
-  Future<void>? _enhancement(Int16List frame) {
+  Future<void>? _enhancement(Int16List frame, {required bool gain}) {
     final enhancer = _microphoneEnhancer;
-    if (enhancer == null || (!_echoCancellation && !_automaticGainControl)) {
+    if (enhancer == null ||
+        !(gain ? _automaticGainControl : _echoCancellation)) {
       return null;
     }
+    final channels = _framer.channels;
     return () async {
       try {
-        await enhancer.process(frame, channels: _framer.channels);
+        await (gain
+            ? enhancer.controlGain(frame, channels: channels)
+            : enhancer.cancelEcho(frame, channels: channels));
       } on Object catch (error) {
         _echoCancellation = false;
         _automaticGainControl = false;
@@ -462,10 +481,8 @@ final class VoiceAudioPipeline {
     try {
       for (var i = 0; i < _flushFrames; i++) {
         final silence = Int16List(_framer.samplesPerFrame);
-        final enhancement = _enhancement(silence);
-        if (enhancement != null) await enhancement;
-        final cleaning = _suppression(silence);
-        if (cleaning != null) await cleaning;
+        final processing = _process(silence);
+        if (processing != null) await processing;
         transport.sendOpusFrame(_encoder.encode(silence));
       }
     } on Object catch (error) {

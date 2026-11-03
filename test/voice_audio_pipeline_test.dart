@@ -521,10 +521,11 @@ void main() {
       expect(opened, hasLength(2));
     });
 
-    test('the enhancer runs before the noise filter', () async {
+    test('echo runs before the noise filter and gain after it', () async {
       final media = _FakeMediaService();
-      final enhancer = _RecordingEnhancer();
-      final suppressor = FakeNoiseSuppressor();
+      final steps = <String>[];
+      final enhancer = _RecordingEnhancer(steps);
+      final suppressor = _RecordingSuppressor(steps);
       final codecs = _FakeCodecFactory();
       final pipeline = VoiceAudioPipeline(
         mediaService: media,
@@ -543,17 +544,18 @@ void main() {
       await pipeline.setNoiseSuppression(true);
       await pipeline.setMicrophoneEnhancement(
         echoCancellation: true,
-        automaticGainControl: false,
+        automaticGainControl: true,
       );
 
       media.addPcm(bytes);
       await _flushEvents();
 
-      // The suppressor saw the enhanced frame, not the raw one: echo and
-      // gain run first, so the noise filter cleans a microphone the room
-      // is already out of.
-      expect(suppressor.frames.single.first, _RecordingEnhancer.enhanced);
-      expect(enhancer.sawRaw, isTrue);
+      // WebRTC's own order: the filter cleans a microphone the room is
+      // already out of, and the gain judges the voice without the noise.
+      expect(steps, ['echo', 'noise', 'gain']);
+      expect(enhancer.echoSawRaw, isTrue);
+      expect(suppressor.frames.single.first, _RecordingEnhancer.echoed);
+      expect(enhancer.gainSaw!.first, FakeNoiseSuppressor.cleaned);
     });
 
     test(
@@ -616,18 +618,30 @@ void main() {
   });
 }
 
-/// An enhancer that marks each sample it hands on, so a downstream filter
-/// can be checked for having seen the enhanced frame.
+/// An enhancer that notes each step it runs in [steps], and marks every
+/// sample its echo step hands on, so the next stage can be checked for
+/// having seen it.
 final class _RecordingEnhancer implements VoiceMicrophoneEnhancer {
-  static const int enhanced = 12000;
+  _RecordingEnhancer(this.steps);
 
-  bool sawRaw = false;
+  static const int echoed = 12000;
+
+  final List<String> steps;
+  bool echoSawRaw = false;
+  Int16List? gainSaw;
   bool disposed = false;
 
   @override
-  Future<void> process(Int16List frame, {required int channels}) async {
-    sawRaw = frame.any((sample) => sample != enhanced);
-    frame.fillRange(0, frame.length, enhanced);
+  Future<void> cancelEcho(Int16List frame, {required int channels}) async {
+    steps.add('echo');
+    echoSawRaw = frame.any((sample) => sample != echoed);
+    frame.fillRange(0, frame.length, echoed);
+  }
+
+  @override
+  Future<void> controlGain(Int16List frame, {required int channels}) async {
+    steps.add('gain');
+    gainSaw = Int16List.fromList(frame);
   }
 
   @override
@@ -637,11 +651,29 @@ final class _RecordingEnhancer implements VoiceMicrophoneEnhancer {
   void dispose() => disposed = true;
 }
 
+/// A filter that notes in [steps] when it ran.
+final class _RecordingSuppressor extends FakeNoiseSuppressor {
+  _RecordingSuppressor(this.steps);
+
+  final List<String> steps;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    steps.add('noise');
+    await super.process(frame, channels: channels);
+  }
+}
+
 final class _BrokenEnhancer implements VoiceMicrophoneEnhancer {
   bool disposed = false;
 
   @override
-  Future<void> process(Int16List frame, {required int channels}) async {
+  Future<void> cancelEcho(Int16List frame, {required int channels}) async {
+    throw StateError('the stages failed');
+  }
+
+  @override
+  Future<void> controlGain(Int16List frame, {required int channels}) async {
     throw StateError('the stages failed');
   }
 
