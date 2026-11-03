@@ -11,8 +11,11 @@ project('flucord_apm', 'cpp',
   ],
 )
 
+# The library asks for C++17 but uses designated initializers. GCC allows
+# them there as an extension; MSVC needs /std:c++20.
 apm_dep = dependency('webrtc-audio-processing-2',
   fallback: ['webrtc-audio-processing', 'audio_processing_dep'],
+  default_options: ['cpp_std=c++20'],
 )
 
 # MinGW links its own C++ runtime statically, as MSVC does with b_vscrt=mt:
