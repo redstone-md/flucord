@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../application/member_profile_controller.dart';
 import '../../domain/user_profile.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'discord_identity_profile_popover.dart';
 import 'remote_identity_image.dart';
 
 /// The full profile underneath the identity block: pronouns, about me,
@@ -32,21 +34,19 @@ class FullProfileSections extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (profile.pronouns.isNotEmpty) ...[
-          _section(context, 'PRONOUNS', Text(profile.pronouns)),
+          _section('PRONOUNS', Text(profile.pronouns, style: _value)),
         ],
         if (profile.bio.isNotEmpty) ...[
-          _section(context, 'ABOUT ME', Text(profile.bio)),
+          _section('ABOUT ME', Text(profile.bio, style: _value)),
         ],
         if (profile.connections.isNotEmpty) ...[
           _section(
-            context,
             'CONNECTIONS',
             ProfileConnectionRows(connections: profile.connections),
           ),
         ],
         if (profile.mutualServers.isNotEmpty) ...[
           _section(
-            context,
             'MUTUAL SERVERS',
             ProfileMutualServerRows(
               servers: profile.mutualServers,
@@ -56,7 +56,6 @@ class FullProfileSections extends StatelessWidget {
         ],
         if (profile.mutualFriends.isNotEmpty) ...[
           _section(
-            context,
             'MUTUAL FRIENDS',
             ProfileMutualFriendRows(friends: profile.mutualFriends),
           ),
@@ -66,17 +65,12 @@ class FullProfileSections extends StatelessWidget {
     );
   }
 
-  Widget _section(BuildContext context, String label, Widget child) => Column(
+  static final _value = FlucordTextRole.label.style;
+
+  Widget _section(String label, Widget child) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(
-        label,
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      ProfileHeading(label),
       const SizedBox(height: 6),
       child,
       const SizedBox(height: 14),
@@ -179,9 +173,8 @@ class ProfileConnectionRows extends StatelessWidget {
                       connection.type.length <= 2
                           ? connection.type.toUpperCase()
                           : connection.type.substring(0, 2).toUpperCase(),
-                      style: TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w700,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        fontWeight: FontWeight.w500,
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -194,14 +187,14 @@ class ProfileConnectionRows extends StatelessWidget {
                   connection.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: FlucordType.caption),
+                  style: FlucordTextRole.label.style,
                 ),
               ),
               if (connection.verified)
                 Padding(
                   padding: const EdgeInsets.only(left: 6),
-                  child: Icon(
-                    Icons.verified_outlined,
+                  child: FlucordIcon(
+                    FlucordIcons.verified,
                     key: const ValueKey('profile-connection-verified'),
                     size: 14,
                     color: context.surfaces.success,
@@ -288,7 +281,7 @@ class ProfileMutualFriendRows extends StatelessWidget {
                   friend.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: FlucordType.caption),
+                  style: FlucordTextRole.label.style,
                 ),
               ),
             ],
@@ -344,14 +337,7 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
       key: const ValueKey('profile-note-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'NOTE',
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        const ProfileHeading('NOTE'),
         const SizedBox(height: 6),
         TextField(
           key: const ValueKey('profile-note-field'),
@@ -370,15 +356,17 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
                 ? 'Click to add a note'
                 : 'Notes need a signed-in account',
           ),
-          style: const TextStyle(fontSize: FlucordType.caption),
+          style: FlucordTextRole.label.style,
         ),
         if (controller.noteRefused)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
               'Discord did not take that note.',
-              key: ValueKey('profile-note-refused'),
-              style: TextStyle(fontSize: FlucordType.caption),
+              key: const ValueKey('profile-note-refused'),
+              style: FlucordTextRole.caption.style.copyWith(
+                color: context.surfaces.errorText,
+              ),
             ),
           ),
         if (_dirty && controller.isSupported)

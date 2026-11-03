@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -153,10 +154,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                               displayName,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: FlucordType.title,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: FlucordTextRole.title.style,
                             ),
                           ),
                           if (badges case final row?)
@@ -172,27 +170,28 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: FlucordType.caption),
+                          style: FlucordTextRole.label.style.copyWith(
+                            color: context.surfaces.bodyText,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 3),
                       Text(
                         statusLabel,
-                        style: TextStyle(
+                        style: FlucordTextRole.label.style.copyWith(
                           color: context.surfaces.muted,
-                          fontSize: FlucordType.caption,
                         ),
                       ),
                       for (final detail in details) ...[
                         const SizedBox(height: 14),
-                        _ProfileLabel(label: detail.label),
+                        ProfileHeading(detail.label),
                         const SizedBox(height: 6),
                         _ProfileDetailChip(detail: detail),
                       ],
                       if (extra case final block?) ...[
                         const SizedBox(height: 14),
                         if (extraLabel case final label?) ...[
-                          _ProfileLabel(label: label),
+                          ProfileHeading(label),
                           const SizedBox(height: 6),
                         ],
                         block,
@@ -206,7 +205,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                         block,
                       ],
                       const SizedBox(height: 14),
-                      const _ProfileLabel(label: 'USER ID'),
+                      const ProfileHeading('USER ID'),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -215,9 +214,8 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                               userId,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: FlucordTextRole.label.style.copyWith(
                                 color: context.surfaces.muted,
-                                fontSize: FlucordType.caption,
                               ),
                             ),
                           ),
@@ -231,7 +229,10 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                       FilledButton.icon(
                         key: messageButtonKey,
                         onPressed: canMessage ? onMessage : null,
-                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                        icon: const FlucordIcon(
+                          FlucordIcons.directMessages,
+                          size: 16,
+                        ),
                         label: const Text('Message'),
                       ),
                       if (safetyActions.isNotEmpty) ...[
@@ -284,7 +285,7 @@ class _ProfileDetailChip extends StatelessWidget {
               detail.value,
               maxLines: detail.maxLines,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: FlucordType.caption),
+              style: FlucordTextRole.label.style,
             ),
           ),
         ],
@@ -318,7 +319,10 @@ class _CopyIdentityButtonState extends State<_CopyIdentityButton> {
     onPressed: _copy,
     tooltip: _copied ? 'User ID copied' : 'Copy user ID',
     visualDensity: VisualDensity.compact,
-    icon: Icon(_copied ? Icons.check : Icons.copy_outlined, size: 16),
+    icon: FlucordIcon(
+      _copied ? FlucordIcons.check : FlucordIcons.copy,
+      size: 16,
+    ),
   );
 
   Future<void> _copy() async {
@@ -327,18 +331,17 @@ class _CopyIdentityButtonState extends State<_CopyIdentityButton> {
   }
 }
 
-class _ProfileLabel extends StatelessWidget {
-  const _ProfileLabel({required this.label});
+/// A section heading inside a popover, such as "ROLE" or "NOTE".
+class ProfileHeading extends StatelessWidget {
+  const ProfileHeading(this.label, {super.key});
 
   final String label;
 
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: TextStyle(
-      color: context.surfaces.muted,
-      fontSize: FlucordType.caption,
-      fontWeight: FontWeight.w700,
+    style: FlucordTextRole.caption.style.copyWith(
+      color: context.surfaces.captionText,
     ),
   );
 }

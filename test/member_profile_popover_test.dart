@@ -65,7 +65,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('copy-member-id')));
     await tester.pumpAndSettle();
     expect(copiedId, '222222222222222222');
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byTooltip('User ID copied'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('message-member')));
     await tester.pump();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/member_profile_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -8,6 +9,7 @@ import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 void main() {
   testWidgets('the popover renders the fetched profile', (tester) async {
@@ -74,6 +76,30 @@ void main() {
     );
     expect(find.textContaining('666666666666666666'), findsNothing);
     expect(find.textContaining('777777777777777777'), findsNothing);
+  });
+
+  testWidgets('headings are captions in the caption tier, values labels', (
+    tester,
+  ) async {
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => _FakeNotesRepository(),
+      serverNameOf: (_) => 'Flucord Dev',
+    );
+    addTearDown(controller.dispose);
+    await controller.open('222');
+    await _pumpPopover(tester, controller);
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+    TextStyle styleOf(String text) =>
+        tester.renderObject<RenderParagraph>(find.text(text)).text.style!;
+
+    for (final heading in ['ROLE', 'MUTUAL SERVERS', 'NOTE', 'USER ID']) {
+      expect(styleOf(heading).fontSize, FlucordTextRole.caption.size);
+      expect(styleOf(heading).color, surfaces.captionText);
+    }
+    for (final value in ['Product design', 'Flucord Dev', 'Roman Vale']) {
+      expect(styleOf(value).fontSize, FlucordTextRole.label.size);
+    }
   });
 
   testWidgets('a note can be edited and saved from the popover', (
