@@ -28,6 +28,14 @@ extension VoiceControllerDevices on VoiceController {
         await playbackService.selectOutput(deviceId);
       }
       _selectedOutputId = deviceId;
+      // Playback left the default for this output, so the echo stage
+      // listens to it too.
+      _audioPipeline?.setSpeakers(
+        outputDevices
+            .where((device) => device.id == deviceId)
+            .firstOrNull
+            ?.label,
+      );
     });
   }
 
@@ -196,7 +204,7 @@ extension VoiceControllerDevices on VoiceController {
     await _saveProcessing();
   }
 
-  /// Whether this build has the machine's echo and gain stages at all.
+  /// Whether this build has the echo and gain stages at all.
   bool get isMicrophoneEnhancementAvailable =>
       _audioPipeline?.isMicrophoneEnhancementAvailable ?? false;
 
@@ -212,7 +220,7 @@ extension VoiceControllerDevices on VoiceController {
       _audioPipeline?.isAutomaticGainControlEnabled ??
       _processing.automaticGainControl;
 
-  /// Switches the machine's echo and gain stages, for this session and the
+  /// Switches the echo and gain stages, for this session and the
   /// next.
   ///
   /// Applied before it is saved, like the noise filter: a file that will

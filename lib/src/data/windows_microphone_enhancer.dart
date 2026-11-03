@@ -7,11 +7,10 @@ import 'package:ffi/ffi.dart';
 import '../domain/voice_processing.dart';
 
 /// Echo cancellation and gain control through `flucord_audio.dll`, which
-/// runs the Windows voice capture stages on the frames handed to it.
+/// runs WebRTC Audio Processing (`flucord_apm.dll`) on the frames handed to
+/// it, at the pipeline's full 48 kHz.
 ///
-/// The stages work one frame behind the microphone, so the enhanced answer
-/// for a frame arrives with the next ones and the first few frames of a
-/// session pass through as captured while their buffers fill. The work
+/// Each frame is processed in place and handed back at once. The work
 /// happens on the caller's turn, like the encoder's does.
 final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   /// The factory the composition root offers: null where the bundle has no
@@ -34,7 +33,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
 
   static const String libraryFileName = 'flucord_audio.dll';
 
-  /// Opens the machine's echo and gain stages. Throws when they cannot be
+  /// Opens the echo and gain stages. Throws when they cannot be
   /// reached: the pipeline reports the failure and turns both switches
   /// off with it, which is what the settings surface then shows.
   static Future<VoiceMicrophoneEnhancer> open({
@@ -59,6 +58,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
        _close = library.lookupFunction<_CloseEnhancerNative, _CloseEnhancer>(
          'flucord_audio_close_mic_enhancer',
        ),
+       _loopBack = library.lookupFunction<_LoopBackNative, _LoopBack>(
+         'flucord_audio_enhancer_loop_back',
+       ),
        _failure = _lookUpFailure(library);
 
   /// Absent in a module built before an open said why it failed.
@@ -77,14 +79,11 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   static const List<String> _stages = [
     'none',
     'COM',
-    'voice capture stages',
-    'stage settings',
-    'stage formats',
-    'default speakers',
+    'WebRTC audio processing',
+    'speakers',
     'speaker loopback',
-    'microphone input',
     'speaker input',
-    'enhanced output',
+    'microphone',
   ];
 
   /// The module handed in rather than opened, so a test can drive the
@@ -108,9 +107,14 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final _OpenEnhancer _open;
   final _EnhanceFrame _enhance;
   final _CloseEnhancer _close;
+  final _LoopBack _loopBack;
   final _EnhancerFailure? _failure;
 
   Pointer<Void>? _enhancer;
+
+  /// The output to take the speaker line from, applied when the enhancer
+  /// opens; null is the system default.
+  String? _speakers;
   Pointer<Int16>? _scratch;
   int _scratchSamples = 0;
   bool _disposed = false;
@@ -147,18 +151,42 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
       );
       if (status != 0) {
         throw StateError(
-          'The machine could not open its echo and gain stages'
+          'The echo and gain stages could not open'
           '${_describeFailure()}',
         );
       }
-      return _enhancer = out.value;
+      final enhancer = _enhancer = out.value;
+      if (_speakers != null) _applySpeakers(enhancer);
+      return enhancer;
     } finally {
       calloc.free(out);
     }
   }
 
-  /// Which step of the open or frame failed and what Windows answered, as a
-  /// suffix for the error, or empty when the module cannot say.
+  @override
+  void loopBack(String? speakers) {
+    if (_disposed || speakers == _speakers) return;
+    _speakers = speakers;
+    final enhancer = _enhancer;
+    if (enhancer != null) _applySpeakers(enhancer);
+  }
+
+  /// The loopback itself opens on the next frame, which reports a missing
+  /// output as that frame's failure.
+  void _applySpeakers(Pointer<Void> enhancer) {
+    final name = _speakers?.toNativeUtf8();
+    try {
+      if (_loopBack(enhancer, name ?? nullptr) != 0) {
+        throw StateError('The echo stage could not take its speaker line');
+      }
+    } finally {
+      if (name != null) calloc.free(name);
+    }
+  }
+
+  /// Which step of the open or frame failed and what Windows or the library
+  /// answered, as a suffix for the error, or empty when the module cannot
+  /// say.
   String _describeFailure() {
     final failure = _failure;
     if (failure == null) return '';
@@ -206,6 +234,8 @@ typedef _OpenEnhancer = int Function(int, int, Pointer<Pointer<Void>>);
 typedef _EnhanceFrameNative =
     Int32 Function(Pointer<Void>, Pointer<Int16>, Int32, Int32);
 typedef _EnhanceFrame = int Function(Pointer<Void>, Pointer<Int16>, int, int);
+typedef _LoopBackNative = Int32 Function(Pointer<Void>, Pointer<Utf8>);
+typedef _LoopBack = int Function(Pointer<Void>, Pointer<Utf8>);
 typedef _CloseEnhancerNative = Void Function(Pointer<Void>);
 typedef _CloseEnhancer = void Function(Pointer<Void>);
 typedef _EnhancerFailureNative = Void Function(Pointer<Int32>, Pointer<Int32>);

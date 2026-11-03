@@ -229,6 +229,66 @@ void main() {
     expect(preview.isRunning, isFalse);
   });
 
+  test('coming back to the window asks for a keyframe at once', () async {
+    final decoder = FakeVideoDecoder();
+    final window = WindowVisible();
+    var clock = Duration.zero;
+    final preview = GoLiveSelfPreview(
+      decoderFactory: () => decoder,
+      window: window,
+      now: () => clock,
+    );
+    addTearDown(preview.dispose);
+    final encoded = StreamController<EncodedVideoFrame>.broadcast();
+    addTearDown(encoded.close);
+    var asked = 0;
+    await preview.start(encoded.stream, requestKeyframe: () async => asked++);
+    final watching = preview.textures.listen((_) {});
+    addTearDown(watching.cancel);
+    await Future<void>.delayed(Duration.zero);
+    encoded.add(_frame(keyframe: true));
+    await Future<void>.delayed(Duration.zero);
+
+    // Alt-tab out and back: the fresh decoder must not wait up to a whole
+    // group of pictures (ten seconds) for the encoder's own next keyframe.
+    clock = _ms(5000);
+    window.setFocused(false);
+    await Future<void>.delayed(Duration.zero);
+    window.setFocused(true);
+    await Future<void>.delayed(Duration.zero);
+    encoded.add(_frame(keyframe: false));
+    await Future<void>.delayed(Duration.zero);
+    expect(asked, 1);
+
+    // Flicking back and forth within a second costs viewers one keyframe.
+    window.setFocused(false);
+    await Future<void>.delayed(Duration.zero);
+    window.setFocused(true);
+    await Future<void>.delayed(Duration.zero);
+    encoded.add(_frame(keyframe: false));
+    await Future<void>.delayed(Duration.zero);
+    expect(asked, 1);
+
+    // Still waiting a second later: the ask may have been lost, so it is
+    // made again.
+    clock = _ms(6100);
+    encoded.add(_frame(keyframe: false));
+    await Future<void>.delayed(Duration.zero);
+    expect(asked, 2);
+    encoded.add(_frame(keyframe: true));
+    await Future<void>.delayed(Duration.zero);
+
+    // Every later return asks too, not only the first one of the share.
+    clock = _ms(20000);
+    window.setFocused(false);
+    await Future<void>.delayed(Duration.zero);
+    window.setFocused(true);
+    await Future<void>.delayed(Duration.zero);
+    encoded.add(_frame(keyframe: false));
+    await Future<void>.delayed(Duration.zero);
+    expect(asked, 3);
+  });
+
   test('the share ending stops the decoder under a watching tile', () async {
     final decoder = FakeVideoDecoder();
     final preview = GoLiveSelfPreview(decoderFactory: () => decoder);
