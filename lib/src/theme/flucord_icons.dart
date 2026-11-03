@@ -60,6 +60,29 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+
+  // The message toolbar.
+  static const addReaction = FlucordIconData(HugeIcons.strokeRoundedSmilePlus);
+  static const forward = FlucordIconData(
+    HugeIcons.strokeRoundedArrowTurnForward,
+    matchTextDirection: true,
+  );
+  static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
+  static const delete = FlucordIconData(HugeIcons.strokeRoundedDelete02);
+  static const report = FlucordIconData(HugeIcons.strokeRoundedFlag01);
+  static const unpin = FlucordIconData(HugeIcons.strokeRoundedPinOff);
+  static const link = FlucordIconData(HugeIcons.strokeRoundedLink01);
+  static const unlink = FlucordIconData(HugeIcons.strokeRoundedUnlink01);
+  static const done = FlucordIconData(HugeIcons.strokeRoundedTaskDone01);
+  static const reopen = FlucordIconData(
+    HugeIcons.strokeRoundedArrowReloadHorizontal,
+  );
+  static const deleteFlagged = FlucordIconData(HugeIcons.strokeRoundedDelete03);
+  static const thumbsDown = FlucordIconData(HugeIcons.strokeRoundedThumbsDown);
+  static const silent = FlucordIconData(
+    HugeIcons.strokeRoundedNotificationOff01,
+  );
+  static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
