@@ -38,8 +38,8 @@
 #include <windows.h>
 
 #include <audioclient.h>
-#include <functiondiscoverykeys_devpkey.h>
 #include <mmdeviceapi.h>
+#include <propsys.h>
 #include <wrl/client.h>
 
 #pragma comment(lib, "ole32.lib")
@@ -56,6 +56,13 @@ constexpr int kCaptureRate = 48000;
 constexpr int kCaptureChunk = kCaptureRate / 100;
 
 constexpr wchar_t kApmLibrary[] = L"flucord_apm.dll";
+
+// PKEY_Device_FriendlyName, pinned here: its header needs DEFINE_PROPERTYKEY
+// from propkeydef.h first under MSVC, and its definition from initguid.h.
+// The value is the SDK's own.
+constexpr PROPERTYKEY kDeviceFriendlyName = {
+    {0xa45c254e, 0xdf1c, 0x4efd, {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}},
+    14};
 
 // How often a loopback of the default output checks that it still is one.
 constexpr ULONGLONG kDefaultCheckMs = 1000;
@@ -211,7 +218,7 @@ HRESULT FindSpeakers(IMMDeviceEnumerator* enumerator,
     PropVariantInit(&friendly);
     if (SUCCEEDED(outputs->Item(i, &device)) &&
         SUCCEEDED(device->OpenPropertyStore(STGM_READ, &properties)) &&
-        SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &friendly)) &&
+        SUCCEEDED(properties->GetValue(kDeviceFriendlyName, &friendly)) &&
         friendly.vt == VT_LPWSTR && name == friendly.pwszVal) {
       PropVariantClear(&friendly);
       *out = device;
