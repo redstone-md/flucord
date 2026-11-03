@@ -19,7 +19,7 @@ import 'accessibility_scope.dart';
 import 'activity_label.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
-import 'mention_badge.dart';
+import 'count_badge.dart';
 import 'stream_quality_scope.dart';
 import 'streamer_mode_scope.dart';
 import 'theme_scope.dart';
@@ -433,10 +433,10 @@ class _RailButtonState extends State<_RailButton> {
                 bottom: 0,
                 // The rail-coloured ring keeps the badge readable where it
                 // overlaps the avatar's edge.
-                child: MentionBadge(
+                child: CountBadge(
                   key: ValueKey('space-mention-${widget.spaceId}'),
                   count: widget.activity.mentionCount,
-                  borderColor: context.surfaces.rail,
+                  ring: context.surfaces.rail,
                 ),
               ),
           ],

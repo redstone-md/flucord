@@ -90,7 +90,7 @@ class _DestinationRow extends StatelessWidget {
                     ),
                   if (destination.mentionCount > 0) ...[
                     const SizedBox(width: 8),
-                    MentionBadge(count: destination.mentionCount),
+                    CountBadge(count: destination.mentionCount),
                   ],
                   const SizedBox(width: 10),
                 ],
