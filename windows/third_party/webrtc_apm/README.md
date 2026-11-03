@@ -12,6 +12,9 @@ gain control AGC2), linked statically behind the small C API in `src/`.
 - License: BSD-3-Clause, reproduced in `LICENSE`
 - Target: Windows x64, Release
 - MSVC runtime: static (`/MT`)
+- Built with: MSVC 14.44 (Visual Studio 17.14), meson 1.12.1, C++20 for the
+  library (see `src/meson.build`)
+- SHA-256: `9716F6429FDC42D9C8F6078F547FD62E9E687B2DA1668CC7F2CD76108F22DE48`
 
 Run `powershell -ExecutionPolicy Bypass -File tool/build_webrtc_apm.ps1` from
 the repository root to rebuild and replace the binary. It needs the MSVC build
