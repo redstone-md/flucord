@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/voice_controller.dart';
+import '../../domain/user_settings.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
+import 'user_settings_controls.dart';
 
 /// Which microphone and which speakers voice uses.
 ///
@@ -23,174 +27,214 @@ class VoiceDevicesSection extends StatelessWidget {
     listenable: controller,
     builder: (context, _) => Column(
       key: const ValueKey('voice-devices-section'),
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Devices are read from the machine, so they are the same whichever '
-          'account is signed in.',
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
+        const SettingsSectionHeader(
+          title: 'Devices',
+          subtitle:
+              'Devices are read from the machine, so they are the same '
+              'whichever account is signed in.',
+        ),
+        const SizedBox(height: 12),
+        _SideBySide(
+          start: _DeviceSelect(
+            key: const ValueKey('voice-settings-input'),
+            label: 'Input device',
+            devices: controller.inputDevices,
+            selectedId: controller.selectedInputId,
+            onChanged: controller.selectInput,
+          ),
+          end: _DeviceSelect(
+            key: const ValueKey('voice-settings-output'),
+            label: 'Output device',
+            devices: controller.outputDevices,
+            selectedId: controller.selectedOutputId,
+            onChanged: controller.selectOutput,
           ),
         ),
-        const SizedBox(height: 16),
-        _DeviceSelect(
-          key: const ValueKey('voice-settings-input'),
-          label: 'Input device',
-          devices: controller.inputDevices,
-          selectedId: controller.selectedInputId,
-          onChanged: controller.selectInput,
-        ),
-        const SizedBox(height: 14),
-        _DeviceSelect(
-          key: const ValueKey('voice-settings-output'),
-          label: 'Output device',
-          devices: controller.outputDevices,
-          selectedId: controller.selectedOutputId,
-          onChanged: controller.selectOutput,
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
         _SensitivityRow(controller: controller),
-        const SizedBox(height: 14),
         _ReleaseDelayRow(controller: controller),
+        if (controller.isMicrophoneEnhancementAvailable ||
+            controller.isNoiseSuppressionAvailable ||
+            controller.isApplicationAttenuationAvailable) ...[
+          const SizedBox(height: 16),
+          const SettingsSectionHeader(title: 'Voice processing'),
+        ],
         if (controller.isMicrophoneEnhancementAvailable) ...[
-          const SizedBox(height: 14),
-          SwitchListTile(
-            key: const ValueKey('voice-settings-echo-cancellation'),
-            contentPadding: EdgeInsets.zero,
+          _VoiceToggleRow(
+            switchKey: const ValueKey('voice-settings-echo-cancellation'),
+            title: 'Echo cancellation',
+            description:
+                'Takes what the speakers are playing out of the microphone, '
+                'so the room does not hear itself.',
             value: controller.echoCancellation,
             onChanged: (value) => unawaited(
               controller.setMicrophoneEnhancement(echoCancellation: value),
             ),
-            title: const Text(
-              'Echo cancellation',
-              style: TextStyle(fontSize: FlucordType.label),
-            ),
-            subtitle: Text(
-              'Takes what the speakers are playing out of the microphone, '
-              'so the room does not hear itself.',
-              style: TextStyle(
-                fontSize: FlucordType.caption,
-                color: context.surfaces.muted,
-              ),
-            ),
           ),
-          const SizedBox(height: 14),
-          SwitchListTile(
-            key: const ValueKey('voice-settings-automatic-gain-control'),
-            contentPadding: EdgeInsets.zero,
+          _VoiceToggleRow(
+            switchKey: const ValueKey('voice-settings-automatic-gain-control'),
+            title: 'Automatic gain control',
+            description:
+                'Keeps the microphone at a steady level without touching its '
+                'own volume knob.',
             value: controller.automaticGainControl,
             onChanged: (value) => unawaited(
               controller.setMicrophoneEnhancement(automaticGainControl: value),
             ),
-            title: const Text(
-              'Automatic gain control',
-              style: TextStyle(fontSize: FlucordType.label),
-            ),
-            subtitle: Text(
-              'Keeps the microphone at a steady level without touching its '
-              'own volume knob.',
-              style: TextStyle(
-                fontSize: FlucordType.caption,
-                color: context.surfaces.muted,
-              ),
-            ),
           ),
         ],
-        if (controller.isNoiseSuppressionAvailable) ...[
-          const SizedBox(height: 14),
-          SwitchListTile(
-            key: const ValueKey('voice-settings-noise-suppression'),
-            contentPadding: EdgeInsets.zero,
+        if (controller.isNoiseSuppressionAvailable)
+          _VoiceToggleRow(
+            switchKey: const ValueKey('voice-settings-noise-suppression'),
+            title: 'Noise suppression',
+            description:
+                'Removes keyboards, fans and other voices from the microphone. '
+                'Costs some CPU while in a call.',
             value: controller.noiseSuppression,
             onChanged: (value) =>
                 unawaited(controller.setNoiseSuppression(value)),
-            title: const Text(
-              'Noise suppression',
-              style: TextStyle(fontSize: FlucordType.label),
-            ),
-            subtitle: Text(
-              'Removes keyboards, fans and other voices from the microphone. '
-              'Costs some CPU while in a call.',
-              style: TextStyle(
-                fontSize: FlucordType.caption,
-                color: context.surfaces.muted,
-              ),
-            ),
           ),
-        ],
         if (controller.isApplicationAttenuationAvailable) ...[
-          const SizedBox(height: 14),
-          SwitchListTile(
-            key: const ValueKey('voice-settings-attenuation'),
-            contentPadding: EdgeInsets.zero,
+          _VoiceToggleRow(
+            switchKey: const ValueKey('voice-settings-attenuation'),
+            title: 'Attenuate other applications',
+            description:
+                'Turns the rest of the machine down while you speak, so the '
+                'room stays audible over music and games.',
             value: controller.attenuateApplications,
             onChanged: (value) =>
                 unawaited(controller.setAttenuateApplications(value)),
-            title: const Text(
-              'Attenuate other applications',
-              style: TextStyle(fontSize: FlucordType.label),
-            ),
-            subtitle: Text(
-              'Turns the rest of the machine down while you speak, so the '
-              'room stays audible over music and games.',
-              style: TextStyle(
-                fontSize: FlucordType.caption,
-                color: context.surfaces.muted,
-              ),
-            ),
           ),
-          if (controller.attenuateApplications) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: Slider(
-                    key: const ValueKey('voice-settings-attenuation-level'),
-                    min: 0,
-                    max: 1,
-                    value: controller.attenuationLevel.clamp(0.0, 1.0),
-                    onChanged: (value) =>
-                        unawaited(controller.setAttenuationLevel(value)),
-                  ),
-                ),
-                SizedBox(
-                  width: 40,
-                  child: Text(
-                    '${(controller.attenuationLevel * 100).round()}%',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      fontSize: FlucordType.caption,
-                      color: context.surfaces.muted,
-                    ),
-                  ),
-                ),
-              ],
+          if (controller.attenuateApplications)
+            _LabelledSlider(
+              sliderKey: const ValueKey('voice-settings-attenuation-level'),
+              min: 0,
+              max: 1,
+              value: controller.attenuationLevel.clamp(0.0, 1.0),
+              valueLabel: '${(controller.attenuationLevel * 100).round()}%',
+              onChanged: (value) =>
+                  unawaited(controller.setAttenuationLevel(value)),
             ),
-          ],
         ],
         if (controller.deviceError case final error?) ...[
           const SizedBox(height: 14),
           Text(
             key: const ValueKey('voice-settings-error'),
             'Audio devices could not be opened: $error',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: FlucordType.caption,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: context.surfaces.errorText,
             ),
           ),
           const SizedBox(height: 8),
           Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
+            alignment: AlignmentDirectional.centerStart,
+            child: FlucordButton(
               key: const ValueKey('voice-settings-retry'),
+              label: 'Try the devices again',
               onPressed: () => unawaited(controller.retryDevices()),
-              child: const Text('Try the devices again'),
             ),
           ),
         ],
       ],
     ),
+  );
+}
+
+/// Two controls on one line, 16 apart, stacked when the pane is narrow.
+class _SideBySide extends StatelessWidget {
+  const _SideBySide({required this.start, required this.end});
+
+  final Widget start;
+  final Widget end;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) =>
+        constraints.maxWidth < SettingRow.stackedWidth
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [start, const SizedBox(height: 12), end],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: start),
+              const SizedBox(width: 16),
+              Expanded(child: end),
+            ],
+          ),
+  );
+}
+
+/// A setting row with a toggle. Every voice setting is one Flucord applies,
+/// so none carries a support note.
+class _VoiceToggleRow extends StatelessWidget {
+  const _VoiceToggleRow({
+    required this.switchKey,
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Key switchKey;
+  final String title;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SettingRow(
+    title: title,
+    description: description,
+    support: UserSettingSupport.applied,
+    child: SettingSwitch(key: switchKey, value: value, onChanged: onChanged),
+  );
+}
+
+/// A slider with its value written at its end.
+class _LabelledSlider extends StatelessWidget {
+  const _LabelledSlider({
+    required this.sliderKey,
+    required this.min,
+    required this.max,
+    required this.value,
+    required this.valueLabel,
+    required this.onChanged,
+  });
+
+  final Key sliderKey;
+  final double min;
+  final double max;
+  final double value;
+  final String valueLabel;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Slider(
+          key: sliderKey,
+          min: min,
+          max: max,
+          value: value,
+          onChanged: onChanged,
+        ),
+      ),
+      SizedBox(
+        width: 52,
+        child: Text(
+          valueLabel,
+          textAlign: TextAlign.end,
+          style: FlucordTextRole.caption.style.copyWith(
+            color: context.surfaces.muted,
+          ),
+        ),
+      ),
+    ],
   );
 }
 
@@ -209,52 +253,14 @@ class _DeviceSelect extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    // A dropdown whose value is not among its items throws, and the list is
-    // empty until the devices have been enumerated.
-    final value = devices.any((device) => device.id == selectedId)
-        ? selectedId
-        : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: value,
-          isExpanded: true,
-          decoration: const InputDecoration(isDense: true),
-          items: [
-            for (final device in devices)
-              DropdownMenuItem(
-                value: device.id,
-                child: Text(device.label, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: devices.isEmpty
-              ? null
-              : (id) {
-                  if (id != null) onChanged(id);
-                },
-          hint: Text(
-            devices.isEmpty ? 'No devices found' : 'Choose a device',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => FlucordSelect<String>(
+    label: label,
+    items: [for (final device in devices) (device.id, device.label)],
+    value: selectedId,
+    hintText: devices.isEmpty ? 'No devices found' : 'Choose a device',
+    // Disabled rather than an empty menu that opens onto nothing.
+    onChanged: devices.isEmpty ? null : onChanged,
+  );
 }
 
 /// The input sensitivity: automatic, or a level chosen by hand.
@@ -278,59 +284,31 @@ class _SensitivityRow extends StatelessWidget {
     final sensitivity = controller.inputSensitivity;
     final automatic = sensitivity == null;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SwitchListTile(
-          key: const ValueKey('voice-settings-manual-sensitivity'),
-          contentPadding: EdgeInsets.zero,
+        _VoiceToggleRow(
+          switchKey: const ValueKey('voice-settings-manual-sensitivity'),
+          title: 'Manual input sensitivity',
+          description: automatic
+              ? 'Flucord learns how loud the room is and opens the microphone '
+                    'when you speak above it.'
+              : 'The microphone opens above the level chosen here, whatever '
+                    'the room sounds like.',
           value: !automatic,
           onChanged: (value) => unawaited(
             controller.setInputSensitivity(value ? (_min + _max) / 2 : null),
           ),
-          title: const Text(
-            'Manual input sensitivity',
-            style: TextStyle(fontSize: FlucordType.label),
-          ),
-          subtitle: Text(
-            automatic
-                ? 'Flucord learns how loud the room is and opens the microphone '
-                      'when you speak above it.'
-                : 'The microphone opens above the level chosen here, whatever '
-                      'the room sounds like.',
-            style: TextStyle(
-              fontSize: FlucordType.caption,
-              color: context.surfaces.muted,
-            ),
-          ),
         ),
-        if (!automatic) ...[
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  key: const ValueKey('voice-settings-input-sensitivity'),
-                  min: _min,
-                  max: _max,
-                  value: sensitivity.clamp(_min, _max),
-                  onChanged: (value) =>
-                      unawaited(controller.setInputSensitivity(value)),
-                ),
-              ),
-              SizedBox(
-                width: 52,
-                child: Text(
-                  '${sensitivity.toStringAsFixed(0)} dB',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
-                    color: context.surfaces.muted,
-                  ),
-                ),
-              ),
-            ],
+        if (!automatic)
+          _LabelledSlider(
+            sliderKey: const ValueKey('voice-settings-input-sensitivity'),
+            min: _min,
+            max: _max,
+            value: sensitivity.clamp(_min, _max),
+            valueLabel: '${sensitivity.toStringAsFixed(0)} dB',
+            onChanged: (value) =>
+                unawaited(controller.setInputSensitivity(value)),
           ),
-        ],
       ],
     );
   }
@@ -360,48 +338,26 @@ class _ReleaseDelayRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final held = controller.pushToTalkReleaseDelayMs;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Push-to-talk release delay',
-                style: TextStyle(fontSize: FlucordType.label),
-              ),
-            ),
-            DropdownButton<int>(
-              key: const ValueKey('voice-settings-release-delay'),
-              value: _steps.contains(held)
-                  ? held
-                  : _steps.reduce(
-                      (a, b) => (a - held).abs() < (b - held).abs() ? a : b,
-                    ),
-              items: [
-                for (final step in _steps)
-                  DropdownMenuItem(
-                    value: step,
-                    child: Text(step == 0 ? 'Off' : '$step ms'),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  unawaited(controller.setPushToTalkReleaseDelayMs(value));
-                }
-              },
-            ),
-          ],
-        ),
-        Text(
+    final step = _steps.contains(held)
+        ? held
+        : _steps.reduce((a, b) => (a - held).abs() < (b - held).abs() ? a : b);
+    return SettingRow(
+      title: 'Push-to-talk release delay',
+      description:
           'Keeps the microphone live for this long after the key is '
           'released, so the ends of words survive.',
-          style: TextStyle(
-            fontSize: FlucordType.caption,
-            color: context.surfaces.muted,
-          ),
-        ),
-      ],
+      support: UserSettingSupport.applied,
+      child: FlucordSegmented<int>(
+        key: const ValueKey('voice-settings-release-delay'),
+        keyPrefix: 'voice-settings-release-delay',
+        options: [
+          for (final step in _steps)
+            FlucordSegment(step, step == 0 ? 'Off' : '$step ms'),
+        ],
+        selected: step,
+        onSelected: (value) =>
+            unawaited(controller.setPushToTalkReleaseDelayMs(value)),
+      ),
     );
   }
 }

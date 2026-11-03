@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/voice_processing.dart';
+import 'package:flucord/src/presentation/widgets/flucord_controls.dart';
 import 'package:flucord/src/presentation/widgets/voice_devices_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -47,6 +53,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.selectedOutputId, 'out-2');
+  });
+
+  testWidgets('the two device selects sit side by side', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpSection(tester, media: _FakeMedia());
+
+    final input = tester.getRect(
+      find.byKey(const ValueKey('voice-settings-input')),
+    );
+    final output = tester.getRect(
+      find.byKey(const ValueKey('voice-settings-output')),
+    );
+    expect(output.top, input.top);
+    expect(output.left, greaterThan(input.right));
   });
 
   testWidgets('a machine with no devices says so rather than offering a menu', (
@@ -84,12 +105,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(key));
+    await tester.tap(_toggle(key));
     await tester.pumpAndSettle();
 
     expect(controller.noiseSuppression, isTrue);
@@ -97,7 +123,7 @@ void main() {
       repository.saved,
       const VoiceProcessingSettings(noiseSuppression: true),
     );
-    expect(tester.widget<SwitchListTile>(find.byKey(key)).value, isTrue);
+    expect(tester.widget<FlucordToggle>(_toggle(key)).value, isTrue);
   });
 
   testWidgets('attenuation offers a switch and a level', (tester) async {
@@ -116,7 +142,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -125,7 +156,7 @@ void main() {
     expect(find.byKey(switchKey), findsOneWidget);
     expect(find.byKey(levelKey), findsNothing);
 
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(controller.attenuateApplications, isTrue);
     expect(repository.saved!.listening.attenuateApplications, isTrue);
@@ -144,7 +175,7 @@ void main() {
     expect(find.text('${(level * 100).round()}%'), findsOneWidget);
 
     // Switched off, the level goes away and the machine is released.
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(find.byKey(levelKey), findsNothing);
     expect(attenuation.calls, contains('release'));
@@ -174,7 +205,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -183,7 +219,7 @@ void main() {
     expect(find.byKey(switchKey), findsOneWidget);
     expect(find.byKey(sliderKey), findsNothing);
 
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(find.byKey(sliderKey), findsOneWidget);
     // The slider starts at the automatic threshold's midpoint.
@@ -197,7 +233,7 @@ void main() {
     );
 
     // Back to automatic: the slider goes away and nothing is saved.
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(find.byKey(sliderKey), findsNothing);
     expect(controller.inputSensitivity, isNull);
@@ -205,8 +241,6 @@ void main() {
   });
 
   testWidgets('the release delay offers the steps a key needs', (tester) async {
-    const key = ValueKey('voice-settings-release-delay');
-
     final repository = MemoryVoiceProcessingRepository();
     final controller = VoiceController(
       _FakeMedia(),
@@ -217,14 +251,22 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(key));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('100 ms').last);
+    // Every step is on screen at once, as a segmented group.
+    expect(find.text('Off'), findsOneWidget);
+    expect(find.text('1000 ms'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('voice-settings-release-delay-100')),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.pushToTalkReleaseDelayMs, 100);
@@ -255,7 +297,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await controller.loadProcessingSettings();
@@ -266,12 +313,12 @@ void main() {
     expect(find.byKey(echoKey), findsOneWidget);
     expect(find.byKey(gainKey), findsOneWidget);
     expect(
-      tester.widget<SwitchListTile>(find.byKey(echoKey)).value,
+      tester.widget<FlucordToggle>(_toggle(echoKey)).value,
       isTrue,
       reason: 'on by default',
     );
 
-    await tester.tap(find.byKey(echoKey));
+    await tester.tap(_toggle(echoKey));
     await tester.pumpAndSettle();
     expect(controller.echoCancellation, isFalse);
     expect(repository.saved!.echoCancellation, isFalse);
@@ -291,6 +338,10 @@ void main() {
     expect(find.byKey(const ValueKey('voice-settings-error')), findsNothing);
   });
 }
+
+/// The on/off pill of the setting row keyed [key].
+Finder _toggle(Key key) =>
+    find.descendant(of: find.byKey(key), matching: find.byType(FlucordToggle));
 
 final class _RecordingAttenuation implements ApplicationAttenuation {
   final List<String> calls = [];
