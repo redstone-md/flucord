@@ -21,31 +21,30 @@ void main() {
     ),
   ];
 
-  testWidgets(
-    'the add-server entry is the green plus at the foot of the list',
-    (tester) async {
-      var pressed = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: ServerRail(
-            spaces: spaces,
-            activity: const {},
-            selectedSpaceId: 'forge',
-            onSelectSpace: (_) {},
-            onToggleTheme: () {},
-            onOpenConnections: () {},
-            onAddServer: () => pressed++,
-            sessionMode: SessionMode.demo,
-            isDark: true,
-          ),
+  testWidgets('the add-server entry at the foot of the list adds a server', (
+    tester,
+  ) async {
+    var pressed = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: ServerRail(
+          spaces: spaces,
+          activity: const {},
+          selectedSpaceId: 'forge',
+          onSelectSpace: (_) {},
+          onToggleTheme: () {},
+          onOpenConnections: () {},
+          onAddServer: () => pressed++,
+          sessionMode: SessionMode.demo,
+          isDark: true,
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.byKey(const ValueKey('add-server')));
-      expect(pressed, 1);
-    },
-  );
+    await tester.tap(find.byKey(const ValueKey('add-server')));
+    expect(pressed, 1);
+  });
 
   testWidgets('without the server-access plane the rail hides the plus', (
     tester,

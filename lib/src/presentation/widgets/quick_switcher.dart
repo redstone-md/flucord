@@ -8,7 +8,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'mention_badge.dart';
+import 'count_badge.dart';
 import 'flucord_dialog.dart';
 
 part 'quick_switcher_destination_row.dart';

@@ -179,7 +179,7 @@ class _FolderRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                MentionBadge(
+                CountBadge(
                   key: const ValueKey('message-requests-count'),
                   count: count,
                 ),
@@ -463,7 +463,7 @@ class _ChannelRow extends StatelessWidget {
                         ),
                       ),
                     if (channel.mentionCount > 0)
-                      MentionBadge(
+                      CountBadge(
                         key: ValueKey('channel-mention-${channel.id}'),
                         count: channel.mentionCount,
                       ),
