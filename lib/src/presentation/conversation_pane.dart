@@ -411,7 +411,7 @@ class ConversationPaneState extends State<ConversationPane> {
       final key = goLive.streamKey;
       if (key == null || key.channelId != channel.id) return null;
       return VoiceSelfPreview(
-        frames: goLive.previewFrames,
+        textures: goLive.previewTextures,
         error: goLive.previewError,
       );
     }

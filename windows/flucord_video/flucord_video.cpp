@@ -1,6 +1,7 @@
 #include "flucord_video.h"
 
 #include "qpc_clock.h"
+#include "video_surface.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1130,8 +1131,9 @@ void CameraLoop(FlucordVideoEncoder* state) {
 }
 
 // One pass of the Direct3D video processor: a source texture in, a picture of
-// another size or pixel format out, read back for the CPU. The scaling and the
-// colour conversion run on the GPU, so the CPU only copies rows.
+// another size or pixel format out, either left on the GPU or read back for
+// the CPU. The scaling and the colour conversion run on the GPU, so the CPU
+// at most copies rows.
 //
 // The encoder scales the desktop into NV12 with it; the decoder turns the NV12
 // it decoded on the GPU into BGRA for a texture.
@@ -1204,13 +1206,6 @@ struct GpuVideoPass {
     picture.BindFlags = D3D11_BIND_RENDER_TARGET;
     hr = d3d->CreateTexture2D(&picture, nullptr, &target);
     if (SUCCEEDED(hr)) {
-      picture.Usage = D3D11_USAGE_STAGING;
-      picture.BindFlags = 0;
-      picture.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-      picture.MiscFlags = 0;
-      hr = d3d->CreateTexture2D(&picture, nullptr, &readback);
-    }
-    if (SUCCEEDED(hr)) {
       D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC view{};
       view.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
       hr = device->CreateVideoProcessorOutputView(target.Get(),
@@ -1234,11 +1229,8 @@ struct GpuVideoPass {
            shape.visible.bottom == visible.bottom;
   }
 
-  // Runs the pass on one slice of `source` and hands the mapped result to
-  // `read`, which copies out of it before the map is released. Blocking: the
-  // map waits for the GPU.
-  template <typename Read>
-  HRESULT Run(ID3D11Texture2D* source, UINT slice, Read&& read) {
+  // Runs the pass on one slice of `source`, leaving the picture in `target`.
+  HRESULT Draw(ID3D11Texture2D* source, UINT slice) {
     D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC input{};
     input.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
     input.Texture2D.ArraySlice = slice;
@@ -1250,9 +1242,37 @@ struct GpuVideoPass {
     D3D11_VIDEO_PROCESSOR_STREAM stream{};
     stream.Enable = TRUE;
     stream.pInputSurface = source_view.Get();
-    hr = context->VideoProcessorBlt(processor.Get(), target_view.Get(), 0, 1,
-                                    &stream);
+    return context->VideoProcessorBlt(processor.Get(), target_view.Get(), 0,
+                                      1, &stream);
+  }
+
+  // Runs the pass and hands the mapped result to `read`.
+  template <typename Reader>
+  HRESULT Run(ID3D11Texture2D* source, UINT slice, Reader&& read) {
+    const HRESULT hr = Draw(source, slice);
     if (FAILED(hr)) return hr;
+    return Read(read);
+  }
+
+  // Hands the last picture drawn to `read`, mapped, which copies out of it
+  // before the map is released. Blocking: the map waits for the GPU.
+  template <typename Reader>
+  HRESULT Read(Reader&& read) {
+    HRESULT hr = S_OK;
+    // Made on the first read rather than with the pass: a picture that stays
+    // on the GPU never needs it.
+    if (!readback) {
+      D3D11_TEXTURE2D_DESC picture{};
+      target->GetDesc(&picture);
+      picture.Usage = D3D11_USAGE_STAGING;
+      picture.BindFlags = 0;
+      picture.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+      picture.MiscFlags = 0;
+      ComPtr<ID3D11Device> d3d;
+      target->GetDevice(&d3d);
+      hr = d3d->CreateTexture2D(&picture, nullptr, &readback);
+      if (FAILED(hr)) return hr;
+    }
     immediate->CopyResource(readback.Get(), target.Get());
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -1628,10 +1648,31 @@ struct FlucordVideoClip {
   int32_t frames_per_second = 30;
 };
 
+// One access unit waiting for the decode thread.
+struct QueuedAccessUnit {
+  std::vector<uint8_t> annex_b;
+  int64_t timestamp_us = 0;
+  // Whether it carries an IDR picture: the one kind a decoder can start from
+  // with nothing before it.
+  bool idr = false;
+};
+
 struct FlucordVideoDecoder {
   ComPtr<IMFTransform> transform;
   FlucordVideoPictureCallback callback = nullptr;
   void* user_data = nullptr;
+  // Where pictures are drawn instead of handed over, or null. The decoder
+  // holds a reference to it until it closes.
+  FlucordVideoSurface* surface = nullptr;
+  // A CPU-decoded picture on its way to the surface. Reused, so a decode
+  // that cannot run on the GPU does not allocate a picture each frame.
+  std::vector<uint8_t> upload;
+  // Whether the surface is keeping its last whole picture: an access unit
+  // was dropped, and no keyframe has been decoded since. Decode thread only.
+  bool holding = false;
+  // While holding, the time of the first keyframe the transform accepted:
+  // pictures from then on are whole. -1 until one is accepted.
+  int64_t mends_at = -1;
   // The GPU the transform decodes on, and the pass that turns its NV12 into
   // BGRA there. Null while the transform decodes on the CPU; gpu_status then
   // says why.
@@ -1661,9 +1702,12 @@ struct FlucordVideoDecoder {
   std::thread worker;
   std::mutex mutex;
   std::condition_variable ready;
-  std::deque<std::pair<std::vector<uint8_t>, int64_t>> queue;
+  std::deque<QueuedAccessUnit> queue;
   bool stopping = false;
   int32_t dropped = 0;
+  // Set by a drop, taken by the decode thread with the next access unit: the
+  // pictures are broken from there until a keyframe.
+  bool broken = false;
 
   // The wire's own accounting, read through flucord_video_decoder_stats:
   // where the access units that go in fail to become pictures that come out.
@@ -1787,11 +1831,9 @@ void ReadCurrentOutputType(FlucordVideoDecoder* decoder) {
 }
 
 // Converts a picture the transform decoded on the GPU, where it is: the video
-// processor turns the NV12 slice into BGRA and crops the padding, and only
-// the finished picture is read back.
-HRESULT ReadGpuPicture(FlucordVideoDecoder* decoder,
-                       IMFDXGIBuffer* buffer,
-                       uint8_t* bgra) {
+// processor turns the NV12 slice into BGRA and crops the padding, and the
+// finished picture is left in to_bgra's target.
+HRESULT DrawGpuPicture(FlucordVideoDecoder* decoder, IMFDXGIBuffer* buffer) {
   ComPtr<ID3D11Texture2D> texture;
   HRESULT hr = buffer->GetResource(IID_PPV_ARGS(&texture));
   if (FAILED(hr)) return hr;
@@ -1822,16 +1864,24 @@ HRESULT ReadGpuPicture(FlucordVideoDecoder* decoder,
                                  shape);
     if (FAILED(hr)) return hr;
   }
+  return decoder->to_bgra.Draw(texture.Get(), slice);
+}
+
+// Draws a GPU-decoded picture and reads it back for the CPU.
+HRESULT ReadGpuPicture(FlucordVideoDecoder* decoder,
+                       IMFDXGIBuffer* buffer,
+                       uint8_t* bgra) {
+  HRESULT hr = DrawGpuPicture(decoder, buffer);
+  if (FAILED(hr)) return hr;
   const size_t row_bytes = static_cast<size_t>(decoder->width) * 4;
   const int height = decoder->height;
-  return decoder->to_bgra.Run(
-      texture.Get(), slice, [&](const D3D11_MAPPED_SUBRESOURCE& mapped) {
-        const uint8_t* rows = static_cast<const uint8_t*>(mapped.pData);
-        for (int y = 0; y < height; ++y) {
-          memcpy(bgra + y * row_bytes,
-                 rows + static_cast<size_t>(y) * mapped.RowPitch, row_bytes);
-        }
-      });
+  return decoder->to_bgra.Read([&](const D3D11_MAPPED_SUBRESOURCE& mapped) {
+    const uint8_t* rows = static_cast<const uint8_t*>(mapped.pData);
+    for (int y = 0; y < height; ++y) {
+      memcpy(bgra + y * row_bytes,
+             rows + static_cast<size_t>(y) * mapped.RowPitch, row_bytes);
+    }
+  });
 }
 
 // Converts a picture the transform decoded into system memory.
@@ -1857,22 +1907,91 @@ HRESULT ReadCpuPicture(FlucordVideoDecoder* decoder,
   return S_OK;
 }
 
-// Reads one decoded sample into a BGRA picture of the visible size.
-HRESULT ReadPicture(FlucordVideoDecoder* decoder,
-                    IMFSample* sample,
-                    uint8_t* bgra) {
+// The GPU buffer a decoded sample lives in, or null when the transform
+// decoded it into memory.
+ComPtr<IMFDXGIBuffer> GpuBuffer(FlucordVideoDecoder* decoder,
+                                IMFSample* sample) {
   ComPtr<IMFMediaBuffer> buffer;
-  HRESULT hr = sample->GetBufferByIndex(0, &buffer);
-  if (FAILED(hr)) return hr;
   ComPtr<IMFDXGIBuffer> on_gpu;
+  if (FAILED(sample->GetBufferByIndex(0, &buffer))) return on_gpu;
   if (decoder->device && SUCCEEDED(buffer.As(&on_gpu))) {
     decoder->gpu_status.store(S_OK);
-    return ReadGpuPicture(decoder, on_gpu.Get(), bgra);
+    return on_gpu;
   }
   // The transform took the device and decoded into memory anyway: the
   // driver has no decoder for this stream, and the status says so.
   if (decoder->device) decoder->gpu_status.store(E_NOINTERFACE);
+  return on_gpu;
+}
+
+// Reads one decoded sample into a BGRA picture of the visible size.
+HRESULT ReadPicture(FlucordVideoDecoder* decoder,
+                    IMFSample* sample,
+                    uint8_t* bgra) {
+  ComPtr<IMFDXGIBuffer> on_gpu = GpuBuffer(decoder, sample);
+  if (on_gpu) return ReadGpuPicture(decoder, on_gpu.Get(), bgra);
   return ReadCpuPicture(decoder, sample, bgra);
+}
+
+// Draws one decoded sample on the decoder's surface. A GPU-decoded picture
+// never leaves the GPU; a CPU-decoded one is uploaded.
+HRESULT ShowPicture(FlucordVideoDecoder* decoder, IMFSample* sample) {
+  ComPtr<IMFDXGIBuffer> on_gpu = GpuBuffer(decoder, sample);
+  if (on_gpu) {
+    const HRESULT hr = DrawGpuPicture(decoder, on_gpu.Get());
+    if (FAILED(hr)) return hr;
+    return decoder->surface->Show(decoder->to_bgra.target.Get());
+  }
+  decoder->upload.resize(static_cast<size_t>(decoder->width) *
+                         decoder->height * 4);
+  const HRESULT hr = ReadCpuPicture(decoder, sample, decoder->upload.data());
+  if (FAILED(hr)) return hr;
+  return decoder->surface->Upload(decoder->upload.data(), decoder->width,
+                                  decoder->height);
+}
+
+// Hands one decoded picture on: drawn on the surface for a decoder that has
+// one, otherwise read into a buffer the callback takes over.
+HRESULT DeliverPicture(FlucordVideoDecoder* decoder,
+                       IMFSample* sample,
+                       int64_t timestamp_us) {
+  LONGLONG sample_time = 0;
+  sample->GetSampleTime(&sample_time);
+  const int64_t time = sample_time != 0 ? sample_time / 10 : timestamp_us;
+  // Pictures still coming out from before the keyframe stay held: they are
+  // built on the one that was dropped.
+  if (decoder->holding && decoder->mends_at >= 0 &&
+      time >= decoder->mends_at) {
+    decoder->holding = false;
+    decoder->mends_at = -1;
+  }
+  std::unique_ptr<uint8_t[]> picture;
+  if (decoder->surface != nullptr) {
+    // A held picture still reaches the callback, which is where the caller
+    // looks for drops; only the surface keeps the last whole one.
+    if (!decoder->holding) {
+      const HRESULT hr = ShowPicture(decoder, sample);
+      if (FAILED(hr)) return hr;
+    }
+  } else {
+    // Every picture owns its buffer: the callback is delivered on the
+    // caller's isolate some time after this returns, so nothing shared
+    // would survive the next picture.
+    picture.reset(new uint8_t[static_cast<size_t>(decoder->width) *
+                              decoder->height * 4]);
+    const HRESULT hr = ReadPicture(decoder, sample, picture.get());
+    if (FAILED(hr)) return hr;
+  }
+  // Ownership went with the callback when it was delivered; a picture the
+  // gate refused is freed here, and nothing arrives in Dart after a close
+  // that stopped waiting for this thread.
+  std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
+  if (!decoder->deliveries.closed) {
+    const int32_t stride = picture ? decoder->width * 4 : 0;
+    decoder->callback(decoder->user_data, picture.release(), decoder->width,
+                      decoder->height, stride, time);
+  }
+  return S_OK;
 }
 
 // How many consecutive format changes a drain replans before it gives up.
@@ -1932,39 +2051,32 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
     }
 
     if (decoder->width > 0 && decoder->height > 0) {
-      // Every picture owns its buffer: the callback is delivered on the
-      // caller's isolate some time after this returns, so nothing shared
-      // would survive the next picture.
-      std::unique_ptr<uint8_t[]> picture(
-          new uint8_t[static_cast<size_t>(decoder->width) * decoder->height *
-                      4]);
-      const HRESULT read = ReadPicture(decoder, produced.Get(), picture.get());
-      if (FAILED(read)) {
+      const HRESULT delivered =
+          DeliverPicture(decoder, produced.Get(), timestamp_us);
+      if (FAILED(delivered)) {
         decoder->outputErrors.fetch_add(1);
-        decoder->lastOutputError.store(static_cast<int64_t>(read));
-      } else {
-        LONGLONG sample_time = 0;
-        produced->GetSampleTime(&sample_time);
-        // Ownership went with the callback when it was delivered; a picture
-        // the gate refused is freed here, and nothing arrives in Dart after
-        // a close that stopped waiting for this thread.
-        std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
-        if (!decoder->deliveries.closed) {
-          decoder->callback(decoder->user_data, picture.release(),
-                            decoder->width, decoder->height,
-                            decoder->width * 4,
-                            sample_time != 0 ? sample_time / 10
-                                             : timestamp_us);
-        }
+        decoder->lastOutputError.store(static_cast<int64_t>(delivered));
       }
     }
     if (allocates && out.pSample != nullptr) out.pSample->Release();
   }
 }
 
+// Whether an Annex B access unit carries an IDR slice (NAL type 5).
+bool ContainsIdr(const uint8_t* annex_b, size_t length) {
+  for (size_t index = 0; index + 3 < length; ++index) {
+    if (annex_b[index] == 0 && annex_b[index + 1] == 0 &&
+        annex_b[index + 2] == 1 && (annex_b[index + 3] & 0x1F) == 5) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void SubmitToTransform(FlucordVideoDecoder* decoder,
                        const std::vector<uint8_t>& annex_b,
-                       int64_t timestamp_us) {
+                       int64_t timestamp_us,
+                       bool idr) {
   ComPtr<IMFMediaBuffer> buffer;
   if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(annex_b.size()), &buffer))) {
     return;
@@ -1994,6 +2106,10 @@ void SubmitToTransform(FlucordVideoDecoder* decoder,
     decoder->lastInputError.store(static_cast<int64_t>(hr));
     return;
   }
+  // Only a keyframe the transform took mends a hold.
+  if (idr && decoder->holding && decoder->mends_at < 0) {
+    decoder->mends_at = timestamp_us;
+  }
   DrainDecoder(decoder, timestamp_us);
 }
 
@@ -2008,22 +2124,20 @@ HRESULT UseGpu(FlucordVideoDecoder* decoder) {
   if (!MFGetAttributeUINT32(attributes.Get(), MF_SA_D3D11_AWARE, FALSE)) {
     return MF_E_UNSUPPORTED_D3D_TYPE;
   }
-  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1,
-                                      D3D_FEATURE_LEVEL_11_0,
-                                      D3D_FEATURE_LEVEL_10_1};
   ComPtr<ID3D11Device> device;
   ComPtr<ID3D11DeviceContext> context;
-  hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                         D3D11_CREATE_DEVICE_VIDEO_SUPPORT, levels,
-                         ARRAYSIZE(levels), D3D11_SDK_VERSION, &device,
-                         nullptr, &context);
-  if (FAILED(hr)) return hr;
-  // The transform reaches the device from its own calls while the decode
-  // thread runs the video processor on it.
-  ComPtr<ID3D11Multithread> multithread;
-  hr = device.As(&multithread);
-  if (FAILED(hr)) return hr;
-  multithread->SetMultithreadProtected(TRUE);
+  if (decoder->surface != nullptr) {
+    // The surface's own device, so a picture is decoded, converted and shown
+    // on the adapter Flutter draws with, and never copied between devices.
+    hr = decoder->surface->video_status();
+    if (FAILED(hr)) return hr;
+    device = decoder->surface->device();
+    context = decoder->surface->context();
+  } else {
+    hr = CreateSharedDevice(nullptr, D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+                            &device, &context);
+    if (FAILED(hr)) return hr;
+  }
   UINT token = 0;
   ComPtr<IMFDXGIDeviceManager> manager;
   hr = MFCreateDXGIDeviceManager(&token, &manager);
@@ -2047,6 +2161,10 @@ void ReleaseDecoder(FlucordVideoDecoder* decoder) {
   decoder->device_manager.Reset();
   decoder->context.Reset();
   decoder->device.Reset();
+  if (decoder->surface != nullptr) {
+    decoder->surface->Release();
+    decoder->surface = nullptr;
+  }
 }
 
 // The input type, low latency, and the streaming notices: everything the
@@ -2099,7 +2217,7 @@ HRESULT ConfigureDecoder(FlucordVideoDecoder* decoder) {
 void DecoderLoop(FlucordVideoDecoder* decoder) {
   ComApartment com;
   while (true) {
-    std::pair<std::vector<uint8_t>, int64_t> unit;
+    QueuedAccessUnit unit;
     {
       std::unique_lock lock(decoder->mutex);
       decoder->ready.wait(lock, [&] {
@@ -2108,8 +2226,13 @@ void DecoderLoop(FlucordVideoDecoder* decoder) {
       if (decoder->stopping) break;
       unit = std::move(decoder->queue.front());
       decoder->queue.pop_front();
+      if (decoder->broken) {
+        decoder->broken = false;
+        decoder->holding = true;
+        decoder->mends_at = -1;
+      }
     }
-    SubmitToTransform(decoder, unit.first, unit.second);
+    SubmitToTransform(decoder, unit.annex_b, unit.timestamp_us, unit.idr);
   }
   ReleaseDecoder(decoder);
 }
@@ -2131,6 +2254,7 @@ extern "C" {
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_decoder_open(FlucordVideoPictureCallback callback,
                            void* user_data,
+                           FlucordVideoSurface* surface,
                            FlucordVideoDecoder** out_decoder) {
   if (callback == nullptr || out_decoder == nullptr) {
     return FLUCORD_VIDEO_ERROR_STATE;
@@ -2144,10 +2268,15 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
   auto decoder = std::make_unique<FlucordVideoDecoder>();
   decoder->callback = callback;
   decoder->user_data = user_data;
+  if (surface != nullptr) {
+    surface->AddRef();
+    decoder->surface = surface;
+  }
   const HRESULT hr = CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr,
                                       CLSCTX_INPROC_SERVER,
                                       IID_PPV_ARGS(&decoder->transform));
   if (FAILED(hr)) {
+    ReleaseDecoder(decoder.get());
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
@@ -2178,15 +2307,19 @@ flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
   // not catching up, and an unbounded one turns a slow decode into an
   // ever-growing memory bill. The oldest frame goes first, and the counter
   // says so, because a dropped frame breaks the reference chain.
-  std::vector<uint8_t> unit(annex_b, annex_b + length);
+  QueuedAccessUnit unit;
+  unit.annex_b.assign(annex_b, annex_b + length);
+  unit.timestamp_us = timestamp_us;
+  unit.idr = ContainsIdr(annex_b, static_cast<size_t>(length));
   decoder->submitted.fetch_add(1);
   {
     std::lock_guard lock(decoder->mutex);
     if (decoder->queue.size() >= 24) {
       decoder->queue.pop_front();
       decoder->dropped++;
+      decoder->broken = true;
     }
-    decoder->queue.emplace_back(std::move(unit), timestamp_us);
+    decoder->queue.push_back(std::move(unit));
   }
   decoder->ready.notify_one();
   return FLUCORD_VIDEO_OK;

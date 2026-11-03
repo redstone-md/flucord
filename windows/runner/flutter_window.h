@@ -9,6 +9,7 @@
 #include "win32_window.h"
 
 class DiscordSocialSdkBridge;
+class VideoTextureBridge;
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -33,6 +34,9 @@ class FlutterWindow : public Win32Window {
 
   // Application-owned bridge for the separately distributed Social SDK.
   std::unique_ptr<DiscordSocialSdkBridge> discord_social_sdk_bridge_;
+
+  // Decoded video drawn as textures, without the pixels passing through Dart.
+  std::unique_ptr<VideoTextureBridge> video_texture_bridge_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

@@ -136,47 +136,124 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
     }
     final image = _image;
     if (image == null) {
-      return _stage('go-live-waiting', [
-        if (widget.showProgress)
-          const SizedBox.square(
-            dimension: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        else
-          const Icon(Icons.live_tv_outlined, size: 24),
-        if (widget.label.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            'Waiting for ${widget.label}',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-            ),
-          ),
-        ],
-      ]);
+      return _waiting(context, widget.label, showProgress: widget.showProgress);
     }
-    return ColoredBox(
-      key: const ValueKey('go-live-picture'),
-      color: Colors.black,
-      child: FittedBox(
-        fit: BoxFit.contain,
-        child: SizedBox(
-          width: image.width.toDouble(),
-          height: image.height.toDouble(),
-          child: RawImage(image: image, fit: BoxFit.contain),
-        ),
-      ),
+    return _picture(
+      image.width,
+      image.height,
+      RawImage(image: image, fit: BoxFit.contain),
+    );
+  }
+}
+
+/// Draws a stream decoded onto a texture (ADR-0009): the pictures never pass
+/// through Dart, only the texture's id and size do.
+class GoLiveTextureViewer extends StatefulWidget {
+  const GoLiveTextureViewer({
+    required this.textures,
+    this.label = '',
+    super.key,
+  });
+
+  /// The texture, each time its picture changes size, or null while there is
+  /// no picture to draw.
+  final Stream<VideoTexture?> textures;
+
+  /// Whose stream this is, shown until the first picture arrives.
+  final String label;
+
+  @override
+  State<GoLiveTextureViewer> createState() => _GoLiveTextureViewerState();
+}
+
+class _GoLiveTextureViewerState extends State<GoLiveTextureViewer> {
+  StreamSubscription<VideoTexture?>? _subscription;
+  VideoTexture? _texture;
+
+  @override
+  void initState() {
+    super.initState();
+    _listen();
+  }
+
+  @override
+  void didUpdateWidget(covariant GoLiveTextureViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.textures, widget.textures)) _listen();
+  }
+
+  void _listen() {
+    unawaited(_subscription?.cancel());
+    _subscription = widget.textures.listen(
+      (texture) => setState(() => _texture = texture),
     );
   }
 
-  /// The full-height state a tile shows before its pictures: a black ground
-  /// with one message in the middle.
-  Widget _stage(String key, List<Widget> children) => ColoredBox(
-    key: ValueKey(key),
-    color: Colors.black,
-    child: Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: children),
-    ),
-  );
+  @override
+  void dispose() {
+    unawaited(_subscription?.cancel());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texture = _texture;
+    if (texture == null) {
+      return _waiting(context, widget.label, showProgress: false);
+    }
+    return _picture(
+      texture.width,
+      texture.height,
+      Texture(textureId: texture.id),
+    );
+  }
 }
+
+/// A picture of its own size, scaled to fit the tile on a black ground.
+Widget _picture(int width, int height, Widget picture) => ColoredBox(
+  key: const ValueKey('go-live-picture'),
+  color: Colors.black,
+  child: FittedBox(
+    fit: BoxFit.contain,
+    child: SizedBox(
+      width: width.toDouble(),
+      height: height.toDouble(),
+      child: picture,
+    ),
+  ),
+);
+
+/// What a tile shows before its first picture.
+Widget _waiting(
+  BuildContext context,
+  String label, {
+  required bool showProgress,
+}) => _stage('go-live-waiting', [
+  if (showProgress)
+    const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    )
+  else
+    const Icon(Icons.live_tv_outlined, size: 24),
+  if (label.isNotEmpty) ...[
+    const SizedBox(height: 10),
+    Text(
+      'Waiting for $label',
+      style: TextStyle(
+        color: context.surfaces.muted,
+        fontSize: FlucordType.caption,
+      ),
+    ),
+  ],
+]);
+
+/// The full-height state a tile shows before its pictures: a black ground
+/// with one message in the middle.
+Widget _stage(String key, List<Widget> children) => ColoredBox(
+  key: ValueKey(key),
+  color: Colors.black,
+  child: Center(
+    child: Column(mainAxisSize: MainAxisSize.min, children: children),
+  ),
+);

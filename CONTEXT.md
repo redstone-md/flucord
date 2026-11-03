@@ -33,7 +33,7 @@ One stream this client is receiving, from the ask to the last picture. Somebody 
 _Avoid_: connection, socket, channel
 
 **Self-preview**:
-The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine. Not a watched session. Drawn only while its tile is on screen and the window is focused.
+The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine onto a texture the interface draws. Not a watched session. Drawn only while its tile is on screen and the window is focused.
 _Avoid_: thumbnail, monitor, mirror
 
 **Stage**:

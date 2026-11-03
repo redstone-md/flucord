@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../app_log.dart';
 import '../domain/video_decoder.dart';
 import '../domain/video_encoder.dart';
 import '../monotonic_clock.dart';
@@ -14,7 +15,9 @@ import 'window_visible.dart';
 /// never answered, so the preview is what left the encoder, and the pace line
 /// is what says whether it also left the machine.
 ///
-/// Decoded only while somebody is listening on [frames] and the window is
+/// The pictures are drawn on a texture, never handed to Dart (ADR-0009).
+///
+/// Decoded only while somebody is listening on [textures] and the window is
 /// being looked at: a sender who has moved to another channel, or who is in
 /// their game with this window behind it or minimized, is not paying a
 /// decoder for a picture nobody draws. [start] and [stop] follow the share;
@@ -25,13 +28,15 @@ import 'window_visible.dart';
 /// rather than waiting a whole group of pictures for the next.
 ///
 /// A decode that falls behind drops access units, and every picture after a
-/// drop is built on one that is gone. The tile then keeps its last whole
-/// picture, and the encoder is asked for the keyframe that mends it, at most
-/// once a second like a watched stream asks. Waiting for the encoder's own
-/// next keyframe instead froze the tile for up to ten seconds per drop.
+/// drop is built on one that is gone. The decoder then keeps its last whole
+/// picture on the texture until it has decoded a keyframe, and the encoder
+/// is asked for one, at most once a second like a watched stream asks.
+/// Waiting for the encoder's own next keyframe instead froze the tile for up
+/// to ten seconds per drop. The feed is not gated here: a drop is reported
+/// after the fact, and the keyframe that mends it may already be in.
 final class GoLiveSelfPreview extends ChangeNotifier {
   GoLiveSelfPreview({
-    required VideoDecoderService Function() decoderFactory,
+    required VideoTextureDecoder Function() decoderFactory,
 
     /// The window the tile is drawn in. Without one, the listener alone
     /// decides.
@@ -40,25 +45,35 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   }) : _decoderFactory = decoderFactory,
        _window = window,
        _now = now ?? monotonicNow {
-    _frames = StreamController.broadcast(
+    _textures = StreamController.broadcast(
       onListen: _wanted,
       onCancel: _unwanted,
     );
-    frames = _frames.stream;
+    // Each listener hears the current texture first: a tile that moves from
+    // the grid to the stage listens again before the old one lets go, and
+    // the texture is only announced when its size changes.
+    textures = Stream.multi((listener) {
+      final current = _current;
+      if (current != null) listener.add(current);
+      listener.addStream(_textures.stream).whenComplete(listener.close);
+    });
     _window?.addListener(_windowChanged);
   }
 
-  final VideoDecoderService Function() _decoderFactory;
+  final VideoTextureDecoder Function() _decoderFactory;
   final WindowVisible? _window;
   final Duration Function() _now;
-  late final StreamController<DecodedVideoFrame> _frames;
+  late final StreamController<VideoTexture?> _textures;
 
-  /// Decoded pictures of the running share. Empty between shares, and while
-  /// nobody listens.
+  /// The texture the running share is drawn on: the current one when a tile
+  /// starts listening, then each change. Null while there is no picture to
+  /// draw, including after the decoder closed and gave its texture back.
   ///
   /// One object for the life of the preview, so a tile that re-listens when
   /// its stream changes identity keeps its subscription across rebuilds.
-  late final Stream<DecodedVideoFrame> frames;
+  late final Stream<VideoTexture?> textures;
+
+  VideoTexture? _current;
 
   /// The running share's output, while there is one.
   ({
@@ -67,23 +82,20 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   })?
   _source;
 
-  /// Whether anything is listening on [frames].
+  /// Whether anything is listening on [textures].
   bool _watched = false;
 
   /// Whether the picture would be seen: a tile is listening, and the window
   /// it is in is on screen and focused.
   bool get _shown => _watched && (_window?.isLookedAt ?? true);
 
-  VideoDecoderService? _decoder;
+  VideoTextureDecoder? _decoder;
   StreamSubscription<EncodedVideoFrame>? _encoded;
-  StreamSubscription<DecodedVideoFrame>? _decoded;
+  StreamSubscription<VideoTexture>? _decoded;
   StreamSubscription<int>? _drops;
-  bool _awaitingKeyframe = true;
 
-  /// Whether a dropped access unit has broken the pictures. They stay hidden
-  /// until the one decoded from [_mendedAt], the keyframe after the drop.
-  bool _broken = false;
-  Duration? _mendedAt;
+  /// Whether the decoder still needs the keyframe it starts from.
+  bool _awaitingKeyframe = true;
 
   /// Asked once per share, when the tile first opens: a decoder reopened
   /// after the window came back waits for the next natural keyframe instead
@@ -156,11 +168,12 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _decoder = decoder;
     _error = null;
     _awaitingKeyframe = true;
-    _broken = false;
     try {
       await decoder.start();
     } on Object catch (error) {
       if (identical(_decoder, decoder)) {
+        // The tile says only that there is no preview; the reason is here.
+        AppLog.warning('golive', 'self-preview did not open: $error');
         _decoder = null;
         _error = error;
         notifyListeners();
@@ -173,18 +186,8 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       await decoder.stop();
       return;
     }
-    _decoded = decoder.frames.listen((frame) {
-      if (_broken) {
-        final mendedAt = _mendedAt;
-        if (mendedAt == null || frame.timestamp < mendedAt) return;
-        _broken = false;
-      }
-      if (!_frames.isClosed) _frames.add(frame);
-    });
+    _decoded = decoder.textures.listen(_show);
     _drops = decoder.droppedAccessUnits.listen((_) {
-      _broken = true;
-      _mendedAt = null;
-      _awaitingKeyframe = true;
       final now = _now();
       final last = _lastDropAsk;
       if (last != null && now - last < const Duration(seconds: 1)) return;
@@ -194,22 +197,28 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _encoded = source.encoded.listen((frame) {
       if (_awaitingKeyframe) {
         if (!frame.isKeyframe) {
-          if (!_broken && !_askedForKeyframe) {
+          if (!_askedForKeyframe) {
             _askedForKeyframe = true;
             unawaited(source.requestKeyframe?.call());
           }
           return;
         }
         _awaitingKeyframe = false;
-        if (_broken) _mendedAt = frame.timestamp;
       }
       unawaited(decoder.submit(frame.bytes, timestamp: frame.timestamp));
     });
   }
 
+  void _show(VideoTexture? texture) {
+    if (texture == _current) return;
+    _current = texture;
+    if (!_textures.isClosed) _textures.add(texture);
+  }
+
   Future<void> _close() async {
     final decoder = _decoder;
     _decoder = null;
+    _show(null);
     // Not awaited: a broadcast subscription's cancel completes on the root
     // zone, and awaiting it from inside a widget test's fake clock strands
     // everything after it.
@@ -227,7 +236,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _window?.removeListener(_windowChanged);
     _source = null;
     unawaited(_close());
-    unawaited(_frames.close());
+    unawaited(_textures.close());
     super.dispose();
   }
 }

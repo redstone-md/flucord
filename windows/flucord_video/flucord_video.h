@@ -165,11 +165,53 @@ FLUCORD_VIDEO_EXPORT void flucord_video_stage_timings(
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_describe_displays(char* buffer,
                                                              int32_t capacity);
 
+// A picture the interface draws without it passing through Dart: a shared
+// Direct3D texture a decoder draws into and Flutter's engine opens by its
+// handle (ADR-0009). The runner makes one per texture widget and hands its
+// address to Dart, which opens a decoder on it.
+typedef struct FlucordVideoSurface FlucordVideoSurface;
+
+// Called on the decode thread each time the surface shows a new picture.
+typedef void (*FlucordVideoSurfaceCallback)(void* context);
+
+// Creates a surface on the graphics adapter with this LUID, which has to be
+// the one Flutter renders on: a texture shared by handle only opens on the
+// adapter that made it. Returns 0 (S_OK), or the HRESULT that refused. The
+// caller holds one reference.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_surface_create(uint32_t adapter_low,
+                             int32_t adapter_high,
+                             FlucordVideoSurfaceCallback on_picture,
+                             void* context,
+                             FlucordVideoSurface** out_surface);
+
+// Stops the picture callback. Once this returns, the callback is not running
+// and is never called again.
+FLUCORD_VIDEO_EXPORT void flucord_video_surface_detach(
+    FlucordVideoSurface* surface);
+
+// Drops the caller's reference. A decoder drawing on the surface holds its
+// own until it closes.
+FLUCORD_VIDEO_EXPORT void flucord_video_surface_release(
+    FlucordVideoSurface* surface);
+
+// The shared handle and size of the picture the surface shows. Returns 0
+// before the first picture, 1 after. Safe from any thread.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_surface_describe(FlucordVideoSurface* surface,
+                               void** handle,
+                               int32_t* width,
+                               int32_t* height);
+
 typedef struct FlucordVideoDecoder FlucordVideoDecoder;
 
 // One decoded picture, as BGRA ready for a texture. Each picture owns its
 // buffer, which stays valid after the callback returns until the callee
 // passes it to flucord_video_decoder_release_picture.
+//
+// A decoder drawing on a surface passes no buffer (`bgra` is null and
+// `stride` 0): the callback then only says that a picture was decoded, its
+// size, and its time.
 typedef void (*FlucordVideoPictureCallback)(void* user_data,
                                             const uint8_t* bgra,
                                             int32_t width,
@@ -186,12 +228,20 @@ typedef void (*FlucordVideoPictureCallback)(void* user_data,
 // quietly produces nothing. It decodes on the GPU where it can, and the
 // colour conversion runs there too; flucord_video_decoder_gpu_status says
 // where it ended up. The decode runs on the decoder's own thread, not on the
-// thread that feeds it, which is the one that draws the whole interface. Pictures arrive on the callback from that thread, each
-// carrying its own heap buffer that the callee releases with
+// thread that feeds it, which is the one that draws the whole interface.
+// Pictures arrive on the callback from that thread, each carrying its own
+// heap buffer that the callee releases with
 // flucord_video_decoder_release_picture once copied.
+//
+// Given a `surface`, the decoder decodes on the surface's device and draws
+// every picture there instead of handing it over, and holds a reference to
+// the surface until it closes. After an access unit is dropped, the surface
+// keeps its last whole picture until a keyframe has been decoded: everything
+// in between is built on a picture that is gone.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_decoder_open(FlucordVideoPictureCallback callback,
                            void* user_data,
+                           FlucordVideoSurface* surface,
                            FlucordVideoDecoder** out_decoder);
 
 // Feeds one access unit in. Returns at once; the decode happens on the

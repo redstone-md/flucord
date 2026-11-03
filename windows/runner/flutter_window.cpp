@@ -4,6 +4,7 @@
 
 #include "discord_social_sdk_bridge.h"
 #include "flutter/generated_plugin_registrant.h"
+#include "video_texture_bridge.h"
 
 namespace {
 
@@ -35,6 +36,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   discord_social_sdk_bridge_ = std::make_unique<DiscordSocialSdkBridge>(
       flutter_controller_->engine()->messenger());
+  video_texture_bridge_ =
+      std::make_unique<VideoTextureBridge>(flutter_controller_->engine());
 #if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
   SetTimer(GetHandle(), kDiscordSocialSdkTimerId,
            kDiscordSocialSdkPumpIntervalMs, nullptr);
@@ -58,6 +61,7 @@ void FlutterWindow::OnDestroy() {
   KillTimer(GetHandle(), kDiscordSocialSdkTimerId);
 #endif
   discord_social_sdk_bridge_.reset();
+  video_texture_bridge_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

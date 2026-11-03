@@ -13,3 +13,4 @@ Accepted. Supersedes the watched-back design of 2026-08. Whether the official cl
 - The preview shows what left the encoder, not what left the machine. Whether pictures reach the room is the Sender's pace line and the viewer count, not the tile.
 - The cap on watched sessions is for other people's streams only; the sender's own no longer takes a seat (ADR-0002).
 - The decoder is open only while the sender's tile is on screen: the preview decodes for as long as something listens to its pictures, and a sender reading another channel pays nothing for it. The official client draws its preview the same way, only where it is looked at.
+- The decoded pictures are drawn on a shared texture, not handed to Dart (ADR-0009).

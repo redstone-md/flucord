@@ -395,11 +395,10 @@ class _SelfPreview extends StatelessWidget {
         ),
       );
     }
-    return GoLiveViewer(
+    return GoLiveTextureViewer(
       key: const ValueKey('voice-self-preview'),
-      frames: preview.frames,
+      textures: preview.textures,
       label: 'your stream',
-      showProgress: false,
     );
   }
 }

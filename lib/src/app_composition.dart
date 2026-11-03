@@ -507,8 +507,7 @@ final class AppComposition {
         // The sender's own picture is the encoder's output decoded here;
         // Discord never answers a watch on the sender's own key (ADR-0001).
         selfPreview: GoLiveSelfPreview(
-          decoderFactory: () =>
-              bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+          decoderFactory: NativeVideoTextureDecoder.new,
           // Not decoded while the window is behind the game or minimized.
           window: windowVisible,
         ),

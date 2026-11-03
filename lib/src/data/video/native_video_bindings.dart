@@ -26,9 +26,12 @@ typedef NativeFrameCallback =
 typedef NativePictureCallback =
     Void Function(Pointer<Void>, Pointer<Uint8>, Int32, Int32, Int32, Int64);
 
+/// The callback, its user data, the surface to draw on (or null), and where
+/// the decoder handle goes.
 typedef _DecoderOpenNative =
     Int32 Function(
       Pointer<NativeFunction<NativePictureCallback>>,
+      Pointer<Void>,
       Pointer<Void>,
       Pointer<Pointer<Void>>,
     );
@@ -36,6 +39,7 @@ typedef _DecoderOpenNative =
 typedef VideoDecoderOpenDart =
     int Function(
       Pointer<NativeFunction<NativePictureCallback>>,
+      Pointer<Void>,
       Pointer<Void>,
       Pointer<Pointer<Void>>,
     );
