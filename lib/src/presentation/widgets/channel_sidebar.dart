@@ -19,6 +19,7 @@ import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'count_badge.dart';
+import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
 import 'theme_scope.dart';
 import 'user_settings_scope.dart';

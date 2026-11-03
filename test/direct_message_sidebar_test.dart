@@ -108,9 +108,7 @@ void main() {
     expect(_fillOf(tester, 'dm-bo'), Colors.transparent);
   });
 
-  testWidgets('an unread DM names the person at full strength', (
-    tester,
-  ) async {
+  testWidgets('an unread DM names the person at full strength', (tester) async {
     await _pumpSidebar(tester);
 
     final name = _textStyle(tester, 'Ann');
@@ -130,6 +128,49 @@ void main() {
     expect(surface.color, _surfaces.text.withValues(alpha: 0.06));
     expect(surface.borderRadius, FlucordRadius.control);
   });
+
+  testWidgets('a message request is a person row with icon answers', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final folder = find.byKey(const ValueKey('message-requests-folder'));
+    expect(
+      find.descendant(
+        of: folder,
+        matching: findFlucordIcon(FlucordIcons.inbox),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(folder);
+    await tester.pump();
+
+    final request = find.byKey(const ValueKey('request-dm-cy'));
+    expect(tester.getSize(request).height, 40);
+    expect(
+      tester.getSize(
+        find.descendant(of: request, matching: find.byType(MemberAvatar)),
+      ),
+      const Size.square(28),
+    );
+    for (final (key, icon) in [
+      ('accept-request-dm-cy', FlucordIcons.check),
+      ('decline-request-dm-cy', FlucordIcons.clear),
+    ]) {
+      final button = find.byKey(ValueKey(key));
+      expect(tester.getSize(button), const Size.square(28));
+      expect(
+        find.descendant(of: button, matching: findFlucordIcon(icon)),
+        findsOneWidget,
+      );
+    }
+    for (final part in [folder, request]) {
+      expect(
+        find.descendant(of: part, matching: find.byType(Icon)),
+        findsNothing,
+      );
+    }
+  });
 }
 
 Finder _row(String channelId) => find.byKey(ValueKey('channel-$channelId'));
@@ -137,8 +178,8 @@ Finder _row(String channelId) => find.byKey(ValueKey('channel-$channelId'));
 TextStyle _textStyle(WidgetTester tester, String text) =>
     tester.widget<Text>(find.text(text)).style!;
 
-Material _surfaceOf(WidgetTester tester, String channelId) => tester
-    .widget<Material>(
+Material _surfaceOf(WidgetTester tester, String channelId) =>
+    tester.widget<Material>(
       find.ancestor(of: _row(channelId), matching: find.byType(Material)).first,
     );
 
@@ -165,6 +206,8 @@ Future<void> _pumpSidebar(
     onToggleCategory: (_) {},
     onNewDirectMessage: onNewDirectMessage ?? () {},
     friends: friends,
+    onAcceptMessageRequest: (_) {},
+    onDeclineMessageRequest: (_) {},
   );
   await tester.pumpWidget(
     MaterialApp(
@@ -188,16 +231,20 @@ Future<void> _pumpSidebar(
   );
 }
 
-ConversationChannel _dm(String person, {bool unread = false}) =>
-    ConversationChannel(
-      id: 'dm-$person',
-      spaceId: CommunitySpace.directMessagesId,
-      name: '${person[0].toUpperCase()}${person.substring(1)}',
-      topic: '',
-      kind: ChannelKind.text,
-      recipientId: person,
-      unread: unread,
-    );
+ConversationChannel _dm(
+  String person, {
+  bool unread = false,
+  bool request = false,
+}) => ConversationChannel(
+  id: 'dm-$person',
+  spaceId: CommunitySpace.directMessagesId,
+  name: '${person[0].toUpperCase()}${person.substring(1)}',
+  topic: '',
+  kind: ChannelKind.text,
+  recipientId: person,
+  unread: unread,
+  isMessageRequest: request,
+);
 
 Member _person(String id, Presence presence) => Member(
   id: id,
@@ -211,7 +258,12 @@ Member _person(String id, Presence presence) => Member(
 
 final _workspace = ChatWorkspace(
   spaces: const [CommunitySpace.directMessages()],
-  channels: [_dm('jack'), _dm('ann', unread: true), _dm('bo')],
+  channels: [
+    _dm('jack'),
+    _dm('ann', unread: true),
+    _dm('bo'),
+    _dm('cy', request: true),
+  ],
   members: [
     const Member(
       id: 'me',
@@ -224,6 +276,7 @@ final _workspace = ChatWorkspace(
     _person('jack', Presence.online),
     _person('ann', Presence.idle),
     _person('bo', Presence.offline),
+    _person('cy', Presence.online),
   ],
   messages: const [],
   currentMemberId: 'me',

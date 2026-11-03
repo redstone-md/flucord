@@ -329,55 +329,65 @@ class _MessageRequestRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final person = recipient;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: _SidebarMetrics.rowGap),
       child: Material(
         color: Colors.transparent,
-        borderRadius: FlucordRadius.small,
+        borderRadius: FlucordRadius.control,
         child: InkWell(
           key: ValueKey('request-${channel.id}'),
           onTap: onPressed,
-          borderRadius: FlucordRadius.small,
+          borderRadius: FlucordRadius.control,
           child: SizedBox(
-            height: 34,
+            height: _SidebarMetrics.personRowHeight,
             child: Row(
               children: [
-                const SizedBox(width: 10),
-                if (recipient != null)
-                  MemberAvatar(member: recipient!, size: 24)
+                const SizedBox(width: _SidebarMetrics.rowPadding),
+                if (person != null)
+                  MemberAvatar(
+                    member: person,
+                    size: _SidebarMetrics.personAvatarSize,
+                    presenceBorderColor: surfaces.rail,
+                  )
                 else
-                  Icon(
-                    Icons.person_outline,
-                    size: 17,
-                    color: context.surfaces.muted,
+                  SizedBox.square(
+                    dimension: _SidebarMetrics.personAvatarSize,
+                    child: Center(
+                      child: FlucordIcon(
+                        FlucordIcons.person,
+                        size: _SidebarMetrics.iconSize,
+                        color: surfaces.muted,
+                      ),
+                    ),
                   ),
-                const SizedBox(width: 7),
+                const SizedBox(width: _SidebarMetrics.iconGap),
                 Expanded(
                   child: Text(
-                    recipient?.displayName ?? channel.name,
+                    person?.displayName ?? channel.name,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: FlucordType.label),
+                    style: FlucordTextRole.label.style.copyWith(
+                      color: surfaces.text,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 if (onAccept != null)
-                  IconButton(
+                  FlucordIconButton(
                     key: ValueKey('accept-request-${channel.id}'),
                     tooltip: 'Accept',
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 16,
                     onPressed: onAccept,
-                    icon: const Icon(Icons.check),
+                    icon: FlucordIcons.check,
                   ),
                 if (onDecline != null)
-                  IconButton(
+                  FlucordIconButton(
                     key: ValueKey('decline-request-${channel.id}'),
                     tooltip: 'Decline',
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 16,
                     onPressed: onDecline,
-                    icon: const Icon(Icons.close),
+                    icon: FlucordIcons.clear,
                   ),
-                const SizedBox(width: 4),
+                const SizedBox(width: _SidebarMetrics.rowPadding / 2),
               ],
             ),
           ),
