@@ -483,6 +483,10 @@ void main() {
       await _drag(tester, session, 800);
     }
     expect(askedForOlder(), isTrue);
+    // The last drag can end at the top of the held history. There the edge
+    // stretch scales the rows for a moment without moving the list, so the
+    // row is read once that has gone.
+    await tester.pump(const Duration(seconds: 1));
     final watched = _rowOnScreen(tester);
 
     olderPage.complete(jsonResponse(_page(0, _firstHeld)));
