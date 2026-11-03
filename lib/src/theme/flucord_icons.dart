@@ -136,6 +136,16 @@ abstract final class FlucordIcons {
   static const themes = FlucordIconData(HugeIcons.strokeRoundedPaintBrush01);
   static const language = FlucordIconData(HugeIcons.strokeRoundedTranslate);
 
+  // Friends.
+  static const activityInvite = FlucordIconData(
+    HugeIcons.strokeRoundedGameController03,
+  );
+  static const removeFriend = FlucordIconData(
+    HugeIcons.strokeRoundedUserRemove01,
+  );
+  static const friends = FlucordIconData(HugeIcons.strokeRoundedUserMultiple);
+  static const plugin = FlucordIconData(HugeIcons.strokeRoundedPlug01);
+
   // Server settings pages.
   static const overview = FlucordIconData(
     HugeIcons.strokeRoundedDashboardSquare01,

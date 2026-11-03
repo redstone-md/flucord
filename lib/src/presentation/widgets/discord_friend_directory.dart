@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_friend_actions.dart';
@@ -15,6 +17,7 @@ import 'discord_relationship_avatar.dart';
 import 'discord_social_sdk_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
 import 'discord_social_dm_scope.dart';
+import 'flucord_button.dart';
 
 class DiscordFriendDirectory extends StatelessWidget {
   const DiscordFriendDirectory({super.key});
@@ -36,31 +39,29 @@ class DiscordFriendDirectory extends StatelessWidget {
       ),
       DiscordFriendsLoadState.authorizationRequired => _FriendsState(
         key: const ValueKey('discord-friends-auth-required'),
-        icon: Icons.key_outlined,
+        icon: FlucordIcons.twoFactor,
         title: 'Native account authorization required',
         detail:
             'Connect your Discord account through the native Social SDK to synchronize friends.',
-        action: FilledButton(
+        action: FlucordButton(
           key: const ValueKey('discord-friends-authorize'),
+          kind: FlucordButtonKind.primary,
+          label: 'Connect Discord',
           onPressed: accountController?.connect ?? socialController.authorize,
-          child: const Text('Connect Discord'),
         ),
       ),
       DiscordFriendsLoadState.unavailable => const _FriendsState(
         key: ValueKey('discord-friends-unavailable'),
-        icon: Icons.extension_off_outlined,
+        icon: FlucordIcons.plugin,
         title: 'Friends are unavailable in this build',
         detail: 'The native Social SDK relationship transport is not active.',
       ),
       DiscordFriendsLoadState.failure => _FriendsState(
         key: const ValueKey('discord-friends-failure'),
-        icon: Icons.error_outline,
+        icon: FlucordIcons.error,
         title: 'Friends could not be loaded',
         detail: 'The native relationship request failed without cached data.',
-        action: OutlinedButton(
-          onPressed: controller.retry,
-          child: const Text('Retry'),
-        ),
+        action: FlucordButton(label: 'Retry', onPressed: controller.retry),
       ),
       DiscordFriendsLoadState.ready => _ReadyFriendDirectory(
         controller: controller,
@@ -125,7 +126,7 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     if (items.isEmpty) {
       return const _FriendsState(
         key: ValueKey('discord-friends-empty'),
-        icon: Icons.people_outline,
+        icon: FlucordIcons.friends,
         title: 'No friends to show',
         detail: 'Discord returned no friend or pending-request relationships.',
       );
@@ -144,12 +145,9 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
           final _FriendSection section => Padding(
             padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
             child: Text(
-              '${section.label.toUpperCase()} — ${section.count}',
-              style: TextStyle(
-                color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.25,
+              '${section.label} — ${section.count}',
+              style: FlucordTextRole.caption.style.copyWith(
+                color: context.surfaces.captionText,
               ),
             ),
           ),
@@ -317,21 +315,23 @@ class _FriendRow extends StatelessWidget {
       link: link,
       child: Material(
         key: ValueKey('discord-friend-${user.id}'),
-        color: selected ? context.surfaces.raised : Colors.transparent,
+        color: selected ? context.surfaces.quietFill : Colors.transparent,
+        borderRadius: FlucordRadius.control,
         child: Semantics(
           button: true,
           label: '${user.displayName}, ${_relationshipDetail(relationship)}',
           child: InkWell(
             onTap: () => onProfile(context),
+            borderRadius: FlucordRadius.control,
             child: Container(
-              height: 58,
+              height: 60,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: context.surfaces.border)),
               ),
               child: Row(
                 children: [
-                  DiscordRelationshipAvatar(user: user),
+                  DiscordRelationshipAvatar(user: user, size: 32),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -342,9 +342,9 @@ class _FriendRow extends StatelessWidget {
                           user.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: FlucordType.label,
-                            fontWeight: FontWeight.w600,
+                          style: FlucordTextRole.label.style.copyWith(
+                            color: context.surfaces.text,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -354,11 +354,10 @@ class _FriendRow extends StatelessWidget {
                               : _relationshipDetail(relationship),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: FlucordTextRole.caption.style.copyWith(
                             color: mutationFailed
                                 ? context.surfaces.errorText
                                 : context.surfaces.muted,
-                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ],
@@ -391,7 +390,7 @@ class _FriendsState extends StatelessWidget {
 
   final String title;
   final String detail;
-  final IconData? icon;
+  final FlucordIconData? icon;
   final bool loading;
   final Widget? action;
 
@@ -408,18 +407,22 @@ class _FriendsState extends StatelessWidget {
                 dimension: 26,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            else
-              Icon(icon, size: 30, color: context.surfaces.muted),
+            else if (icon case final icon?)
+              FlucordIcon(icon, size: 28, color: context.surfaces.muted),
             const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 5),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: FlucordTextRole.heading.style.copyWith(
+                color: context.surfaces.text,
+              ),
+            ),
+            const SizedBox(height: 4),
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: FlucordTextRole.label.style.copyWith(
                 color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
-                height: 1.4,
               ),
             ),
             if (action case final action?) ...[
