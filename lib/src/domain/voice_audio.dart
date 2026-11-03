@@ -48,10 +48,12 @@ abstract interface class VoiceAudioTransport {
   /// Accounts for a frame the microphone captured that is not being sent.
   ///
   /// The stream's clock keeps time with the microphone, not with what was
-  /// sent (RFC 3550, section 5.1). A receiver reads a frame that never came
-  /// as a loss and conceals it. If the clock skipped over it instead, the
-  /// receiver would play everything after it 20 ms later, for good, and
-  /// dropped frames would pile up into seconds of delay.
+  /// sent (RFC 3550, section 5.1). The packet sequence stays unbroken, so a
+  /// receiver sees no lost packet, only a gap in time, which it fills as it
+  /// does a pause in speech, and the next frame plays on time. If the clock
+  /// did not move, the receiver would play everything after the frame 20 ms
+  /// later, for good, and dropped frames would pile up into seconds of
+  /// delay.
   void skipOpusFrame();
   Future<void> finishSpeaking();
 }
