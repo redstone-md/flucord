@@ -60,6 +60,9 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+  static const lightTheme = FlucordIconData(HugeIcons.strokeRoundedSun03);
+  static const darkTheme = FlucordIconData(HugeIcons.strokeRoundedMoon02);
+  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
   // Menu and popover actions.
   static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
   static const forward = FlucordIconData(
@@ -97,7 +100,6 @@ abstract final class FlucordIcons {
   static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
 
   // The channel list and its voice seats.
-  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
   static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
   static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
   static const headphonesOff = FlucordIconData(

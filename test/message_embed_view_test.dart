@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_embed_view.dart';
 import 'package:flucord/src/presentation/widgets/native_inline_video_player.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
@@ -28,6 +29,38 @@ void main() {
     );
     expect(accent.color, const Color(0xff4c9b72));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sits on a barely raised card with a thin border', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_EmbedTestApp(embed: _embed()));
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+
+    final card =
+        tester
+                .widget<Container>(find.byKey(const ValueKey('embed-card')))
+                .decoration!
+            as BoxDecoration;
+
+    expect(card.color, surfaces.text.withValues(alpha: 0.03));
+    expect(card.border, Border.all(color: surfaces.border));
+    expect(card.borderRadius, FlucordRadius.medium);
+  });
+
+  testWidgets('draws its text in weights 400 and 500 only', (tester) async {
+    await tester.pumpWidget(_EmbedTestApp(embed: _embed()));
+
+    final weights = {
+      for (final text in tester.widgetList<Text>(find.byType(Text)))
+        text.style?.fontWeight ?? FontWeight.w400,
+    };
+
+    expect(weights, everyElement(isIn([FontWeight.w400, FontWeight.w500])));
+    expect(
+      tester.widget<Text>(find.text('Deploy complete')).style?.fontWeight,
+      FontWeight.w500,
+    );
   });
 
   testWidgets('collapses inline fields to one column without overflow', (

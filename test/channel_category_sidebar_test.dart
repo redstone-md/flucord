@@ -46,12 +46,15 @@ void main() {
     expect(find.byKey(const ValueKey('channel-random')), findsOneWidget);
     expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
 
-    final mention = tester.widget<Container>(
-      find.byKey(const ValueKey('channel-mention-alerts')),
+    final mention = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byKey(const ValueKey('channel-mention-alerts')),
+        matching: find.byType(DecoratedBox),
+      ),
     );
     expect(
-      (mention.decoration! as BoxDecoration).color,
-      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.mention,
+      (mention.decoration as BoxDecoration).color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger,
     );
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));

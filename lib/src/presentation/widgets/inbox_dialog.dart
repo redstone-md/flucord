@@ -8,7 +8,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
-import 'mention_badge.dart';
+import 'count_badge.dart';
 import 'flucord_dialog.dart';
 
 class InboxActivityButton extends StatelessWidget {
@@ -51,7 +51,7 @@ class InboxActivityButton extends StatelessWidget {
                 Positioned(
                   top: 3,
                   right: 2,
-                  child: MentionBadge(
+                  child: CountBadge(
                     key: const ValueKey('inbox-mention-badge'),
                     count: summary.mentionCount,
                   ),

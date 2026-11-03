@@ -10,6 +10,7 @@ import 'package:flucord/src/presentation/widgets/direct_message_views.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 
 import 'support/flucord_icon_finder.dart';
 
@@ -78,22 +79,18 @@ void main() {
         of: guildButton,
         matching: find.byType(AnimatedContainer),
       );
-      var decoration = tester
-          .widget<AnimatedContainer>(guildSurface)
-          .decoration!;
-      expect(
-        (decoration as BoxDecoration).borderRadius,
-        BorderRadius.circular(22),
-      );
+      BoxDecoration surface() =>
+          tester.widget<AnimatedContainer>(guildSurface).decoration!
+              as BoxDecoration;
+      final restingFill = surface().color;
+      expect(surface().borderRadius, FlucordRadius.large);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(guildButton));
       await tester.pump(const Duration(milliseconds: 160));
-      decoration = tester.widget<AnimatedContainer>(guildSurface).decoration!;
-      expect(
-        (decoration as BoxDecoration).borderRadius,
-        BorderRadius.circular(14),
-      );
+      // Hover lights the tile up but keeps its shape.
+      expect(surface().color, isNot(restingFill));
+      expect(surface().borderRadius, FlucordRadius.large);
       await mouse.removePointer();
 
       await tester.tap(find.byKey(const ValueKey('new-direct-message')));
