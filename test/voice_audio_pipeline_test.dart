@@ -334,8 +334,16 @@ void main() {
       await _flushEvents();
       suppressor.release.complete();
       await _flushEvents();
+      // The next frame that gets through carries the dropped ones' time.
+      media.addPcm(bytes);
+      await _flushEvents();
 
-      expect(transport.clock, [...List.filled(5, 'frame'), 'skip', 'skip']);
+      expect(transport.clock, [
+        ...List.filled(5, 'frame'),
+        'skip',
+        'skip',
+        'frame',
+      ]);
     });
 
     test('a suppressor that throws mid-call is dropped and reported', () async {

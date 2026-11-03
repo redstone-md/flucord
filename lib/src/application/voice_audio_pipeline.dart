@@ -109,6 +109,10 @@ final class VoiceAudioPipeline {
   int _uplinkBacklog = 0;
   int _uplinkDropped = 0;
 
+  /// Frames dropped since the last one queued, whose time the next queued
+  /// frame moves the clock on by before it goes out.
+  int _uplinkSkipped = 0;
+
   bool _enabled = false;
   bool _disposed = false;
   final StreamController<bool> _speaking = StreamController.broadcast();
@@ -299,6 +303,7 @@ final class VoiceAudioPipeline {
       await _uplink;
       _uplink = Future<void>.value();
       _uplinkBacklog = 0;
+      _uplinkSkipped = 0;
       await _flushNoiseSuppressor();
       _setSpeaking(false);
       await _transport?.finishSpeaking();
@@ -311,14 +316,19 @@ final class VoiceAudioPipeline {
     for (final frame in _framer.add(chunk)) {
       if (_uplinkBacklog >= _uplinkBacklogLimit) {
         _noteDroppedFrame();
-        // Its 20 ms still pass, after the frames already waiting.
-        _uplink = _uplink.then((_) => _transport?.skipOpusFrame());
+        // Its 20 ms still pass, after the frames already waiting: a count,
+        // so a filter that never answers holds nothing per frame.
+        _uplinkSkipped++;
         continue;
       }
       _uplinkBacklog++;
-      _uplink = _uplink.then((_) => _sendUplinkFrame(frame)).whenComplete(() {
-        _uplinkBacklog--;
-      });
+      final skipped = _uplinkSkipped;
+      _uplinkSkipped = 0;
+      _uplink = _uplink
+          .then((_) => _sendUplinkFrame(frame, skippedBefore: skipped))
+          .whenComplete(() {
+            _uplinkBacklog--;
+          });
     }
   }
 
@@ -341,9 +351,15 @@ final class VoiceAudioPipeline {
   /// awaited call that does nothing still costs a turn of the event loop
   /// per frame, and a microphone that arrives faster than the empty turns
   /// drain would be dropped for no reason.
-  Future<void> _sendUplinkFrame(Int16List frame) async {
+  Future<void> _sendUplinkFrame(
+    Int16List frame, {
+    required int skippedBefore,
+  }) async {
     final transport = _transport;
     if (_disposed || transport == null) return;
+    for (var i = 0; i < skippedBefore; i++) {
+      transport.skipOpusFrame();
+    }
     try {
       final processing = _process(frame);
       if (processing != null) await processing;
