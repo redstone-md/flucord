@@ -1,0 +1,91 @@
+import 'package:flutter/widgets.dart';
+import 'package:hugeicons/hugeicons.dart';
+
+/// One Hugeicons drawing, plus whether it points a way and so must mirror in
+/// right-to-left text, as [IconData.matchTextDirection] does.
+@immutable
+final class FlucordIconData {
+  const FlucordIconData(this.data, {this.matchTextDirection = false});
+
+  /// The path data `HugeIcon` draws.
+  final List<List<dynamic>> data;
+
+  final bool matchTextDirection;
+}
+
+/// The app's icons, named by what they mean rather than by their shape.
+///
+/// Draw them with [FlucordIcon], as `FlucordIcon(FlucordIcons.reply)`.
+abstract final class FlucordIcons {
+  static const textChannel = FlucordIconData(HugeIcons.strokeRoundedHashtag);
+  static const voiceChannel = FlucordIconData(
+    HugeIcons.strokeRoundedVolumeHigh,
+  );
+  static const chevronDown = FlucordIconData(
+    HugeIcons.strokeRoundedArrowDown01,
+  );
+  static const chevronRight = FlucordIconData(
+    HugeIcons.strokeRoundedArrowRight01,
+    matchTextDirection: true,
+  );
+  static const search = FlucordIconData(HugeIcons.strokeRoundedSearch01);
+  static const inbox = FlucordIconData(HugeIcons.strokeRoundedInbox);
+  static const pin = FlucordIconData(HugeIcons.strokeRoundedPin);
+  static const members = FlucordIconData(HugeIcons.strokeRoundedUserGroup);
+  static const threads = FlucordIconData(
+    HugeIcons.strokeRoundedMessageMultiple01,
+  );
+  static const mic = FlucordIconData(HugeIcons.strokeRoundedMic01);
+  static const headphones = FlucordIconData(HugeIcons.strokeRoundedHeadphones);
+  static const settings = FlucordIconData(HugeIcons.strokeRoundedSettings01);
+  static const camera = FlucordIconData(HugeIcons.strokeRoundedVideo01);
+  static const screenShare = FlucordIconData(
+    HugeIcons.strokeRoundedScreenShare,
+    matchTextDirection: true,
+  );
+  static const hangUp = FlucordIconData(HugeIcons.strokeRoundedCallEnd01);
+  static const add = FlucordIconData(HugeIcons.strokeRoundedAdd01);
+  static const emoji = FlucordIconData(HugeIcons.strokeRoundedSmile);
+  static const reply = FlucordIconData(
+    HugeIcons.strokeRoundedArrowTurnBackward,
+    matchTextDirection: true,
+  );
+  static const directMessages = FlucordIconData(
+    HugeIcons.strokeRoundedMessage01,
+  );
+  static const image = FlucordIconData(HugeIcons.strokeRoundedImage01);
+  static const explore = FlucordIconData(HugeIcons.strokeRoundedDiscoverCircle);
+  static const more = FlucordIconData(HugeIcons.strokeRoundedMoreHorizontal);
+  // Hugeicons' plain "signal" is the messenger logo; these are the bars.
+  static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
+  static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
+  static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+}
+
+/// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
+///
+/// Size and colour come from the ambient [IconTheme] unless given here, so it
+/// drops in where an [Icon] was.
+class FlucordIcon extends StatelessWidget {
+  const FlucordIcon(this.icon, {super.key, this.size, this.color});
+
+  static const double _strokeWidth = 1.75;
+
+  final FlucordIconData icon;
+  final double? size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final drawing = HugeIcon(
+      icon: icon.data,
+      size: size ?? IconTheme.of(context).size,
+      color: color,
+      strokeWidth: _strokeWidth,
+    );
+    final mirror =
+        icon.matchTextDirection &&
+        Directionality.of(context) == TextDirection.rtl;
+    return mirror ? Transform.flip(flipX: true, child: drawing) : drawing;
+  }
+}
