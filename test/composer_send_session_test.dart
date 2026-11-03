@@ -11,6 +11,7 @@ import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/proto/proto_message.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/expression_favorites.dart';
+import 'package:flucord/src/presentation/widgets/flucord_icon_button.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';
@@ -227,7 +228,7 @@ void main() {
   group('slowmode', () {
     Finder sendButton() => find.byKey(const ValueKey('send-message'));
     bool sendEnabled(WidgetTester tester) =>
-        tester.widget<IconButton>(sendButton()).onPressed != null;
+        tester.widget<FlucordIconButton>(sendButton()).onPressed != null;
 
     testSession('blocks the button and Enter until the time ends', (
       tester,
@@ -348,7 +349,7 @@ void main() {
         await session.openChannel(SessionHarness.channelId);
         await _typeAndSend(tester, session, 'first');
 
-        final record = tester.widget<IconButton>(
+        final record = tester.widget<FlucordIconButton>(
           find.byKey(const ValueKey('record-voice-message')),
         );
         expect(record.onPressed, isNull);

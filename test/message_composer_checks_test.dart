@@ -6,6 +6,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/pending_attachment_picker.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/contrast.dart';
@@ -283,12 +284,13 @@ void main() {
       );
       await tester.pump();
 
-      final icon = tester.widget<Icon>(
+      final icon = tester.widget<FlucordIcon>(
         find.descendant(
           of: find.byKey(const ValueKey('send-message')),
-          matching: find.byIcon(Icons.send),
+          matching: find.byType(FlucordIcon),
         ),
       );
+      expect(icon.icon, FlucordIcons.send);
       expectReadable(theme, icon.color, 3);
     });
 
@@ -299,10 +301,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('open-emoji-picker')));
       await tester.pumpAndSettle();
 
-      final icon = tester.widget<Icon>(
+      final icon = tester.widget<FlucordIcon>(
         find.descendant(
           of: find.byKey(const ValueKey('open-emoji-picker')),
-          matching: find.byType(Icon),
+          matching: find.byType(FlucordIcon),
         ),
       );
       expectReadable(theme, icon.color, 3);
