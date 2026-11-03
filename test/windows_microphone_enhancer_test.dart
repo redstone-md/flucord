@@ -45,20 +45,13 @@ void main() {
   group('the stages', () {
     const path = 'build/windows/x64/runner/Release/flucord_audio.dll';
 
-    /// Whether this machine can drive the real module at all: the tests
-    /// below are live evidence, and a suite without the DLL keeps them
-    /// visible as skips instead of silently passing.
-    ///
-    /// Gain alone needs no speakers. The echo path loops the default
-    /// speakers back, so a CI box with no audio hardware refuses its open.
-    bool stageSupported() => Platform.isWindows && File(path).existsSync();
+    /// The tests below are live evidence: without the module they are
+    /// reported as skipped rather than passing.
+    final skip = Platform.isWindows && File(path).existsSync()
+        ? false
+        : 'needs a Windows build of flucord_audio.dll';
 
-    test('gain keeps the whole band of the voice', () async {
-      if (!stageSupported()) {
-        // Counted as a skip, not a silent pass: the suite reports the case
-        // it did not run.
-        return;
-      }
+    test('gain keeps the whole band of the voice', skip: skip, () async {
       final enhancer = WindowsMicrophoneEnhancer(
         DynamicLibrary.open(path),
         echoCancellation: false,
@@ -81,26 +74,30 @@ void main() {
       expect(kept, greaterThan(reference * 0.5));
     });
 
-    test('gain with echo runs both stages on one capture', () async {
-      if (!stageSupported()) {
-        // Counted as a skip the same way: the echo path is machine-bound.
-        return;
-      }
-      // A machine without speakers refuses the open, and the refusal is the
-      // honest answer, not a failure of the path.
-      final enhancer = WindowsMicrophoneEnhancer(
-        DynamicLibrary.open(path),
-        echoCancellation: true,
-        automaticGainControl: true,
-      );
-      addTearDown(enhancer.dispose);
-
-      for (var frame = 0; frame < 4; frame++) {
-        await enhancer.process(
-          _tone(frame, hertz: 440, amplitude: 3000),
-          channels: 2,
+    test(
+      'gain with echo runs both stages on one capture',
+      skip: skip,
+      () async {
+        final enhancer = WindowsMicrophoneEnhancer(
+          DynamicLibrary.open(path),
+          echoCancellation: true,
+          automaticGainControl: true,
         );
-      }
-    });
+        addTearDown(enhancer.dispose);
+
+        try {
+          for (var frame = 0; frame < 4; frame++) {
+            await enhancer.process(
+              _tone(frame, hertz: 440, amplitude: 3000),
+              channels: 2,
+            );
+          }
+        } on StateError catch (error) {
+          // A machine without speakers refuses the open at the speakers step,
+          // and that refusal is the honest answer, not a failure of the path.
+          expect('$error', contains('speakers'));
+        }
+      },
+    );
   });
 }

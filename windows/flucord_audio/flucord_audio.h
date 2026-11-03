@@ -90,7 +90,7 @@ typedef enum FlucordAudioEnhancerStage {
   FLUCORD_AUDIO_ENHANCER_STAGE_APARTMENT = 1,
   // flucord_apm.dll missing beside this module, or out of memory.
   FLUCORD_AUDIO_ENHANCER_STAGE_LIBRARY = 2,
-  // No default speakers, or a mix format that is neither float nor 16-bit.
+  // No such output, or a mix format that is neither float nor 16-bit.
   FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS = 3,
   // Starting the loopback capture of the speakers.
   FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK = 4,
@@ -108,6 +108,14 @@ typedef enum FlucordAudioEnhancerStage {
 // memory for the enhancer).
 FLUCORD_AUDIO_EXPORT void
 flucord_audio_mic_enhancer_failure(int32_t* out_stage, int32_t* out_result);
+
+// Takes the echo reference from the output named speakers_utf8 (its
+// friendly name, as the playback device list shows it), or from the system
+// default when it is null or empty, which also follows a default that moves.
+// The loopback opens on the next frame.
+FLUCORD_AUDIO_EXPORT FlucordAudioStatus
+flucord_audio_enhancer_loop_back(FlucordAudioEnhancer* enhancer,
+                                 const char* speakers_utf8);
 
 // Enhances one frame of interleaved 16-bit PCM at 48 kHz in place. samples
 // holds sample_count_per_channel samples on each of channels interleaved

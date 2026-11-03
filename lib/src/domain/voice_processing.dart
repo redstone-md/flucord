@@ -297,5 +297,10 @@ abstract interface class VoiceMicrophoneEnhancer {
   /// order is kept whichever side does the work.
   Future<void> process(Int16List frame, {required int channels});
 
+  /// Takes the speaker line from the output named [speakers], as the
+  /// playback's device list names it, or from the system default when null:
+  /// the echo to remove is whatever the room is played on.
+  void loopBack(String? speakers);
+
   void dispose();
 }

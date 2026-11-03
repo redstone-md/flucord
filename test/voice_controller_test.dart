@@ -257,15 +257,15 @@ void main() {
     final media = _FakeVoiceMediaService();
     final signaling = _FakeVoiceSignalingService();
     final repository = MemoryVoiceProcessingRepository();
-    final enhancer = FakeMicrophoneEnhancer();
+    final opened = <(bool, bool, FakeMicrophoneEnhancer)>[];
     final controller = VoiceController(
       media,
       signalingServiceProvider: () => signaling,
       audioCodecFactory: _FakeCodecFactory(),
       microphoneEnhancerFactory:
           ({required echoCancellation, required automaticGainControl}) async {
-            expect(echoCancellation, isTrue);
-            expect(automaticGainControl, isTrue);
+            final enhancer = FakeMicrophoneEnhancer();
+            opened.add((echoCancellation, automaticGainControl, enhancer));
             return enhancer;
           },
       processingRepository: repository,
@@ -282,6 +282,8 @@ void main() {
     // Both switches are on by default, and one open path serves them.
     expect(controller.echoCancellation, isTrue, reason: 'the default');
     expect(controller.automaticGainControl, isTrue);
+    final (echo, gain, enhancer) = opened.single;
+    expect((echo, gain), (true, true));
     expect(enhancer.disposed, isFalse);
 
     await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
@@ -293,22 +295,34 @@ void main() {
     expect(enhancer.frames, hasLength(1));
     expect(enhancer.channels, 2);
 
-    // Echo off, gain on: the open path stays, no reopen.
+    // Playback moves to the headset: the echo stage listens to it too.
+    await controller.initialize();
+    await controller.selectOutput('speaker-2');
+    expect(enhancer.speakers, 'Headset');
+
+    // Echo off, gain on: the stages are fixed when an enhancer opens, so a
+    // gain-only one replaces it.
     await controller.setMicrophoneEnhancement(echoCancellation: false);
+    await _flushEvents();
     expect(controller.echoCancellation, isFalse);
     expect(controller.automaticGainControl, isTrue);
+    expect(enhancer.disposed, isTrue);
+    final (_, gainOnly, replacement) = opened.last;
+    expect((opened.last.$1, gainOnly), (false, true));
+    expect(replacement.speakers, 'Headset');
     media.addPcm(_speech);
     await _flushEvents();
-    expect(enhancer.frames, hasLength(2));
+    expect(replacement.frames, hasLength(1));
 
     // Both off: the path closes.
     await controller.setMicrophoneEnhancement(automaticGainControl: false);
     expect(controller.echoCancellation, isFalse);
     expect(controller.automaticGainControl, isFalse);
-    expect(enhancer.disposed, isTrue);
+    expect(replacement.disposed, isTrue);
     media.addPcm(_speech);
     await _flushEvents();
-    expect(enhancer.frames, hasLength(2));
+    expect(replacement.frames, hasLength(1));
+    expect(opened, hasLength(2));
 
     expect(repository.saved!.echoCancellation, isFalse);
     expect(repository.saved!.automaticGainControl, isFalse);

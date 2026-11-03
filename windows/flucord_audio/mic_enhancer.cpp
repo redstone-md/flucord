@@ -15,9 +15,13 @@
 // capture DMO this replaced worked at 22 kHz at most, and at the 16 kHz it
 // ran at it cut every voice down to a telephone's.
 //
-// The echo stage needs what the machine is playing, so the default speakers
-// are looped back and handed over, at their own rate and width, before each
-// microphone frame. The echo stage finds the delay between the two itself.
+// The echo stage needs what the room is played on, so that output is looped
+// back and handed over, at its own rate and width, before each microphone
+// frame. The echo stage finds the delay between the two itself. The output
+// is the one the playback picked, by the name its device list shows (the
+// endpoint's friendly name, which is what miniaudio lists), or the system
+// default until one is picked; a default that moves is followed within a
+// second, as playback follows it.
 //
 // Everything runs on the thread that opens it, the same thread the record
 // package's frames arrive on. The loopback needs COM; when the thread has no
@@ -34,6 +38,7 @@
 #include <windows.h>
 
 #include <audioclient.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <mmdeviceapi.h>
 #include <wrl/client.h>
 
@@ -51,6 +56,9 @@ constexpr int kCaptureRate = 48000;
 constexpr int kCaptureChunk = kCaptureRate / 100;
 
 constexpr wchar_t kApmLibrary[] = L"flucord_apm.dll";
+
+// How often a loopback of the default output checks that it still is one.
+constexpr ULONGLONG kDefaultCheckMs = 1000;
 
 // Float samples are what a shared-mode endpoint almost always hands back.
 // Clamped rather than wrapped: a sample past full scale is loud, and
@@ -141,6 +149,13 @@ struct EnhancerState {
   ApmLibrary library;
   FlucordApm* apm = nullptr;
 
+  // The output to loop back, by friendly name; empty follows the default.
+  std::wstring speakers_name;
+  // The endpoint the open loopback reads, and when the default was last
+  // checked against it.
+  std::wstring loopback_id;
+  ULONGLONG default_checked_at = 0;
+
   ComPtr<IAudioClient> loopback_client;
   ComPtr<IAudioCaptureClient> loopback_capture;
   WAVEFORMATEX* loopback_format = nullptr;
@@ -157,6 +172,7 @@ void CloseLoopback(EnhancerState* state) {
   state->loopback_client.Reset();
   CoTaskMemFree(state->loopback_format);
   state->loopback_format = nullptr;
+  state->loopback_id.clear();
   state->speaker.clear();
 }
 
@@ -171,6 +187,41 @@ EnhancerState::~EnhancerState() {
 // Starts the loopback of the default speakers: what the machine is playing,
 // which a microphone in front of those speakers hears again. On a refusal,
 // [failed_stage] says which step.
+HRESULT EndpointId(IMMDevice* device, std::wstring* out) {
+  LPWSTR id = nullptr;
+  const HRESULT hr = device->GetId(&id);
+  if (SUCCEEDED(hr)) *out = id;
+  CoTaskMemFree(id);
+  return hr;
+}
+
+// The active output whose friendly name is [name].
+HRESULT FindSpeakers(IMMDeviceEnumerator* enumerator,
+                     const std::wstring& name,
+                     ComPtr<IMMDevice>* out) {
+  ComPtr<IMMDeviceCollection> outputs;
+  HRESULT hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE,
+                                              &outputs);
+  UINT count = 0;
+  if (SUCCEEDED(hr)) hr = outputs->GetCount(&count);
+  for (UINT i = 0; SUCCEEDED(hr) && i < count; i++) {
+    ComPtr<IMMDevice> device;
+    ComPtr<IPropertyStore> properties;
+    PROPVARIANT friendly;
+    PropVariantInit(&friendly);
+    if (SUCCEEDED(outputs->Item(i, &device)) &&
+        SUCCEEDED(device->OpenPropertyStore(STGM_READ, &properties)) &&
+        SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &friendly)) &&
+        friendly.vt == VT_LPWSTR && name == friendly.pwszVal) {
+      PropVariantClear(&friendly);
+      *out = device;
+      return S_OK;
+    }
+    PropVariantClear(&friendly);
+  }
+  return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+}
+
 HRESULT OpenLoopback(EnhancerState* state, int32_t* failed_stage) {
   *failed_stage = FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS;
   ComPtr<IMMDeviceEnumerator> enumerator;
@@ -178,8 +229,11 @@ HRESULT OpenLoopback(EnhancerState* state, int32_t* failed_stage) {
   HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
                                 CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
   if (SUCCEEDED(hr)) {
-    hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+    hr = state->speakers_name.empty()
+             ? enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)
+             : FindSpeakers(enumerator.Get(), state->speakers_name, &device);
   }
+  if (SUCCEEDED(hr)) hr = EndpointId(device.Get(), &state->loopback_id);
   if (SUCCEEDED(hr)) {
     hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
                           &state->loopback_client);
@@ -244,18 +298,40 @@ HRESULT PullSpeakers(EnhancerState* state) {
   }
 }
 
-// Hands the echo stage every whole chunk the speakers have played. A
-// speaker device that went away (the default output changed) is looped back
-// again from the new default, and the line starts over from there.
+// Whether the loopback follows the default output and the default has moved
+// to another endpoint since it opened. Checked once a second.
+bool DefaultMoved(EnhancerState* state) {
+  if (!state->speakers_name.empty()) return false;
+  const ULONGLONG now = GetTickCount64();
+  if (now - state->default_checked_at < kDefaultCheckMs) return false;
+  state->default_checked_at = now;
+  ComPtr<IMMDeviceEnumerator> enumerator;
+  ComPtr<IMMDevice> device;
+  std::wstring id;
+  return SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                                    CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) &&
+         SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole,
+                                                       &device)) &&
+         SUCCEEDED(EndpointId(device.Get(), &id)) && id != state->loopback_id;
+}
+
+// Hands the echo stage every whole chunk the output has played. The loopback
+// is opened again, and the line starts over, when it was closed for another
+// output, when the default it follows moved, or when its endpoint went away.
 HRESULT FeedSpeakers(EnhancerState* state, int32_t* failed_stage) {
-  *failed_stage = FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT;
-  HRESULT hr = PullSpeakers(state);
-  if (hr == AUDCLNT_E_DEVICE_INVALIDATED) {
+  if (state->loopback_capture != nullptr && DefaultMoved(state)) {
     CloseLoopback(state);
-    hr = OpenLoopback(state, failed_stage);
-    if (FAILED(hr)) return hr;
+  }
+  HRESULT hr = S_OK;
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (state->loopback_capture == nullptr) {
+      hr = OpenLoopback(state, failed_stage);
+      if (FAILED(hr)) return hr;
+    }
     *failed_stage = FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT;
     hr = PullSpeakers(state);
+    if (hr != AUDCLNT_E_DEVICE_INVALIDATED) break;
+    CloseLoopback(state);
   }
   if (FAILED(hr)) return hr;
 
@@ -362,6 +438,30 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
 
   enhancer->opened = true;
   *out_enhancer = enhancer.release();
+  return FLUCORD_AUDIO_OK;
+}
+
+FLUCORD_AUDIO_EXPORT FlucordAudioStatus
+flucord_audio_enhancer_loop_back(FlucordAudioEnhancer* enhancer,
+                                 const char* speakers_utf8) {
+  if (enhancer == nullptr) return FLUCORD_AUDIO_ERROR_STATE;
+  std::wstring name;
+  if (speakers_utf8 != nullptr && speakers_utf8[0] != '\0') {
+    const int length =
+        MultiByteToWideChar(CP_UTF8, 0, speakers_utf8, -1, nullptr, 0);
+    if (length <= 0) return FLUCORD_AUDIO_ERROR_STATE;
+    name.resize(static_cast<size_t>(length));
+    MultiByteToWideChar(CP_UTF8, 0, speakers_utf8, -1, name.data(), length);
+    name.resize(static_cast<size_t>(length) - 1);
+  }
+  std::lock_guard<std::mutex> guard(enhancer->lock);
+  EnhancerState* state = &enhancer->state;
+  if (!enhancer->opened || name == state->speakers_name) {
+    return enhancer->opened ? FLUCORD_AUDIO_OK : FLUCORD_AUDIO_ERROR_STATE;
+  }
+  state->speakers_name = name;
+  // Opened on the next frame, on the thread the frames arrive on.
+  CloseLoopback(state);
   return FLUCORD_AUDIO_OK;
 }
 

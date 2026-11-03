@@ -58,6 +58,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
        _close = library.lookupFunction<_CloseEnhancerNative, _CloseEnhancer>(
          'flucord_audio_close_mic_enhancer',
        ),
+       _loopBack = library.lookupFunction<_LoopBackNative, _LoopBack>(
+         'flucord_audio_enhancer_loop_back',
+       ),
        _failure = _lookUpFailure(library);
 
   /// Absent in a module built before an open said why it failed.
@@ -77,7 +80,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     'none',
     'COM',
     'WebRTC audio processing',
-    'default speakers',
+    'speakers',
     'speaker loopback',
     'speaker input',
     'microphone',
@@ -104,9 +107,14 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final _OpenEnhancer _open;
   final _EnhanceFrame _enhance;
   final _CloseEnhancer _close;
+  final _LoopBack _loopBack;
   final _EnhancerFailure? _failure;
 
   Pointer<Void>? _enhancer;
+
+  /// The output to take the speaker line from, applied when the enhancer
+  /// opens; null is the system default.
+  String? _speakers;
   Pointer<Int16>? _scratch;
   int _scratchSamples = 0;
   bool _disposed = false;
@@ -147,9 +155,32 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
           '${_describeFailure()}',
         );
       }
-      return _enhancer = out.value;
+      final enhancer = _enhancer = out.value;
+      if (_speakers != null) _applySpeakers(enhancer);
+      return enhancer;
     } finally {
       calloc.free(out);
+    }
+  }
+
+  @override
+  void loopBack(String? speakers) {
+    if (_disposed || speakers == _speakers) return;
+    _speakers = speakers;
+    final enhancer = _enhancer;
+    if (enhancer != null) _applySpeakers(enhancer);
+  }
+
+  /// The loopback itself opens on the next frame, which reports a missing
+  /// output as that frame's failure.
+  void _applySpeakers(Pointer<Void> enhancer) {
+    final name = _speakers?.toNativeUtf8();
+    try {
+      if (_loopBack(enhancer, name ?? nullptr) != 0) {
+        throw StateError('The echo stage could not take its speaker line');
+      }
+    } finally {
+      if (name != null) calloc.free(name);
     }
   }
 
@@ -203,6 +234,8 @@ typedef _OpenEnhancer = int Function(int, int, Pointer<Pointer<Void>>);
 typedef _EnhanceFrameNative =
     Int32 Function(Pointer<Void>, Pointer<Int16>, Int32, Int32);
 typedef _EnhanceFrame = int Function(Pointer<Void>, Pointer<Int16>, int, int);
+typedef _LoopBackNative = Int32 Function(Pointer<Void>, Pointer<Utf8>);
+typedef _LoopBack = int Function(Pointer<Void>, Pointer<Utf8>);
 typedef _CloseEnhancerNative = Void Function(Pointer<Void>);
 typedef _CloseEnhancer = void Function(Pointer<Void>);
 typedef _EnhancerFailureNative = Void Function(Pointer<Int32>, Pointer<Int32>);

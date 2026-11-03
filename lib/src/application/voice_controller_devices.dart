@@ -28,6 +28,14 @@ extension VoiceControllerDevices on VoiceController {
         await playbackService.selectOutput(deviceId);
       }
       _selectedOutputId = deviceId;
+      // Playback left the default for this output, so the echo stage
+      // listens to it too.
+      _audioPipeline?.setSpeakers(
+        outputDevices
+            .where((device) => device.id == deviceId)
+            .firstOrNull
+            ?.label,
+      );
     });
   }
 

@@ -462,6 +462,43 @@ void main() {
       expect(enhancer.disposed, isTrue);
     });
 
+    test('a change of stages opens a new enhancer with the new pair, on the '
+        'output the room plays on', () async {
+      final media = _FakeMediaService();
+      final opened = <(bool, bool, FakeMicrophoneEnhancer)>[];
+      final (pipeline, _, _) = await pump(
+        media,
+        factory:
+            ({required echoCancellation, required automaticGainControl}) async {
+              final enhancer = FakeMicrophoneEnhancer();
+              opened.add((echoCancellation, automaticGainControl, enhancer));
+              return enhancer;
+            },
+        echoCancellation: true,
+        automaticGainControl: true,
+      );
+      pipeline.setSpeakers('Headphones');
+      expect(opened.single.$3.speakers, 'Headphones');
+
+      // The stages are fixed when an enhancer opens: echo off with gain
+      // still on must not leave the echo stage running.
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: false,
+        automaticGainControl: true,
+      );
+      expect(opened, hasLength(2));
+      expect(opened.first.$3.disposed, isTrue);
+      expect((opened.last.$1, opened.last.$2), (false, true));
+      expect(opened.last.$3.speakers, 'Headphones');
+
+      // The same pair again opens nothing.
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: false,
+        automaticGainControl: true,
+      );
+      expect(opened, hasLength(2));
+    });
+
     test('the enhancer runs before the noise filter', () async {
       final media = _FakeMediaService();
       final enhancer = _RecordingEnhancer();
@@ -572,6 +609,9 @@ final class _RecordingEnhancer implements VoiceMicrophoneEnhancer {
   }
 
   @override
+  void loopBack(String? speakers) {}
+
+  @override
   void dispose() => disposed = true;
 }
 
@@ -582,6 +622,9 @@ final class _BrokenEnhancer implements VoiceMicrophoneEnhancer {
   Future<void> process(Int16List frame, {required int channels}) async {
     throw StateError('the stages failed');
   }
+
+  @override
+  void loopBack(String? speakers) {}
 
   @override
   void dispose() => disposed = true;

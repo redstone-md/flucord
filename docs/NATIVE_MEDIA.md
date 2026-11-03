@@ -198,9 +198,9 @@ It runs WebRTC Audio Processing, the echo canceller (AEC3) and gain control
 (AGC2) Discord's own client uses, bundled as `flucord_apm.dll`
 (`tool/build_webrtc_apm.ps1` rebuilds it). The library works at 48 kHz in
 10 ms chunks, so a 20 ms frame is two chunks processed in place, with the
-whole band of the voice kept. The module loops back the default render
-endpoint as the reference the echo stage takes out, and loops back the new
-default when the old one goes away.
+whole band of the voice kept. The module loops back the output the room is
+played on (the one picked in voice settings, or the system default, followed
+when it moves) as the reference the echo stage takes out.
 
 The receive boundary maps speaking SSRCs to users, reorders RTP across sequence
 wrap, rejects duplicate/replayed packets, decrypts DAVE, and keeps independent

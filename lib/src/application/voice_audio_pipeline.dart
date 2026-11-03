@@ -93,6 +93,14 @@ final class VoiceAudioPipeline {
   bool _noiseSuppression = false;
   VoiceMicrophoneEnhancer? _microphoneEnhancer;
   Future<void>? _microphoneEnhancerOpening;
+
+  /// The stages [_microphoneEnhancer] was opened with: they are fixed for
+  /// the life of an enhancer, so a different pair opens a new one.
+  ({bool echo, bool gain})? _enhancerStages;
+
+  /// The output the room is played on, for the echo stage; null is the
+  /// system default.
+  String? _speakers;
   bool _echoCancellation = false;
   bool _automaticGainControl = false;
 
@@ -151,20 +159,41 @@ final class VoiceAudioPipeline {
       // voice stages running for a microphone nobody asked to enhance.
       _microphoneEnhancer?.dispose();
       _microphoneEnhancer = null;
+      _enhancerStages = null;
       return;
     }
-    if (_microphoneEnhancer != null) return;
-    if (_microphoneEnhancerOpening case final opening?) return opening;
+    // Another open finishes first; then this one decides on what it left,
+    // with the switches as the latest call set them.
+    for (
+      var opening = _microphoneEnhancerOpening;
+      opening != null;
+      opening = _microphoneEnhancerOpening
+    ) {
+      await opening;
+    }
+    if (_disposed || (!_echoCancellation && !_automaticGainControl)) return;
+    final stages = (echo: _echoCancellation, gain: _automaticGainControl);
+    if (_microphoneEnhancer != null && _enhancerStages == stages) return;
+    _microphoneEnhancer?.dispose();
+    _microphoneEnhancer = null;
+    _enhancerStages = null;
     final opening = _microphoneEnhancerOpening = _openMicrophoneEnhancer(
       factory,
-      echoCancellation: echoCancellation,
-      automaticGainControl: automaticGainControl,
+      echoCancellation: stages.echo,
+      automaticGainControl: stages.gain,
     );
     try {
       await opening;
     } finally {
       _microphoneEnhancerOpening = null;
     }
+  }
+
+  /// Says which output the room is played on, so the echo stage takes the
+  /// right speaker line out; null is the system default.
+  void setSpeakers(String? speakers) {
+    _speakers = speakers;
+    _microphoneEnhancer?.loopBack(speakers);
   }
 
   Future<void> _openMicrophoneEnhancer(
@@ -186,7 +215,9 @@ final class VoiceAudioPipeline {
         enhancer.dispose();
         return;
       }
+      enhancer.loopBack(_speakers);
       _microphoneEnhancer = enhancer;
+      _enhancerStages = (echo: echoCancellation, gain: automaticGainControl);
     } on Object catch (error) {
       _echoCancellation = false;
       _automaticGainControl = false;

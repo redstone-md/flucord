@@ -65,6 +65,10 @@ class FakeMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final List<Int16List> frames = [];
   int? channels;
   bool disposed = false;
+  String? speakers;
+
+  @override
+  void loopBack(String? speakers) => this.speakers = speakers;
 
   @override
   Future<void> process(Int16List frame, {required int channels}) async {
