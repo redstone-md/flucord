@@ -48,7 +48,7 @@ void main() {
     );
     expect(
       (mention.decoration! as BoxDecoration).color,
-      const Color(0xfff23f42),
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.mention,
     );
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));

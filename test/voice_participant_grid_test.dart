@@ -29,7 +29,10 @@ void main() {
       find.byKey(const ValueKey('voice-participant-member-1')),
     );
     final decoration = tile.decoration as BoxDecoration;
-    expect(decoration.border!.top.color, const Color(0xff23a55a));
+    expect(
+      decoration.border!.top.color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.success,
+    );
     expect(decoration.border!.top.width, 2);
     expect(tester.takeException(), isNull);
   });
