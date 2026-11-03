@@ -185,17 +185,11 @@ class SettingSwitch extends StatelessWidget {
   );
 }
 
-/// One option in a [SettingChoices] row.
-final class SettingChoice<T extends Enum> {
-  const SettingChoice(this.value, this.label, {this.enabled = true});
-
-  final T value;
-  final String label;
-
-  /// A choice Discord stores but Flucord cannot honour stays visible and
-  /// unselectable: hiding it would misrepresent what the account can hold.
-  final bool enabled;
-}
+/// One option in a [SettingChoices] row. A choice Discord stores but
+/// Flucord cannot honour is passed with `enabled: false`: it stays visible
+/// and unselectable, since hiding it would misrepresent what the account can
+/// hold.
+typedef SettingChoice<T extends Enum> = FlucordSegment<T>;
 
 /// A segmented group, one option per choice.
 ///
@@ -220,10 +214,7 @@ class SettingChoices<T extends Enum> extends StatelessWidget {
     alignment: AlignmentDirectional.centerEnd,
     child: FlucordSegmented<T>(
       keyPrefix: keyPrefix,
-      options: [
-        for (final option in options)
-          FlucordSegment(option.value, option.label, enabled: option.enabled),
-      ],
+      options: options,
       selected: selected,
       onSelected: onSelected,
     ),
