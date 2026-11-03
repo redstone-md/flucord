@@ -137,7 +137,7 @@ class _EntitlementsSettingsSectionState
                             Text(
                               grant.label,
                               style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             Text(

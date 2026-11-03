@@ -40,6 +40,7 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/join_server_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -102,11 +103,35 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.byKey(const ValueKey('join-server-submit')),
+            find.descendant(
+              of: find.byKey(const ValueKey('join-server-submit')),
+              matching: find.byType(FilledButton),
+              matchRoot: true,
+            ),
           )
           .enabled,
       isFalse,
     );
+  });
+
+  testWidgets('Enter checks the invite, as the Check button does', (
+    tester,
+  ) async {
+    final chat = await _loadedController();
+    addTearDown(chat.dispose);
+    await tester.pumpWidget(_app(chat));
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('join-server-invite-field')),
+      'aurora',
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('join-server-preview')), findsOneWidget);
   });
 
   testWidgets('a refused preview shows the refusal message', (tester) async {

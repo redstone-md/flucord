@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/theme/flucord_theme.dart';
+
 import 'support/session_harness.dart';
 
 /// Every dialog sits in one frame: the same dimmed barrier behind it and the
-/// same background, whichever part of the app opened it.
+/// same background, whichever part of the app opened it. Settings is the one
+/// screen that takes the whole window instead.
 void main() {
   ({Color? barrier, Color? background}) topDialog(WidgetTester tester) {
     final dialog = find.byType(Dialog).last;
@@ -32,7 +35,18 @@ void main() {
 
     await tester.tap(find.byTooltip('User settings'));
     await session.settle();
-    seen['user settings'] = topDialog(tester);
+    final settings = find.byType(Dialog).last;
+    // The Dialog widget always spans the window; its frame is the Material.
+    expect(
+      tester.getSize(
+        find.descendant(of: settings, matching: find.byType(Material)).first,
+      ),
+      tester.getSize(find.byType(Scaffold).first),
+    );
+    expect(
+      topDialog(tester).background,
+      Theme.of(tester.element(settings)).extension<FlucordSurfaceTheme>()!.rail,
+    );
     await close(tester, session);
 
     await tester.tap(find.byKey(const ValueKey('open-connections')));

@@ -21,7 +21,7 @@ import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
-import '../../theme/flucord_radius.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'user_profile_controls.dart';
@@ -44,36 +44,62 @@ import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
-import 'flucord_dialog.dart';
+import 'flucord_button.dart';
+import 'settings_layout.dart';
 
-/// The left-hand categories, in the order Discord lists the comparable ones.
-enum UserSettingsCategory {
-  profile('Profile', Icons.person_outline),
-  appearance('Appearance', Icons.palette_outlined),
-  chat('Chat', Icons.chat_bubble_outline),
-  notifications('Notifications', Icons.notifications_none),
-  privacy('Privacy', Icons.shield_outlined),
-  standing('Account Standing', Icons.gavel_outlined),
-  family('Family Center', Icons.family_restroom_outlined),
-  devices('Devices', Icons.devices_outlined),
-  connections('Connections', Icons.link_outlined),
-  entitlements('Entitlements', Icons.card_membership_outlined),
-  security('Two-Factor', Icons.key_outlined),
-  age('Age Verification', Icons.badge_outlined),
-  apps('App Authorisation', Icons.smart_toy_outlined),
-  dataPackage('Data Package', Icons.mark_email_read_outlined),
-  keybinds('Keybinds', Icons.keyboard_outlined),
-  streamer('Streamer Mode', Icons.videocam_outlined),
-  accessibility('Accessibility', Icons.accessibility_new),
-  voice('Voice & Video', Icons.mic_none),
-  themes('Themes', Icons.brush_outlined),
-  language('Language', Icons.translate),
-  status('Status', Icons.mood_outlined);
+/// The two groups the navigation lists pages under.
+enum UserSettingsGroup {
+  user('User settings'),
+  app('App settings');
 
-  const UserSettingsCategory(this.label, this.icon);
+  const UserSettingsGroup(this.label);
 
   final String label;
-  final IconData icon;
+}
+
+/// The left-hand categories, in the order Discord lists the comparable ones.
+/// What belongs to the account is under [UserSettingsGroup.user]; what
+/// belongs to this machine and app is under [UserSettingsGroup.app].
+enum UserSettingsCategory {
+  profile('Profile', FlucordIcons.profile, UserSettingsGroup.user),
+  appearance('Appearance', FlucordIcons.appearance, UserSettingsGroup.app),
+  chat('Chat', FlucordIcons.chat, UserSettingsGroup.app),
+  notifications(
+    'Notifications',
+    FlucordIcons.notifications,
+    UserSettingsGroup.app,
+  ),
+  privacy('Privacy', FlucordIcons.privacy, UserSettingsGroup.user),
+  standing('Account Standing', FlucordIcons.standing, UserSettingsGroup.user),
+  family('Family Center', FlucordIcons.family, UserSettingsGroup.user),
+  devices('Devices', FlucordIcons.devices, UserSettingsGroup.user),
+  connections('Connections', FlucordIcons.link, UserSettingsGroup.user),
+  entitlements(
+    'Entitlements',
+    FlucordIcons.entitlements,
+    UserSettingsGroup.user,
+  ),
+  security('Two-Factor', FlucordIcons.twoFactor, UserSettingsGroup.user),
+  age('Age Verification', FlucordIcons.ageVerification, UserSettingsGroup.user),
+  apps('App Authorisation', FlucordIcons.apps, UserSettingsGroup.user),
+  dataPackage('Data Package', FlucordIcons.download, UserSettingsGroup.user),
+  keybinds('Keybinds', FlucordIcons.keyboard, UserSettingsGroup.app),
+  streamer('Streamer Mode', FlucordIcons.streamerMode, UserSettingsGroup.app),
+  accessibility(
+    'Accessibility',
+    FlucordIcons.accessibility,
+    UserSettingsGroup.app,
+  ),
+  voice('Voice & Video', FlucordIcons.mic, UserSettingsGroup.app),
+  themes('Themes', FlucordIcons.themes, UserSettingsGroup.app),
+  language('Language', FlucordIcons.language, UserSettingsGroup.app),
+  status('Status', FlucordIcons.emoji, UserSettingsGroup.user);
+
+  const UserSettingsCategory(this.label, this.icon, this.group);
+
+  final String label;
+  final FlucordIconData icon;
+  final UserSettingsGroup group;
 }
 
 /// Discord's user settings screen, for the settings Flucord can speak for.
@@ -223,182 +249,52 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => FlucordDialog.frame(
+  Widget build(BuildContext context) => ListenableBuilder(
     key: const ValueKey('user-settings-dialog'),
-    maxWidth: 940,
-    maxHeight: 720,
-    child: ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) => LayoutBuilder(
-        builder: (context, constraints) {
-          final wide =
-              constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
-          final navigation = _Navigation(
-            selected: _category,
-            horizontal: !wide,
-            onSelected: (category) => setState(() => _category = category),
-          );
-          final body = _Body(
-            controller: widget.controller,
-            profileController: widget.profileController,
-            standingController: widget.standingController,
-            familyController: widget.familyController,
-            sessionController: widget.sessionController,
-            connectionsController: widget.connectionsController,
-            entitlementsController: widget.entitlementsController,
-            dataPackageController: widget.dataPackageController,
-            appAuthorisationController: widget.appAuthorisationController,
-            mfaController: widget.mfaController,
-            ageController: widget.ageController,
-            keybindController: widget.keybindController,
-            streamerModeController: widget.streamerModeController,
-            accessibilityController: widget.accessibilityController,
-            streamQualityController: widget.streamQualityController,
-            themeController: widget.themeController,
-            voiceController: widget.voiceController,
-            category: _category,
-          );
-          return wide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(width: 232, child: navigation),
-                    VerticalDivider(width: 1, color: context.surfaces.border),
-                    Expanded(child: body),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    navigation,
-                    Divider(height: 1, color: context.surfaces.border),
-                    Expanded(child: body),
-                  ],
-                );
-        },
+    listenable: widget.controller,
+    builder: (context, _) => SettingsLayout(
+      compactWidth: UserSettingsDialog.railBreakpoint,
+      closeKey: const ValueKey('user-settings-close'),
+      title: _category.label,
+      groups: [
+        for (final group in UserSettingsGroup.values)
+          SettingsNavGroup(
+            heading: group.label,
+            entries: [
+              for (final category in UserSettingsCategory.values)
+                if (category.group == group)
+                  SettingsNavEntry(
+                    key: ValueKey('settings-nav-${category.name}'),
+                    label: category.label,
+                    icon: category.icon,
+                    selected: category == _category,
+                    onPressed: () => setState(() => _category = category),
+                  ),
+            ],
+          ),
+      ],
+      body: _Body(
+        controller: widget.controller,
+        profileController: widget.profileController,
+        standingController: widget.standingController,
+        familyController: widget.familyController,
+        sessionController: widget.sessionController,
+        connectionsController: widget.connectionsController,
+        entitlementsController: widget.entitlementsController,
+        dataPackageController: widget.dataPackageController,
+        appAuthorisationController: widget.appAuthorisationController,
+        mfaController: widget.mfaController,
+        ageController: widget.ageController,
+        keybindController: widget.keybindController,
+        streamerModeController: widget.streamerModeController,
+        accessibilityController: widget.accessibilityController,
+        streamQualityController: widget.streamQualityController,
+        themeController: widget.themeController,
+        voiceController: widget.voiceController,
+        category: _category,
       ),
     ),
   );
-}
-
-class _Navigation extends StatelessWidget {
-  const _Navigation({
-    required this.selected,
-    required this.horizontal,
-    required this.onSelected,
-  });
-
-  final UserSettingsCategory selected;
-  final bool horizontal;
-  final ValueChanged<UserSettingsCategory> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final tiles = [
-      for (final category in UserSettingsCategory.values)
-        _NavigationTile(
-          category: category,
-          selected: category == selected,
-          compact: horizontal,
-          onPressed: () => onSelected(category),
-        ),
-    ];
-    if (!horizontal) {
-      return ColoredBox(
-        color: context.surfaces.surface,
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-              child: Text(
-                'User settings',
-                style: TextStyle(
-                  color: context.surfaces.muted,
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ),
-            ...tiles,
-          ],
-        ),
-      );
-    }
-    return ColoredBox(
-      color: context.surfaces.surface,
-      child: SizedBox(
-        height: 52,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          children: [
-            for (final tile in tiles)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: tile,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavigationTile extends StatelessWidget {
-  const _NavigationTile({
-    required this.category,
-    required this.selected,
-    required this.compact,
-    required this.onPressed,
-  });
-
-  final UserSettingsCategory category;
-  final bool selected;
-  final bool compact;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected
-        ? Theme.of(context).colorScheme.onSurface
-        : context.surfaces.muted;
-    final label = Text(
-      category.label,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: foreground,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: compact ? 0 : 1),
-      child: Material(
-        color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: FlucordRadius.small,
-        child: InkWell(
-          key: ValueKey('settings-nav-${category.name}'),
-          borderRadius: FlucordRadius.small,
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(category.icon, size: 15, color: foreground),
-                const SizedBox(width: 8),
-                // The horizontal strip hands its children unbounded width, so
-                // only the rail's column can hand the label a flex factor.
-                if (compact) label else Flexible(child: label),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _Body extends StatelessWidget {
@@ -449,44 +345,20 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                category.label,
-                style: TextStyle(
-                  color: context.surfaces.muted,
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            IconButton(
-              key: const ValueKey('user-settings-close'),
-              tooltip: 'Close',
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: const Icon(Icons.close, size: 18),
-            ),
-          ],
-        ),
-      ),
       if (controller.writeError != null)
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          padding: const EdgeInsets.fromLTRB(40, 0, 40, 4),
           child: Text(
             key: const ValueKey('user-settings-write-error'),
             'Discord did not accept the last change.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: FlucordType.caption,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: context.surfaces.errorText,
             ),
           ),
         ),
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: const EdgeInsets.fromLTRB(40, 8, 40, 24),
           child: _content(context),
         ),
       ),
@@ -526,7 +398,7 @@ class _Body extends StatelessWidget {
       if (keybinds == null) {
         return const ProfileNotice(
           key: ValueKey('user-keybinds-unavailable'),
-          icon: Icons.keyboard_outlined,
+          icon: FlucordIcons.keyboard,
           message: 'Keybinds are unavailable in this build.',
         );
       }
@@ -537,7 +409,7 @@ class _Body extends StatelessWidget {
       if (streamer == null) {
         return const ProfileNotice(
           key: ValueKey('user-streamer-unavailable'),
-          icon: Icons.videocam_off_outlined,
+          icon: FlucordIcons.cameraOff,
           message: 'Streamer mode is unavailable in this build.',
         );
       }
@@ -550,7 +422,7 @@ class _Body extends StatelessWidget {
       if (accessibility == null) {
         return const ProfileNotice(
           key: ValueKey('user-accessibility-unavailable'),
-          icon: Icons.accessibility_new,
+          icon: FlucordIcons.accessibility,
           message: 'Accessibility settings are unavailable in this build.',
         );
       }
@@ -562,7 +434,7 @@ class _Body extends StatelessWidget {
       if (voice == null && quality == null) {
         return const ProfileNotice(
           key: ValueKey('user-voice-unavailable'),
-          icon: Icons.mic_off_outlined,
+          icon: FlucordIcons.micOff,
           message: 'Voice is unavailable in this build.',
         );
       }
@@ -583,7 +455,7 @@ class _Body extends StatelessWidget {
       if (themes == null) {
         return const ProfileNotice(
           key: ValueKey('user-themes-unavailable'),
-          icon: Icons.brush_outlined,
+          icon: FlucordIcons.themes,
           message: 'Themes are unavailable in this build.',
         );
       }
@@ -709,13 +581,14 @@ class _Body extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const ProfileNotice(
-            icon: Icons.error_outline,
+            icon: FlucordIcons.error,
             message: 'Discord did not return your settings.',
           ),
           const SizedBox(height: 12),
-          FilledButton(
+          FlucordButton(
+            kind: FlucordButtonKind.primary,
+            label: 'Try again',
             onPressed: () => unawaited(controller.load()),
-            child: const Text('Try again'),
           ),
         ],
       );
@@ -780,7 +653,7 @@ class _NeedsAccountNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ProfileNotice(
-    icon: Icons.cloud_off_outlined,
+    icon: FlucordIcons.offline,
     message:
         'Connect a Discord account to $toDo. Demo mode and bot accounts have '
         'no account behind them.',

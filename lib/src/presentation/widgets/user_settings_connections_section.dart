@@ -151,7 +151,7 @@ class _ConnectionRow extends StatelessWidget {
               children: [
                 Text(
                   service,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 1),
                 Text(

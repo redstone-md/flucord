@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/duration_in_words.dart';
@@ -49,7 +51,7 @@ class GuildSettingsAutoModSection extends StatelessWidget {
           for (final rule in rules)
             GuildSettingsRow(
               key: ValueKey('automod-rule-${rule.id}'),
-              leading: Icon(_iconFor(rule.triggerType), size: 16),
+              leading: FlucordIcon(_iconFor(rule.triggerType), size: 16),
               title: rule.name,
               subtitle: describeAutoModRule(rule, workspace: workspace),
               // Compact on purpose: three controls at their default tap size
@@ -74,7 +76,7 @@ class GuildSettingsAutoModSection extends StatelessWidget {
                   _CompactIcon(
                     buttonKey: ValueKey('automod-edit-${rule.id}'),
                     tooltip: 'Edit',
-                    icon: Icons.edit_outlined,
+                    icon: FlucordIcons.edit,
                     onPressed: controller.isBusy
                         ? null
                         : () => unawaited(_openRuleDialog(context, rule: rule)),
@@ -82,7 +84,7 @@ class GuildSettingsAutoModSection extends StatelessWidget {
                   _CompactIcon(
                     buttonKey: ValueKey('automod-delete-${rule.id}'),
                     tooltip: 'Delete',
-                    icon: Icons.delete_outline,
+                    icon: FlucordIcons.delete,
                     onPressed: controller.isBusy
                         ? null
                         : () =>
@@ -136,16 +138,17 @@ class GuildSettingsAutoModSection extends StatelessWidget {
     }
   }
 
-  static IconData _iconFor(AutoModTriggerType trigger) => switch (trigger) {
-    AutoModTriggerType.keyword => Icons.abc,
-    AutoModTriggerType.spamLink => Icons.link_off,
-    AutoModTriggerType.mlSpam => Icons.filter_alt_outlined,
-    AutoModTriggerType.defaultKeywordList => Icons.playlist_remove,
-    AutoModTriggerType.mentionSpam => Icons.alternate_email,
-    AutoModTriggerType.userProfile => Icons.badge_outlined,
-    AutoModTriggerType.serverPolicy => Icons.policy_outlined,
-    AutoModTriggerType.unknown => Icons.help_outline,
-  };
+  static FlucordIconData _iconFor(AutoModTriggerType trigger) =>
+      switch (trigger) {
+        AutoModTriggerType.keyword => FlucordIcons.keyword,
+        AutoModTriggerType.spamLink => FlucordIcons.unlink,
+        AutoModTriggerType.mlSpam => FlucordIcons.filter,
+        AutoModTriggerType.defaultKeywordList => FlucordIcons.listRemove,
+        AutoModTriggerType.mentionSpam => FlucordIcons.mention,
+        AutoModTriggerType.userProfile => FlucordIcons.profile,
+        AutoModTriggerType.serverPolicy => FlucordIcons.policy,
+        AutoModTriggerType.unknown => FlucordIcons.help,
+      };
 }
 
 /// An icon button sized to fit three controls in one row.
@@ -159,14 +162,14 @@ class _CompactIcon extends StatelessWidget {
 
   final Key buttonKey;
   final String tooltip;
-  final IconData icon;
+  final FlucordIconData icon;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => IconButton(
     key: buttonKey,
     tooltip: tooltip,
-    icon: Icon(icon, size: 16),
+    icon: FlucordIcon(icon, size: 16),
     padding: EdgeInsets.zero,
     visualDensity: VisualDensity.compact,
     constraints: const BoxConstraints.tightFor(width: 32, height: 32),

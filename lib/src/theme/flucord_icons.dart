@@ -114,6 +114,91 @@ abstract final class FlucordIcons {
   );
   static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
 
+  // Settings and dialogs.
+  static const info = FlucordIconData(HugeIcons.strokeRoundedInformationCircle);
+  static const error = FlucordIconData(HugeIcons.strokeRoundedAlertCircle);
+  static const offline = FlucordIconData(HugeIcons.strokeRoundedCloudOff);
+  static const lock = FlucordIconData(HugeIcons.strokeRoundedSquareLock02);
+  static const logOut = FlucordIconData(
+    HugeIcons.strokeRoundedLogout03,
+    matchTextDirection: true,
+  );
+
+  // User settings pages.
+  static const profile = FlucordIconData(HugeIcons.strokeRoundedUserCircle);
+  static const appearance = FlucordIconData(HugeIcons.strokeRoundedPaintBoard);
+  static const chat = FlucordIconData(HugeIcons.strokeRoundedComment01);
+  static const notifications = FlucordIconData(
+    HugeIcons.strokeRoundedNotification01,
+  );
+  static const privacy = FlucordIconData(HugeIcons.strokeRoundedShield01);
+  static const standing = FlucordIconData(
+    HugeIcons.strokeRoundedJusticeScale01,
+  );
+  static const family = FlucordIconData(HugeIcons.strokeRoundedUserMultiple02);
+  static const devices = FlucordIconData(
+    HugeIcons.strokeRoundedComputerPhoneSync,
+  );
+  static const entitlements = FlucordIconData(HugeIcons.strokeRoundedAward01);
+  static const twoFactor = FlucordIconData(HugeIcons.strokeRoundedKey01);
+  static const ageVerification = FlucordIconData(
+    HugeIcons.strokeRoundedIdVerified,
+  );
+  static const apps = FlucordIconData(HugeIcons.strokeRoundedRobot01);
+  static const download = FlucordIconData(HugeIcons.strokeRoundedDownload01);
+  static const keyboard = FlucordIconData(HugeIcons.strokeRoundedKeyboard);
+  static const streamerMode = FlucordIconData(HugeIcons.strokeRoundedTv01);
+  static const accessibility = FlucordIconData(
+    HugeIcons.strokeRoundedAccessibility,
+  );
+  static const themes = FlucordIconData(HugeIcons.strokeRoundedPaintBrush01);
+  static const language = FlucordIconData(HugeIcons.strokeRoundedTranslate);
+
+  // Friends.
+  static const activityInvite = FlucordIconData(
+    HugeIcons.strokeRoundedGameController03,
+  );
+  static const removeFriend = FlucordIconData(
+    HugeIcons.strokeRoundedUserRemove01,
+  );
+  static const friends = FlucordIconData(HugeIcons.strokeRoundedUserMultiple);
+  static const plugin = FlucordIconData(HugeIcons.strokeRoundedPlug01);
+
+  // Settings lists and forms.
+  static const moveUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp01);
+  static const moveDown = FlucordIconData(HugeIcons.strokeRoundedArrowDown01);
+  static const refresh = FlucordIconData(HugeIcons.strokeRoundedRefresh);
+  static const radioOn = FlucordIconData(HugeIcons.strokeRoundedRadioButton);
+  static const radioOff = FlucordIconData(HugeIcons.strokeRoundedCircle);
+  static const checkCircle = FlucordIconData(
+    HugeIcons.strokeRoundedCheckmarkCircle02,
+  );
+  static const addCircle = FlucordIconData(HugeIcons.strokeRoundedAddCircle);
+  static const removeCircle = FlucordIconData(
+    HugeIcons.strokeRoundedRemoveCircle,
+  );
+  static const noColour = FlucordIconData(HugeIcons.strokeRoundedCircleOff);
+  static const erase = FlucordIconData(HugeIcons.strokeRoundedEraser01);
+  static const keyword = FlucordIconData(HugeIcons.strokeRoundedTextFont);
+  static const filter = FlucordIconData(HugeIcons.strokeRoundedFilter);
+  static const listRemove = FlucordIconData(HugeIcons.strokeRoundedNoteRemove);
+  static const policy = FlucordIconData(HugeIcons.strokeRoundedPolicy);
+  static const help = FlucordIconData(HugeIcons.strokeRoundedHelpCircle);
+  static const music = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
+  static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
+
+  // Server settings pages.
+  static const overview = FlucordIconData(
+    HugeIcons.strokeRoundedDashboardSquare01,
+  );
+  static const roles = FlucordIconData(HugeIcons.strokeRoundedShield02);
+  static const ban = FlucordIconData(HugeIcons.strokeRoundedHammer);
+  static const automod = FlucordIconData(HugeIcons.strokeRoundedRobotic);
+  static const invite = FlucordIconData(HugeIcons.strokeRoundedUserAdd01);
+  static const webhooks = FlucordIconData(HugeIcons.strokeRoundedWebhook);
+  static const expressions = FlucordIconData(HugeIcons.strokeRoundedSticker);
+  static const auditLog = FlucordIconData(HugeIcons.strokeRoundedNote01);
+
   // The channel list and its voice seats.
   static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
   static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);

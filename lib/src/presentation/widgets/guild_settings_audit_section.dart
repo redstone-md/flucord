@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/guild_audit_log.dart';
 import '../../theme/flucord_theme.dart';
@@ -99,7 +101,7 @@ class GuildSettingsAuditSection extends StatelessWidget {
     final count = record.isMerged ? ' (x${record.count})' : '';
     return GuildSettingsRow(
       key: ValueKey('audit-entry-${head.id}'),
-      leading: Icon(_iconFor(head.actionClass), size: 16),
+      leading: FlucordIcon(_iconFor(head.actionClass), size: 16),
       title: '$actor ${auditActionLabel(head.action)}$count',
       subtitle: _subtitle(record),
       trailing: Text(
@@ -120,11 +122,11 @@ class GuildSettingsAuditSection extends StatelessWidget {
     return changes.map((change) => change.key).take(4).join(', ');
   }
 
-  static IconData _iconFor(AuditLogActionClass value) => switch (value) {
-    AuditLogActionClass.create => Icons.add_circle_outline,
-    AuditLogActionClass.update => Icons.edit_outlined,
-    AuditLogActionClass.delete => Icons.remove_circle_outline,
-    AuditLogActionClass.other => Icons.circle_outlined,
+  static FlucordIconData _iconFor(AuditLogActionClass value) => switch (value) {
+    AuditLogActionClass.create => FlucordIcons.addCircle,
+    AuditLogActionClass.update => FlucordIcons.edit,
+    AuditLogActionClass.delete => FlucordIcons.removeCircle,
+    AuditLogActionClass.other => FlucordIcons.radioOff,
   };
 
   static String _formatTime(DateTime value) {
