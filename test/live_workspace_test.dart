@@ -520,13 +520,11 @@ void main() {
           _rawMember(roles: [roleId]),
         );
 
-        expect(
-          find.descendant(
-            of: _memberRow(_strangerId),
-            matching: find.text('Moderator'),
-          ),
-          findsOneWidget,
-        );
+        // A member row has no role line, so the role shows on the profile.
+        await tester.tap(_memberRow(_strangerId));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Moderator'), findsOneWidget);
       },
       ready: {
         ...SessionHarness.defaultReady(),

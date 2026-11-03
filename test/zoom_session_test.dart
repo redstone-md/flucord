@@ -46,8 +46,8 @@ void main() {
         expect(card.right, closeTo(window.width - 8 * 0.8, 0.5));
         final composer = tester.getRect(find.byType(MessageComposer));
         expect(composer.bottom, closeTo(card.bottom, 0.5));
-        // The member list, 224 px wide, is drawn at 0.8 to its right.
-        expect(composer.right, closeTo(card.right - 224 * 0.8, 0.5));
+        // The member list, 240 px wide, is drawn at 0.8 to its right.
+        expect(composer.right, closeTo(card.right - 240 * 0.8, 0.5));
       },
       size: window,
       accessibility: const AccessibilitySettings(zoom: 0.8),
