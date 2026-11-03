@@ -431,10 +431,7 @@ extension _FlucordShellNavigation on FlucordShell {
   /// Flucord has, so it confirms first, and a refusal from the server (an
   /// owner leaving their own server) is shown as the message it is.
   Future<void> _leaveServer(BuildContext context, CommunitySpace space) async {
-    final confirmed = await showLeaveServerConfirmation(
-      context,
-      serverName: space.name,
-    );
+    final confirmed = await showLeaveServerConfirmation(context, space: space);
     if (!confirmed || !context.mounted) return;
     final left = await chatController.leaveGuild(space.id);
     if (!context.mounted) return;
