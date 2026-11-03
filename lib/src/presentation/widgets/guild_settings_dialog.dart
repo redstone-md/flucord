@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
-import '../../theme/flucord_radius.dart';
-import '../../theme/flucord_theme.dart';
-import '../../theme/flucord_type.dart';
+import '../../theme/flucord_icons.dart';
+import 'flucord_button.dart';
 import 'guild_settings_audit_section.dart';
 import 'guild_settings_automod_section.dart';
 import 'guild_settings_channels_section.dart';
@@ -18,6 +17,7 @@ import 'guild_settings_overview_section.dart';
 import 'guild_settings_roles_section.dart';
 import 'guild_settings_webhooks_section.dart';
 import 'flucord_dialog.dart';
+import 'settings_layout.dart';
 
 /// Discord's server-settings window.
 ///
@@ -63,125 +63,38 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FlucordDialog.frame(
-      key: const ValueKey('guild-settings-dialog'),
-      maxWidth: 940,
-      maxHeight: 660,
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) => _layout(
-            context,
-            isCompact: constraints.maxWidth < GuildSettingsDialog.compactWidth,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _layout(BuildContext context, {required bool isCompact}) {
-    final sections = widget.controller.availableSections;
-    if (sections.isEmpty) return _noPermissionView(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _header(context),
-        if (isCompact) _sectionStrip(context, sections),
-        Flexible(
-          child: isCompact
-              ? _sectionBody(context)
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: 200,
-                      child: _sectionRail(context, sections),
-                    ),
-                    VerticalDivider(width: 1, color: context.surfaces.border),
-                    Expanded(child: _sectionBody(context)),
-                  ],
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) {
+      final controller = widget.controller;
+      final sections = controller.availableSections;
+      if (sections.isEmpty) return _noPermissionView();
+      return SettingsLayout(
+        key: const ValueKey('guild-settings-dialog'),
+        compactWidth: GuildSettingsDialog.compactWidth,
+        closeKey: const ValueKey('guild-settings-close'),
+        stripKey: const ValueKey('guild-settings-section-strip'),
+        title: widget.space.name,
+        busy: controller.isBusy,
+        groups: [
+          SettingsNavGroup(
+            heading: 'Server settings',
+            entries: [
+              for (final section in sections)
+                SettingsNavEntry(
+                  key: ValueKey('guild-settings-rail-${section.name}'),
+                  compactKey: ValueKey('guild-settings-chip-${section.name}'),
+                  label: guildSettingsSectionLabel(section),
+                  icon: guildSettingsSectionIcon(section),
+                  selected: section == controller.section,
+                  onPressed: () => unawaited(controller.openSection(section)),
                 ),
-        ),
-      ],
-    );
-  }
-
-  Widget _header(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(20, 14, 8, 14),
-    decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: context.surfaces.border)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            widget.space.name,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: FlucordType.title,
-              fontWeight: FontWeight.w700,
-            ),
+            ],
           ),
-        ),
-        if (widget.controller.isBusy)
-          const Padding(
-            padding: EdgeInsets.only(right: 8),
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        IconButton(
-          key: const ValueKey('guild-settings-close'),
-          tooltip: 'Close',
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ],
-    ),
-  );
-
-  Widget _sectionRail(
-    BuildContext context,
-    List<GuildSettingsSection> sections,
-  ) => ListView(
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-    children: [
-      for (final section in sections)
-        _RailEntry(
-          section: section,
-          selected: section == widget.controller.section,
-          onSelected: () => unawaited(widget.controller.openSection(section)),
-        ),
-    ],
-  );
-
-  Widget _sectionStrip(
-    BuildContext context,
-    List<GuildSettingsSection> sections,
-  ) => SizedBox(
-    height: 52,
-    child: ListView(
-      key: const ValueKey('guild-settings-section-strip'),
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      children: [
-        for (final section in sections)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              key: ValueKey('guild-settings-chip-${section.name}'),
-              label: Text(guildSettingsSectionLabel(section)),
-              selected: section == widget.controller.section,
-              onSelected: (_) =>
-                  unawaited(widget.controller.openSection(section)),
-            ),
-          ),
-      ],
-    ),
+        ],
+        body: _sectionBody(context),
+      );
+    },
   );
 
   Widget _sectionBody(BuildContext context) {
@@ -243,19 +156,20 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
     };
   }
 
-  Widget _noPermissionView(BuildContext context) => Padding(
-    key: const ValueKey('guild-settings-forbidden'),
-    padding: const EdgeInsets.all(28),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.lock_outline, size: 32),
-        const SizedBox(height: 12),
-        const Text('You cannot manage this server.'),
-        const SizedBox(height: 12),
-        TextButton(
+  /// Nothing to list: a small dialog says so instead of an empty window.
+  Widget _noPermissionView() => Builder(
+    builder: (context) => FlucordDialog(
+      key: const ValueKey('guild-settings-forbidden'),
+      title: const Text('You cannot manage this server'),
+      description:
+          'Your roles here do not include any server settings permission.',
+      onConfirm: () => Navigator.of(context).maybePop(),
+      actions: [
+        FlucordButton(
+          kind: FlucordButtonKind.primary,
+          label: 'Close',
+          keyHint: FlucordKeyHint.enter,
           onPressed: () => Navigator.of(context).maybePop(),
-          child: const Text('Close'),
         ),
       ],
     ),
@@ -276,62 +190,19 @@ String guildSettingsSectionLabel(GuildSettingsSection section) =>
       GuildSettingsSection.auditLog => 'Audit Log',
     };
 
-IconData guildSettingsSectionIcon(GuildSettingsSection section) =>
+/// The navigation icon for each section.
+FlucordIconData guildSettingsSectionIcon(GuildSettingsSection section) =>
     switch (section) {
-      GuildSettingsSection.overview => Icons.tune,
-      GuildSettingsSection.roles => Icons.shield_outlined,
-      GuildSettingsSection.channels => Icons.tag,
-      GuildSettingsSection.bans => Icons.gavel,
-      GuildSettingsSection.automod => Icons.shield_moon_outlined,
-      GuildSettingsSection.invites => Icons.link,
-      GuildSettingsSection.webhooks => Icons.anchor,
-      GuildSettingsSection.expressions => Icons.emoji_emotions_outlined,
-      GuildSettingsSection.auditLog => Icons.receipt_long,
+      GuildSettingsSection.overview => FlucordIcons.overview,
+      GuildSettingsSection.roles => FlucordIcons.roles,
+      GuildSettingsSection.channels => FlucordIcons.textChannel,
+      GuildSettingsSection.bans => FlucordIcons.ban,
+      GuildSettingsSection.automod => FlucordIcons.automod,
+      GuildSettingsSection.invites => FlucordIcons.invite,
+      GuildSettingsSection.webhooks => FlucordIcons.webhooks,
+      GuildSettingsSection.expressions => FlucordIcons.expressions,
+      GuildSettingsSection.auditLog => FlucordIcons.auditLog,
     };
-
-class _RailEntry extends StatelessWidget {
-  const _RailEntry({
-    required this.section,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final GuildSettingsSection section;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 2),
-    child: Material(
-      color: selected ? context.surfaces.control : Colors.transparent,
-      borderRadius: FlucordRadius.small,
-      child: InkWell(
-        key: ValueKey('guild-settings-rail-${section.name}'),
-        borderRadius: FlucordRadius.small,
-        onTap: onSelected,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          child: Row(
-            children: [
-              Icon(guildSettingsSectionIcon(section), size: 17),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  guildSettingsSectionLabel(section),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
 
 /// Opens the window for [space].
 Future<void> showGuildSettingsDialog({

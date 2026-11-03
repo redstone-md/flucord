@@ -36,8 +36,11 @@ void main() {
     await tester.tap(find.byTooltip('User settings'));
     await session.settle();
     final settings = find.byType(Dialog).last;
+    // The Dialog widget always spans the window; its frame is the Material.
     expect(
-      tester.getSize(settings),
+      tester.getSize(
+        find.descendant(of: settings, matching: find.byType(Material)).first,
+      ),
       tester.getSize(find.byType(Scaffold).first),
     );
     expect(
