@@ -30,7 +30,9 @@ abstract final class FlucordTheme {
     inset: Color(palette.inset),
     control: Color(palette.control),
     text: Color(palette.text),
+    bodyText: Color(palette.bodyText),
     muted: Color(palette.muted),
+    captionText: Color(palette.captionText),
     border: Color(palette.border),
     brand: Color(palette.brand),
     brandPressed: Color(palette.brandPressed),
@@ -84,7 +86,9 @@ abstract final class FlucordTheme {
     required Color inset,
     required Color control,
     required Color text,
+    required Color bodyText,
     required Color muted,
+    required Color captionText,
     required Color border,
     required Color brand,
     required Color brandPressed,
@@ -101,12 +105,13 @@ abstract final class FlucordTheme {
       backgrounds: backgrounds,
       ratio: _nonTextContrast,
     );
-    final errorText = _readable(
-      danger,
+    Color readableText(Color base) => _readable(
+      base,
       text: text,
       backgrounds: backgrounds,
       ratio: _textContrast,
     );
+    final errorText = readableText(danger);
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
       (states) => states.contains(WidgetState.focused)
           ? BorderSide(color: focusRing, width: _focusRingWidth)
@@ -234,7 +239,9 @@ abstract final class FlucordTheme {
           inset: inset,
           control: control,
           text: text,
+          bodyText: readableText(bodyText),
           muted: muted,
+          captionText: readableText(captionText),
           border: border,
           brand: brand,
           brandPressed: brandPressed,
@@ -243,12 +250,7 @@ abstract final class FlucordTheme {
           mention: mention,
           danger: danger,
           offline: offline,
-          link: _readable(
-            brand,
-            text: text,
-            backgrounds: backgrounds,
-            ratio: _textContrast,
-          ),
+          link: readableText(brand),
           errorText: errorText,
           accentIcon: focusRing,
           focusRing: focusRing,
@@ -268,7 +270,9 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     required this.inset,
     required this.control,
     required this.text,
+    required this.bodyText,
     required this.muted,
+    required this.captionText,
     required this.border,
     required this.brand,
     required this.brandPressed,
@@ -289,8 +293,21 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
   final Color raised;
   final Color inset;
   final Color control;
+
+  /// Titles and names: the brightest text tier.
   final Color text;
+
+  /// Message text. Reaches 4.5:1 on every background of the theme.
+  final Color bodyText;
+
+  /// Secondary text, and the default icon colour.
   final Color muted;
+
+  /// Captions and placeholders: the faintest text tier. Reaches 4.5:1 on
+  /// every background of the theme.
+  final Color captionText;
+
+  /// Lines between areas. May be see-through.
   final Color border;
   final Color brand;
   final Color brandPressed;
@@ -321,7 +338,9 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     Color? inset,
     Color? control,
     Color? text,
+    Color? bodyText,
     Color? muted,
+    Color? captionText,
     Color? border,
     Color? brand,
     Color? brandPressed,
@@ -342,7 +361,9 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     inset: inset ?? this.inset,
     control: control ?? this.control,
     text: text ?? this.text,
+    bodyText: bodyText ?? this.bodyText,
     muted: muted ?? this.muted,
+    captionText: captionText ?? this.captionText,
     border: border ?? this.border,
     brand: brand ?? this.brand,
     brandPressed: brandPressed ?? this.brandPressed,
@@ -371,7 +392,9 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
       inset: Color.lerp(inset, other.inset, t)!,
       control: Color.lerp(control, other.control, t)!,
       text: Color.lerp(text, other.text, t)!,
+      bodyText: Color.lerp(bodyText, other.bodyText, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
+      captionText: Color.lerp(captionText, other.captionText, t)!,
       border: Color.lerp(border, other.border, t)!,
       brand: Color.lerp(brand, other.brand, t)!,
       brandPressed: Color.lerp(brandPressed, other.brandPressed, t)!,

@@ -60,7 +60,11 @@ void main() {
       inset: 0xff000005,
       control: 0xff000006,
       text: 0xff000007,
+      // Bright, so they already read on the near-black backgrounds and are
+      // kept as written.
+      bodyText: 0xffffff11,
       muted: 0xff000008,
+      captionText: 0xffffff12,
       border: 0xff000009,
       brand: 0xff00000a,
       brandPressed: 0xff00000b,
@@ -82,7 +86,9 @@ void main() {
     expect(surfaces.inset, const Color(0xff000005));
     expect(surfaces.control, const Color(0xff000006));
     expect(surfaces.text, const Color(0xff000007));
+    expect(surfaces.bodyText, const Color(0xffffff11));
     expect(surfaces.muted, const Color(0xff000008));
+    expect(surfaces.captionText, const Color(0xffffff12));
     expect(surfaces.border, const Color(0xff000009));
     expect(surfaces.brand, const Color(0xff00000a));
     expect(surfaces.brandPressed, const Color(0xff00000b));
@@ -91,6 +97,76 @@ void main() {
     expect(surfaces.mention, const Color(0xff00000e));
     expect(surfaces.danger, const Color(0xff00000f));
     expect(surfaces.offline, const Color(0xff000010));
+  });
+
+  group('the dark palette', () {
+    const dark = FlucordPalette.dark;
+
+    test('takes the direction B surfaces', () {
+      expect(dark.rail, 0xff08090a);
+      expect(dark.canvas, 0xff111113);
+      expect(dark.surface, 0xff111113);
+      expect(dark.raised, 0xff1b1b1e);
+      expect(dark.inset, 0xff0c0c0e);
+    });
+
+    test('has four text tiers, brightest first', () {
+      expect(dark.text, 0xffeeeef0);
+      expect(dark.bodyText, 0xffc8c8ce);
+      expect(dark.muted, 0xff8e8e96);
+      expect(dark.captionText, 0xff616168);
+    });
+
+    test('takes the direction B accent and signal colours', () {
+      expect(dark.brand, 0xff8b7cf6);
+      expect(dark.danger, 0xffe5484d);
+      expect(dark.success, 0xff46a758);
+      expect(dark.warning, 0xffe2a336);
+    });
+
+    test('draws borders in white at 7%', () {
+      final border = Color(dark.border);
+
+      expect(border.a, closeTo(0.07, 0.005));
+      expect((border.r, border.g, border.b), (1.0, 1.0, 1.0));
+    });
+  });
+
+  group('a theme file without the text tiers', () {
+    // Written before the tiers existed: it names every other role.
+    final older = Map<String, Object?>.of(FlucordPalette.light.toJson())
+      ..remove('body_text')
+      ..remove('caption_text');
+
+    test('takes the built-in tiers', () {
+      final palette = FlucordPalette.fromJson(
+        older,
+        fallback: FlucordPalette.dark,
+      );
+
+      expect(palette.text, FlucordPalette.light.text);
+      expect(palette.bodyText, FlucordPalette.dark.bodyText);
+      expect(palette.captionText, FlucordPalette.dark.captionText);
+    });
+
+    // The built-in tiers are pale; on this light theme they would vanish.
+    test('still draws them readable', () {
+      final theme = FlucordTheme.fromPalette(FlucordPalette.fromJson(older));
+      final surfaces = theme.extension<FlucordSurfaceTheme>()!;
+
+      expectReadable(theme, surfaces.bodyText, 4.5);
+      expectReadable(theme, surfaces.captionText, 4.5);
+    });
+
+    test('keeps tiers it does name', () {
+      final palette = FlucordPalette.fromJson({
+        'body_text': '#d0d0d0',
+        'caption_text': '#909090',
+      });
+
+      expect(palette.bodyText, 0xffd0d0d0);
+      expect(palette.captionText, 0xff909090);
+    });
   });
 
   testWidgets('an installed theme paints buttons in its own brand', (
@@ -161,6 +237,21 @@ void main() {
 
         void expectContrast(Color foreground, double minimum) =>
             expectReadable(theme, foreground, minimum);
+
+        test(
+          'message text reaches 4.5:1',
+          () => expectContrast(surfaces.bodyText, 4.5),
+        );
+
+        test(
+          'secondary text reaches 4.5:1',
+          () => expectContrast(surfaces.muted, 4.5),
+        );
+
+        test(
+          'caption text reaches 4.5:1',
+          () => expectContrast(surfaces.captionText, 4.5),
+        );
 
         test(
           'link text reaches 4.5:1',
