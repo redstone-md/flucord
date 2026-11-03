@@ -26,12 +26,19 @@ import 'window_visible.dart';
 ///
 /// A decoder needs a keyframe to start from, so frames are held back until one
 /// passes; if the first frame seen is not one, the encoder is asked for one
-/// rather than waiting a whole group of pictures for the next.
+/// rather than waiting a whole group of pictures (ten seconds) for the next.
+/// That holds every time the decoder opens, including after the sender
+/// alt-tabs back: waiting for the encoder's own keyframe left the tile on
+/// "waiting" for up to ten seconds per return.
 ///
 /// A decode that falls behind drops access units, and every picture after a
 /// drop is built on one that is gone. The decoder then keeps its last whole
 /// picture on the texture until it has decoded a keyframe, and the encoder
-/// is asked for one, at most once a second like a watched stream asks.
+/// is asked for one.
+///
+/// Every ask, for a start or for a drop, is made at most once a second, like
+/// a watched stream asks: flicking between windows costs viewers one full
+/// picture, and an ask still unanswered a second later is made again.
 /// Waiting for the encoder's own next keyframe instead froze the tile for up
 /// to ten seconds per drop. The feed is not gated here: a drop is reported
 /// after the fact, and the keyframe that mends it may already be in.
@@ -80,13 +87,8 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   /// Whether the decoder still needs the keyframe it starts from.
   bool _awaitingKeyframe = true;
 
-  /// Asked once per share, when the tile first opens: a decoder reopened
-  /// after the window came back waits for the next natural keyframe instead
-  /// of costing every viewer a full picture at the sender's bitrate.
-  bool _askedForKeyframe = false;
-
-  /// When a drop last asked for a keyframe.
-  Duration? _lastDropAsk;
+  /// When the encoder was last asked for a keyframe, in this share.
+  Duration? _lastAsk;
   Object? _error;
 
   /// Why there is no picture, or null while there is or could be one.
@@ -105,8 +107,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     await _close();
     _source = (encoded: encoded, requestKeyframe: requestKeyframe);
     _error = null;
-    _askedForKeyframe = false;
-    _lastDropAsk = null;
+    _lastAsk = null;
     if (_shown) await _open();
   }
 
@@ -170,26 +171,27 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       return;
     }
     _decoded = decoder.textures.listen(_textures.show);
-    _drops = decoder.droppedAccessUnits.listen((_) {
-      final now = _now();
-      final last = _lastDropAsk;
-      if (last != null && now - last < const Duration(seconds: 1)) return;
-      _lastDropAsk = now;
-      unawaited(source.requestKeyframe?.call());
-    });
+    _drops = decoder.droppedAccessUnits.listen(
+      (_) => _askForKeyframe(source.requestKeyframe),
+    );
     _encoded = source.encoded.listen((frame) {
       if (_awaitingKeyframe) {
         if (!frame.isKeyframe) {
-          if (!_askedForKeyframe) {
-            _askedForKeyframe = true;
-            unawaited(source.requestKeyframe?.call());
-          }
+          _askForKeyframe(source.requestKeyframe);
           return;
         }
         _awaitingKeyframe = false;
       }
       unawaited(decoder.submit(frame.bytes, timestamp: frame.timestamp));
     });
+  }
+
+  void _askForKeyframe(Future<void> Function()? requestKeyframe) {
+    final now = _now();
+    final last = _lastAsk;
+    if (last != null && now - last < const Duration(seconds: 1)) return;
+    _lastAsk = now;
+    unawaited(requestKeyframe?.call());
   }
 
   Future<void> _close() async {
