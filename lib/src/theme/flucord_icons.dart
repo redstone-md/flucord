@@ -83,6 +83,21 @@ abstract final class FlucordIcons {
   static const verified = FlucordIconData(
     HugeIcons.strokeRoundedCheckmarkBadge01,
   );
+
+  // The message toolbar.
+  static const addReaction = FlucordIconData(HugeIcons.strokeRoundedSmilePlus);
+  static const unpin = FlucordIconData(HugeIcons.strokeRoundedPinOff);
+  static const unlink = FlucordIconData(HugeIcons.strokeRoundedUnlink01);
+  static const done = FlucordIconData(HugeIcons.strokeRoundedTaskDone01);
+  static const reopen = FlucordIconData(
+    HugeIcons.strokeRoundedArrowReloadHorizontal,
+  );
+  static const deleteFlagged = FlucordIconData(HugeIcons.strokeRoundedDelete03);
+  static const thumbsDown = FlucordIconData(HugeIcons.strokeRoundedThumbsDown);
+  static const silent = FlucordIconData(
+    HugeIcons.strokeRoundedNotificationOff01,
+  );
+  static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

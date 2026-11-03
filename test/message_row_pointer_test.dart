@@ -1,3 +1,4 @@
+import 'package:flucord/src/presentation/widgets/message_action_bar.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -246,15 +247,23 @@ void main() {
   );
 
   group('the hover bar', () {
-    testSession('stays inside a short row', (tester, session) async {
+    // It reaches over the row above, so the tests below click and cross the
+    // part that lies outside its own row.
+    testSession('floats over the top edge of the message, at its right', (
+      tester,
+      session,
+    ) async {
       await _openTwoRows(session);
       await _hover(tester, tester.getCenter(session.messageRow(_lowerId)));
 
-      final row = tester.getRect(session.messageRow(_lowerId));
-      final button = tester.getRect(_addReactionToLower);
+      final surface = tester.getRect(
+        find.byKey(const ValueKey('message-surface-$_lowerId')),
+      );
+      final bar = tester.getRect(find.byType(MessageActionBar));
 
-      expect(row.top, lessThanOrEqualTo(button.top));
-      expect(row.bottom, greaterThanOrEqualTo(button.bottom));
+      expect(bar.top, surface.top - 16);
+      expect(bar.bottom, greaterThan(surface.top));
+      expect(bar.right, surface.right - 16);
     });
 
     testSession('answers a click on the top edge of a button', (

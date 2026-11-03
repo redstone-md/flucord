@@ -212,6 +212,7 @@ Future<void> _pumpActionBar(
             onEdit: () {},
             onTogglePin: () {},
             onDelete: () {},
+            onMore: (_) {},
           ),
         ),
       ),

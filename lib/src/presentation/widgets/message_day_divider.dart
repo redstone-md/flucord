@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
-/// Marks the place in the timeline where the calendar day changes.
+/// Marks the place in the timeline where the calendar day changes: a thin
+/// line on each side of the date. Rows show only the time, so this is where
+/// the date lives.
 class MessageDayDivider extends StatelessWidget {
   const MessageDayDivider({required this.day, super.key});
 
@@ -18,9 +20,12 @@ class MessageDayDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final line = Divider(height: 1, color: context.surfaces.border);
+    final surfaces = context.surfaces;
+    final line = Divider(height: 1, thickness: 1, color: surfaces.border);
+    // The next message adds its own group gap below, so the space reads the
+    // same above and below the line.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
       child: Row(
         children: [
           Expanded(child: line),
@@ -28,10 +33,8 @@ class MessageDayDivider extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
               MaterialLocalizations.of(context).formatFullDate(day.toLocal()),
-              style: TextStyle(
-                color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
-                fontWeight: FontWeight.w600,
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.captionText,
               ),
             ),
           ),

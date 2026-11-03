@@ -442,7 +442,9 @@ void main() {
 /// platform with the thickest frame.
 const _smallestWindow = Size(924, 461);
 
-final _row = find.byKey(const ValueKey('message-900000000000000001'));
+/// The message's highlight, which takes the pointer. The gap above a new author
+/// is outside it.
+final _row = find.byKey(const ValueKey('message-surface-900000000000000001'));
 
 final _composerField = find.descendant(
   of: find.byType(MessageComposer),
