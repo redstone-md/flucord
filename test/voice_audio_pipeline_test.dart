@@ -316,6 +316,28 @@ void main() {
       },
     );
 
+    test('a frame dropped behind a slow filter still moves the clock on, in '
+        'its place', () async {
+      final media = _FakeMediaService();
+      final transport = _FakeAudioTransport();
+      final suppressor = _HeldSuppressor();
+      await pump(
+        media,
+        factory: () async => suppressor,
+        enabled: true,
+        transport: transport,
+      );
+      // Five frames wait for the filter; the sixth and seventh are dropped.
+      for (var i = 0; i < 7; i++) {
+        media.addPcm(bytes);
+      }
+      await _flushEvents();
+      suppressor.release.complete();
+      await _flushEvents();
+
+      expect(transport.clock, [...List.filled(5, 'frame'), 'skip', 'skip']);
+    });
+
     test('a suppressor that throws mid-call is dropped and reported', () async {
       final media = _FakeMediaService();
       final suppressor = _BrokenSuppressor();
@@ -630,6 +652,18 @@ final class _BrokenEnhancer implements VoiceMicrophoneEnhancer {
   void dispose() => disposed = true;
 }
 
+/// A filter that holds every frame until [release] completes: one that has
+/// fallen behind the microphone.
+final class _HeldSuppressor extends FakeNoiseSuppressor {
+  final Completer<void> release = Completer<void>();
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    await release.future;
+    await super.process(frame, channels: channels);
+  }
+}
+
 final class _BrokenSuppressor extends FakeNoiseSuppressor {
   @override
   Future<void> process(Int16List frame, {required int channels}) =>
@@ -689,6 +723,9 @@ final class _FakeAudioTransport implements VoiceAudioTransport {
   final StreamController<VoiceRemoteOpusFrame> _remote =
       StreamController.broadcast();
   final List<Uint8List> sent = [];
+
+  /// What each frame did to the stream's clock, in order: sent or skipped.
+  final List<String> clock = [];
   int finishCount = 0;
 
   @override
@@ -707,8 +744,13 @@ final class _FakeAudioTransport implements VoiceAudioTransport {
   );
 
   @override
-  void sendOpusFrame(Uint8List opusFrame) =>
-      sent.add(Uint8List.fromList(opusFrame));
+  void sendOpusFrame(Uint8List opusFrame) {
+    sent.add(Uint8List.fromList(opusFrame));
+    clock.add('frame');
+  }
+
+  @override
+  void skipOpusFrame() => clock.add('skip');
 
   @override
   Future<void> finishSpeaking() async => finishCount++;

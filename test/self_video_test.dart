@@ -683,6 +683,9 @@ final class _FakeSignaling
   void sendOpusFrame(Uint8List opusFrame) {}
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async {}
 
   @override

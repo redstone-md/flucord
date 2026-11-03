@@ -44,6 +44,15 @@ final class VoiceRemotePcmFrame {
 abstract interface class VoiceAudioTransport {
   Stream<VoiceRemoteOpusFrame> get remoteAudio;
   void sendOpusFrame(Uint8List opusFrame);
+
+  /// Accounts for a frame the microphone captured that is not being sent.
+  ///
+  /// The stream's clock keeps time with the microphone, not with what was
+  /// sent (RFC 3550, section 5.1). A receiver reads a frame that never came
+  /// as a loss and conceals it. If the clock skipped over it instead, the
+  /// receiver would play everything after it 20 ms later, for good, and
+  /// dropped frames would pile up into seconds of delay.
+  void skipOpusFrame();
   Future<void> finishSpeaking();
 }
 

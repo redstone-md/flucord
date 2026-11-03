@@ -311,6 +311,8 @@ final class VoiceAudioPipeline {
     for (final frame in _framer.add(chunk)) {
       if (_uplinkBacklog >= _uplinkBacklogLimit) {
         _noteDroppedFrame();
+        // Its 20 ms still pass, after the frames already waiting.
+        _uplink = _uplink.then((_) => _transport?.skipOpusFrame());
         continue;
       }
       _uplinkBacklog++;

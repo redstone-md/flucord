@@ -35,6 +35,20 @@ void main() {
     expect(second.header.timestamp, 0x10 + 960);
   });
 
+  test('a skipped frame moves the time on but not the sequence', () {
+    final packetizer = DiscordAudioRtpPacketizer(
+      ssrc: 1,
+      initialSequence: 7,
+      initialTimestamp: 0xffffffff - 959,
+    );
+
+    packetizer.skip();
+    final next = packetizer.packetize(Uint8List.fromList([1]));
+
+    expect(next.header.sequence, 7);
+    expect(next.header.timestamp, 0);
+  });
+
   test('names the payload types Discord assigns the two media', () {
     expect(DiscordRtpHeader.discordAudioPayloadType, 0x78);
     expect(DiscordRtpHeader.discordVideoPayloadType, 101);

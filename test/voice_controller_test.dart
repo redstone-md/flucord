@@ -1060,6 +1060,9 @@ final class _FakeVoiceSignalingService
   }
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async => _operations?.add('finish');
 
   Future<void> close() async {

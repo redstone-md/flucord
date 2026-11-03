@@ -861,6 +861,9 @@ final class _FakeVoiceClient
   void sendOpusFrame(Uint8List opusFrame) => sentOpus.add(opusFrame);
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async {}
 
   /// A closed client is silent, as the real one is.

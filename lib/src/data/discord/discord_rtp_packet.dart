@@ -179,8 +179,14 @@ final class DiscordAudioRtpPacketizer {
       payload: daveFrame,
     );
     _sequence = (_sequence + 1) & 0xffff;
-    _timestamp = (_timestamp + samplesPerFrame) & 0xffffffff;
+    skip();
     return frame;
+  }
+
+  /// Moves the timestamp on by one frame that is not sent. The sequence
+  /// stays: it counts packets, and no packet went out.
+  void skip() {
+    _timestamp = (_timestamp + samplesPerFrame) & 0xffffffff;
   }
 }
 

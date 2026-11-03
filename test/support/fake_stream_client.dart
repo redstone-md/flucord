@@ -98,6 +98,9 @@ final class FakeStreamClient
   }
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async {}
 
   @override

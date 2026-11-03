@@ -137,6 +137,9 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
   }
 
   @override
+  void skipOpusFrame() => _packetizer?.skip();
+
+  @override
   Future<void> finishSpeaking() async {
     if (!_speaking) return;
     try {

@@ -483,6 +483,9 @@ final class _FakeSignaling
   void sendOpusFrame(Uint8List frame) => sentFrames.add(frame);
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async {}
 
   void emit(VoiceSignalingEvent event) => _events.add(event);

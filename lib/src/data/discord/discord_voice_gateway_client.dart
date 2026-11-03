@@ -661,6 +661,9 @@ final class DiscordVoiceGatewayClient
       _mediaTransport.sendOpusFrame(opusFrame);
 
   @override
+  void skipOpusFrame() => _mediaTransport.skipOpusFrame();
+
+  @override
   Future<void> finishSpeaking() => _mediaTransport.finishSpeaking();
 
   /// One packet, or nothing at all.
