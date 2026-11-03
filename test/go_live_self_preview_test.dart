@@ -91,7 +91,7 @@ void main() {
     },
   );
 
-  test('a dropped access unit feeds only keyframes and asks for one', () async {
+  test('a dropped access unit asks for a keyframe and keeps feeding', () async {
     final decoder = FakeVideoDecoder();
     var clock = Duration.zero;
     final preview = GoLiveSelfPreview(
@@ -110,29 +110,25 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(decoder.submitted, hasLength(2));
 
-    // The decode fell behind and threw a unit away: everything built on it
-    // is wrong. The decoder keeps its last whole picture on the texture;
-    // here, the encoder is asked for the keyframe that mends it rather than
-    // the tile standing still until the next one of the encoder's own, and
-    // nothing that cannot mend it is fed in meanwhile.
+    // The decode fell behind and threw a unit away. The decoder keeps its
+    // last whole picture until a keyframe; here, the encoder is asked for one
+    // rather than the tile standing still until its own next one.
     decoder.drop(1);
     await Future<void>.delayed(Duration.zero);
     expect(asked, 1);
+
+    // The drop is heard after the fact: the keyframe that mends it may
+    // already be in, so what follows is fed on rather than held back until
+    // yet another keyframe.
     encoded.add(_frame(keyframe: false, timestamp: _ms(33)));
     await Future<void>.delayed(Duration.zero);
-    expect(decoder.submitted, hasLength(2));
+    expect(decoder.submitted, hasLength(3));
 
     // A second drop while that keyframe is on its way asks no second one.
     clock = _ms(500);
     decoder.drop(2);
     await Future<void>.delayed(Duration.zero);
     expect(asked, 1);
-
-    // The keyframe, and what follows it, are fed in again.
-    encoded.add(_frame(keyframe: true, timestamp: _ms(50)));
-    encoded.add(_frame(keyframe: false, timestamp: _ms(66)));
-    await Future<void>.delayed(Duration.zero);
-    expect(decoder.submitted, hasLength(4));
 
     // A drop a second later is a new break, and asks again.
     clock = _ms(1600);

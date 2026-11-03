@@ -94,8 +94,8 @@ struct FlucordVideoSurface {
 
   std::mutex lock_;
   // What the engine is given. The texture shown before a resize stays alive
-  // one more picture, so a handle the engine was just handed is never one
-  // that has already been freed.
+  // until the next picture, so a handle the engine was just handed is never
+  // one that has already been freed.
   Shared shown_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> previous_;
   FlucordVideoSurfaceCallback on_picture_ = nullptr;

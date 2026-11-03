@@ -1670,6 +1670,9 @@ struct FlucordVideoDecoder {
   // Whether the surface is keeping its last whole picture: an access unit
   // was dropped, and no keyframe has been decoded since. Decode thread only.
   bool holding = false;
+  // While holding, the time of the first keyframe the transform accepted:
+  // pictures from then on are whole. -1 until one is accepted.
+  int64_t mends_at = -1;
   // The GPU the transform decodes on, and the pass that turns its NV12 into
   // BGRA there. Null while the transform decodes on the CPU; gpu_status then
   // says why.
@@ -1952,6 +1955,16 @@ HRESULT ShowPicture(FlucordVideoDecoder* decoder, IMFSample* sample) {
 HRESULT DeliverPicture(FlucordVideoDecoder* decoder,
                        IMFSample* sample,
                        int64_t timestamp_us) {
+  LONGLONG sample_time = 0;
+  sample->GetSampleTime(&sample_time);
+  const int64_t time = sample_time != 0 ? sample_time / 10 : timestamp_us;
+  // Pictures still coming out from before the keyframe stay held: they are
+  // built on the one that was dropped.
+  if (decoder->holding && decoder->mends_at >= 0 &&
+      time >= decoder->mends_at) {
+    decoder->holding = false;
+    decoder->mends_at = -1;
+  }
   std::unique_ptr<uint8_t[]> picture;
   if (decoder->surface != nullptr) {
     // A held picture still reaches the callback, which is where the caller
@@ -1969,8 +1982,6 @@ HRESULT DeliverPicture(FlucordVideoDecoder* decoder,
     const HRESULT hr = ReadPicture(decoder, sample, picture.get());
     if (FAILED(hr)) return hr;
   }
-  LONGLONG sample_time = 0;
-  sample->GetSampleTime(&sample_time);
   // Ownership went with the callback when it was delivered; a picture the
   // gate refused is freed here, and nothing arrives in Dart after a close
   // that stopped waiting for this thread.
@@ -1978,8 +1989,7 @@ HRESULT DeliverPicture(FlucordVideoDecoder* decoder,
   if (!decoder->deliveries.closed) {
     const int32_t stride = picture ? decoder->width * 4 : 0;
     decoder->callback(decoder->user_data, picture.release(), decoder->width,
-                      decoder->height, stride,
-                      sample_time != 0 ? sample_time / 10 : timestamp_us);
+                      decoder->height, stride, time);
   }
   return S_OK;
 }
@@ -2065,7 +2075,8 @@ bool ContainsIdr(const uint8_t* annex_b, size_t length) {
 
 void SubmitToTransform(FlucordVideoDecoder* decoder,
                        const std::vector<uint8_t>& annex_b,
-                       int64_t timestamp_us) {
+                       int64_t timestamp_us,
+                       bool idr) {
   ComPtr<IMFMediaBuffer> buffer;
   if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(annex_b.size()), &buffer))) {
     return;
@@ -2094,6 +2105,10 @@ void SubmitToTransform(FlucordVideoDecoder* decoder,
     decoder->inputErrors.fetch_add(1);
     decoder->lastInputError.store(static_cast<int64_t>(hr));
     return;
+  }
+  // Only a keyframe the transform took mends a hold.
+  if (idr && decoder->holding && decoder->mends_at < 0) {
+    decoder->mends_at = timestamp_us;
   }
   DrainDecoder(decoder, timestamp_us);
 }
@@ -2214,12 +2229,10 @@ void DecoderLoop(FlucordVideoDecoder* decoder) {
       if (decoder->broken) {
         decoder->broken = false;
         decoder->holding = true;
+        decoder->mends_at = -1;
       }
     }
-    // A keyframe needs nothing before it: from its picture on, what the
-    // decoder draws is whole again.
-    if (unit.idr) decoder->holding = false;
-    SubmitToTransform(decoder, unit.annex_b, unit.timestamp_us);
+    SubmitToTransform(decoder, unit.annex_b, unit.timestamp_us, unit.idr);
   }
   ReleaseDecoder(decoder);
 }

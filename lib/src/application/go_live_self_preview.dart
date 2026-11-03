@@ -29,10 +29,11 @@ import 'window_visible.dart';
 ///
 /// A decode that falls behind drops access units, and every picture after a
 /// drop is built on one that is gone. The decoder then keeps its last whole
-/// picture on the texture, nothing but keyframes is fed to it, and the
-/// encoder is asked for the keyframe that mends it, at most once a second
-/// like a watched stream asks. Waiting for the encoder's own next keyframe
-/// instead froze the tile for up to ten seconds per drop.
+/// picture on the texture until it has decoded a keyframe, and the encoder
+/// is asked for one, at most once a second like a watched stream asks.
+/// Waiting for the encoder's own next keyframe instead froze the tile for up
+/// to ten seconds per drop. The feed is not gated here: a drop is reported
+/// after the fact, and the keyframe that mends it may already be in.
 final class GoLiveSelfPreview extends ChangeNotifier {
   GoLiveSelfPreview({
     required VideoTextureDecoder Function() decoderFactory,
@@ -93,13 +94,8 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   StreamSubscription<VideoTexture>? _decoded;
   StreamSubscription<int>? _drops;
 
-  /// Whether the decoder needs a keyframe before anything else: at the
-  /// start, and after a drop, when every picture until one is broken.
+  /// Whether the decoder still needs the keyframe it starts from.
   bool _awaitingKeyframe = true;
-
-  /// Whether the keyframe being waited for mends a drop rather than starts
-  /// the decoder. A start asks for one once; a drop has its own limit.
-  bool _broken = false;
 
   /// Asked once per share, when the tile first opens: a decoder reopened
   /// after the window came back waits for the next natural keyframe instead
@@ -172,7 +168,6 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _decoder = decoder;
     _error = null;
     _awaitingKeyframe = true;
-    _broken = false;
     try {
       await decoder.start();
     } on Object catch (error) {
@@ -193,8 +188,6 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     }
     _decoded = decoder.textures.listen(_show);
     _drops = decoder.droppedAccessUnits.listen((_) {
-      _broken = true;
-      _awaitingKeyframe = true;
       final now = _now();
       final last = _lastDropAsk;
       if (last != null && now - last < const Duration(seconds: 1)) return;
@@ -204,14 +197,13 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _encoded = source.encoded.listen((frame) {
       if (_awaitingKeyframe) {
         if (!frame.isKeyframe) {
-          if (!_broken && !_askedForKeyframe) {
+          if (!_askedForKeyframe) {
             _askedForKeyframe = true;
             unawaited(source.requestKeyframe?.call());
           }
           return;
         }
         _awaitingKeyframe = false;
-        _broken = false;
       }
       unawaited(decoder.submit(frame.bytes, timestamp: frame.timestamp));
     });

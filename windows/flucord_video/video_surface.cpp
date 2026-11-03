@@ -193,6 +193,9 @@ HRESULT FlucordVideoSurface::Present() {
   if (shown_.texture != drawing_.texture) {
     previous_ = shown_.texture;
     shown_ = drawing_;
+  } else {
+    // The engine has had a picture to open the new handle by.
+    previous_.Reset();
   }
   // Called under the lock, so Detach cannot return while a call is running.
   // The callback only marks a frame available, which the engine queues
