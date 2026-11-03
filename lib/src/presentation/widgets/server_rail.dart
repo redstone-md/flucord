@@ -7,26 +7,10 @@ import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'account_connections_scope.dart';
-import 'account_entitlements_scope.dart';
-import 'account_data_package_scope.dart';
-import 'app_authorisation_scope.dart';
-import 'auth_session_scope.dart';
-import 'account_standing_scope.dart';
 import 'remote_identity_image.dart';
 
-import 'accessibility_scope.dart';
 import 'activity_label.dart';
-import 'age_verification_scope.dart';
-import 'keybind_scope.dart';
 import 'mention_badge.dart';
-import 'stream_quality_scope.dart';
-import 'streamer_mode_scope.dart';
-import 'theme_scope.dart';
-import 'voice_scope.dart';
-import 'multi_factor_auth_scope.dart';
-import 'family_centre_scope.dart';
-import 'user_profile_scope.dart';
 import 'user_settings_dialog.dart';
 import 'user_settings_scope.dart';
 
@@ -145,33 +129,9 @@ class ServerRail extends StatelessWidget {
             IconButton(
               key: const ValueKey('open-user-settings'),
               onPressed: () => unawaited(
-                UserSettingsDialog.show(
+                UserSettingsDialog.showFromScopes(
                   context,
                   controller: settings,
-                  profileController: UserProfileScope.maybeOf(context),
-                  standingController: AccountStandingScope.maybeOf(context),
-                  familyController: FamilyCentreScope.maybeOf(context),
-                  sessionController: AuthSessionScope.maybeOf(context),
-                  connectionsController: AccountConnectionsScope.maybeOf(
-                    context,
-                  ),
-                  entitlementsController: AccountEntitlementsScope.maybeOf(
-                    context,
-                  ),
-                  dataPackageController: AccountDataPackageScope.maybeOf(
-                    context,
-                  ),
-                  appAuthorisationController: AppAuthorisationScope.maybeOf(
-                    context,
-                  ),
-                  mfaController: MultiFactorAuthScope.maybeOf(context),
-                  ageController: AgeVerificationScope.maybeOf(context),
-                  keybindController: KeybindScope.maybeOf(context),
-                  streamerModeController: StreamerModeScope.maybeOf(context),
-                  accessibilityController: AccessibilityScope.maybeOf(context),
-                  streamQualityController: StreamQualityScope.maybeOf(context),
-                  themeController: ThemeScope.maybeOf(context),
-                  voiceController: VoiceScope.maybeOf(context),
                 ),
               ),
               icon: const Icon(Icons.settings_outlined),
