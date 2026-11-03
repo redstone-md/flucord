@@ -29,8 +29,13 @@ final class DiscordVoiceDaveController {
     required VoiceDaveService daveService,
     required this.channelId,
     required this.selfUserId,
+    this.logScope = 'voice.dave',
   }) : _service = daveService,
        _recognizedUserIds = {selfUserId};
+
+  /// Where the handshake is traced: the call's connection and a stream's
+  /// each run a group of their own.
+  final String logScope;
 
   final VoiceDaveService _service;
   final String channelId;
@@ -77,11 +82,18 @@ final class DiscordVoiceDaveController {
       throw StateError('Discord selected an unsupported DAVE version');
     }
     _protocolVersion = protocolVersion;
+    _trace('session on protocol $protocolVersion');
     _transitionMediaProtocol(protocolVersion);
     if (protocolVersion <= 0) return const [];
     _ensureSession(protocolVersion).setProtocolVersion(protocolVersion);
     return _keyPackageCommands();
   }
+
+  /// One step of the handshake, for the log. A share whose pictures go out
+  /// unencrypted shows as nothing at all to every viewer, so how long the
+  /// group key took, and which step held it up, has to be readable after the
+  /// fact. Counts only: no user ids and no MLS payloads.
+  void _trace(String step) => AppLog.warning(logScope, step);
 
   List<DiscordVoiceDaveCommand> acceptJson(
     int opcode,
@@ -93,11 +105,13 @@ final class DiscordVoiceDaveController {
         if (userIds is List) {
           _recognizedUserIds.addAll(userIds.whereType<String>());
         }
+        _trace('clients connected, ${_recognizedUserIds.length} known');
       case 13:
         final userId = data['user_id'];
         if (userId is String && userId != selfUserId) {
           _recognizedUserIds.remove(userId);
         }
+        _trace('client left, ${_recognizedUserIds.length} known');
       case 21:
         return _prepareTransition(data);
       case 22:
@@ -131,6 +145,7 @@ final class DiscordVoiceDaveController {
     final transitionId = data['transition_id'];
     final protocolVersion = data['protocol_version'];
     if (transitionId is! int || protocolVersion is! int) return const [];
+    _trace('prepare transition $transitionId to protocol $protocolVersion');
     _pendingTransitionId = transitionId;
     _pendingProtocolVersion = protocolVersion;
     return [
@@ -143,7 +158,17 @@ final class DiscordVoiceDaveController {
 
   void _executeTransition(Map<String, Object?> data) {
     final transitionId = data['transition_id'];
-    if (transitionId is! int || transitionId != _pendingTransitionId) return;
+    if (transitionId is! int || transitionId != _pendingTransitionId) {
+      _trace(
+        'execute transition $transitionId ignored: '
+        'waiting on ${_pendingTransitionId ?? 'none'}',
+      );
+      return;
+    }
+    _trace(
+      'execute transition $transitionId'
+      '${_selfRatchetPending ? ', adopting own key' : ''}',
+    );
     final protocolVersion = _pendingProtocolVersion;
     if (protocolVersion != null) {
       _protocolVersion = protocolVersion;
@@ -168,6 +193,7 @@ final class DiscordVoiceDaveController {
       return const [];
     }
     _protocolVersion = protocolVersion;
+    _trace('prepare epoch $epoch on protocol $protocolVersion');
     // A first epoch is a new group: the session starts over, and the fresh
     // key package that goes with it is what puts this account in the roster.
     // Later epochs continue the group the session already holds.
@@ -178,6 +204,7 @@ final class DiscordVoiceDaveController {
 
   void _acceptExternalSender(List<int> payload) {
     _externalSender = List<int>.unmodifiable(payload);
+    _trace('external sender received');
     final version = _protocolVersion > 0
         ? _protocolVersion
         : _service.maxProtocolVersion;
@@ -189,6 +216,10 @@ final class DiscordVoiceDaveController {
       proposals: payload,
       recognizedUserIds: _recognizedUsers,
     );
+    _trace(
+      'proposals with ${_recognizedUserIds.length} known: '
+      '${output.isEmpty ? 'no commit' : 'commit sent'}',
+    );
     if (output.isEmpty) return const [];
     return [DiscordVoiceDaveBinaryCommand(opcode: 28, payload: output)];
   }
@@ -197,6 +228,7 @@ final class DiscordVoiceDaveController {
     if (payload.length < 2) return const [];
     final transitionId = _transitionId(payload);
     final result = _requiredSession().processCommit(payload.sublist(2));
+    _trace('commit for transition $transitionId: ${result.status.name}');
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
@@ -214,6 +246,7 @@ final class DiscordVoiceDaveController {
       welcome: payload.sublist(2),
       recognizedUserIds: _recognizedUsers,
     );
+    _trace('welcome for transition $transitionId: ${result.status.name}');
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
@@ -222,6 +255,7 @@ final class DiscordVoiceDaveController {
   }
 
   List<DiscordVoiceDaveCommand> _recoverFromInvalid(int transitionId) {
+    _trace('transition $transitionId invalid, starting over');
     if (_protocolVersion > 0) _replaceSession(_protocolVersion);
     return [
       DiscordVoiceDaveJsonCommand(
@@ -396,6 +430,7 @@ final class DiscordVoiceDaveController {
       _adoptSelfRatchet();
       return;
     }
+    _trace('own key waits for transition $transitionId');
     _pendingTransitionId = transitionId;
     _pendingProtocolVersion = _protocolVersion;
     _selfRatchetPending = true;
@@ -409,11 +444,12 @@ final class DiscordVoiceDaveController {
     try {
       _withRatchet(session.getKeyRatchet(selfUserId), encryptor.setKeyRatchet);
     } on Object catch (error) {
-      AppLog.warning('voice.dave', 'no key for this account yet: $error');
+      _trace('no key for this account yet: $error');
       return;
     }
     _hasKeyRatchet = true;
     encryptor.setPassthrough(false);
+    _trace('own key adopted, encrypting');
   }
 
   void _forgetUnrecognizedDecryptors() {

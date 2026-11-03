@@ -107,6 +107,7 @@ final class DiscordVoiceGatewayClient
                  carriesVideo: carriesVideo,
                ),
                selfUserId: credentials.userId,
+               logScope: streamKey == null ? 'voice.dave' : 'golive.dave',
              ),
        _socketConnector =
            socketConnector ?? const IoDiscordVoiceSocketConnector(),
