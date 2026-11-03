@@ -3,25 +3,30 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/self_video_controller.dart';
-
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'go_live_button.dart';
+import 'go_live_display_dialog.dart';
+import 'go_live_scope.dart';
+import 'panel_icon_button.dart';
 import 'voice_control.dart';
 import 'voice_room_status.dart';
 
-/// The strip that says you are still in a voice channel.
+/// The voice panel: the strip that says you are still in a voice channel.
 ///
-/// A voice connection outlives the screen that opened it — Discord lets you
-/// read another channel while staying in the room — so mute and hang-up cannot
-/// live only inside the room view. Without this, walking away from the voice
+/// A voice connection outlives the screen that opened it (Discord lets you
+/// read another channel while staying in the room), so hang-up cannot live
+/// only inside the room view. Without this, walking away from the voice
 /// channel left the connection running with no way to leave it, which is the
-/// single thing a user reaches for most.
+/// single thing a user reaches for most. Mute and deafen sit in the user
+/// panel below, where they stay whether or not a room is open.
 ///
-/// It listens for itself, so it redraws when voice or the camera changes,
-/// even inside a sidebar that is kept across rebuilds.
+/// It listens for itself, so it redraws when voice, the camera or a share
+/// changes, even inside a sidebar that is kept across rebuilds.
 class VoiceConnectionBar extends StatelessWidget {
   const VoiceConnectionBar({
     required this.controller,
@@ -48,6 +53,11 @@ class VoiceConnectionBar extends StatelessWidget {
   /// The account's own camera, when this build can send one.
   final SelfVideoController? camera;
 
+  static const _buttonSize = 32.0;
+  static const _gap = 8.0;
+  static const _hangUpFillAlpha = 0.12;
+  static const _controlFillAlpha = 0.05;
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([controller, camera]),
@@ -57,112 +67,79 @@ class VoiceConnectionBar extends StatelessWidget {
   Widget _buildBar(BuildContext context) {
     final channelId = controller.connectedChannelId;
     if (channelId == null) return const SizedBox.shrink();
-    final name = channelNameFor(channelId);
-    final server = serverNameFor?.call(channelId);
-    final ready = controller.connectionStatus == VoiceConnectionStatus.ready;
+    final surfaces = context.surfaces;
     final failed =
         controller.connectionStatus == VoiceConnectionStatus.failure ||
         controller.joinBlockedReason != null;
     final accent = failed
-        ? Theme.of(context).colorScheme.error
-        : ready
-        ? context.surfaces.success
-        : context.surfaces.muted;
+        ? surfaces.danger
+        : controller.connectionStatus == VoiceConnectionStatus.ready
+        ? surfaces.success
+        : surfaces.muted;
+    final controlFill = surfaces.text.withValues(alpha: _controlFillAlpha);
     return Container(
       key: const ValueKey('voice-connection-bar'),
-      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: _gap),
       decoration: BoxDecoration(
-        color: context.surfaces.raised,
-        border: Border(top: BorderSide(color: context.surfaces.border)),
+        border: Border(top: BorderSide(color: surfaces.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                failed ? Icons.error_outline : Icons.podcasts,
-                size: 15,
-                color: accent,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      voiceRoomStatusLabel(controller),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      switch ((name, server)) {
-                        (final name?, final server?) => '$name / $server',
-                        (final name?, null) => name,
-                        (null, _) => 'Voice channel',
-                      },
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: FlucordType.caption,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onOpenChannel != null && name != null)
-                _BarButton(
-                  buttonKey: const ValueKey('voice-bar-open'),
-                  tooltip: 'Back to $name',
-                  icon: Icons.open_in_full,
-                  onPressed: () => onOpenChannel!(channelId),
-                ),
-              _BarButton(
+              Expanded(child: _status(context, channelId, accent)),
+              const SizedBox(width: _gap),
+              PanelIconButton(
                 buttonKey: const ValueKey('voice-bar-disconnect'),
                 tooltip: 'Disconnect',
-                icon: Icons.call_end,
+                icon: FlucordIcons.hangUp,
                 danger: true,
+                size: _buttonSize,
+                fill: surfaces.danger.withValues(alpha: _hangUpFillAlpha),
                 onPressed: () => unawaited(controller.disconnect()),
               ),
             ],
           ),
-          // A row of their own: the sidebar is too narrow to draw these beside
-          // the names and still leave the names readable.
+          const SizedBox(height: _gap),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            spacing: _gap,
             children: [
-              _BarButton.control(
-                buttonKey: const ValueKey('voice-bar-mute'),
-                control: VoiceControl.mute(controller),
-              ),
-              _BarButton.control(
-                buttonKey: const ValueKey('voice-bar-deafen'),
-                control: VoiceControl.deafen(controller),
-              ),
               if (camera case final camera? when camera.isSupported)
-                _BarButton.control(
-                  buttonKey: const ValueKey('voice-bar-camera'),
-                  control: VoiceControl.camera(camera),
+                Expanded(
+                  child: PanelIconButton.control(
+                    buttonKey: const ValueKey('voice-bar-camera'),
+                    control: VoiceControl.camera(camera),
+                    size: _buttonSize,
+                    fill: controlFill,
+                  ),
                 ),
+              Expanded(
+                child: PanelIconButton.control(
+                  buttonKey: const ValueKey('voice-bar-share'),
+                  control: _screenShare(context, channelId),
+                  size: _buttonSize,
+                  fill: controlFill,
+                ),
+              ),
+              Expanded(
+                child: PanelIconButton.control(
+                  buttonKey: const ValueKey('voice-bar-activities'),
+                  control: const VoiceControl.activities(),
+                  size: _buttonSize,
+                  fill: controlFill,
+                ),
+              ),
             ],
           ),
           if (voiceRoomWarning(controller) case final warning?)
             Padding(
-              padding: const EdgeInsets.only(top: 6, right: 4),
+              padding: const EdgeInsets.only(top: _gap),
               child: Text(
                 warning,
                 key: const ValueKey('voice-bar-warning'),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: FlucordType.caption,
-                  height: 1.35,
+                style: FlucordTextRole.caption.style.copyWith(
+                  color: surfaces.errorText,
                 ),
               ),
             ),
@@ -170,57 +147,74 @@ class VoiceConnectionBar extends StatelessWidget {
       ),
     );
   }
-}
 
-class _BarButton extends StatelessWidget {
-  const _BarButton({
-    required this.buttonKey,
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.active = false,
-    this.danger = false,
-  });
-
-  _BarButton.control({required Key buttonKey, required VoiceControl control})
-    : this(
-        buttonKey: buttonKey,
-        tooltip: control.tooltip,
-        icon: control.icon,
-        onPressed: control.onPressed,
-        active: control.active,
-        danger: control.danger,
-      );
-
-  final Key buttonKey;
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool active;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    // The disabled shade matches the icon button theme's disabled colour.
-    final colour = onPressed == null
-        ? context.surfaces.muted.withValues(alpha: 0.38)
-        : danger
-        ? Theme.of(context).colorScheme.error
-        : active
-        ? Theme.of(context).colorScheme.onSurface
-        : context.surfaces.muted;
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        key: buttonKey,
-        borderRadius: FlucordRadius.small,
-        onTap: onPressed,
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: Center(child: Icon(icon, size: 16, color: colour)),
-        ),
+  /// "Voice connected" with the signal mark, and the room and server under
+  /// it. The room's name leads back to the room.
+  Widget _status(BuildContext context, String channelId, Color accent) {
+    final name = channelNameFor(channelId);
+    final server = serverNameFor?.call(channelId);
+    final room = Text(
+      switch ((name, server)) {
+        (final name?, final server?) => '$name / $server',
+        (final name?, null) => name,
+        (null, _) => 'Voice channel',
+      },
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: FlucordTextRole.caption.style.copyWith(
+        color: context.surfaces.captionText,
       ),
     );
+    final open = onOpenChannel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          spacing: 4,
+          children: [
+            FlucordIcon(FlucordIcons.signal, size: 16, color: accent),
+            Flexible(
+              child: Text(
+                voiceRoomStatusLabel(controller),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.style.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (open != null && name != null)
+          Tooltip(
+            message: 'Back to $name',
+            child: InkWell(
+              key: const ValueKey('voice-bar-open'),
+              borderRadius: FlucordRadius.small,
+              onTap: () => open(channelId),
+              child: room,
+            ),
+          )
+        else
+          room,
+      ],
+    );
   }
+
+  /// Go Live from the panel, the same share the room's own button starts.
+  VoiceControl _screenShare(BuildContext context, String channelId) =>
+      VoiceControl.screenShare(
+        GoLiveScope.maybeOf(context),
+        toggle: (goLive) => unawaited(
+          GoLiveButton.toggle(
+            goLive,
+            channelId: channelId,
+            guildId: controller.connectedGuildId,
+            pickSource: () =>
+                GoLiveDisplayDialog.pick(context, goLive.displays),
+          ),
+        ),
+      );
 }

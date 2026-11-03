@@ -44,6 +44,17 @@ abstract final class FlucordIcons {
     matchTextDirection: true,
   );
   static const hangUp = FlucordIconData(HugeIcons.strokeRoundedCallEnd01);
+  // The voice and user panels.
+  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
+  static const headphonesOff = FlucordIconData(
+    HugeIcons.strokeRoundedHeadphoneOff,
+  );
+  static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
+  static const screenShareOff = FlucordIconData(
+    HugeIcons.strokeRoundedScreenShareOff,
+    matchTextDirection: true,
+  );
+  static const activities = FlucordIconData(HugeIcons.strokeRoundedRocket01);
   static const add = FlucordIconData(HugeIcons.strokeRoundedAdd01);
   static const emoji = FlucordIconData(HugeIcons.strokeRoundedSmile);
   static const reply = FlucordIconData(
@@ -185,7 +196,6 @@ abstract final class FlucordIcons {
   static const policy = FlucordIconData(HugeIcons.strokeRoundedPolicy);
   static const help = FlucordIconData(HugeIcons.strokeRoundedHelpCircle);
   static const music = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
-  static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
 
   // Server settings pages.
   static const overview = FlucordIconData(
@@ -201,10 +211,6 @@ abstract final class FlucordIcons {
 
   // The channel list and its voice seats.
   static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
-  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
-  static const headphonesOff = FlucordIconData(
-    HugeIcons.strokeRoundedHeadphoneOff,
-  );
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

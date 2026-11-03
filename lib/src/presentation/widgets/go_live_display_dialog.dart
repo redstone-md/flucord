@@ -15,6 +15,26 @@ class GoLiveDisplayDialog extends StatelessWidget {
 
   final List<GoLiveDisplay> displays;
 
+  /// Asks which of [displays] to share, answering null when dismissed. One
+  /// screen is shared without asking.
+  ///
+  /// The displays come from the encoder, not from a capture library. WebRTC's
+  /// enumeration opens duplications of its own to build thumbnails with, and
+  /// Windows refuses a second duplication of a display something already
+  /// holds, which is what turned every share into "that display is no longer
+  /// attached".
+  static Future<String?> pick(
+    BuildContext context,
+    List<GoLiveDisplay> displays,
+  ) async {
+    if (displays.length <= 1) return displays.firstOrNull?.sourceId;
+    final picked = await showDialog<GoLiveDisplay>(
+      context: context,
+      builder: (_) => GoLiveDisplayDialog(displays: displays),
+    );
+    return picked?.sourceId;
+  }
+
   @override
   Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('go-live-display-dialog'),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../application/self_video_controller.dart';
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
@@ -543,6 +544,6 @@ class _VoiceToolbar extends StatelessWidget {
               : Theme.of(context).colorScheme.onSurface,
           side: BorderSide(color: context.surfaces.border),
         ),
-        icon: Icon(control.icon),
+        icon: FlucordIcon(control.icon),
       );
 }

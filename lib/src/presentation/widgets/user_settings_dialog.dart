@@ -46,6 +46,22 @@ import 'theme_section.dart';
 import 'voice_devices_section.dart';
 import 'flucord_button.dart';
 import 'settings_layout.dart';
+import 'accessibility_scope.dart';
+import 'account_connections_scope.dart';
+import 'account_data_package_scope.dart';
+import 'account_entitlements_scope.dart';
+import 'account_standing_scope.dart';
+import 'age_verification_scope.dart';
+import 'app_authorisation_scope.dart';
+import 'auth_session_scope.dart';
+import 'family_centre_scope.dart';
+import 'keybind_scope.dart';
+import 'multi_factor_auth_scope.dart';
+import 'stream_quality_scope.dart';
+import 'streamer_mode_scope.dart';
+import 'theme_scope.dart';
+import 'user_profile_scope.dart';
+import 'voice_scope.dart';
 
 /// The two groups the navigation lists pages under.
 enum UserSettingsGroup {
@@ -188,6 +204,32 @@ class UserSettingsDialog extends StatefulWidget {
 
   /// The audio devices, which belong to the machine like the themes do.
   final VoiceController? voiceController;
+
+  /// Opens settings with every controller the scopes above [context]
+  /// publish. Where the gear lives, nothing is threaded down to it.
+  static Future<void> showFromScopes(
+    BuildContext context, {
+    required UserSettingsController controller,
+  }) => show(
+    context,
+    controller: controller,
+    profileController: UserProfileScope.maybeOf(context),
+    standingController: AccountStandingScope.maybeOf(context),
+    familyController: FamilyCentreScope.maybeOf(context),
+    sessionController: AuthSessionScope.maybeOf(context),
+    connectionsController: AccountConnectionsScope.maybeOf(context),
+    entitlementsController: AccountEntitlementsScope.maybeOf(context),
+    dataPackageController: AccountDataPackageScope.maybeOf(context),
+    appAuthorisationController: AppAuthorisationScope.maybeOf(context),
+    mfaController: MultiFactorAuthScope.maybeOf(context),
+    ageController: AgeVerificationScope.maybeOf(context),
+    keybindController: KeybindScope.maybeOf(context),
+    streamerModeController: StreamerModeScope.maybeOf(context),
+    accessibilityController: AccessibilityScope.maybeOf(context),
+    streamQualityController: StreamQualityScope.maybeOf(context),
+    themeController: ThemeScope.maybeOf(context),
+    voiceController: VoiceScope.maybeOf(context),
+  );
 
   static Future<void> show(
     BuildContext context, {

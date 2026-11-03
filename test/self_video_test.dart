@@ -554,7 +554,7 @@ void main() {
       );
       await tester.tap(button);
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.videocam), findsNothing);
+      expect(find.byTooltip('Turn camera off'), findsNothing);
     });
 
     testWidgets('the button turns the camera on and back off', (tester) async {
@@ -567,12 +567,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('voice-bar-camera')));
       await tester.pumpAndSettle();
       expect(camera.isOn, isTrue);
-      expect(find.byIcon(Icons.videocam), findsOneWidget);
+      expect(find.byTooltip('Turn camera off'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('voice-bar-camera')));
       await tester.pumpAndSettle();
       expect(camera.isOn, isFalse);
-      expect(find.byIcon(Icons.videocam_off_outlined), findsOneWidget);
+      expect(find.byTooltip('Turn camera on'), findsOneWidget);
     });
   });
 }

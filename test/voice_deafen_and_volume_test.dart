@@ -3,10 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/theme/flucord_icons.dart';
+
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
 const _friend = 'friend-1';
@@ -107,7 +110,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byTooltip('Undeafen'), findsOneWidget);
-      expect(find.byIcon(Icons.headset_off), findsOneWidget);
+      expect(findFlucordIcon(FlucordIcons.headphonesOff), findsOneWidget);
       expect(find.text('Voice connected, deafened'), findsOneWidget);
     });
 

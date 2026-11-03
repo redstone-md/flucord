@@ -13,7 +13,9 @@ void main() {
   ({Color? barrier, Color? background}) topDialog(WidgetTester tester) {
     final dialog = find.byType(Dialog).last;
     return (
-      barrier: tester.widget<ModalBarrier>(find.byType(ModalBarrier).last).color,
+      barrier: tester
+          .widget<ModalBarrier>(find.byType(ModalBarrier).last)
+          .color,
       background: tester
           .widget<Material>(
             find.descendant(of: dialog, matching: find.byType(Material)).first,
@@ -33,7 +35,7 @@ void main() {
   ) async {
     final seen = <String, ({Color? barrier, Color? background})>{};
 
-    await tester.tap(find.byTooltip('User settings'));
+    await tester.tap(find.byKey(const ValueKey('account-settings')));
     await session.settle();
     final settings = find.byType(Dialog).last;
     // The Dialog widget always spans the window; its frame is the Material.
