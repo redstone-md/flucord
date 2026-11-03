@@ -161,7 +161,7 @@ void main() {
       expect(selected, 'All');
       expect(
         tester.getSemantics(find.widgetWithText(FlucordTab, 'All')),
-        containsSemantics(isSelected: true, isButton: true),
+        isSemantics(isSelected: true, isButton: true),
       );
     });
   });
