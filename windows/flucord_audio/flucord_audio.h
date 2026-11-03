@@ -84,7 +84,7 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
                                 int32_t automatic_gain_control,
                                 FlucordAudioEnhancer** out_enhancer);
 
-// The step an enhancer's open failed at, read with
+// The step an enhancer's open or frame failed at, read with
 // flucord_audio_mic_enhancer_failure.
 typedef enum FlucordAudioEnhancerStage {
   FLUCORD_AUDIO_ENHANCER_STAGE_NONE = 0,
@@ -100,9 +100,16 @@ typedef enum FlucordAudioEnhancerStage {
   FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS = 5,
   // Starting the loopback capture of the speakers.
   FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK = 6,
+  // Handing a frame of the microphone to the DMO.
+  FLUCORD_AUDIO_ENHANCER_STAGE_MICROPHONE_INPUT = 7,
+  // Handing a frame of the speakers to the DMO.
+  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT = 8,
+  // Reading the enhanced frame back.
+  FLUCORD_AUDIO_ENHANCER_STAGE_OUTPUT = 9,
 } FlucordAudioEnhancerStage;
 
-// Why the most recent flucord_audio_open_mic_enhancer failed: the step, as a
+// Why the most recent flucord_audio_open_mic_enhancer or
+// flucord_audio_enhance_frame failed: the step, as a
 // FlucordAudioEnhancerStage, and the HRESULT Windows answered. NONE after an
 // open that succeeded, and after one refused before any step (bad arguments,
 // or no memory for the enhancer).
