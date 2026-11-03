@@ -467,22 +467,43 @@ bool FillFrame(EnhancerState* state,
 }
 
 // Sets one DMO property, answering whether it took.
-bool SetProperty(IPropertyStore* store, REFPROPERTYKEY key, int value) {
+HRESULT SetProperty(IPropertyStore* store, REFPROPERTYKEY key, int value) {
   PROPVARIANT held = {};
   held.vt = VT_I4;
   held.lVal = value;
   const HRESULT result = store->SetValue(key, held);
   PropVariantClear(&held);
-  return SUCCEEDED(result);
+  return result;
 }
 
-bool SetProperty(IPropertyStore* store, REFPROPERTYKEY key, bool value) {
+HRESULT SetProperty(IPropertyStore* store, REFPROPERTYKEY key, bool value) {
   PROPVARIANT held = {};
   held.vt = VT_BOOL;
   held.boolVal = value ? VARIANT_TRUE : VARIANT_FALSE;
   const HRESULT result = store->SetValue(key, held);
   PropVariantClear(&held);
-  return SUCCEEDED(result);
+  return result;
+}
+
+// Why the last open of an enhancer failed: the step, and what Windows
+// answered. One open fails as a whole, so one record is enough; the lock is
+// for the caller reading it from another thread than the open ran on.
+struct EnhancerFailure {
+  std::mutex lock;
+  int32_t stage = FLUCORD_AUDIO_ENHANCER_STAGE_NONE;
+  int32_t result = 0;
+};
+
+EnhancerFailure& LastEnhancerFailure() {
+  static EnhancerFailure failure;
+  return failure;
+}
+
+void RecordEnhancerFailure(int32_t stage, HRESULT result) {
+  EnhancerFailure& failure = LastEnhancerFailure();
+  std::lock_guard<std::mutex> guard(failure.lock);
+  failure.stage = stage;
+  failure.result = static_cast<int32_t>(result);
 }
 
 }  // namespace
@@ -511,6 +532,9 @@ FLUCORD_AUDIO_EXPORT FlucordAudioStatus
 flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
                                 int32_t automatic_gain_control,
                                 FlucordAudioEnhancer** out_enhancer) {
+  // Cleared first, so a refusal before any step is never read as the reason
+  // an earlier open gave.
+  RecordEnhancerFailure(FLUCORD_AUDIO_ENHANCER_STAGE_NONE, S_OK);
   if (out_enhancer == nullptr ||
       (echo_cancellation == 0 && automatic_gain_control == 0)) {
     return FLUCORD_AUDIO_ERROR_STATE;
@@ -522,57 +546,57 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
   if (enhancer == nullptr) return FLUCORD_AUDIO_ERROR_STATE;
   EnhancerState* state = &enhancer->state;
 
+  // Every refusal below is a device answer, not a broken state: the stages
+  // cannot run on this machine right now. Which step refused, and with what,
+  // is kept for flucord_audio_mic_enhancer_failure.
+  const auto fail = [enhancer](int32_t stage, HRESULT hr) {
+    RecordEnhancerFailure(stage, hr);
+    AbandonEnhancer(enhancer);
+    return FLUCORD_AUDIO_ERROR_DEVICE;
+  };
+
   // The thread the record package's frames arrive on has an apartment of
   // the runner's choosing; the DMO is in-process and takes it as it is.
   // Only a thread with none gets one here, and only that one takes it down.
   const HRESULT apartment = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   state->com_up = SUCCEEDED(apartment);
   if (FAILED(apartment) && apartment != RPC_E_CHANGED_MODE) {
-    delete enhancer;
-    return FLUCORD_AUDIO_ERROR_DEVICE;
+    return fail(FLUCORD_AUDIO_ENHANCER_STAGE_APARTMENT, apartment);
   }
 
-  // A machine whose voice stages cannot be created is a machine whose
-  // microphone cannot be enhanced: a device answer, not a broken state.
   HRESULT hr = CoCreateInstance(kVoiceCaptureClsid, nullptr,
                                 CLSCTX_INPROC_SERVER,
                                 IID_PPV_ARGS(&state->dmo));
-  if (FAILED(hr) || state->dmo == nullptr) {
-    AbandonEnhancer(enhancer);
-    return FLUCORD_AUDIO_ERROR_DEVICE;
-  }
-  hr = state->dmo.As(&state->properties);
-  if (FAILED(hr) || state->properties == nullptr) {
-    AbandonEnhancer(enhancer);
-    return FLUCORD_AUDIO_ERROR_DEVICE;
-  }
+  if (SUCCEEDED(hr)) hr = state->dmo.As(&state->properties);
+  if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_CREATE, hr);
 
   // Filter mode, the stages wanted, and nothing else: the DMO's own noise
   // suppression stays off because DeepFilterNet already owns noise at the
   // same place in the pipeline.
-  const bool configured =
-      SetProperty(state->properties.Get(), kSourceMode, false) &&
-      SetProperty(state->properties.Get(), kSystemMode,
-                  echo_cancellation ? kModeEchoCancellation
-                                    : kModeNoiseAndGain) &&
-      SetProperty(state->properties.Get(), kFeatureMode, true) &&
-      SetProperty(state->properties.Get(), kFeatureNoiseSuppression, false) &&
-      SetProperty(state->properties.Get(), kFeatureAutomaticGain,
-                  automatic_gain_control != 0);
-  if (!configured) {
-    AbandonEnhancer(enhancer);
-    return FLUCORD_AUDIO_ERROR_DEVICE;
+  IPropertyStore* properties = state->properties.Get();
+  hr = SetProperty(properties, kSourceMode, false);
+  if (SUCCEEDED(hr)) {
+    hr = SetProperty(properties, kSystemMode,
+                     echo_cancellation ? kModeEchoCancellation
+                                       : kModeNoiseAndGain);
   }
+  if (SUCCEEDED(hr)) hr = SetProperty(properties, kFeatureMode, true);
+  if (SUCCEEDED(hr)) {
+    hr = SetProperty(properties, kFeatureNoiseSuppression, false);
+  }
+  if (SUCCEEDED(hr)) {
+    hr = SetProperty(properties, kFeatureAutomaticGain,
+                     automatic_gain_control != 0);
+  }
+  if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_CONFIGURE, hr);
 
   // Both streams and the answer are 16 kHz mono 16-bit.
   const PcmMediaType internal(kInternalRate, 1);
-  if (FAILED(state->dmo->SetInputType(0, internal.get(), 0)) ||
-      FAILED(state->dmo->SetInputType(1, internal.get(), 0)) ||
-      FAILED(state->dmo->SetOutputType(0, internal.get(), 0)) ||
-      FAILED(state->dmo->AllocateStreamingResources())) {
-    AbandonEnhancer(enhancer);
-    return FLUCORD_AUDIO_ERROR_DEVICE;
-  }
+  hr = state->dmo->SetInputType(0, internal.get(), 0);
+  if (SUCCEEDED(hr)) hr = state->dmo->SetInputType(1, internal.get(), 0);
+  if (SUCCEEDED(hr)) hr = state->dmo->SetOutputType(0, internal.get(), 0);
+  if (SUCCEEDED(hr)) hr = state->dmo->AllocateStreamingResources();
+  if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_FORMAT, hr);
 
   // The speaker line: what the machine is playing, looped back from the
   // render endpoint. The room's voices come out of this process, and a
@@ -581,22 +605,24 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
   if (echo_cancellation) {
     ComPtr<IMMDeviceEnumerator> enumerator;
     ComPtr<IMMDevice> device;
-    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
-                                CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) ||
-        FAILED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole,
-                                                  &device)) ||
-        FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
-                                &state->loopback_client))) {
-      AbandonEnhancer(enhancer);
-      return FLUCORD_AUDIO_ERROR_DEVICE;
+    hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                          IID_PPV_ARGS(&enumerator));
+    if (SUCCEEDED(hr)) {
+      hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
     }
+    if (SUCCEEDED(hr)) {
+      hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                            &state->loopback_client);
+    }
+    if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS, hr);
     WAVEFORMATEX* format = nullptr;
-    if (FAILED(state->loopback_client->GetMixFormat(&format)) ||
-        format == nullptr || format->nSamplesPerSec == 0) {
-      CoTaskMemFree(format);
-      AbandonEnhancer(enhancer);
-      return FLUCORD_AUDIO_ERROR_DEVICE;
+    hr = state->loopback_client->GetMixFormat(&format);
+    if (SUCCEEDED(hr) && (format == nullptr || format->nSamplesPerSec == 0)) {
+      hr = E_UNEXPECTED;
     }
+    // Held by the state from here, so the abandon frees it on every exit.
+    state->loopback_format = format;
+    if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS, hr);
     hr = state->loopback_client->Initialize(
         AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 10000000, 0,
         format, nullptr);
@@ -604,22 +630,23 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
       hr = state->loopback_client->GetService(
           IID_PPV_ARGS(&state->loopback_capture));
     }
-    if (SUCCEEDED(hr)) {
-      hr = state->loopback_client->Start();
-    }
-    if (FAILED(hr)) {
-      CoTaskMemFree(format);
-      AbandonEnhancer(enhancer);
-      return FLUCORD_AUDIO_ERROR_DEVICE;
-    }
+    if (SUCCEEDED(hr)) hr = state->loopback_client->Start();
+    if (FAILED(hr)) return fail(FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK, hr);
     state->speaker_step =
         static_cast<double>(kInternalRate) / format->nSamplesPerSec;
-    state->loopback_format = format;
   }
 
   enhancer->opened = true;
   *out_enhancer = enhancer;
   return FLUCORD_AUDIO_OK;
+}
+
+FLUCORD_AUDIO_EXPORT void
+flucord_audio_mic_enhancer_failure(int32_t* out_stage, int32_t* out_result) {
+  EnhancerFailure& failure = LastEnhancerFailure();
+  std::lock_guard<std::mutex> guard(failure.lock);
+  if (out_stage != nullptr) *out_stage = failure.stage;
+  if (out_result != nullptr) *out_result = failure.result;
 }
 
 FLUCORD_AUDIO_EXPORT FlucordAudioStatus

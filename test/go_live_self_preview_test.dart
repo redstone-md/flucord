@@ -99,10 +99,14 @@ void main() {
   );
 
   test(
-    'a dropped access unit holds the last whole picture until a keyframe',
+    'a dropped access unit holds the last whole picture and asks for a keyframe',
     () async {
       final decoder = FakeVideoDecoder();
-      final preview = GoLiveSelfPreview(decoderFactory: () => decoder);
+      var clock = Duration.zero;
+      final preview = GoLiveSelfPreview(
+        decoderFactory: () => decoder,
+        now: () => clock,
+      );
       addTearDown(preview.dispose);
       final encoded = StreamController<EncodedVideoFrame>.broadcast();
       addTearDown(encoded.close);
@@ -119,17 +123,23 @@ void main() {
       expect(seen, [Duration.zero]);
 
       // The decode fell behind and threw a unit away: everything built on it
-      // is wrong, both what is still queued and what comes next.
+      // is wrong, both what is still queued and what comes next. The encoder
+      // is asked for the keyframe that mends it, rather than the tile
+      // standing still until the next one of the encoder's own.
       decoder.drop(1);
       await Future<void>.delayed(Duration.zero);
+      expect(asked, 1);
       decoder.emit(_pictureAt(_ms(16)));
       encoded.add(_frame(keyframe: false, timestamp: _ms(33)));
       await Future<void>.delayed(Duration.zero);
       expect(seen, [Duration.zero]);
       expect(decoder.submitted, hasLength(2));
-      // The encoder's next keyframe mends it; one asked for early would cost
-      // every viewer a full picture for the sender's own tile.
-      expect(asked, 0);
+
+      // A second drop while that keyframe is on its way asks no second one.
+      clock = _ms(500);
+      decoder.drop(2);
+      await Future<void>.delayed(Duration.zero);
+      expect(asked, 1);
 
       // A picture still in the queue when the keyframe arrives is older than
       // it, and stays hidden; the keyframe's own picture is the first shown.
@@ -140,6 +150,19 @@ void main() {
       decoder.emit(_pictureAt(_ms(50)));
       await Future<void>.delayed(Duration.zero);
       expect(seen, [Duration.zero, _ms(50)]);
+
+      // A drop a second later is a new break, and asks again.
+      clock = _ms(1600);
+      decoder.drop(3);
+      await Future<void>.delayed(Duration.zero);
+      expect(asked, 2);
+
+      // A new share starts its own count: its first drop asks at once, even
+      // within a second of the last share's ask.
+      await preview.start(encoded.stream, requestKeyframe: () async => asked++);
+      decoder.drop(4);
+      await Future<void>.delayed(Duration.zero);
+      expect(asked, 3);
     },
   );
 

@@ -84,6 +84,31 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
                                 int32_t automatic_gain_control,
                                 FlucordAudioEnhancer** out_enhancer);
 
+// The step an enhancer's open failed at, read with
+// flucord_audio_mic_enhancer_failure.
+typedef enum FlucordAudioEnhancerStage {
+  FLUCORD_AUDIO_ENHANCER_STAGE_NONE = 0,
+  // COM on the calling thread.
+  FLUCORD_AUDIO_ENHANCER_STAGE_APARTMENT = 1,
+  // Creating the Windows voice capture DMO.
+  FLUCORD_AUDIO_ENHANCER_STAGE_CREATE = 2,
+  // Choosing its mode and stages.
+  FLUCORD_AUDIO_ENHANCER_STAGE_CONFIGURE = 3,
+  // Its input and output formats, and its streaming resources.
+  FLUCORD_AUDIO_ENHANCER_STAGE_FORMAT = 4,
+  // Finding the default speakers and their format.
+  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS = 5,
+  // Starting the loopback capture of the speakers.
+  FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK = 6,
+} FlucordAudioEnhancerStage;
+
+// Why the most recent flucord_audio_open_mic_enhancer failed: the step, as a
+// FlucordAudioEnhancerStage, and the HRESULT Windows answered. NONE after an
+// open that succeeded, and after one refused before any step (bad arguments,
+// or no memory for the enhancer).
+FLUCORD_AUDIO_EXPORT void
+flucord_audio_mic_enhancer_failure(int32_t* out_stage, int32_t* out_result);
+
 // Enhances one frame of interleaved 16-bit PCM in place. samples holds
 // sample_count_per_channel samples on each of channels interleaved channels.
 FLUCORD_AUDIO_EXPORT FlucordAudioStatus

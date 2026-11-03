@@ -58,7 +58,30 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
        ),
        _close = library.lookupFunction<_CloseEnhancerNative, _CloseEnhancer>(
          'flucord_audio_close_mic_enhancer',
-       );
+       ),
+       _failure = _lookUpFailure(library);
+
+  /// Absent in a module built before an open said why it failed.
+  static _EnhancerFailure? _lookUpFailure(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<_EnhancerFailureNative, _EnhancerFailure>(
+        'flucord_audio_mic_enhancer_failure',
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  /// The steps of an open, by the number the module reports them with.
+  static const List<String> _stages = [
+    'none',
+    'COM',
+    'voice capture stages',
+    'stage settings',
+    'stage formats',
+    'default speakers',
+    'speaker loopback',
+  ];
 
   /// The module handed in rather than opened, so a test can drive the
   /// real thing against a build it controls.
@@ -81,6 +104,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final _OpenEnhancer _open;
   final _EnhanceFrame _enhance;
   final _CloseEnhancer _close;
+  final _EnhancerFailure? _failure;
 
   Pointer<Void>? _enhancer;
   Pointer<Int16>? _scratch;
@@ -116,11 +140,36 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
         out,
       );
       if (status != 0) {
-        throw StateError('The machine could not open its echo and gain stages');
+        throw StateError(
+          'The machine could not open its echo and gain stages'
+          '${_describeFailure()}',
+        );
       }
       return _enhancer = out.value;
     } finally {
       calloc.free(out);
+    }
+  }
+
+  /// Which step of the open failed and what Windows answered, as a suffix
+  /// for the error, or empty when the module cannot say.
+  String _describeFailure() {
+    final failure = _failure;
+    if (failure == null) return '';
+    final stage = calloc<Int32>();
+    final result = calloc<Int32>();
+    try {
+      failure(stage, result);
+      // No step recorded: the open refused before reaching one.
+      if (stage.value == 0) return '';
+      final name = stage.value < _stages.length
+          ? _stages[stage.value]
+          : 'step ${stage.value}';
+      final code = result.value.toUnsigned(32).toRadixString(16);
+      return ' ($name, 0x$code)';
+    } finally {
+      calloc.free(stage);
+      calloc.free(result);
     }
   }
 
@@ -153,3 +202,5 @@ typedef _EnhanceFrameNative =
 typedef _EnhanceFrame = int Function(Pointer<Void>, Pointer<Int16>, int, int);
 typedef _CloseEnhancerNative = Void Function(Pointer<Void>);
 typedef _CloseEnhancer = void Function(Pointer<Void>);
+typedef _EnhancerFailureNative = Void Function(Pointer<Int32>, Pointer<Int32>);
+typedef _EnhancerFailure = void Function(Pointer<Int32>, Pointer<Int32>);
