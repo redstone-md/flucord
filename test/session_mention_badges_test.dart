@@ -115,7 +115,7 @@ bool _rowLooksUnread(WidgetTester tester, String channelId, String name) {
       matching: find.text(name),
     ),
   );
-  return text.style!.fontWeight == FontWeight.w600;
+  return text.style!.fontWeight == FontWeight.w500;
 }
 
 Iterable<Uri> _acksOf(SessionHarness session, String channelId) => session

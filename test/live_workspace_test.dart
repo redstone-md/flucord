@@ -122,7 +122,7 @@ void main() {
       await session.settle();
 
       expect(_channelRow(_newDmId), findsOneWidget);
-      expect(_rowWeight(tester, _newDmId, 'Stranger'), FontWeight.w600);
+      expect(_rowWeight(tester, _newDmId, 'Stranger'), FontWeight.w500);
     });
 
     testSession('a message right behind its new channel is not lost', (
@@ -221,7 +221,7 @@ void main() {
         _dispatchedChannel(id: _randomId, name: 'renamed'),
       );
 
-      expect(_rowWeight(tester, _randomId, 'renamed'), FontWeight.w600);
+      expect(_rowWeight(tester, _randomId, 'renamed'), FontWeight.w500);
     });
 
     testSession(
@@ -425,7 +425,7 @@ void main() {
           tester.getTopLeft(_railButton(_guildId)).dy,
           lessThan(tester.getTopLeft(_railButton(_secondGuildId)).dy),
         );
-        expect(_rowWeight(tester, _randomId, 'random'), FontWeight.w600);
+        expect(_rowWeight(tester, _randomId, 'random'), FontWeight.w500);
       },
       ready: {
         ...SessionHarness.defaultReady(),

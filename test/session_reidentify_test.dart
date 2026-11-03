@@ -231,7 +231,7 @@ void main() {
         );
 
         final name = tester.widget<Text>(find.text('new'));
-        expect(name.style?.fontWeight, FontWeight.w600);
+        expect(name.style?.fontWeight, FontWeight.w500);
       },
     );
   });
