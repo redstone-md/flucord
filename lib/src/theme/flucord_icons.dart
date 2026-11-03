@@ -95,6 +95,14 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedNotificationOff01,
   );
   static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
+
+  // The channel list and its voice seats.
+  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
+  static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
+  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
+  static const headphonesOff = FlucordIconData(
+    HugeIcons.strokeRoundedHeadphoneOff,
+  );
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
