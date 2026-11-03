@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/session_harness.dart';
 
@@ -15,6 +17,8 @@ void main() {
   final sidebar = find.byKey(const ValueKey('channel-sidebar'));
 
   Finder inCard(Finder finder) => find.descendant(of: card, matching: finder);
+  Container containerOf(WidgetTester tester, Finder finder) =>
+      tester.widget<Container>(finder);
 
   testSession('chat and the member list sit in the card, navigation does not', (
     tester,
@@ -34,5 +38,72 @@ void main() {
     expect(cardRect.right, window.width - 8);
     expect(cardRect.bottom, window.height - 8);
     expect(cardRect.left, tester.getRect(sidebar).right);
+  }, size: window);
+
+  testSession(
+    'the card is the canvas, with a thin border and clipped corners',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      final surfaces = tester.element(card).surfaces;
+      final look = containerOf(tester, card);
+
+      expect(
+        look.decoration,
+        BoxDecoration(
+          color: surfaces.canvas,
+          borderRadius: FlucordRadius.large,
+        ),
+      );
+      expect(
+        look.foregroundDecoration,
+        BoxDecoration(
+          border: Border.all(color: surfaces.border),
+          borderRadius: FlucordRadius.large,
+        ),
+      );
+      expect(look.clipBehavior, isNot(Clip.none));
+    },
+    size: window,
+  );
+
+  testSession('the rail and the channel sidebar share the rail, no lines', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(SessionHarness.channelId);
+    final surfaces = tester.element(card).surfaces;
+
+    for (final navigation in [rail, sidebar]) {
+      expect(
+        containerOf(tester, navigation).decoration,
+        BoxDecoration(color: surfaces.rail),
+      );
+    }
+    expect(tester.getRect(rail).right, tester.getRect(sidebar).left);
+  }, size: window);
+
+  testSession('with the member list hidden, the chat fills the card', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(SessionHarness.channelId);
+    await tester.tap(find.byKey(const ValueKey('toggle-members')));
+    await session.settle();
+
+    expect(find.byType(MemberSidebar), findsNothing);
+    expect(tester.getRect(find.byType(ConversationPane)), tester.getRect(card));
+  }, size: window);
+
+  testSession('a direct message opens inside the card too', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(
+      SessionHarness.dmChannelId,
+      space: 'direct-messages',
+    );
+
+    expect(inCard(find.byType(ConversationPane)), findsOneWidget);
+    expect(tester.getRect(find.byType(ConversationPane)), tester.getRect(card));
   }, size: window);
 }

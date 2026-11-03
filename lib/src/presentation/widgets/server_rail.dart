@@ -78,10 +78,7 @@ class ServerRail extends StatelessWidget {
     return Container(
       key: const ValueKey('server-rail'),
       width: 72,
-      decoration: BoxDecoration(
-        color: context.surfaces.rail,
-        border: Border(right: BorderSide(color: context.surfaces.border)),
-      ),
+      decoration: BoxDecoration(color: context.surfaces.rail),
       child: Column(
         children: [
           const SizedBox(height: 12),
