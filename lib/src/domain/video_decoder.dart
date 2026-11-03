@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
-/// One decoded picture from somebody else's stream.
+/// One decoded picture, as pixels. Only the probe tool reads these: the app
+/// draws decoded video on textures (ADR-0009).
 final class DecodedVideoFrame {
   const DecodedVideoFrame({
     required this.pixels,
@@ -21,25 +22,6 @@ final class DecodedVideoFrame {
 
   /// Whether the buffer holds what the dimensions claim.
   bool get isComplete => pixels.length == expectedLength;
-
-  /// Whether there is a picture in here worth drawing.
-  ///
-  /// A decoder that has been handed nothing usable still produces a buffer,
-  /// and an all-zero one is not black — converted from YUV with no chroma it
-  /// comes out a flat, violent green, which is what the room was showing in
-  /// place of an avatar. Sampled rather than scanned: a full pass over a 4K
-  /// frame, thirty times a second, to answer one question is not worth it,
-  /// and a picture with content has it everywhere.
-  bool get hasPicture {
-    if (!isComplete || pixels.isEmpty) return false;
-    // A few hundred samples spread across the buffer, whatever its size: a
-    // fixed stride reads one byte of a thumbnail and thousands of a 4K frame.
-    final stride = (pixels.length / 256).ceil().clamp(1, pixels.length);
-    for (var index = 0; index < pixels.length; index += stride) {
-      if (pixels[index] != 0) return true;
-    }
-    return pixels.last != 0;
-  }
 }
 
 /// A texture a decoder draws on, as it is now: the id a `Texture` widget
@@ -89,7 +71,8 @@ abstract interface class VideoDecoder {
   Future<void> stop();
 }
 
-/// A decoder that hands every picture over as pixels.
+/// A decoder that hands every picture over as pixels, for the probe tool to
+/// check what a decoder actually produced.
 abstract interface class VideoDecoderService implements VideoDecoder {
   /// Pictures, in the order they decode.
   Stream<DecodedVideoFrame> get frames;

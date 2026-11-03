@@ -7,6 +7,7 @@ import '../domain/video_decoder.dart';
 import '../domain/voice_audio.dart';
 import '../monotonic_clock.dart';
 import 'stream_picture_pacer.dart';
+import 'video_texture_feed.dart';
 import 'voice_audio_receiver.dart';
 
 /// One RTP payload as it arrives from a stream connection.
@@ -45,20 +46,18 @@ typedef WatchedSessionStats = ({
 
   /// Whole pictures handed to the decoder.
   int pictures,
-
-  /// Pictures the decoder produced.
-  int decodedFrames,
   int pacerOverflows,
 });
 
-/// Turns one watched session's packets into paced pictures and sound.
+/// Turns one watched session's packets into paced pictures, drawn on a
+/// texture (ADR-0009), and sound.
 ///
 /// Everything between a packet and a decoded frame is this module's:
 /// reassembly, group decryption once per picture (ADR-0005), the verdict that
 /// the decoder's references are broken, the keyframe ask and its rate limit,
 /// the pacer, the decoder's lifetime across suspension (ADR-0003), and the
 /// session's audio receiver. It knows nothing about stream keys, rooms, or
-/// Discord: the caller hands it packets and reads frames.
+/// Discord: the caller hands it packets and shows its texture.
 ///
 /// Decoding on or off is the seam for whoever decides when pictures are worth
 /// making: suspension (ADR-0003), and whether a tile draws them. Off lets go of
@@ -67,7 +66,7 @@ typedef WatchedSessionStats = ({
 /// decoded and the first picture back is a keyframe.
 final class WatchedSessionPipeline {
   WatchedSessionPipeline({
-    required VideoDecoderService Function() decoderFactory,
+    required VideoTextureDecoder Function() decoderFactory,
     VideoPictureGroupDecryptor? groupDecryptor,
     WatchedSessionAudio? audio,
     void Function()? requestKeyframe,
@@ -77,7 +76,7 @@ final class WatchedSessionPipeline {
     void Function()? onDrawnChanged,
     Duration Function()? now,
     bool paced = true,
-  }) : _frames = StreamController.broadcast(
+  }) : _textures = VideoTextureFeed(
          onListen: onDrawnChanged,
          onCancel: onDrawnChanged,
        ),
@@ -103,7 +102,7 @@ final class WatchedSessionPipeline {
     }
   }
 
-  final VideoDecoderService Function() _decoderFactory;
+  final VideoTextureDecoder Function() _decoderFactory;
   final VideoPictureGroupDecryptor? _groupDecryptor;
   final WatchedSessionAudio? _audio;
 
@@ -119,21 +118,21 @@ final class WatchedSessionPipeline {
   /// camera tiles, which are small, few, and expected to be live.
   final bool _paced;
 
-  final StreamController<DecodedVideoFrame> _frames;
+  final VideoTextureFeed _textures;
   final StreamController<String> _audioEnded = StreamController.broadcast();
 
   VoiceAudioReceiver? _audioReceiver;
   StreamSubscription<Object>? _audioErrors;
-  VideoDecoderService? _decoder;
+  VideoTextureDecoder? _decoder;
   DiscordVideoPictureReceiver? _receiver;
   StreamPicturePacer? _pacer;
-  StreamSubscription<DecodedVideoFrame>? _decoderFrames;
+  StreamSubscription<VideoTexture>? _decoderTextures;
   StreamSubscription<int>? _decoderDrops;
 
   /// Decoders still opening. One let go meanwhile is stopped once its start
   /// has answered, not while it runs: a decoder whose handle lands after the
   /// stop would be left open.
-  final Set<VideoDecoderService> _opening = {};
+  final Set<VideoTextureDecoder> _opening = {};
 
   /// Set when a picture was lost, dropped, or never decoded, and cleared only
   /// by an IDR: in between, every picture that opens is drawn from references
@@ -144,17 +143,17 @@ final class WatchedSessionPipeline {
 
   int _receivedPackets = 0;
   int _pictures = 0;
-  int _decodedFrames = 0;
   int _pacerOverflows = 0;
 
-  /// Pictures, in decode order, whichever decoder is behind them.
-  ///
-  /// One object for the life of the session, so a tile that listens again when
-  /// its stream changes identity keeps its subscription across rebuilds.
-  late final Stream<DecodedVideoFrame> frames = _frames.stream;
+  /// The texture the session is drawn on, whichever decoder is behind it
+  /// (see [VideoTextureFeed]). Listening is what [isDrawn] reads.
+  Stream<VideoTexture?> get textures => _textures.stream;
 
-  /// Whether anything is listening on [frames].
-  bool get isDrawn => _frames.hasListener;
+  /// The texture as it is now, or null while there is no picture.
+  VideoTexture? get texture => _textures.current;
+
+  /// Whether anything is listening on [textures].
+  bool get isDrawn => _textures.hasListener;
 
   /// Decoded screen-share audio, tagged with the session's source id.
   Stream<VoiceRemotePcmFrame> get pcm =>
@@ -166,7 +165,6 @@ final class WatchedSessionPipeline {
   WatchedSessionStats get stats => (
     receivedPackets: _receivedPackets,
     pictures: _pictures,
-    decodedFrames: _decodedFrames,
     pacerOverflows: _pacerOverflows,
   );
 
@@ -230,13 +228,7 @@ final class WatchedSessionPipeline {
     // Whatever the decoder had before is gone with it: the first picture it
     // draws has to be a keyframe.
     _referencesBroken = true;
-    _decoderFrames = decoder.frames.listen((frame) {
-      _decodedFrames++;
-      if (_decodedFrames == 1 || _decodedFrames % 300 == 0) {
-        _diagnose('decoder frames: $_decodedFrames (pictures $_pictures)');
-      }
-      if (!_frames.isClosed) _frames.add(frame);
-    });
+    _decoderTextures = decoder.textures.listen(_textures.show);
     _decoderDrops = decoder.droppedAccessUnits.listen((dropped) {
       // A dropped access unit breaks the chain just like a lost picture,
       // even though every packet arrived.
@@ -275,11 +267,11 @@ final class WatchedSessionPipeline {
       _pacer = null;
       // Locals, for the same reason _release reads into locals: the awaits
       // below can overlap a fresh install.
-      final frames = _decoderFrames;
+      final textures = _decoderTextures;
       final drops = _decoderDrops;
-      _decoderFrames = null;
+      _decoderTextures = null;
       _decoderDrops = null;
-      await frames?.cancel();
+      await textures?.cancel();
       await drops?.cancel();
       rethrow;
     } finally {
@@ -300,7 +292,7 @@ final class WatchedSessionPipeline {
     final audio = _audio;
     if (audio != null) _audioEnded.add(audio.sourceId);
     await _audioEnded.close();
-    await _frames.close();
+    await _textures.close();
   }
 
   /// Lets go of what turns packets into pictures. The decoder is stopped
@@ -314,18 +306,20 @@ final class WatchedSessionPipeline {
   /// and its pictures smearing until a random keyframe.
   Future<void> _release() async {
     final decoder = _decoder;
-    final frames = _decoderFrames;
+    final textures = _decoderTextures;
     final drops = _decoderDrops;
     _decoder = null;
     _receiver = null;
-    _decoderFrames = null;
+    _decoderTextures = null;
     _decoderDrops = null;
+    // The texture goes back with the decoder.
+    _textures.show(null);
     // Disposing flushes what the pacer holds into the decoder before it
     // stops, rather than dropping pictures that already arrived.
     _pacer?.dispose();
     _pacer = null;
     final stopping = _opening.contains(decoder) ? null : decoder?.stop();
-    await frames?.cancel();
+    await textures?.cancel();
     await drops?.cancel();
     await stopping;
   }

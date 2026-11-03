@@ -3,23 +3,18 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/domain/video_decoder.dart';
 
-/// A decoder that records what it was handed and emits a picture, or a
-/// texture, when a test says so. Failures are opted into per test.
-final class FakeVideoDecoder
-    implements VideoDecoderService, VideoTextureDecoder {
+/// A decoder that records what it was handed and shows a texture when a
+/// test says so. Failures are opted into per test.
+final class FakeVideoDecoder implements VideoTextureDecoder {
   FakeVideoDecoder({this.supported = true, this.failStart = false});
 
   final bool supported;
   final bool failStart;
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
   final StreamController<VideoTexture> _textures = StreamController.broadcast();
   final StreamController<int> _drops = StreamController.broadcast();
   final List<Uint8List> submitted = [];
   int started = 0;
   int stopped = 0;
-
-  void emit(DecodedVideoFrame frame) => _frames.add(frame);
 
   void show(VideoTexture texture) => _textures.add(texture);
 
@@ -28,9 +23,6 @@ final class FakeVideoDecoder
 
   @override
   bool get isSupported => supported;
-
-  @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
 
   @override
   Stream<VideoTexture> get textures => _textures.stream;

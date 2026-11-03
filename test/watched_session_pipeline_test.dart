@@ -44,13 +44,8 @@ final Uint8List _pFrame = Uint8List.fromList([
   ...List.filled(8, 0xbb),
 ]);
 
-/// One small picture, as a decoder hands it out.
-final DecodedVideoFrame _picture = DecodedVideoFrame(
-  pixels: Uint8List.fromList([1, 2, 3, 4]),
-  width: 1,
-  height: 1,
-  timestamp: Duration.zero,
-);
+/// The texture a decoder draws on, once it has a picture.
+const _texture = VideoTexture(id: 3, width: 1280, height: 720);
 
 /// The packets [unit] becomes on the wire.
 List<IncomingVideoPacket> _packets(Uint8List unit, {int rtpTimestamp = 0}) => [
@@ -306,36 +301,45 @@ void main() {
     expect(made.first.submitted, isEmpty);
   });
 
-  test('the frames it exposes follow the decoder across suspension', () async {
-    final made = <_FakeDecoder>[];
-    final pipeline = WatchedSessionPipeline(
-      decoderFactory: () {
-        final decoder = _FakeDecoder();
-        made.add(decoder);
-        return decoder;
-      },
-    );
-    addTearDown(pipeline.close);
-    final drawn = <DecodedVideoFrame>[];
-    final frames = pipeline.frames.listen(drawn.add);
-    addTearDown(frames.cancel);
+  test(
+    'the texture it exposes follows the decoder across suspension',
+    () async {
+      final made = <_FakeDecoder>[];
+      final pipeline = WatchedSessionPipeline(
+        decoderFactory: () {
+          final decoder = _FakeDecoder();
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(pipeline.close);
+      final drawn = <VideoTexture?>[];
+      final textures = pipeline.textures.listen(drawn.add);
+      addTearDown(textures.cancel);
 
-    await pipeline.setDecoding(true);
-    made.single.emit(_picture);
-    await _flush();
-    expect(drawn, hasLength(1));
+      await pipeline.setDecoding(true);
+      made.single.show(_texture);
+      await _flush();
+      expect(drawn, [_texture]);
 
-    await pipeline.setDecoding(false);
-    await pipeline.setDecoding(true);
-    made.first.emit(_picture);
-    made.last.emit(_picture);
-    await _flush();
+      // The texture goes back with the decoder that drew on it.
+      await pipeline.setDecoding(false);
+      await _flush();
+      expect(drawn, [_texture, null]);
+      expect(pipeline.texture, isNull);
 
-    // One subscription for the room, whichever decoder is behind it, and
-    // nothing from the one that was let go.
-    expect(drawn, hasLength(2));
-    expect(pipeline.stats.decodedFrames, 2);
-  });
+      const fresh = VideoTexture(id: 4, width: 1280, height: 720);
+      await pipeline.setDecoding(true);
+      made.first.show(_texture);
+      made.last.show(fresh);
+      await _flush();
+
+      // One subscription for the room, whichever decoder is behind it, and
+      // nothing from the one that was let go.
+      expect(drawn, [_texture, null, fresh]);
+      expect(pipeline.texture, fresh);
+    },
+  );
 
   test(
     'a release racing a fresh install leaves the new subscriptions in',
@@ -351,9 +355,9 @@ void main() {
         requestKeyframe: () => asks++,
       );
       addTearDown(pipeline.close);
-      final drawn = <DecodedVideoFrame>[];
-      final frames = pipeline.frames.listen(drawn.add);
-      addTearDown(frames.cancel);
+      final drawn = <VideoTexture?>[];
+      final textures = pipeline.textures.listen(drawn.add);
+      addTearDown(textures.cancel);
 
       await pipeline.setDecoding(true);
 
@@ -366,15 +370,15 @@ void main() {
       await reopen;
       expect(made, hasLength(2));
 
-      // A drop the new decoder made reaches the keyframe ask, and its frames
-      // reach the room: both subscriptions are still the new decoder's.
+      // A drop the new decoder made reaches the keyframe ask, and its texture
+      // reaches the room: both subscriptions are still the new decoder's.
       made.last.drop(1);
       await _flush();
       expect(asks, 1);
 
-      made.last.emit(_picture);
+      made.last.show(_texture);
       await _flush();
-      expect(drawn, hasLength(1));
+      expect(drawn.last, _texture);
     },
   );
 
@@ -561,21 +565,20 @@ void main() {
   });
 }
 
-final class _FakeDecoder implements VideoDecoderService {
+final class _FakeDecoder implements VideoTextureDecoder {
   _FakeDecoder({this.failStart = false, this.startGate});
 
   final bool failStart;
 
   /// Held shut so a test can act while the decoder is still opening.
   final Completer<void>? startGate;
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
+  final StreamController<VideoTexture> _textures = StreamController.broadcast();
   final StreamController<int> _drops = StreamController.broadcast();
   final List<Uint8List> submitted = [];
   int started = 0;
   int stopped = 0;
 
-  void emit(DecodedVideoFrame frame) => _frames.add(frame);
+  void show(VideoTexture texture) => _textures.add(texture);
 
   void drop(int total) => _drops.add(total);
 
@@ -583,7 +586,7 @@ final class _FakeDecoder implements VideoDecoderService {
   bool get isSupported => true;
 
   @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
+  Stream<VideoTexture> get textures => _textures.stream;
 
   @override
   Stream<int> get droppedAccessUnits => _drops.stream;

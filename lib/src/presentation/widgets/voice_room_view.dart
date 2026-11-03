@@ -31,8 +31,7 @@ class VoiceRoomView extends StatefulWidget {
     this.streamViewer,
     this.streams,
     this.listening,
-    this.cameraFrameFor,
-    this.cameraFramesFor,
+    this.cameraTextureFor,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
@@ -50,13 +49,8 @@ class VoiceRoomView extends StatefulWidget {
   final List<Member> members;
   final String currentMemberId;
 
-  /// The latest picture from a participant's camera, when one is
-  /// arriving.
-  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
-
-  /// Where a participant's camera pictures arrive from now on, for the tile
-  /// that is already showing one.
-  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
+  /// The texture a participant's camera is drawn on, when it has a picture.
+  final VideoTexture? Function(String userId)? cameraTextureFor;
 
   /// The stage strip, or null for an ordinary voice channel.
   final Widget? stageControls;
@@ -163,8 +157,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 members: widget.members,
                 currentMemberId: widget.currentMemberId,
                 spaceId: widget.spaceId,
-                cameraFrameFor: widget.cameraFrameFor,
-                cameraFramesFor: widget.cameraFramesFor,
+                cameraTextureFor: widget.cameraTextureFor,
               ),
             ),
             _VoiceToolbar(
@@ -277,8 +270,7 @@ class _VoiceStage extends StatelessWidget {
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
-    this.cameraFrameFor,
-    this.cameraFramesFor,
+    this.cameraTextureFor,
     this.streams,
     this.listening,
     this.focusedUserId,
@@ -286,13 +278,8 @@ class _VoiceStage extends StatelessWidget {
     this.onClearFocus,
   });
 
-  /// The latest picture from a participant's camera, when one is
-  /// arriving.
-  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
-
-  /// Where a participant's camera pictures arrive from now on, for the tile
-  /// that is already showing one.
-  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
+  /// The texture a participant's camera is drawn on, when it has a picture.
+  final VideoTexture? Function(String userId)? cameraTextureFor;
   final String? focusedUserId;
   final void Function(String userId)? onTapParticipant;
   final VoidCallback? onClearFocus;
@@ -325,8 +312,7 @@ class _VoiceStage extends StatelessWidget {
           members: members,
           currentMemberId: currentMemberId,
           spaceId: spaceId,
-          cameraFrameFor: cameraFrameFor,
-          cameraFramesFor: cameraFramesFor,
+          cameraTextureFor: cameraTextureFor,
           streams: streams,
           listening: listening,
           onTapParticipant: onTapParticipant,
@@ -351,8 +337,7 @@ class _VoiceStage extends StatelessWidget {
                   members: members,
                   currentMemberId: currentMemberId,
                   spaceId: spaceId,
-                  cameraFrameFor: cameraFrameFor,
-                  cameraFramesFor: cameraFramesFor,
+                  cameraTextureFor: cameraTextureFor,
                   streams: streams,
                   onTap: onTapParticipant,
                   size: VoiceParticipantTileSize.stage,

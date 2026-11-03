@@ -6,6 +6,7 @@ import '../app_log.dart';
 import '../domain/video_decoder.dart';
 import '../domain/video_encoder.dart';
 import '../monotonic_clock.dart';
+import 'video_texture_feed.dart';
 import 'window_visible.dart';
 
 /// The picture a sender sees of their own share.
@@ -45,35 +46,17 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   }) : _decoderFactory = decoderFactory,
        _window = window,
        _now = now ?? monotonicNow {
-    _textures = StreamController.broadcast(
-      onListen: _wanted,
-      onCancel: _unwanted,
-    );
-    // Each listener hears the current texture first: a tile that moves from
-    // the grid to the stage listens again before the old one lets go, and
-    // the texture is only announced when its size changes.
-    textures = Stream.multi((listener) {
-      final current = _current;
-      if (current != null) listener.add(current);
-      listener.addStream(_textures.stream).whenComplete(listener.close);
-    });
+    _textures = VideoTextureFeed(onListen: _wanted, onCancel: _unwanted);
     _window?.addListener(_windowChanged);
   }
 
   final VideoTextureDecoder Function() _decoderFactory;
   final WindowVisible? _window;
   final Duration Function() _now;
-  late final StreamController<VideoTexture?> _textures;
+  late final VideoTextureFeed _textures;
 
-  /// The texture the running share is drawn on: the current one when a tile
-  /// starts listening, then each change. Null while there is no picture to
-  /// draw, including after the decoder closed and gave its texture back.
-  ///
-  /// One object for the life of the preview, so a tile that re-listens when
-  /// its stream changes identity keeps its subscription across rebuilds.
-  late final Stream<VideoTexture?> textures;
-
-  VideoTexture? _current;
+  /// The texture the running share is drawn on (see [VideoTextureFeed]).
+  Stream<VideoTexture?> get textures => _textures.stream;
 
   /// The running share's output, while there is one.
   ({
@@ -186,7 +169,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       await decoder.stop();
       return;
     }
-    _decoded = decoder.textures.listen(_show);
+    _decoded = decoder.textures.listen(_textures.show);
     _drops = decoder.droppedAccessUnits.listen((_) {
       final now = _now();
       final last = _lastDropAsk;
@@ -209,16 +192,10 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     });
   }
 
-  void _show(VideoTexture? texture) {
-    if (texture == _current) return;
-    _current = texture;
-    if (!_textures.isClosed) _textures.add(texture);
-  }
-
   Future<void> _close() async {
     final decoder = _decoder;
     _decoder = null;
-    _show(null);
+    _textures.show(null);
     // Not awaited: a broadcast subscription's cancel completes on the root
     // zone, and awaiting it from inside a widget test's fake clock strands
     // everything after it.

@@ -26,7 +26,7 @@ const int maxWatchedStreams = 4;
 final class StreamViewerController extends ChangeNotifier {
   StreamViewerController({
     required GoLiveRepository? Function() repositoryProvider,
-    required VideoDecoderService Function() decoderFactory,
+    required VideoTextureDecoder Function() decoderFactory,
     void Function(GoLiveStreamKey key)? onWatchStopped,
 
     /// Decodes screen-share audio for watched sessions, when the build can.
@@ -37,7 +37,7 @@ final class StreamViewerController extends ChangeNotifier {
        _audioDecoderFactory = audioDecoderFactory;
 
   final GoLiveRepository? Function() _repositoryProvider;
-  final VideoDecoderService Function() _decoderFactory;
+  final VideoTextureDecoder Function() _decoderFactory;
 
   /// Told which key was stopped, so whoever holds the connection drops it.
   ///
@@ -123,14 +123,13 @@ final class StreamViewerController extends ChangeNotifier {
   /// it until the window is back (ADR-0003).
   bool get isSuspended => _suspended;
 
-  /// Pictures from [key]'s stream.
+  /// The texture [key]'s stream is drawn on (ADR-0009).
   ///
   /// Per key rather than one stream for the room: the stage draws one session,
   /// and which one changes. Listening is what opens the session's decoder, and
   /// the last listener leaving lets it go (ADR-0003).
-  Stream<DecodedVideoFrame> framesFor(GoLiveStreamKey key) =>
-      _sessions[key]?.pipeline.frames ??
-      const Stream<DecodedVideoFrame>.empty();
+  Stream<VideoTexture?> texturesFor(GoLiveStreamKey key) =>
+      _sessions[key]?.pipeline.textures ?? const Stream<VideoTexture?>.empty();
 
   /// Audio from watched sessions, for the room output (ADR-0004).
   Stream<VoiceRemotePcmFrame> get audio => _pcm.stream;
@@ -255,7 +254,7 @@ final class StreamViewerController extends ChangeNotifier {
   ///
   /// Used once the stream connection is up: the ask already went out, and
   /// repeating it would open a second one. Nothing is decoded until a tile
-  /// listens on [framesFor]. Answers whether the session is held.
+  /// listens on [texturesFor]. Answers whether the session is held.
   Future<bool> attach(
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
@@ -535,7 +534,7 @@ final class StreamViewerController extends ChangeNotifier {
       // The first picture is news to the room: the stream went from arriving
       // to showing. Every picture after it is not, and telling the room about
       // each one rebuilt its widget tree at the stream's frame rate. The
-      // pictures themselves travel on [framesFor].
+      // texture itself travels on [texturesFor].
       onFirstPicture: () {
         _diagnose('first picture handed to the decoder for ${key.userId}');
         _notify();

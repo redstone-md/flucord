@@ -17,7 +17,6 @@ import 'domain/navigation_memory.dart';
 import 'domain/soundboard_playback.dart';
 import 'domain/stream_quality.dart';
 import 'domain/streamer_mode.dart';
-import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
 import 'domain/voice_media.dart';
@@ -59,7 +58,6 @@ class AppBootstrap {
     this.soundboardAudioPlayer,
     this.messageSpeechPlayer,
     this.videoEncoderService,
-    this.videoDecoderService,
     this.keybindRepository,
     this.themeStore,
     this.streamerModeRepository,
@@ -118,9 +116,6 @@ class AppBootstrap {
 
   /// Overridden in tests, which have no display to capture.
   final VideoEncoderService? videoEncoderService;
-
-  /// Overridden in tests, which have no decoder to open.
-  final VideoDecoderService? videoDecoderService;
 
   /// Where the keybinds are kept. Injected so a test does not write into
   /// the real support directory.

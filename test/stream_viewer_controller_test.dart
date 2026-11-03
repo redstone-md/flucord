@@ -14,13 +14,8 @@ import 'support/fake_voice_audio.dart';
 const _key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'them');
 const _other = GoLiveStreamKey.guild(guildId: 'g', channelId: 'c', userId: 'u');
 
-/// One small picture, as a decoder hands it to whatever draws it.
-final DecodedVideoFrame _picture = DecodedVideoFrame(
-  pixels: Uint8List.fromList([1, 2, 3, 4]),
-  width: 1,
-  height: 1,
-  timestamp: Duration.zero,
-);
+/// The texture a decoder draws on, once it has a picture.
+const _texture = VideoTexture(id: 3, width: 1280, height: 720);
 
 /// The packets one small access unit becomes, as a stream connection would
 /// deliver them.
@@ -376,20 +371,13 @@ void main() {
     addTearDown(decoder.close);
     await controller.watch(_key, packets: const Stream.empty());
 
-    final seen = <DecodedVideoFrame>[];
-    final subscription = controller.framesFor(_key).listen(seen.add);
+    final seen = <VideoTexture?>[];
+    final subscription = controller.texturesFor(_key).listen(seen.add);
     addTearDown(subscription.cancel);
-    decoder.emit(
-      DecodedVideoFrame(
-        pixels: Uint8List(16),
-        width: 2,
-        height: 2,
-        timestamp: Duration.zero,
-      ),
-    );
+    decoder.show(const VideoTexture(id: 1, width: 2, height: 2));
     await Future<void>.delayed(Duration.zero);
 
-    expect(seen.single.width, 2);
+    expect(seen.single?.width, 2);
   });
 
   group('asking first, decoding later', () {
@@ -1017,10 +1005,10 @@ void main() {
         await controller.watch(_key, packets: packets.stream);
         // Drawing, while the window is being looked at: what the room reads is
         // this decoder's pictures.
-        final drawn = <DecodedVideoFrame>[];
-        final frames = controller.framesFor(_key).listen(drawn.add);
+        final drawn = <VideoTexture?>[];
+        final frames = controller.texturesFor(_key).listen(drawn.add);
         addTearDown(frames.cancel);
-        made.single.emit(_picture);
+        made.single.show(_texture);
         await Future<void>.delayed(Duration.zero);
         expect(drawn, hasLength(1));
         for (final packet in _packetsFor()) {
@@ -1046,7 +1034,7 @@ void main() {
         // being let go does to a decoder.
         await frames.cancel();
         drawn.clear();
-        final afterSuspension = controller.framesFor(_key).listen(drawn.add);
+        final afterSuspension = controller.texturesFor(_key).listen(drawn.add);
         addTearDown(afterSuspension.cancel);
         for (final packet in _packetsFor()) {
           packets.add(packet);
@@ -1140,10 +1128,10 @@ void main() {
       expect(controller.decodedUnitsFor(_key), 0);
 
       // What the room draws from is the new decoder's pictures again.
-      final drawn = <DecodedVideoFrame>[];
-      final frames = controller.framesFor(_key).listen(drawn.add);
+      final drawn = <VideoTexture?>[];
+      final frames = controller.texturesFor(_key).listen(drawn.add);
       addTearDown(frames.cancel);
-      made.last.emit(_picture);
+      made.last.show(_texture);
       await Future<void>.delayed(Duration.zero);
       expect(drawn, hasLength(1));
 
@@ -1345,11 +1333,11 @@ void main() {
 
       // The room draws from the one that is left, and nothing reaches it from
       // the one that was shut.
-      final drawn = <DecodedVideoFrame>[];
-      final frames = controller.framesFor(_key).listen(drawn.add);
+      final drawn = <VideoTexture?>[];
+      final frames = controller.texturesFor(_key).listen(drawn.add);
       addTearDown(frames.cancel);
-      made[1].emit(_picture);
-      made[2].emit(_picture);
+      made[1].show(_texture);
+      made[2].show(_texture);
       await Future<void>.delayed(Duration.zero);
       expect(drawn, hasLength(1));
 
@@ -1500,10 +1488,10 @@ void main() {
   });
 }
 
-/// What a tile does: listens for [key]'s pictures, which is what opens the
+/// What a tile does: listens for [key]'s texture, which is what opens the
 /// session's decoder.
 void _draw(StreamViewerController controller, GoLiveStreamKey key) {
-  final tile = controller.framesFor(key).listen(null);
+  final tile = controller.texturesFor(key).listen(null);
   addTearDown(tile.cancel);
 }
 
@@ -1540,7 +1528,7 @@ List<GoLiveStreamKey> _roomKeys() => [
     GoLiveStreamKey.call(channelId: 'dm-1', userId: 'u$index'),
 ];
 
-final class _FakeDecoder implements VideoDecoderService {
+final class _FakeDecoder implements VideoTextureDecoder {
   _FakeDecoder({this.supported = true, this.failStart = false, this.startGate});
 
   final bool supported;
@@ -1549,21 +1537,20 @@ final class _FakeDecoder implements VideoDecoderService {
   /// Held shut so a test can act while a decoder is still opening, which is
   /// the window every ask can be withdrawn in.
   final Completer<void>? startGate;
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
+  final StreamController<VideoTexture> _textures = StreamController.broadcast();
   final List<Uint8List> submitted = [];
   int started = 0;
   int stopped = 0;
 
-  void emit(DecodedVideoFrame frame) => _frames.add(frame);
+  void show(VideoTexture texture) => _textures.add(texture);
 
-  Future<void> close() => _frames.close();
+  Future<void> close() => _textures.close();
 
   @override
   bool get isSupported => supported;
 
   @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
+  Stream<VideoTexture> get textures => _textures.stream;
 
   @override
   Stream<int> get droppedAccessUnits => const Stream.empty();

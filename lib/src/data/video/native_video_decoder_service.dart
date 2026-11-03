@@ -81,8 +81,8 @@ abstract base class _NativeDecoderProxy implements VideoDecoder {
   }
 }
 
-/// Decodes a Go Live stream through `flucord_video.dll` and hands every
-/// picture over as pixels.
+/// Decodes through `flucord_video.dll` and hands every picture over as
+/// pixels. Used by the probe tool; the app decodes onto textures.
 final class NativeVideoDecoderService extends _NativeDecoderProxy
     implements VideoDecoderService {
   NativeVideoDecoderService({super.libraryPath});

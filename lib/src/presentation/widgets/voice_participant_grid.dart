@@ -17,8 +17,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
-    this.cameraFrameFor,
-    this.cameraFramesFor,
+    this.cameraTextureFor,
     this.streams,
     this.onTapParticipant,
     this.compact = false,
@@ -35,13 +34,8 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// off it. Null where the room has no stage to put them on.
   final void Function(String userId)? onTapParticipant;
 
-  /// The latest picture from a participant's camera, when one is arriving.
-  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
-
-  /// Where a participant's camera pictures arrive from now on, for the tile
-  /// that is already showing one: the pictures go to their tile alone
-  /// instead of rebuilding the room around it.
-  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
+  /// The texture a participant's camera is drawn on, when it has a picture.
+  final VideoTexture? Function(String userId)? cameraTextureFor;
 
   /// The streams this client has open, and the controls a tile offers for
   /// them. Null where the room was drawn without a stream plane at all.
@@ -111,8 +105,7 @@ class VoiceParticipantGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final participant = participants[index];
         return VoiceParticipantTile(
-          cameraFrameFor: cameraFrameFor,
-          cameraFramesFor: cameraFramesFor,
+          cameraTextureFor: cameraTextureFor,
           participant: participant,
           members: members,
           currentMemberId: currentMemberId,
@@ -141,8 +134,7 @@ class VoiceParticipantTile extends StatelessWidget {
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
-    this.cameraFrameFor,
-    this.cameraFramesFor,
+    this.cameraTextureFor,
     this.streams,
     this.listening,
     this.onTap,
@@ -154,11 +146,7 @@ class VoiceParticipantTile extends StatelessWidget {
   final List<Member> members;
   final String currentMemberId;
   final String spaceId;
-  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
-
-  /// Where this participant's camera pictures arrive from now on, for the
-  /// tile that is already showing one.
-  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
+  final VideoTexture? Function(String userId)? cameraTextureFor;
   final VoiceStreamControls? streams;
 
   /// This participant's volume control, or null where the tile has no room
@@ -175,8 +163,7 @@ class VoiceParticipantTile extends StatelessWidget {
       members.where((member) => member.id == participant.userId).firstOrNull ??
       _unknownMember(participant.userId);
 
-  DecodedVideoFrame? get cameraFrame =>
-      cameraFrameFor?.call(participant.userId);
+  VideoTexture? get cameraTexture => cameraTextureFor?.call(participant.userId);
 
   /// The sender's own picture, on the sender's own tile only (ADR-0001).
   VoiceSelfPreview? get selfPreview =>
@@ -258,16 +245,12 @@ class VoiceParticipantTile extends StatelessWidget {
                     child: _SelfPreview(preview: preview),
                   ),
                 )
-              else if (cameraFrame case final DecodedVideoFrame frame
-                  when frame.hasPicture)
+              else if (cameraTexture case final texture?)
                 Positioned.fill(
                   key: ValueKey('voice-camera-${participant.userId}'),
                   child: ClipRRect(
                     borderRadius: FlucordRadius.small,
-                    child: CameraPicture(
-                      frame: frame,
-                      frames: cameraFramesFor?.call(participant.userId),
-                    ),
+                    child: CameraPicture(texture: texture),
                   ),
                 )
               else
@@ -395,10 +378,11 @@ class _SelfPreview extends StatelessWidget {
         ),
       );
     }
-    return GoLiveTextureViewer(
+    return GoLiveViewer(
       key: const ValueKey('voice-self-preview'),
       textures: preview.textures,
       label: 'your stream',
+      showProgress: false,
     );
   }
 }

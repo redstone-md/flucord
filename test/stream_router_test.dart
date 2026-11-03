@@ -114,13 +114,13 @@ final class _Wiring {
   late final StreamViewerController viewer;
   late final DiscordStreamRtcService service;
   late final StreamRouter router;
-  StreamSubscription<DecodedVideoFrame>? _tile;
+  StreamSubscription<VideoTexture?>? _tile;
 
-  /// What a tile does: listens for [key]'s pictures, which is what opens the
+  /// What a tile does: listens for [key]'s texture, which is what opens the
   /// session's decoder.
   void draw(GoLiveStreamKey key) {
     unawaited(_tile?.cancel());
-    _tile = viewer.framesFor(key).listen(null);
+    _tile = viewer.texturesFor(key).listen(null);
   }
 
   /// Emits one small picture, as the capture would.
@@ -678,9 +678,8 @@ final class _FakeClient implements DiscordVoiceClient {
   }
 }
 
-final class _FakeDecoder implements VideoDecoderService {
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
+final class _FakeDecoder implements VideoTextureDecoder {
+  final StreamController<VideoTexture> _textures = StreamController.broadcast();
   final List<Uint8List> submitted = [];
 
   /// How many times this decoder was opened and shut: a session that is
@@ -688,13 +687,13 @@ final class _FakeDecoder implements VideoDecoderService {
   int started = 0;
   int stopped = 0;
 
-  Future<void> close() => _frames.close();
+  Future<void> close() => _textures.close();
 
   @override
   bool get isSupported => true;
 
   @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
+  Stream<VideoTexture> get textures => _textures.stream;
 
   @override
   Stream<int> get droppedAccessUnits => const Stream.empty();

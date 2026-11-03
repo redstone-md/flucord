@@ -69,17 +69,17 @@ milliseconds at a time, which reached the watcher as a freeze followed by a
 burst. The worker echoes each picture back to the hub, so the clip buffer
 keeps recording a stream and the self-preview has something to decode.
 
-Watching somebody else's stream runs on the same kind of isolate.
-`NativeVideoDecoderService` is a proxy: one worker isolate owns every decoder
-handle, opens it and answers whether that worked (a decoder that will not
-open becomes the watched session's error rather than a spinner), copies each
-decoded picture into a transferable buffer, reports each drop the moment the
-count grows so a keyframe is asked for at once, and closes the decoder. The
-close joins the decode thread, which used to run on the UI isolate and hitch
-the interface on every suspend, switch and leave. The main isolate hands
-access units over and receives pictures, and touches no native memory.
+Watching somebody else's stream runs on the same kind of isolate. Each
+decoder is a proxy: one worker isolate owns every decoder handle, opens it and
+answers whether that worked (a decoder that will not open becomes the watched
+session's error rather than a spinner), reports each drop the moment the count
+grows so a keyframe is asked for at once, and closes the decoder. The close
+joins the decode thread, which used to run on the UI isolate and hitch the
+interface on every suspend, switch and leave. The main isolate hands access
+units over and touches no native memory.
 
-The self-preview does not receive pictures at all (ADR-0009).
+Decoded pictures do not come back to Dart at all (ADR-0009). Watched streams,
+cameras and the self-preview all decode onto a texture.
 `NativeVideoTextureDecoder` asks the runner for a texture over
 `flucord/video_texture`. The runner makes a surface in `flucord_video.dll` (one
 shared Direct3D texture, on the adapter Flutter renders with) and registers it
