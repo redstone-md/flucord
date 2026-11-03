@@ -513,7 +513,10 @@ class _MessageItemState extends State<MessageItem> {
             onSelectChannel: widget.onSelectChannel,
           ),
         if (!widget.isEditing && message.body.isNotEmpty)
-          MessageInviteCards(body: message.body),
+          MessageInviteCards(
+            body: message.body,
+            sentByMe: widget.isCurrentUser,
+          ),
         for (var index = 0; index < message.snapshots.length; index++)
           Padding(
             padding: EdgeInsets.only(

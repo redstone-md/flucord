@@ -40,6 +40,29 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Join'));
     expect(opened, ['aurora'], reason: 'Join opens the existing join flow');
   });
+
+  testWidgets('an invite Discord refuses shows the invalid card in danger', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _row(
+        previewInvite: (_) async => throw const GuildAccessException(
+          refusal: GuildAccessRefusal.invalid,
+          message: 'This invite is not valid.',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('You sent an invite, but'), findsOneWidget);
+    expect(find.text('Try sending a new invite'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Join'), findsNothing);
+    final danger = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger;
+    final title = tester.widget<Text>(find.text('Invalid Invite'));
+    expect(title.style?.color, danger);
+    final hint = tester.widget<Text>(find.text('Try sending a new invite'));
+    expect(hint.style?.color, isNot(danger), reason: 'danger is only the tile');
+  });
 }
 
 final _messageText = find.textContaining('come hang out', findRichText: true);

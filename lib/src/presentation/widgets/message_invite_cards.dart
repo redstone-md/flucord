@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/channel_link.dart';
 import '../../domain/guild_management.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -12,13 +13,21 @@ import 'streamer_mode_scope.dart';
 
 /// The invite cards under a message's text, one per invite it links.
 ///
-/// Each card asks [GuildAccessScope.previewInvite] for its server. Nothing is
-/// drawn when the host cannot look invites up, and a lookup that fails in
-/// transit leaves only the link in the text.
+/// Each card asks [GuildAccessScope.previewInvite] for its server. An invite
+/// Discord refuses shows the invalid card. Nothing is drawn when the host
+/// cannot look invites up, and a lookup that fails in transit leaves only the
+/// link in the text.
 class MessageInviteCards extends StatelessWidget {
-  const MessageInviteCards({required this.body, super.key});
+  const MessageInviteCards({
+    required this.body,
+    required this.sentByMe,
+    super.key,
+  });
 
   final String body;
+
+  /// Whether this account wrote the message, which words the invalid card.
+  final bool sentByMe;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +45,7 @@ class MessageInviteCards extends StatelessWidget {
             key: ValueKey('invite-$code'),
             code: code,
             lookup: lookup,
+            sentByMe: sentByMe,
             onJoin: () => access.onOpenInvite(context, code),
           ),
       ],
@@ -48,12 +58,14 @@ class _InviteCard extends StatefulWidget {
   const _InviteCard({
     required this.code,
     required this.lookup,
+    required this.sentByMe,
     required this.onJoin,
     super.key,
   });
 
   final String code;
   final Future<InvitePreview> Function(String code) lookup;
+  final bool sentByMe;
   final VoidCallback onJoin;
 
   @override
@@ -72,11 +84,18 @@ class _InviteCardState extends State<_InviteCard> {
   @override
   Widget build(BuildContext context) => FutureBuilder(
     future: _preview,
-    builder: (context, snapshot) => switch (snapshot.data) {
-      final preview? => _InviteFrame(
+    builder: (context, snapshot) => switch ((snapshot.data, snapshot.error)) {
+      (final preview?, _) => _InviteFrame(
         child: _ValidInvite(preview: preview, onJoin: widget.onJoin),
       ),
-      null => const SizedBox.shrink(),
+      (
+        _,
+        GuildAccessException(
+          refusal: GuildAccessRefusal.invalid || GuildAccessRefusal.expired,
+        ),
+      ) =>
+        _InviteFrame(child: _InvalidInvite(sentByMe: widget.sentByMe)),
+      _ => const SizedBox.shrink(),
     },
   );
 }
@@ -204,6 +223,45 @@ class _ValidInvite extends StatelessWidget {
         ],
       ),
       action: FilledButton(onPressed: onJoin, child: const Text('Join')),
+    );
+  }
+}
+
+/// An invite Discord refused. Danger marks only the icon tile and the title.
+class _InvalidInvite extends StatelessWidget {
+  const _InvalidInvite({required this.sentByMe});
+
+  /// The tile's danger tint, as the account standing section uses.
+  static const _tileAlpha = 0.12;
+
+  final bool sentByMe;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return _InviteLayout(
+      caption: sentByMe
+          ? 'You sent an invite, but'
+          : 'You received an invite, but',
+      tile: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surfaces.danger.withValues(alpha: _tileAlpha),
+          borderRadius: FlucordRadius.large,
+        ),
+        child: Center(
+          child: FlucordIcon(FlucordIcons.mail, color: surfaces.danger),
+        ),
+      ),
+      title: Text(
+        'Invalid Invite',
+        style: FlucordTextRole.heading.style.copyWith(color: surfaces.danger),
+      ),
+      detail: Text(
+        'Try sending a new invite',
+        style: FlucordTextRole.caption.style.copyWith(
+          color: surfaces.captionText,
+        ),
+      ),
     );
   }
 }
