@@ -22,6 +22,15 @@ class FlucordIconButton extends StatelessWidget {
   static const size = 28.0;
   static const iconSize = 16.0;
 
+  /// The 28 px square, for an icon button this class does not draw, such as
+  /// a [PopupMenuButton]'s. Pair it with [iconSize].
+  static final squareStyle = IconButton.styleFrom(
+    fixedSize: const Size.square(size),
+    minimumSize: const Size.square(size),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   /// The fill behind a selected button.
   static const _selectedAlpha = 0.06;
 
@@ -43,11 +52,8 @@ class FlucordIconButton extends StatelessWidget {
       onPressed: onPressed,
       tooltip: tooltip,
       isSelected: selected,
-      constraints: const BoxConstraints.tightFor(width: size, height: size),
-      padding: EdgeInsets.zero,
       iconSize: iconSize,
-      style: ButtonStyle(
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      style: squareStyle.copyWith(
         foregroundColor: selected && color == null
             ? WidgetStatePropertyAll(surfaces.text)
             : null,

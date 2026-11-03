@@ -163,12 +163,7 @@ class ChatHeader extends StatelessWidget {
             tooltip: 'Choose channel',
             onSelected: onSelectChannel,
             iconSize: FlucordIconButton.iconSize,
-            style: IconButton.styleFrom(
-              fixedSize: const Size.square(FlucordIconButton.size),
-              minimumSize: const Size.square(FlucordIconButton.size),
-              padding: EdgeInsets.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
+            style: FlucordIconButton.squareStyle,
             itemBuilder: (context) => [
               for (final item in channels.where(
                 (item) => !item.isArchived || item.id == channel.id,
