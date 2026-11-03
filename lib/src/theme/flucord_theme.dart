@@ -198,9 +198,7 @@ abstract final class FlucordTheme {
         backgroundColor: surface,
         insetPadding: const EdgeInsets.all(24),
         shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.medium),
-        titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+        titleTextStyle: textTheme.titleLarge,
         contentTextStyle: textTheme.bodyMedium,
       ),
       tooltipTheme: TooltipThemeData(
@@ -208,7 +206,7 @@ abstract final class FlucordTheme {
           color: rail,
           borderRadius: FlucordRadius.small,
         ),
-        textStyle: TextStyle(color: text, fontSize: FlucordType.caption),
+        textStyle: FlucordTextRole.caption.style.copyWith(color: text),
         waitDuration: const Duration(milliseconds: 450),
       ),
       inputDecorationTheme: InputDecorationTheme(

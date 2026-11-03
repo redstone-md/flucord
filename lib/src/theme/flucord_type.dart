@@ -5,20 +5,24 @@ import 'package:flutter/material.dart';
 /// Every piece of text takes its size from this scale, so the interface has
 /// five sizes rather than one per widget. Nothing is under 12 px. The font
 /// dial in Accessibility then scales all of them together.
+///
+/// Hierarchy comes from weight and colour, not size. [FlucordTextRole] adds
+/// the line height and weight that go with each size.
 abstract final class FlucordType {
   /// Bundled with the app (see `assets/fonts/golos_text`), so text looks the
   /// same on Windows, macOS and Linux. A system font would exist on one of
   /// them. Its Cyrillic is drawn for interfaces: a `б` never reads as a `6`.
   static const family = 'Golos Text';
 
-  /// Timestamps, badges, counters, section labels and hints. The smallest.
+  /// Timestamps, activities, badges, group labels and hints. The smallest.
   static const caption = 12.0;
 
-  /// Controls, list rows, buttons and most interface text. The default.
-  static const label = 14.0;
+  /// Channel and member rows, buttons, menus and most interface text.
+  static const label = 13.0;
 
-  /// Message text and panel headings: what people read at length.
-  static const body = 16.0;
+  /// Message text and the composer: what people read at length. Headings
+  /// use this size too, in a heavier weight.
+  static const body = 14.0;
 
   /// Dialog and page titles.
   static const title = 20.0;
@@ -33,30 +37,73 @@ abstract final class FlucordType {
   static double fitting(double space) =>
       sizes.lastWhere((size) => size <= space, orElse: () => caption);
 
-  /// Material's text roles, each set to a size on the scale.
+  /// Material's text roles, each set to a role on the scale.
   ///
   /// Material widgets draw in these roles: a badge in `labelSmall`, helper
-  /// text in `bodySmall`, a field in `bodyLarge`. Material's own sizes run
-  /// from 11 to 57 px, so without this they would sit off the scale.
+  /// text in `bodySmall`, a field in `bodyLarge`, a button in `labelLarge`.
+  /// Material's own sizes run from 11 to 57 px, so without this they would
+  /// sit off the scale.
   static TextTheme textTheme(TextTheme base) {
-    TextStyle? sized(TextStyle? style, double size) =>
-        style?.copyWith(fontSize: size);
+    TextStyle? inRole(TextStyle? style, FlucordTextRole role) =>
+        style?.merge(role.style);
     return base.copyWith(
-      displayLarge: sized(base.displayLarge, display),
-      displayMedium: sized(base.displayMedium, display),
-      displaySmall: sized(base.displaySmall, display),
-      headlineLarge: sized(base.headlineLarge, display),
-      headlineMedium: sized(base.headlineMedium, display),
-      headlineSmall: sized(base.headlineSmall, display),
-      titleLarge: sized(base.titleLarge, title),
-      titleMedium: sized(base.titleMedium, body),
-      titleSmall: sized(base.titleSmall, label),
-      bodyLarge: sized(base.bodyLarge, body),
-      bodyMedium: sized(base.bodyMedium, label),
-      bodySmall: sized(base.bodySmall, caption),
-      labelLarge: sized(base.labelLarge, label),
-      labelMedium: sized(base.labelMedium, caption),
-      labelSmall: sized(base.labelSmall, caption),
+      displayLarge: inRole(base.displayLarge, FlucordTextRole.display),
+      displayMedium: inRole(base.displayMedium, FlucordTextRole.display),
+      displaySmall: inRole(base.displaySmall, FlucordTextRole.display),
+      headlineLarge: inRole(base.headlineLarge, FlucordTextRole.display),
+      headlineMedium: inRole(base.headlineMedium, FlucordTextRole.display),
+      headlineSmall: inRole(base.headlineSmall, FlucordTextRole.display),
+      titleLarge: inRole(base.titleLarge, FlucordTextRole.title),
+      titleMedium: inRole(base.titleMedium, FlucordTextRole.heading),
+      titleSmall: inRole(base.titleSmall, FlucordTextRole.heading),
+      bodyLarge: inRole(base.bodyLarge, FlucordTextRole.body),
+      bodyMedium: inRole(base.bodyMedium, FlucordTextRole.label),
+      bodySmall: inRole(base.bodySmall, FlucordTextRole.caption),
+      // A button's text is a label one weight step up.
+      labelLarge: inRole(
+        base.labelLarge,
+        FlucordTextRole.label,
+      )?.copyWith(fontWeight: FontWeight.w500),
+      labelMedium: inRole(base.labelMedium, FlucordTextRole.caption),
+      labelSmall: inRole(base.labelSmall, FlucordTextRole.caption),
     );
   }
+}
+
+/// A role on the type scale: a size, a line height and a weight.
+///
+/// Emphasis inside a role is one weight step, 400 to 500, never a size
+/// change. SemiBold (600) is kept for badge digits.
+enum FlucordTextRole {
+  caption(FlucordType.caption, 16),
+  label(FlucordType.label, 18),
+  body(FlucordType.body, 21),
+  heading(FlucordType.body, 20, FontWeight.w500),
+  title(FlucordType.title, 26, FontWeight.w500),
+  display(FlucordType.display, 30, FontWeight.w500);
+
+  const FlucordTextRole(
+    this.size,
+    this.lineHeight, [
+    this.weight = FontWeight.w400,
+  ]);
+
+  final double size;
+
+  /// The height of one line in pixels, as Figma gives it.
+  final double lineHeight;
+
+  final FontWeight weight;
+
+  /// The role as a style. The extra line space is shared evenly above and
+  /// below the text, as Figma and CSS do, so a 14/21 line sits where the
+  /// design puts it.
+  TextStyle get style => TextStyle(
+    fontFamily: FlucordType.family,
+    fontSize: size,
+    height: lineHeight / size,
+    fontWeight: weight,
+    letterSpacing: 0,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
 }

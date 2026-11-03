@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 import 'support/contrast.dart';
 
@@ -217,6 +218,58 @@ void main() {
       expectReadable(theme, surfaces.link, 4.5);
       expectReadable(theme, surfaces.errorText, 4.5);
       expectReadable(theme, surfaces.focusRing, 3);
+    });
+  });
+
+  group('the type scale', () {
+    final text = FlucordTheme.dark.textTheme;
+
+    // Size, line height and weight of each role, as the spec lists them.
+    void expectRole(TextStyle? style, double size, double line, int weight) {
+      expect(style!.fontSize, size);
+      expect(style.fontSize! * style.height!, closeTo(line, 0.01));
+      expect(style.fontWeight!.value, weight);
+    }
+
+    test('caption is 12/16 regular', () {
+      expectRole(text.bodySmall, 12, 16, 400);
+      expectRole(text.labelSmall, 12, 16, 400);
+    });
+
+    test('label is 13/18, medium on buttons', () {
+      expectRole(text.bodyMedium, 13, 18, 400);
+      expectRole(text.labelLarge, 13, 18, 500);
+    });
+
+    test('body is 14/21 regular', () {
+      expectRole(text.bodyLarge, 14, 21, 400);
+    });
+
+    test('heading is 14/20 medium', () {
+      expectRole(text.titleSmall, 14, 20, 500);
+      expectRole(text.titleMedium, 14, 20, 500);
+    });
+
+    test('title is 20/26 medium', () {
+      expectRole(text.titleLarge, 20, 26, 500);
+    });
+
+    test('display is 24/30 medium', () {
+      expectRole(text.headlineSmall, 24, 30, 500);
+      expectRole(text.displayLarge, 24, 30, 500);
+    });
+
+    test('a role sets its line like Figma does, half above and half below', () {
+      expect(text.bodyLarge!.leadingDistribution, TextLeadingDistribution.even);
+    });
+
+    test('every role is in the app font', () {
+      expect(text.bodyLarge!.fontFamily, FlucordType.family);
+      expect(text.titleLarge!.fontFamily, FlucordType.family);
+    });
+
+    test('the sizes on the scale, smallest first', () {
+      expect(FlucordType.sizes, [12, 13, 14, 20, 24]);
     });
   });
 
