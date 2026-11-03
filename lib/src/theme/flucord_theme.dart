@@ -25,6 +25,10 @@ abstract final class FlucordTheme {
         borderSide: BorderSide(color: color, width: width),
       );
 
+  /// How far a link moves from the accent toward the text colour. On a dark
+  /// theme that is a lighter tint: frame B's #A497F8 next to its #8B7CF6.
+  static const _linkTint = 0.25;
+
   static ThemeData get dark => fromPalette(FlucordPalette.dark);
 
   static ThemeData get light => fromPalette(FlucordPalette.light);
@@ -302,7 +306,7 @@ abstract final class FlucordTheme {
           mention: mention,
           danger: danger,
           offline: offline,
-          link: readableText(brand),
+          link: readableText(Color.lerp(brand, text, _linkTint)!),
           errorText: errorText,
           accentIcon: focusRing,
           focusRing: focusRing,
@@ -369,7 +373,8 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
   final Color danger;
   final Color offline;
 
-  /// Link text. Reaches 4.5:1 on every background of the theme.
+  /// Link text: the accent, a step toward the text colour. Reaches 4.5:1 on
+  /// every background of the theme.
   final Color link;
 
   /// Error text. Reaches 4.5:1 on every background of the theme.

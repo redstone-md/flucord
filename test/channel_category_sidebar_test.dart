@@ -6,7 +6,10 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets('collapses categories but retains selected and unread channels', (
@@ -43,12 +46,15 @@ void main() {
     expect(find.byKey(const ValueKey('channel-random')), findsOneWidget);
     expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
 
-    final mention = tester.widget<Container>(
-      find.byKey(const ValueKey('channel-mention-alerts')),
+    final mention = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byKey(const ValueKey('channel-mention-alerts')),
+        matching: find.byType(DecoratedBox),
+      ),
     );
     expect(
-      (mention.decoration! as BoxDecoration).color,
-      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.mention,
+      (mention.decoration as BoxDecoration).color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger,
     );
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
@@ -58,7 +64,7 @@ void main() {
     expect(find.byKey(const ValueKey('channel-general')), findsOneWidget);
     expect(find.byKey(const ValueKey('channel-alerts')), findsOneWidget);
     expect(find.byKey(const ValueKey('channel-random')), findsNothing);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(findFlucordIcon(FlucordIcons.chevronRight), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
     await tester.pump();

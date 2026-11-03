@@ -4,10 +4,13 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/notification_settings_menu.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 const _guildId = '111111111111111111';
 const _generalId = '222222222222222222';
@@ -234,7 +237,7 @@ void main() {
     expect(find.text('Active threads'), findsOneWidget);
     expect(find.text('Forums'), findsOneWidget);
     expect(find.text('Voice channels'), findsOneWidget);
-    expect(find.byIcon(Icons.perm_media_outlined), findsOneWidget);
+    expect(findFlucordIcon(FlucordIcons.image), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

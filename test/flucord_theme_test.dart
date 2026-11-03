@@ -276,10 +276,36 @@ void main() {
         FlucordPalette.dark.copyWith(brand: brand, danger: danger),
       ).extension<FlucordSurfaceTheme>()!;
 
-      expect(surfaces.link, const Color(brand));
       expect(surfaces.errorText, const Color(danger));
       expect(surfaces.accentIcon, const Color(brand));
       expect(surfaces.focusRing, const Color(brand));
+    });
+
+    // Frame B draws links in #A497F8, a lighter tint of the #8B7CF6 accent.
+    test('links are a lighter tint of the accent', () {
+      final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+      const figma = Color(0xffa497f8);
+      int channel(double value) => (value * 255).round();
+
+      for (final (shown, wanted) in [
+        (surfaces.link.r, figma.r),
+        (surfaces.link.g, figma.g),
+        (surfaces.link.b, figma.b),
+      ]) {
+        expect(channel(shown), closeTo(channel(wanted), 4));
+      }
+    });
+
+    test('a theme\'s links keep its accent\'s hue, a step lighter', () {
+      const brand = Color(0xffffc0cb);
+      final surfaces = FlucordTheme.fromPalette(
+        FlucordPalette.dark.copyWith(brand: brand.toARGB32()),
+      ).extension<FlucordSurfaceTheme>()!;
+      final link = HSLColor.fromColor(surfaces.link);
+      final accent = HSLColor.fromColor(brand);
+
+      expect(link.hue, closeTo(accent.hue, 2));
+      expect(link.lightness, greaterThan(accent.lightness));
     });
 
     // A theme file may give a colour alpha. What people read is that colour

@@ -60,6 +60,9 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+  static const lightTheme = FlucordIconData(HugeIcons.strokeRoundedSun03);
+  static const darkTheme = FlucordIconData(HugeIcons.strokeRoundedMoon02);
+  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
   // Menu and popover actions.
   static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
   static const forward = FlucordIconData(
@@ -167,7 +170,6 @@ abstract final class FlucordIcons {
   static const policy = FlucordIconData(HugeIcons.strokeRoundedPolicy);
   static const help = FlucordIconData(HugeIcons.strokeRoundedHelpCircle);
   static const music = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
-  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
   static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
 
   // Server settings pages.
@@ -181,6 +183,13 @@ abstract final class FlucordIcons {
   static const webhooks = FlucordIconData(HugeIcons.strokeRoundedWebhook);
   static const expressions = FlucordIconData(HugeIcons.strokeRoundedSticker);
   static const auditLog = FlucordIconData(HugeIcons.strokeRoundedNote01);
+
+  // The channel list and its voice seats.
+  static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
+  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
+  static const headphonesOff = FlucordIconData(
+    HugeIcons.strokeRoundedHeadphoneOff,
+  );
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

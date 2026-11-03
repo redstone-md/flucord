@@ -438,6 +438,12 @@ class FlucordShell extends StatelessWidget {
                               listenable: voiceController,
                               builder: (_, _) {
                                 final seats = voiceController.seatedByChannel;
+                                final speaking = {
+                                  for (final participant
+                                      in voiceController.participants)
+                                    if (participant.isSpeaking)
+                                      participant.userId,
+                                };
                                 final categories = workspace.categoriesFor(
                                   spaceId,
                                 );
@@ -456,6 +462,7 @@ class FlucordShell extends StatelessWidget {
                                       seats: seats,
                                     ),
                                     seats,
+                                    speaking,
                                     channelId,
                                     workspaceController.collapsedCategoryIds,
                                     // Not the whole snapshot: each ack makes a new
@@ -485,6 +492,7 @@ class FlucordShell extends StatelessWidget {
                                     memberOf: _memberOf,
                                     channelOf: _channelOf,
                                     seatedByChannel: seats,
+                                    speakingUserIds: speaking,
                                     // Discord opens a profile from these rows with
                                     // either mouse button. Ours were labels.
                                     onOpenMemberProfile: (userId) => unawaited(
