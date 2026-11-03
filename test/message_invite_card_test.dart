@@ -63,6 +63,19 @@ void main() {
     final hint = tester.widget<Text>(find.text('Try sending a new invite'));
     expect(hint.style?.color, isNot(danger), reason: 'danger is only the tile');
   });
+
+  testWidgets('a lookup that fails in transit leaves the message as it was', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _row(previewInvite: (_) async => throw StateError('offline')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(_messageText, findsOneWidget);
+    expect(find.byKey(const ValueKey('invite-card')), findsNothing);
+  });
 }
 
 final _messageText = find.textContaining('come hang out', findRichText: true);
