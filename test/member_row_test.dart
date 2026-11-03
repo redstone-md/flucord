@@ -2,7 +2,9 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +201,33 @@ void main() {
       );
     });
 
+    testWidgets('is one muted caption line, cut with an ellipsis', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _member(
+          activities: const [
+            UserActivity(
+              name: 'A game whose name is far too long for the member list',
+            ),
+          ],
+        ),
+      );
+
+      final text = tester.widget<Text>(
+        find.descendant(of: _line, matching: find.byType(Text)),
+      );
+      expect(text.maxLines, 1);
+      expect(text.overflow, TextOverflow.ellipsis);
+      expect(text.style?.fontSize, 12);
+      expect(text.style?.color, _surfaces.muted);
+      expect(
+        tester.getRect(_line).right,
+        lessThanOrEqualTo(tester.getRect(_row).right),
+      );
+    });
+
     testWidgets('nothing to show: no role fallback, name centred', (
       tester,
     ) async {
@@ -226,6 +255,18 @@ void main() {
       );
     });
 
+    testWidgets('the status dot has a 2 px ring in the list colour', (
+      tester,
+    ) async {
+      await _pump(tester, _member());
+
+      final dot = tester.widget<PresenceIndicator>(
+        find.descendant(of: _row, matching: find.byType(PresenceIndicator)),
+      );
+      expect(dot.borderWidth, 2);
+      expect(dot.borderColor, _surfaces.surface);
+    });
+
     testWidgets('the name keeps its role colour', (tester) async {
       await _pump(tester, _member(), nameColorOf: (_) => 0xffe91e63);
 
@@ -246,6 +287,35 @@ void main() {
         find.descendant(of: header, matching: _icon(FlucordIcons.search)),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the search field is recessed, with a caption placeholder', (
+      tester,
+    ) async {
+      await _pump(tester, _member());
+
+      final decoration = tester
+          .widget<TextField>(find.byKey(const ValueKey('member-search')))
+          .decoration!;
+      expect(decoration.fillColor, _surfaces.inset);
+      expect(decoration.hintText, 'Search members');
+      expect(decoration.hintStyle?.fontSize, 12);
+      expect(decoration.hintStyle?.color, _surfaces.captionText);
+      final border = decoration.enabledBorder! as OutlineInputBorder;
+      expect(border.borderSide.color, _surfaces.border);
+      expect(border.borderSide.width, 1);
+      expect(border.borderRadius, FlucordRadius.control);
+    });
+
+    testWidgets('a group label has 16 px above and 4 px below', (tester) async {
+      await _pump(tester, _member());
+
+      final header = tester.getRect(
+        find.byKey(const ValueKey('member-list-header')),
+      );
+      final label = tester.getRect(find.textContaining('Engineer'));
+      expect(label.top - header.bottom, 16);
+      expect(tester.getRect(_row).top - label.bottom, 4);
     });
 
     testWidgets('group labels are captions in the caption tier', (
