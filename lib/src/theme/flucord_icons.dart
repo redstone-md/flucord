@@ -54,6 +54,9 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedMessage01,
   );
   static const image = FlucordIconData(HugeIcons.strokeRoundedImage01);
+  // The chat header and the composer.
+  static const call = FlucordIconData(HugeIcons.strokeRoundedCall02);
+  static const channels = FlucordIconData(HugeIcons.strokeRoundedMenu01);
   static const explore = FlucordIconData(HugeIcons.strokeRoundedDiscoverCircle);
   static const more = FlucordIconData(HugeIcons.strokeRoundedMoreHorizontal);
   // Hugeicons' plain "signal" is the messenger logo; these are the bars.

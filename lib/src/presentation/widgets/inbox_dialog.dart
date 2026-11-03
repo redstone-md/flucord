@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import '../../application/inbox_catalog.dart';
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 import 'count_badge.dart';
 import 'flucord_dialog.dart';
+import 'flucord_icon_button.dart';
 
 class InboxActivityButton extends StatelessWidget {
   const InboxActivityButton({
@@ -28,50 +30,51 @@ class InboxActivityButton extends StatelessWidget {
         : summary.hasUnread
         ? 'Inbox, unread messages'
         : 'Inbox';
+    // The badge hangs off the button's corner, cut out of the header by a
+    // ring in the header's colour.
     return Semantics(
       label: label,
       button: true,
       onTap: onPressed,
       excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: SizedBox.square(
-          dimension: 40,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: IconButton(
-                  key: const ValueKey('open-inbox'),
-                  onPressed: onPressed,
-                  icon: const Icon(Icons.inbox_outlined, size: 19),
+      child: SizedBox.square(
+        dimension: FlucordIconButton.size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: FlucordIconButton(
+                key: const ValueKey('open-inbox'),
+                onPressed: onPressed,
+                icon: FlucordIcons.inbox,
+                tooltip: label,
+              ),
+            ),
+            if (summary.mentionCount > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: CountBadge(
+                  key: const ValueKey('inbox-mention-badge'),
+                  count: summary.mentionCount,
+                  ring: context.surfaces.canvas,
+                ),
+              )
+            else if (summary.hasUnread)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  key: const ValueKey('inbox-unread-indicator'),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: context.surfaces.text,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-              if (summary.mentionCount > 0)
-                Positioned(
-                  top: 3,
-                  right: 2,
-                  child: CountBadge(
-                    key: const ValueKey('inbox-mention-badge'),
-                    count: summary.mentionCount,
-                  ),
-                )
-              else if (summary.hasUnread)
-                Positioned(
-                  top: 7,
-                  right: 6,
-                  child: Container(
-                    key: const ValueKey('inbox-unread-indicator'),
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
