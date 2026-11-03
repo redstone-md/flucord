@@ -13,6 +13,7 @@ import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/self_presence_scope.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
