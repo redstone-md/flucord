@@ -55,9 +55,12 @@ mixin _DiscordGuildAccess {
   /// what the permission model needs to answer visibility questions before
   /// the user opens anything. An already-joined account is refused with a
   /// 403, which is the one refusal this route has its own message for.
+  ///
+  /// The route reads a JSON body, and an empty one is refused as invalid
+  /// JSON (50109), so an empty object is sent, as the official client does.
   Future<JoinedGuild> joinGuild(String code) async {
     final payload = await _rest
-        .requestObject('POST', '/invites/${_segment(code)}')
+        .requestObject('POST', '/invites/${_segment(code)}', body: const {})
         .catchError((Object error) => throw _joinRefusal(error));
     final guild = await _hydrateGuild(guildIdOfInvite(payload));
     onGuildGained?.call(guild);

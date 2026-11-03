@@ -160,6 +160,9 @@ void _serverAccessCases() {
       expect(gained.members.single.id, '987654321098765432');
       expect(transport.requests.first.uri.path, endsWith('/invites/aurora'));
       expect(transport.requests.first.method, 'POST');
+      // The route reads a JSON body: an empty one is refused as invalid JSON
+      // (50109), so the join sends an empty object like the official client.
+      expect(transport.requests.first.decoded, <String, Object?>{});
       // The hydration reads that follow: the guild, its channels, its roles,
       // and this account's own membership.
       expect(
