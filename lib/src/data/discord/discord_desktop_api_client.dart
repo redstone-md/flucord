@@ -800,14 +800,18 @@ final class DiscordDesktopApiClient
   /// blocked profile comes back half redacted; both are answers, so a 403 or
   /// 404 reads as null rather than as an outage.
   @override
-  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+  Future<Map<String, Object?>?> readUserProfile(
+    String userId, {
+    String? guildId,
+  }) async {
     try {
       return await _rest.requestObject(
         'GET',
         '/users/${Uri.encodeComponent(userId)}/profile',
-        query: const {
+        query: {
           'with_mutual_guilds': 'true',
           'with_mutual_friends': 'true',
+          'guild_id': guildId,
         },
       );
     } on DiscordApiException catch (error) {

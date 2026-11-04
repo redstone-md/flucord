@@ -90,6 +90,15 @@ final class DiscordCdn {
   }) =>
       _asset(['guilds', guildId, 'users', userId, 'avatars'], hash, size: size);
 
+  /// The banner somebody set for one server.
+  static String? guildMemberBanner(
+    String guildId,
+    String userId,
+    String? hash, {
+    int size = 512,
+  }) =>
+      _asset(['guilds', guildId, 'users', userId, 'banners'], hash, size: size);
+
   static String customEmoji(
     String emojiId, {
     bool animated = false,

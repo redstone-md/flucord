@@ -15,13 +15,18 @@ abstract interface class DiscordUserProfileTransport {
   /// business, not this layer's.
   Future<Map<String, Object?>?> patchCurrentUser(Map<String, Object?> body);
 
-  /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`.
+  /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`,
+  /// plus `guild_id` when [guildId] is given, which adds the server profile.
   ///
-  /// Answers null when Discord refused the read, which the route does for
-  /// somebody this account has no relationship with at all. The mutuals are
-  /// asked for up front: the popover wants them, and a second request per
-  /// open would only save a round trip for a profile with none.
-  Future<Map<String, Object?>?> readUserProfile(String userId);
+  /// Answers null when Discord refused the read (403 or 404), which the route
+  /// does for somebody this account has no relationship with at all. Any
+  /// other failure throws. The mutuals are asked for up front: the popover
+  /// wants them, and a second request per open would only save a round trip
+  /// for a profile with none.
+  Future<Map<String, Object?>?> readUserProfile(
+    String userId, {
+    String? guildId,
+  });
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -62,11 +67,14 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   }
 
   @override
-  Future<OtherUserProfile?> loadProfileOf(String userId) async {
+  Future<OtherUserProfile?> loadProfileOf(
+    String userId, {
+    String? serverId,
+  }) async {
     if (userId.trim().isEmpty) return null;
-    final payload = await _transport.readUserProfile(userId);
+    final payload = await _transport.readUserProfile(userId, guildId: serverId);
     if (payload == null) return null;
-    return readOtherProfile(payload);
+    return readOtherProfile(payload, serverId: serverId);
   }
 
   /// Applies a `USER_UPDATE` dispatch, which is how a change made on another
@@ -117,7 +125,14 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   /// half under `user`, and redacts several fields for a private profile or a
   /// user who blocked this account. Anything absent stays absent rather than
   /// guessing: an empty bio and no bio read the same to the popover.
-  static OtherUserProfile? readOtherProfile(Map<String, Object?> payload) {
+  ///
+  /// Either level can carry the banner on its profile half or only on its
+  /// identity half (`user`, `guild_member`), so the second backs up the first.
+  /// The server profile is read only for the [serverId] that was asked for.
+  static OtherUserProfile? readOtherProfile(
+    Map<String, Object?> payload, {
+    String? serverId,
+  }) {
     final user = _object(payload['user']);
     if (user == null) return null;
     final id = user['id'];
@@ -132,7 +147,8 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       bio: _text(metadata['bio']),
       pronouns: _text(metadata['pronouns']),
       avatarHash: _nullableText(user['avatar']),
-      bannerHash: _metadataText(metadata['banner']),
+      bannerHash:
+          _metadataText(metadata['banner']) ?? _metadataText(user['banner']),
       accentColor: metadata['accent_color'] is int
           ? metadata['accent_color']! as int
           : null,
@@ -188,6 +204,25 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
               ),
             ),
       ],
+      serverProfile: serverId == null
+          ? null
+          : _readServerProfile(payload, serverId),
+    );
+  }
+
+  static ServerProfile? _readServerProfile(
+    Map<String, Object?> payload,
+    String serverId,
+  ) {
+    final profile = _object(payload['guild_member_profile']);
+    final member = _object(payload['guild_member']) ?? const {};
+    if (profile == null) return null;
+    return ServerProfile(
+      guildId: serverId,
+      bio: _metadataText(profile['bio']),
+      pronouns: _metadataText(profile['pronouns']),
+      bannerHash:
+          _metadataText(profile['banner']) ?? _metadataText(member['banner']),
     );
   }
 

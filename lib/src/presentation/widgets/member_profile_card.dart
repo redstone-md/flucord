@@ -102,7 +102,7 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.profile?.open(widget.member.id));
+    unawaited(widget.profile?.open(widget.member.id, serverId: widget.spaceId));
     final moderation = widget.moderationBuilder?.call();
     _moderation = moderation;
     if (moderation != null) unawaited(moderation.load());

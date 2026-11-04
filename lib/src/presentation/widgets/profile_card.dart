@@ -246,9 +246,9 @@ class ProfileCard extends StatelessWidget {
 final class _ProfileMetrics {
   const _ProfileMetrics({
     required this.bannerHeight,
+    required this.imageBannerHeight,
     required this.avatarSize,
     required this.ring,
-    required this.avatarTop,
     required this.padding,
     required this.dot,
     required this.name,
@@ -257,9 +257,10 @@ final class _ProfileMetrics {
 
   static const card = _ProfileMetrics(
     bannerHeight: 72,
+    // Discord's popout: 105 px of banner image on a 300 px card.
+    imageBannerHeight: 105,
     avatarSize: 80,
     ring: 4,
-    avatarTop: 32,
     padding: ProfileCard._padding,
     dot: 16,
     name: FlucordTextRole.title,
@@ -268,9 +269,9 @@ final class _ProfileMetrics {
 
   static const window = _ProfileMetrics(
     bannerHeight: 120,
+    imageBannerHeight: 120,
     avatarSize: 96,
     ring: 6,
-    avatarTop: 72,
     padding: 20,
     dot: 18,
     name: FlucordTextRole.display,
@@ -280,19 +281,20 @@ final class _ProfileMetrics {
   final FlucordTextRole name;
   final bool showsMutualLine;
 
+  /// The banner's height with only a colour in it.
   final double bannerHeight;
+  final double imageBannerHeight;
   final double avatarSize;
 
   /// The band of [_Header.backdrop] around the avatar.
   final double ring;
-
-  /// Where the avatar's top sits below the banner's top.
-  final double avatarTop;
   final double padding;
   final double dot;
 
-  double get height => avatarTop + avatarSize + ring;
   double get statusLeft => padding + avatarSize + ring + 8;
+
+  double bannerHeightOf(ProfileCardData data) =>
+      data.bannerUrl == null ? bannerHeight : imageBannerHeight;
 }
 
 /// The banner, the avatar over its bottom edge and the custom status beside
@@ -319,8 +321,11 @@ class _Header extends StatelessWidget {
     final surfaces = context.surfaces;
     final accent = data.accentColorValue;
     final avatar = _Avatar(data: data, metrics: metrics, backdrop: backdrop);
+    final bannerHeight = metrics.bannerHeightOf(data);
+    // The avatar's middle sits on the banner's bottom edge.
+    final avatarTop = bannerHeight - metrics.avatarSize / 2;
     return SizedBox(
-      height: metrics.height,
+      height: avatarTop + metrics.avatarSize + metrics.ring,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -328,7 +333,7 @@ class _Header extends StatelessWidget {
             left: 0,
             right: 0,
             top: 0,
-            height: metrics.bannerHeight,
+            height: bannerHeight,
             child: ColoredBox(
               key: const ValueKey('profile-card-banner'),
               color: accent == null ? surfaces.control : Color(accent),
@@ -361,7 +366,7 @@ class _Header extends StatelessWidget {
           ),
           Positioned(
             left: metrics.padding - metrics.ring,
-            top: metrics.avatarTop - metrics.ring,
+            top: avatarTop - metrics.ring,
             child: _FullProfileLink(
               linkKey: const ValueKey('profile-card-avatar'),
               name: data.displayName,
@@ -373,7 +378,7 @@ class _Header extends StatelessWidget {
             Positioned(
               left: metrics.statusLeft,
               right: metrics.padding,
-              top: metrics.bannerHeight - 14,
+              top: bannerHeight - 14,
               child: Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: _StatusBubble(text: status, fill: backdrop),
