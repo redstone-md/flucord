@@ -10,7 +10,6 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_friend_actions.dart';
-import 'discord_friend_profile_popover.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
@@ -18,6 +17,8 @@ import 'discord_social_sdk_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
 import 'discord_social_dm_scope.dart';
 import 'flucord_button.dart';
+import 'profile_card.dart';
+import 'profile_card_data.dart';
 
 class DiscordFriendDirectory extends StatelessWidget {
   const DiscordFriendDirectory({super.key});
@@ -201,15 +202,43 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
                 }
                 return KeyEventResult.ignored;
               },
-              child: DiscordFriendProfilePopover(
-                relationship: relationship,
-                onMessage: () {
-                  _dismiss();
-                  widget.onMessage(relationship.user);
-                },
+              child: ProfileCard(
+                data: ProfileCardData.relationship(relationship),
+                actions: _profileActions(context, relationship),
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Copy the id, and for a friend the message field: it opens the DM and
+  /// sends what was typed.
+  ProfileCardActions _profileActions(
+    BuildContext context,
+    DiscordRelationship relationship,
+  ) {
+    final user = relationship.user;
+    return ProfileCardActions(
+      onMessage: relationship.kind == DiscordRelationshipKind.friend
+          ? (text) {
+              _dismiss();
+              widget.onMessage(user);
+              if (text.isNotEmpty) {
+                unawaited(
+                  DiscordSocialDmScope.of(context).sendMessage(user.id, text),
+                );
+              }
+            }
+          : null,
+      menu: [
+        ProfileCardMenuEntry(
+          key: const ValueKey('copy-friend-id'),
+          label: 'Copy user ID',
+          icon: FlucordIcons.id,
+          onSelected: () =>
+              unawaited(Clipboard.setData(ClipboardData(text: user.id))),
         ),
       ],
     );

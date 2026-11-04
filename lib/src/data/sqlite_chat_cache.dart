@@ -776,6 +776,8 @@ final class SqliteChatCache
     ),
     'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
     ..._tagsToRow(member.tags),
+    // A member mapped without a username keeps the stored one.
+    'username': ?member.username,
   };
 
   /// A clan tag the payload left out is no column at all, so a write keeps
@@ -807,6 +809,7 @@ final class SqliteChatCache
       isBot: row['is_bot'] == 1,
       clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
     ),
+    username: row['username'] as String?,
   );
 
   /// Every table is found by name, so a table added later cannot be missed.

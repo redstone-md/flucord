@@ -20,6 +20,7 @@ import 'message_item.dart';
 import 'message_forward_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
+import 'profile_card_route.dart';
 import 'unread_message_boundary.dart';
 
 part 'message_list_states.dart';
@@ -132,8 +133,8 @@ class MessageList extends StatefulWidget {
   final ExternalLinkLauncher externalLinkLauncher;
   final ValueChanged<String> onSelectChannel;
 
-  /// Opens the profile of a message's author, by user id.
-  final ValueChanged<String>? onOpenMemberProfile;
+  /// Opens the profile of a message's author beside their name.
+  final OpenProfileCard? onOpenMemberProfile;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -746,6 +747,7 @@ class MessageListState extends State<MessageList>
         showPresence: false,
       ),
       name: person.displayName,
+      username: person.username,
     );
   }
 

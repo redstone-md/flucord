@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -23,7 +24,7 @@ void main() {
     await tester.tap(row);
     await tester.pump();
 
-    final popover = find.byKey(const ValueKey('member-profile-popover'));
+    final popover = find.byKey(const ValueKey('profile-card'));
     expect(tester.getTopLeft(popover).dy, greaterThanOrEqualTo(rowTop - 1));
   });
 
@@ -32,6 +33,7 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     Member? recipient;
+    String? sent;
     String? copiedId;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -45,32 +47,39 @@ void main() {
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(SystemChannels.platform, null),
     );
-    await tester.pumpWidget(_host(onMessage: (member) => recipient = member));
+    await tester.pumpWidget(
+      _host(
+        onMessage: (member, text) {
+          recipient = member;
+          sent = text;
+        },
+      ),
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('member-row-222222222222222222')),
     );
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
     expect(find.text('Mira Chen'), findsWidgets);
-    expect(find.text('Product design'), findsWidgets);
-    expect(find.text('Online'), findsOneWidget);
-    expect(find.text('222222222222222222'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Mira Chen profile')), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('copy-member-id')));
     await tester.pumpAndSettle();
     expect(copiedId, '222222222222222222');
-    expect(find.byTooltip('User ID copied'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('message-member')));
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-card-message')),
+      'see you at nine',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
     expect(recipient?.id, '222222222222222222');
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(sent, 'see you at nine');
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
     semantics.dispose();
   });
 
@@ -82,14 +91,11 @@ void main() {
       find.byKey(const ValueKey('member-row-333333333333333333')),
     );
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey('member-row-222222222222222222')),
@@ -97,22 +103,7 @@ void main() {
     await tester.pump();
     await tester.tapAt(const Offset(40, 40));
     await tester.pump();
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
-  });
-
-  testWidgets('does not offer a direct message to the current member', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_host());
-    await tester.tap(
-      find.byKey(const ValueKey('member-row-111111111111111111')),
-    );
-    await tester.pump();
-
-    final button = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('message-member')),
-    );
-    expect(button.onPressed, isNull);
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
   });
 
   testWidgets('closes an open profile after the workspace changes', (
@@ -133,8 +124,7 @@ void main() {
                   MemberSidebar(
                     members: const [_jack, _mira, _roman],
                     spaceId: spaceId,
-                    currentMemberId: _jack.id,
-                    onMessage: (_) {},
+                    cardFor: _card(),
                   ),
                 ],
               ),
@@ -147,38 +137,50 @@ void main() {
       find.byKey(const ValueKey('member-row-222222222222222222')),
     );
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
 
     updateHost(() => spaceId = 'guild-2');
     await tester.pump();
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
 
-Widget _host({ValueChanged<Member>? onMessage, TransitionBuilder? builder}) =>
-    MaterialApp(
-      theme: FlucordTheme.dark,
-      builder: builder,
-      home: Scaffold(
-        body: Row(
-          children: [
-            const Expanded(child: SizedBox()),
-            MemberSidebar(
-              members: const [_jack, _mira, _roman],
-              spaceId: 'guild-1',
-              currentMemberId: _jack.id,
-              onMessage: onMessage ?? (_) {},
-            ),
-          ],
-        ),
-      ),
+/// The card a row opens, as the shell builds it, with [onMessage] told who
+/// was messaged and what was typed.
+Widget Function(Member, VoidCallback) _card({
+  void Function(Member member, String text)? onMessage,
+}) =>
+    (member, close) => MemberProfileCard(
+      member: member,
+      spaceId: 'guild-1',
+      onMessage: (text) {
+        close();
+        onMessage?.call(member, text);
+      },
     );
+
+Widget _host({
+  void Function(Member member, String text)? onMessage,
+  TransitionBuilder? builder,
+}) => MaterialApp(
+  theme: FlucordTheme.dark,
+  builder: builder,
+  home: Scaffold(
+    body: Row(
+      children: [
+        const Expanded(child: SizedBox()),
+        MemberSidebar(
+          members: const [_jack, _mira, _roman],
+          spaceId: 'guild-1',
+          cardFor: _card(onMessage: onMessage),
+        ),
+      ],
+    ),
+  ),
+);
 
 const _jack = Member(
   id: '111111111111111111',
