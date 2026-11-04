@@ -138,13 +138,7 @@ class _EventsHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Events',
-                style: TextStyle(
-                  fontSize: FlucordType.body,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Events', style: FlucordTextRole.heading.style),
               Text(
                 spaceName,
                 overflow: TextOverflow.ellipsis,
@@ -244,10 +238,7 @@ class _ScheduledEventRow extends StatelessWidget {
                         event.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: FlucordType.label,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: FlucordTextRole.label.strong,
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -425,20 +416,12 @@ class _EventDate extends StatelessWidget {
       children: [
         Text(
           active ? 'NOW' : _months[start.month - 1],
-          style: TextStyle(
+          style: FlucordTextRole.caption.strong.copyWith(
             color: active ? context.surfaces.success : context.surfaces.mention,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          '${start.day}',
-          style: const TextStyle(
-            fontSize: FlucordType.title,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text('${start.day}', style: FlucordTextRole.title.style),
       ],
     ),
   );
@@ -452,10 +435,8 @@ class _LiveLabel extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 4),
     child: Text(
       'LIVE NOW',
-      style: TextStyle(
+      style: FlucordTextRole.caption.strong.copyWith(
         color: context.surfaces.success,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w700,
       ),
     ),
   );
@@ -471,10 +452,8 @@ class _EventSectionLabel extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
     child: Text(
       label.toUpperCase(),
-      style: TextStyle(
+      style: FlucordTextRole.caption.strong.copyWith(
         color: context.surfaces.muted,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w700,
       ),
     ),
   );
@@ -505,7 +484,7 @@ class _EventsState extends StatelessWidget {
         children: [
           FlucordIcon(icon, size: 30, color: context.surfaces.muted),
           const SizedBox(height: 10),
-          Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(title!, style: FlucordTextRole.label.strong),
           if (onRetry != null) ...[
             const SizedBox(height: 10),
             TextButton.icon(

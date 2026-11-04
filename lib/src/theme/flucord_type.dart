@@ -114,4 +114,7 @@ enum FlucordTextRole {
     letterSpacing: 0,
     leadingDistribution: TextLeadingDistribution.even,
   );
+
+  /// [style] one weight step up, for a title or a name inside the role.
+  TextStyle get strong => style.copyWith(fontWeight: FontWeight.w500);
 }

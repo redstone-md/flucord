@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/guild_scheduled_events_dialog.dart';
@@ -47,6 +48,34 @@ void main() {
     expect(selectedChannelId, 'voice-1');
     expect(find.byKey(const ValueKey('guild-events-dialog')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('draws its words at the type scale weights, 400 and 500', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(560, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: GuildScheduledEventsDialog(
+          space: _workspace.spaces.single,
+          workspace: _workspace,
+          events: _events,
+          isLoading: false,
+          error: null,
+          onRefresh: () {},
+        ),
+      ),
+    );
+
+    final heavy = [
+      for (final paragraph
+          in tester.allRenderObjects.whereType<RenderParagraph>())
+        if ((paragraph.text.style?.fontWeight ?? FontWeight.w400).value > 500)
+          paragraph.text.toPlainText(),
+    ];
+    expect(heavy, isEmpty);
   });
 
   testWidgets('keeps event failure retry in place', (tester) async {

@@ -149,10 +149,7 @@ class _ConnectionRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  service,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
+                Text(service, style: FlucordTextRole.label.strong),
                 const SizedBox(height: 1),
                 Text(
                   connection.name,

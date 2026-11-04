@@ -4,7 +4,9 @@ import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_standing_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _standing = AccountStanding(
@@ -168,6 +170,23 @@ void main() {
       find.byKey(const ValueKey('standing-review-record-1')),
       findsNothing,
     );
+  });
+
+  testWidgets('the name and each record title are strong labels', (
+    tester,
+  ) async {
+    await _pump(tester, repository: _FakeSafetyHub(_standing));
+    await tester.pumpAndSettle();
+
+    for (final finder in [
+      find.byKey(const ValueKey('standing-username')),
+      find.text('Harassment'),
+    ]) {
+      final style = tester.renderObject<RenderParagraph>(finder).text.style!;
+      expect(style.fontSize, FlucordType.label);
+      expect(style.fontWeight, FontWeight.w500);
+      expect(style.height, 18 / FlucordType.label);
+    }
   });
 
   testWidgets('a review Discord declines reads as an answer', (tester) async {

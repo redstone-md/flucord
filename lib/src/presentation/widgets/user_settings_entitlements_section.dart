@@ -136,9 +136,7 @@ class _EntitlementsSettingsSectionState
                           children: [
                             Text(
                               grant.label,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: FlucordTextRole.label.strong,
                             ),
                             Text(
                               grant.describeExpiry(),

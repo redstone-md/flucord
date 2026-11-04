@@ -72,8 +72,7 @@ class SettingRow extends StatelessWidget {
       children: [
         Text(
           title,
-          style: FlucordTextRole.label.style.copyWith(
-            fontWeight: FontWeight.w500,
+          style: FlucordTextRole.label.strong.copyWith(
             color: context.surfaces.text,
           ),
         ),

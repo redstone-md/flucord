@@ -125,10 +125,7 @@ class _MethodRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                method.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
+              Text(method.label, style: FlucordTextRole.label.strong),
               if (method.description.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
