@@ -437,7 +437,9 @@ class _MessageItemState extends State<MessageItem> {
   TextStyle _captionStyle(BuildContext context) => FlucordTextRole.caption.style
       .copyWith(color: context.surfaces.captionText);
 
-  /// The toolbar, over the right end of the highlight's top edge.
+  /// The toolbar, over the right end of the highlight's top edge. It never
+  /// rises above the list the row scrolls in, so the topmost message keeps it
+  /// off the chat header.
   Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) {
     // A transform that flattens the row means it is not on screen.
     if (widget.isEditing || layout.childPaintTransform.determinant() == 0) {
@@ -447,8 +449,12 @@ class _MessageItemState extends State<MessageItem> {
       layout.childPaintTransform,
       Offset.zero & layout.childSize,
     );
+    final top = surface.top - MessageRowMetrics.barRise;
     return Positioned(
-      top: surface.top - MessageRowMetrics.barRise,
+      top: switch (_listTop()) {
+        final listTop? when listTop > top => listTop,
+        _ => top,
+      },
       right:
           layout.overlaySize.width - surface.right + MessageRowMetrics.inline,
       child: MouseRegion(
@@ -461,6 +467,15 @@ class _MessageItemState extends State<MessageItem> {
         ),
       ),
     );
+  }
+
+  /// The top edge of the list this row scrolls in, in the overlay's space,
+  /// or null for a row in no list.
+  double? _listTop() {
+    final list = Scrollable.maybeOf(context)?.context.findRenderObject();
+    final overlay = Overlay.maybeOf(context)?.context.findRenderObject();
+    if (list is! RenderBox || overlay == null) return null;
+    return list.localToGlobal(Offset.zero, ancestor: overlay).dy;
   }
 
   /// What a screen reader says when the row takes focus: author, time, text.
