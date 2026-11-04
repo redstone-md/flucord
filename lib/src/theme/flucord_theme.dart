@@ -128,6 +128,16 @@ abstract final class FlucordTheme {
 
   static const _readableSteps = 100;
 
+  /// The label for a strong [fill]: white while it reaches [ratio], else
+  /// black when that reads better, as on a pale accent a theme chose.
+  static Color _labelOn(Color fill, {required double ratio}) {
+    const light = FlucordFixedColors.onFill;
+    const dark = FlucordFixedColors.onLightFill;
+    final onLight = _contrast(light, fill);
+    if (onLight >= ratio) return light;
+    return _contrast(dark, fill) > onLight ? dark : light;
+  }
+
   /// The WCAG 2 contrast ratio of [foreground] drawn on [background].
   ///
   /// A theme file may give a colour alpha, so [foreground] is measured as it
@@ -181,13 +191,15 @@ abstract final class FlucordTheme {
     final scheme = ColorScheme(
       brightness: brightness,
       primary: brand,
-      onPrimary: FlucordFixedColors.onFill,
+      // Material draws checkmarks and switch thumbs in it: marks, not text.
+      onPrimary: _labelOn(brand, ratio: _nonTextContrast),
       secondary: success,
       onSecondary: const Color(0xff051b10),
       // Widgets and Material's own fields draw error text in this, so it is the
       // readable error text. A danger fill takes `surfaces.danger` instead.
       error: errorText,
-      onError: FlucordFixedColors.onFill,
+      // The label of a danger button, on the `danger` fill.
+      onError: _labelOn(danger, ratio: _textContrast),
       surface: surface,
       onSurface: text,
     );
