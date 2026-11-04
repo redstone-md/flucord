@@ -57,6 +57,27 @@ void main() {
     expect(button.onPressed, isNull);
   });
 
+  testWidgets(
+    'the header button says why it rests in a build with no encoder',
+    (tester) async {
+      final repository = _FakeRepository();
+      final controller = GoLiveController(
+        repositoryProvider: () => repository,
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+      )..reconcile();
+      addTearDown(controller.dispose);
+      addTearDown(repository.close);
+
+      await pump(tester, controller);
+
+      final button = tester.widget<IconButton>(
+        find.byKey(const ValueKey('go-live-toggle')),
+      );
+      expect(button.onPressed, isNull);
+      expect(button.tooltip, 'Screen sharing is not available in this build');
+    },
+  );
+
   test('a build without the encoder says why the share button rests', () {
     final controller = GoLiveController(
       repositoryProvider: _FakeRepository.new,
