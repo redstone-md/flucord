@@ -15,6 +15,8 @@ final class CommunitySpace {
     this.ownerId,
     this.requiresMultiFactorAuth = false,
     this.premiumTier = 0,
+    this.memberCount,
+    this.joinedAt,
   });
 
   const CommunitySpace.directMessages()
@@ -26,7 +28,9 @@ final class CommunitySpace {
       kind = SpaceKind.directMessages,
       ownerId = null,
       requiresMultiFactorAuth = false,
-      premiumTier = 0;
+      premiumTier = 0,
+      memberCount = null,
+      joinedAt = null;
 
   final String id;
   final String name;
@@ -47,7 +51,30 @@ final class CommunitySpace {
   /// the server, which is the one thing this client reads it for.
   final int premiumTier;
 
+  /// How many members the guild had when the gateway last sent it in full.
+  /// Null when unknown, such as for a server read back from the cache.
+  final int? memberCount;
+
+  /// When the account joined the guild. Null when unknown.
+  final DateTime? joinedAt;
+
   bool get isDirectMessages => kind == SpaceKind.directMessages;
+
+  /// This record, with the member count and join date of [earlier] where
+  /// this one has none. A guild update carries neither.
+  CommunitySpace keepingSummaryOf(CommunitySpace earlier) => CommunitySpace(
+    id: id,
+    name: name,
+    monogram: monogram,
+    colorValue: colorValue,
+    iconUrl: iconUrl,
+    kind: kind,
+    ownerId: ownerId,
+    requiresMultiFactorAuth: requiresMultiFactorAuth,
+    premiumTier: premiumTier,
+    memberCount: memberCount ?? earlier.memberCount,
+    joinedAt: joinedAt ?? earlier.joinedAt,
+  );
 }
 
 final class CommunityRole {
