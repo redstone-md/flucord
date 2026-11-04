@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/app_log.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
@@ -393,6 +394,102 @@ void main() {
     },
   );
 
+  group('log', () {
+    test('a heartbeat that goes out writes no log line', () async {
+      final log = _recordLog();
+      final socket = _MemoryDesktopWebSocket();
+      final gateway = DiscordDesktopGatewayClient(
+        authorization: 'account-session',
+        properties: const {'os': 'Windows'},
+        profile: _uncompressed,
+        socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      );
+      addTearDown(gateway.close);
+
+      await gateway.connect('wss://gateway.discord.gg');
+      socket.receiveTerm(const {
+        'op': 10,
+        'd': {'heartbeat_interval': 60},
+      });
+      await _waitFor(() => socket.terms.any((frame) => frame['op'] == 1));
+
+      expect(
+        log.where((record) => record.message.contains('heartbeat')),
+        isEmpty,
+      );
+    });
+
+    test('a heartbeat that went unanswered writes a warning', () async {
+      final log = _recordLog();
+      final socket = _MemoryDesktopWebSocket();
+      final connector = _MemoryDesktopWebSocketConnector(
+        socket,
+        _MemoryDesktopWebSocket(),
+      );
+      final gateway = DiscordDesktopGatewayClient(
+        authorization: 'account-session',
+        properties: const {'os': 'Windows'},
+        profile: _uncompressed,
+        socketConnector: connector,
+      );
+      addTearDown(gateway.close);
+
+      await gateway.connect('wss://gateway.discord.gg');
+      socket.receiveTerm(const {
+        'op': 10,
+        'd': {'heartbeat_interval': 5},
+      });
+      await _waitFor(() => connector.dials > 1);
+
+      expect(log.where((record) => record.message.contains('heartbeat')), [
+        isA<_LogRecord>()
+            .having((record) => record.level, 'level', AppLogLevel.warning)
+            .having(
+              (record) => record.message,
+              'message',
+              contains('unanswered'),
+            ),
+      ]);
+    });
+
+    for (final event in ['READY', 'RESUMED']) {
+      test('$event is written at info level', () async {
+        final log = _recordLog();
+        final socket = _MemoryDesktopWebSocket();
+        final gateway = DiscordDesktopGatewayClient(
+          authorization: 'account-session',
+          properties: const {'os': 'Windows'},
+          profile: _uncompressed,
+          socketConnector: _MemoryDesktopWebSocketConnector(socket),
+        );
+        addTearDown(gateway.close);
+
+        await gateway.connect('wss://gateway.discord.gg');
+        socket.receiveTerm({
+          'op': 0,
+          's': 1,
+          't': event,
+          'd': const {
+            'session_id': 'session',
+            'user': {'id': 'me'},
+            'guilds': <Object?>[],
+            'private_channels': <Object?>[],
+          },
+        });
+        bool logged(_LogRecord record) => record.message == event.toLowerCase();
+        await _waitFor(() => log.any(logged));
+
+        expect(log.where(logged), [
+          isA<_LogRecord>().having(
+            (record) => record.level,
+            'level',
+            AppLogLevel.info,
+          ),
+        ]);
+      });
+    }
+  });
+
   test('keeps working when the profile selects the JSON encoding', () async {
     final socket = _MemoryDesktopWebSocket();
     final gateway = DiscordDesktopGatewayClient(
@@ -427,6 +524,17 @@ const _uncompressed = DiscordDesktopProtocolProfile(
   clientBuildNumber: 582977,
   gatewayEncoding: 'etf',
 );
+
+typedef _LogRecord = ({AppLogLevel level, String message});
+
+/// Records what the client logs for the length of a test.
+List<_LogRecord> _recordLog() {
+  final records = <_LogRecord>[];
+  AppLog.redirect = (level, scope, message, error) =>
+      records.add((level: level, message: message));
+  addTearDown(() => AppLog.redirect = null);
+  return records;
+}
 
 Future<void> _waitFor(bool Function() condition) async {
   for (var attempt = 0; attempt < 50 && !condition(); attempt++) {
