@@ -580,12 +580,11 @@ class _ChannelRow extends StatelessWidget {
                           children: [
                             DisplayName(
                               channel.name,
-                              style: FlucordTextRole.label.style.copyWith(
-                                color: foreground,
-                                fontWeight: strong
-                                    ? FontWeight.w500
-                                    : FontWeight.w400,
-                              ),
+                              style:
+                                  (strong
+                                          ? FlucordTextRole.label.strong
+                                          : FlucordTextRole.label.style)
+                                      .copyWith(color: foreground),
                               nameStyle: person?.tags.nameStyle,
                             ),
                             // What the person is doing, the way the member list
