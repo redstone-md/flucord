@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_social_sdk.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -32,7 +33,13 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
             height: 18,
             child: _isBusy(controller.state)
                 ? const CircularProgressIndicator(strokeWidth: 2)
-                : Icon(presentation.icon, size: 17, color: presentation.color),
+                : Center(
+                    child: FlucordIcon(
+                      presentation.icon,
+                      size: 17,
+                      color: presentation.color,
+                    ),
+                  ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -100,46 +107,46 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
   ) => switch (controller.state) {
     DiscordSocialSdkControllerState.idle ||
     DiscordSocialSdkControllerState.checking => _StatusPresentation(
-      icon: Icons.sync,
+      icon: FlucordIcons.syncing,
       color: surfaces.accentIcon,
       title: 'Checking native social access',
       detail: 'Inspecting the Discord Social SDK bridge.',
     ),
     DiscordSocialSdkControllerState.restoring => _StatusPresentation(
-      icon: Icons.sync,
+      icon: FlucordIcons.syncing,
       color: surfaces.accentIcon,
       title: 'Restoring native social session',
       detail:
           'Rotating the saved Social SDK grant and reconnecting to Discord.',
     ),
     DiscordSocialSdkControllerState.signedOut => _StatusPresentation(
-      icon: Icons.key_outlined,
+      icon: FlucordIcons.credential,
       color: surfaces.warning,
       title: 'Native social account is disconnected',
       detail: 'The SDK is bundled. Connect Discord to enable live friends.',
     ),
     DiscordSocialSdkControllerState.authorizing => _StatusPresentation(
-      icon: Icons.key_outlined,
+      icon: FlucordIcons.credential,
       color: surfaces.accentIcon,
       title: 'Waiting for Discord authorization',
       detail: 'Complete the native Discord authorization prompt.',
     ),
     DiscordSocialSdkControllerState.ready => _StatusPresentation(
-      icon: Icons.people_outline,
+      icon: FlucordIcons.friends,
       color: surfaces.success,
       title: 'Native social access is linked',
       detail:
           'The Social SDK session is authenticated and ready for live friend synchronization.',
     ),
     DiscordSocialSdkControllerState.unconfigured => _StatusPresentation(
-      icon: Icons.settings_outlined,
+      icon: FlucordIcons.settings,
       color: surfaces.warning,
       title: 'Discord application ID is missing',
       detail:
           'Build with FLUCORD_DISCORD_CLIENT_ID to enable Social SDK authorization.',
     ),
     DiscordSocialSdkControllerState.disconnecting => _StatusPresentation(
-      icon: Icons.sync,
+      icon: FlucordIcons.syncing,
       color: surfaces.accentIcon,
       title: 'Disconnecting native social session',
       detail: 'Closing the SDK connection and clearing its saved grant.',
@@ -149,7 +156,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
       surfaces,
     ),
     DiscordSocialSdkControllerState.failure => _StatusPresentation(
-      icon: Icons.error_outline,
+      icon: FlucordIcons.error,
       color: surfaces.errorText,
       title: 'Native social access check failed',
       detail:
@@ -172,7 +179,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
     if (availability?.status ==
         DiscordSocialSdkAvailabilityStatus.unsupportedPlatform) {
       return _StatusPresentation(
-        icon: Icons.desktop_windows_outlined,
+        icon: FlucordIcons.desktop,
         color: surfaces.warning,
         title: 'Native social bridge is unavailable',
         detail:
@@ -180,7 +187,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
       );
     }
     return _StatusPresentation(
-      icon: Icons.extension_off_outlined,
+      icon: FlucordIcons.packageMissing,
       color: surfaces.warning,
       title: 'Discord Social SDK is not bundled',
       detail:
@@ -197,7 +204,7 @@ final class _StatusPresentation {
     required this.detail,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final Color color;
   final String title;
   final String detail;

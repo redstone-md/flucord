@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -95,7 +96,8 @@ class _ConnectedAccountRow extends StatelessWidget {
                 color: context.surfaces.raised,
                 borderRadius: FlucordRadius.medium,
               ),
-              child: Icon(
+              alignment: Alignment.center,
+              child: FlucordIcon(
                 _serviceIcon(connection.type),
                 size: 17,
                 color: connection.revoked
@@ -131,8 +133,8 @@ class _ConnectedAccountRow extends StatelessWidget {
             if (connection.verified)
               Tooltip(
                 message: 'Verified connection',
-                child: Icon(
-                  Icons.verified_outlined,
+                child: FlucordIcon(
+                  FlucordIcons.verified,
                   size: 15,
                   color: context.surfaces.success,
                 ),
@@ -141,8 +143,8 @@ class _ConnectedAccountRow extends StatelessWidget {
               const SizedBox(width: 6),
               Tooltip(
                 message: 'Visible on Discord profile',
-                child: Icon(
-                  Icons.visibility_outlined,
+                child: FlucordIcon(
+                  FlucordIcons.visible,
                   size: 15,
                   color: context.surfaces.muted,
                 ),
@@ -170,16 +172,16 @@ String _serviceName(String type) => switch (type) {
         .join(' '),
 };
 
-IconData _serviceIcon(String type) => switch (type) {
-  'spotify' => Icons.graphic_eq,
+FlucordIconData _serviceIcon(String type) => switch (type) {
+  'spotify' => FlucordIcons.music,
   'steam' ||
   'playstation' ||
   'xbox' ||
   'epicgames' ||
-  'riotgames' => Icons.sports_esports_outlined,
-  'github' => Icons.code,
-  'youtube' || 'twitch' || 'tiktok' => Icons.play_circle_outline,
-  'paypal' => Icons.payments_outlined,
-  'domain' => Icons.language,
-  _ => Icons.link,
+  'riotgames' => FlucordIcons.game,
+  'github' => FlucordIcons.code,
+  'youtube' || 'twitch' || 'tiktok' => FlucordIcons.streaming,
+  'paypal' => FlucordIcons.payment,
+  'domain' => FlucordIcons.website,
+  _ => FlucordIcons.link,
 };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'oauth_account_footer.dart';
@@ -148,8 +149,8 @@ class _OAuthGuildSidebar extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.lock_outline,
+                    FlucordIcon(
+                      FlucordIcons.lock,
                       size: 16,
                       color: context.surfaces.muted,
                     ),
@@ -217,7 +218,11 @@ class _OAuthMessageBoundary extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.lock_outline, size: 18, color: context.surfaces.muted),
+              FlucordIcon(
+                FlucordIcons.lock,
+                size: 18,
+                color: context.surfaces.muted,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -247,8 +252,8 @@ class _OAuthMessageBoundary extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    guild == null ? Icons.dns_outlined : Icons.lock_outline,
+                  FlucordIcon(
+                    guild == null ? FlucordIcons.server : FlucordIcons.lock,
                     size: 32,
                     color: context.surfaces.muted,
                   ),
@@ -286,7 +291,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                   const SizedBox(height: 18),
                   OutlinedButton.icon(
                     onPressed: onOpenConnections,
-                    icon: const Icon(Icons.link, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.link, size: 16),
                     label: const Text('Connections'),
                   ),
                 ],

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_social_presence_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_social_presence.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_social_presence_scope.dart';
@@ -47,7 +48,9 @@ class OAuthAccountFooter extends StatelessWidget {
                       url: account.avatarUrl,
                       fallback: ColoredBox(
                         color: context.surfaces.raised,
-                        child: const Icon(Icons.person_outline, size: 18),
+                        child: const Center(
+                          child: FlucordIcon(FlucordIcons.person, size: 18),
+                        ),
                       ),
                     ),
                   ),
@@ -94,12 +97,12 @@ class OAuthAccountFooter extends StatelessWidget {
               ],
             ),
           ),
-          Icon(
+          FlucordIcon(
             activePresence?.state == DiscordSocialPresenceState.updating
-                ? Icons.sync
+                ? FlucordIcons.syncing
                 : hasNativePresence
-                ? Icons.keyboard_arrow_up
-                : Icons.verified_user_outlined,
+                ? FlucordIcons.chevronUp
+                : FlucordIcons.authorized,
             size: 18,
             color: hasNativePresence
                 ? context.surfaces.muted
@@ -160,7 +163,11 @@ class _StatusMenuItem extends StatelessWidget {
           ),
         ),
         if (selected)
-          Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
+          FlucordIcon(
+            FlucordIcons.check,
+            size: 17,
+            color: context.surfaces.accentIcon,
+          ),
       ],
     );
   }
