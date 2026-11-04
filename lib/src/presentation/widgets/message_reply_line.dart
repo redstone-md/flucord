@@ -5,6 +5,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 import 'message_preview_text.dart';
+import 'name_tags.dart';
 
 /// What a reply answers: a small avatar, the name, and the quoted text cut to
 /// one line. It sits in the text column, above the name row.
@@ -69,6 +70,7 @@ class MessageReplyPreview extends StatelessWidget {
               color: nameColor ?? surfaces.muted,
             ),
           ),
+          if (author != null) NameTags(member: author, showsClan: false),
           const SizedBox(width: _gap),
           Expanded(
             child: Text(

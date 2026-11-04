@@ -478,4 +478,7 @@ extension FlucordFills on FlucordSurfaceTheme {
   /// A selected row or tab, a secondary button, a close button: the text
   /// colour at 6%, which is white at 6% in the dark theme.
   Color get quietFill => text.withValues(alpha: 0.06);
+
+  /// The accent at 18%, behind accent text: the APP tag beside a bot's name.
+  Color get brandTint => brand.withValues(alpha: 0.18);
 }
