@@ -422,9 +422,7 @@ class _SidebarRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
-        color: selected
-            ? surfaces.quietFill
-            : Colors.transparent,
+        color: selected ? surfaces.quietFill : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(
           key: rowKey,

@@ -266,9 +266,7 @@ class _SidebarNavRow extends StatelessWidget {
         button: true,
         selected: selected,
         child: Material(
-          color: selected
-              ? surfaces.quietFill
-              : Colors.transparent,
+          color: selected ? surfaces.quietFill : Colors.transparent,
           borderRadius: FlucordRadius.control,
           child: InkWell(
             onTap: onPressed,
@@ -557,9 +555,7 @@ class _ChannelRow extends StatelessWidget {
       button: true,
       selected: selected,
       child: Material(
-        color: selected
-            ? surfaces.quietFill
-            : Colors.transparent,
+        color: selected ? surfaces.quietFill : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(
           key: ValueKey('channel-${channel.id}'),
