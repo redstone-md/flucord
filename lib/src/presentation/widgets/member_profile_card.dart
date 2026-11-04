@@ -190,6 +190,13 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
         for (final role in assignable.values)
           if (!held.contains(role.id)) role.asCommunityRole,
       ],
+      onRemoveRole: moderation == null || assignable.isEmpty
+          ? null
+          : (role) => unawaited(moderation.revokeRole(assignable[role.id]!)),
+      removableRoleIds: {
+        for (final id in assignable.keys)
+          if (held.contains(id)) id,
+      },
       onOpenFullProfile: widget.onOpenFullProfile,
       onOpenProfile: widget.onOpenProfile,
       onOpenServer: widget.onOpenServer,
