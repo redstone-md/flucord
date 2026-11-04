@@ -16,10 +16,10 @@ class _AboutSections extends StatelessWidget {
         Divider(height: 1, thickness: 1, color: context.surfaces.border),
         if (data.bio.isNotEmpty) ...[
           const SizedBox(height: 12),
-          _AboutSection.text(
+          _AboutSection(
             key: const ValueKey('profile-card-bio'),
             heading: 'About me',
-            value: data.bio,
+            child: ProfileBioText(data.bio),
           ),
         ],
         if (since != null) ...[

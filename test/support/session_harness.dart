@@ -26,6 +26,7 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/navigation_memory.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
@@ -134,6 +135,11 @@ final class SessionHarness {
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
 
+  final _RecordingLinks _links = _RecordingLinks();
+
+  /// Every link the app opened in the browser, oldest first.
+  List<Uri> get openedLinks => _links.opened;
+
   /// The QR sign-in. Feed it what the phone and Discord would cause.
   final FakeRemoteAuth remoteAuth = FakeRemoteAuth();
 
@@ -197,6 +203,7 @@ final class SessionHarness {
         discordRemoteAuthGatewayFactory: remoteAuth,
         navigationMemoryRepository: _navigationMemory,
         captcha: _solvableCaptcha,
+        externalLinkLauncher: _links,
       ),
     ),
   );
@@ -716,6 +723,18 @@ final class _FakeDesktopWindow implements DesktopIntegration {
 
   @override
   Future<void> dispose() async => _subscription?.cancel();
+}
+
+/// The browser, as far as the app can tell: it keeps each link and says it
+/// opened.
+final class _RecordingLinks implements ExternalLinkLauncher {
+  final opened = <Uri>[];
+
+  @override
+  Future<bool> open(Uri uri) async {
+    opened.add(uri);
+    return true;
+  }
 }
 
 /// The QR sign-in, below the app's controller. It stands in for the phone and

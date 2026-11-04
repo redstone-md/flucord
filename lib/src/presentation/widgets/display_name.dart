@@ -147,11 +147,13 @@ class DisplayName extends StatelessWidget {
                   ? width * (1 + 0.5 * (1 - wave.abs()))
                   : width,
             ),
-            child: Stack(
-              children: [
-                _outlined(typed, drop, width),
-                ExcludeSemantics(child: _line(typed.copyWith(color: drop))),
-              ],
+            child: SelectionContainer.disabled(
+              child: Stack(
+                children: [
+                  _outlined(typed, drop, width),
+                  ExcludeSemantics(child: _line(typed.copyWith(color: drop))),
+                ],
+              ),
             ),
           ),
         if (outline != null)
@@ -187,15 +189,18 @@ class DisplayName extends StatelessWidget {
     Color color,
     double width, {
     Shadow? glow,
-  }) => ExcludeSemantics(
-    child: _line(
-      typed.copyWith(
-        foreground: Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = width
-          ..strokeJoin = StrokeJoin.round
-          ..color = color,
-        shadows: [?glow],
+  }) => SelectionContainer.disabled(
+    // Only the fill is the name; a copy of it stays out of a selection.
+    child: ExcludeSemantics(
+      child: _line(
+        typed.copyWith(
+          foreground: Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = width
+            ..strokeJoin = StrokeJoin.round
+            ..color = color,
+          shadows: [?glow],
+        ),
       ),
     ),
   );

@@ -129,12 +129,17 @@ class _FlucordAppState extends State<FlucordApp> {
               window: _composition.windowVisible,
               child: PresenceScope(
                 chat: _composition.chat,
-                child: NameStyleScope(
-                  videos: const ImageNameplateVideos(),
-                  fonts: _composition.nameFonts,
-                  child: CaptchaScope(
-                    builder: widget.bootstrap.captcha,
-                    child: child!,
+                // Above the navigator, so a popout or a dialog reads the
+                // chat as the pane does.
+                child: ChatScope(
+                  controller: _composition.chat,
+                  child: NameStyleScope(
+                    videos: const ImageNameplateVideos(),
+                    fonts: _composition.nameFonts,
+                    child: CaptchaScope(
+                      builder: widget.bootstrap.captcha,
+                      child: child!,
+                    ),
                   ),
                 ),
               ),
@@ -326,44 +331,41 @@ class _FlucordAppState extends State<FlucordApp> {
         ),
       );
     },
-    child: ChatScope(
-      controller: _composition.chat,
-      child: WorkspaceScope(
-        controller: _composition.workspace,
-        child: DirectCallScope(
-          controller: _composition.directCall,
-          child: ExternalLinkLauncherScope(
-            launcher: _composition.externalLinkLauncher,
-            child: AttachmentDownloadScope(
-              service: _composition.attachmentDownload,
-              child: VoiceMessageRecorderScope(
-                recorder: _composition.voiceMessageRecorder,
-                child: ThreadMembershipScope(
-                  controller: _composition.threadMembership,
-                  child: StageScope(
-                    controller: _composition.stage,
-                    child: SoundboardScope(
-                      controller: _composition.soundboard,
-                      child: GoLiveScope(
-                        controller: _composition.goLive,
-                        child: StreamViewerScope(
-                          controller: _composition.streamViewer,
-                          child: RoomFocusScope(
-                            focus: _composition.roomFocus,
-                            child: RemoteCameraScope(
-                              controller: _composition.remoteCameras,
-                              child: GifPickerScope(
-                                controller: _composition.gifPicker,
-                                child: ExpressionFavoritesScope(
-                                  controller: _composition.expressionFavorites,
-                                  child: SlashCommandScope(
-                                    controller: _composition.slashCommand,
-                                    child: MessageComponentScope(
-                                      controller: _composition.messageComponent,
-                                      child: SelfVideoScope(
-                                        controller: _composition.selfVideo,
-                                        child: child,
-                                      ),
+    child: WorkspaceScope(
+      controller: _composition.workspace,
+      child: DirectCallScope(
+        controller: _composition.directCall,
+        child: ExternalLinkLauncherScope(
+          launcher: _composition.externalLinkLauncher,
+          child: AttachmentDownloadScope(
+            service: _composition.attachmentDownload,
+            child: VoiceMessageRecorderScope(
+              recorder: _composition.voiceMessageRecorder,
+              child: ThreadMembershipScope(
+                controller: _composition.threadMembership,
+                child: StageScope(
+                  controller: _composition.stage,
+                  child: SoundboardScope(
+                    controller: _composition.soundboard,
+                    child: GoLiveScope(
+                      controller: _composition.goLive,
+                      child: StreamViewerScope(
+                        controller: _composition.streamViewer,
+                        child: RoomFocusScope(
+                          focus: _composition.roomFocus,
+                          child: RemoteCameraScope(
+                            controller: _composition.remoteCameras,
+                            child: GifPickerScope(
+                              controller: _composition.gifPicker,
+                              child: ExpressionFavoritesScope(
+                                controller: _composition.expressionFavorites,
+                                child: SlashCommandScope(
+                                  controller: _composition.slashCommand,
+                                  child: MessageComponentScope(
+                                    controller: _composition.messageComponent,
+                                    child: SelfVideoScope(
+                                      controller: _composition.selfVideo,
+                                      child: child,
                                     ),
                                   ),
                                 ),

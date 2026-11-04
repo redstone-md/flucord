@@ -30,7 +30,12 @@ class MemberAvatar extends StatelessWidget {
   final bool livePresence;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
+  Widget build(BuildContext context) => SelectionContainer.disabled(
+    // A picture, not text: its fallback letters stay out of a selection.
+    child: _avatar(context),
+  );
+
+  Widget _avatar(BuildContext context) => SizedBox.square(
     dimension: size,
     child: Stack(
       clipBehavior: Clip.none,

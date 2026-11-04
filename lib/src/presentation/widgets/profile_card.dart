@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/discord/discord_cdn.dart';
@@ -14,6 +17,8 @@ import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'display_name.dart';
 import 'art_tile.dart';
+import 'chat_scope.dart';
+import 'discord_markdown.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
@@ -179,57 +184,64 @@ class ProfileCard extends StatelessWidget {
               maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
             ),
             child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Header(
-                    data: data,
-                    metrics: _ProfileMetrics.card,
-                    backdrop: surfaces.raised,
-                    actions: actions,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      _padding,
-                      12,
-                      _padding,
-                      _padding,
+              child: SelectionArea(
+                // Names, the bio and the status can be selected and copied. A click on the name still opens the full profile.
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(
+                      data: data,
+                      metrics: _ProfileMetrics.card,
+                      backdrop: surfaces.raised,
+                      actions: actions,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      spacing: 12,
-                      children: [
-                        _Names(
-                          data: data,
-                          metrics: _ProfileMetrics.card,
-                          backdrop: surfaces.raised,
-                          onOpenFullProfile: actions.onOpenFullProfile,
-                        ),
-                        if (_preview)
-                          _AboutSections(data: data)
-                        else if (data.bio.isNotEmpty)
-                          _Bio(
-                            bio: data.bio,
-                            onViewFull: actions.onOpenFullProfile,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        _padding,
+                        12,
+                        _padding,
+                        _padding,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        spacing: 12,
+                        children: [
+                          _Names(
+                            data: data,
+                            metrics: _ProfileMetrics.card,
+                            backdrop: surfaces.raised,
+                            onOpenFullProfile: actions.onOpenFullProfile,
                           ),
-                        if (data.activity case final activity?)
-                          ActivityCard(
-                            activity: activity,
-                            now: now ?? DateTime.now(),
-                          ),
-                        if (showsRoles)
-                          _Roles(
-                            roles: roles,
-                            addable: actions.addableRoles,
-                            onAdd: actions.onAddRole,
-                          ),
-                        if (actions.onMessage case final send?)
-                          _MessageField(name: data.displayName, onSubmit: send),
-                      ],
+                          if (_preview)
+                            _AboutSections(data: data)
+                          else if (data.bio.isNotEmpty)
+                            _Bio(
+                              bio: data.bio,
+                              onViewFull: actions.onOpenFullProfile,
+                              onOpenLink: actions.onOpenLink,
+                            ),
+                          if (data.activity case final activity?)
+                            ActivityCard(
+                              activity: activity,
+                              now: now ?? DateTime.now(),
+                            ),
+                          if (showsRoles)
+                            _Roles(
+                              roles: roles,
+                              addable: actions.addableRoles,
+                              onAdd: actions.onAddRole,
+                            ),
+                          if (actions.onMessage case final send?)
+                            _MessageField(
+                              name: data.displayName,
+                              onSubmit: send,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -320,7 +332,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final accent = data.accentColorValue;
-    final avatar = _Avatar(data: data, metrics: metrics, backdrop: backdrop);
+    // A picture, not text: its fallback letter stays out of a selection.
+    final avatar = SelectionContainer.disabled(
+      child: _Avatar(data: data, metrics: metrics, backdrop: backdrop),
+    );
     final bannerHeight = metrics.bannerHeightOf(data);
     // The avatar's middle sits on the banner's bottom edge.
     final avatarTop = bannerHeight - metrics.avatarSize / 2;
@@ -611,29 +626,32 @@ class _MessageFieldState extends State<_MessageField> {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    return TextField(
-      key: const ValueKey('profile-card-message'),
-      controller: _text,
-      textInputAction: TextInputAction.send,
-      onSubmitted: (text) => widget.onSubmit(text.trim()),
-      style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
-      // Framed, as the activity card above it: siblings share a corner.
-      decoration:
-          recessedFieldDecoration(
-            context,
-            borderRadius: FlucordRadius.framed,
-          ).copyWith(
-            hintText: 'Message @${widget.name}',
-            hintStyle: FlucordTextRole.label.style.copyWith(
-              color: surfaces.captionText,
+    return SelectionContainer.disabled(
+      // Its hint is a prompt, not profile text.
+      child: TextField(
+        key: const ValueKey('profile-card-message'),
+        controller: _text,
+        textInputAction: TextInputAction.send,
+        onSubmitted: (text) => widget.onSubmit(text.trim()),
+        style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+        // Framed, as the activity card above it: siblings share a corner.
+        decoration:
+            recessedFieldDecoration(
+              context,
+              borderRadius: FlucordRadius.framed,
+            ).copyWith(
+              hintText: 'Message @${widget.name}',
+              hintStyle: FlucordTextRole.label.style.copyWith(
+                color: surfaces.captionText,
+              ),
+              // 9 + 18 + 9: the label line in the middle of a 36 px field,
+              // as the app's other fields have it.
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
-            // 9 + 18 + 9: the label line in the middle of a 36 px field,
-            // as the app's other fields have it.
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 9,
-            ),
-          ),
+      ),
     );
   }
 }

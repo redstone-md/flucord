@@ -207,65 +207,156 @@ class _MutualLine extends StatelessWidget {
 
 /// The bio, cut after a few lines. A bio that does not fit gets "View full
 /// bio", which opens the full profile; a bio that fits has no link.
-class _Bio extends StatelessWidget {
-  const _Bio({required this.bio, this.onViewFull});
+class _Bio extends StatefulWidget {
+  const _Bio({required this.bio, this.onViewFull, this.onOpenLink});
 
   static const _lines = 3;
 
   final String bio;
   final VoidCallback? onViewFull;
+  final ValueChanged<Uri>? onOpenLink;
+
+  @override
+  State<_Bio> createState() => _BioState();
+}
+
+class _BioState extends State<_Bio> {
+  bool _cut = false;
 
   @override
   Widget build(BuildContext context) {
-    final surfaces = context.surfaces;
-    final style = FlucordTextRole.label.style.copyWith(
-      color: surfaces.bodyText,
-    );
-    final text = Text(
-      bio,
-      key: const ValueKey('profile-card-bio'),
-      maxLines: _lines,
-      overflow: TextOverflow.ellipsis,
-      style: style,
-    );
-    final open = onViewFull;
-    if (open == null) return text;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Measured at the card's width and text scale: the same characters
-        // fit or not depending on where the lines break.
-        final painter = TextPainter(
-          text: TextSpan(text: bio, style: style),
-          maxLines: _lines,
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-        )..layout(maxWidth: constraints.maxWidth);
-        final cut = painter.didExceedMaxLines;
-        painter.dispose();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            text,
-            if (cut)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: InkWell(
-                  key: const ValueKey('profile-card-view-bio'),
-                  onTap: open,
-                  borderRadius: FlucordRadius.small,
-                  child: Text(
-                    'View full bio',
-                    style: FlucordTextRole.caption.style.copyWith(
-                      color: surfaces.link,
-                    ),
+    final lineHeight = MediaQuery.textScalerOf(
+      context,
+    ).scale(FlucordTextRole.label.lineHeight);
+    final open = widget.onViewFull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HeightClamp(
+          key: const ValueKey('profile-card-bio'),
+          maxHeight: lineHeight * _Bio._lines,
+          onCut: (cut) {
+            if (mounted && cut != _cut) setState(() => _cut = cut);
+          },
+          child: ProfileBioText(widget.bio, onOpenLink: widget.onOpenLink),
+        ),
+        if (_cut && open != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: InkWell(
+                key: const ValueKey('profile-card-view-bio'),
+                onTap: open,
+                borderRadius: FlucordRadius.small,
+                child: Text(
+                  'View full bio',
+                  style: FlucordTextRole.caption.style.copyWith(
+                    color: context.surfaces.link,
                   ),
                 ),
               ),
-          ],
-        );
-      },
+            ),
+          ),
+      ],
     );
   }
+}
+
+/// A bio drawn as chat draws a message: links, markdown, custom emoji,
+/// mentions and timestamps. A link goes to [onOpenLink], the card's own link
+/// action; without one, links do nothing.
+class ProfileBioText extends StatelessWidget {
+  const ProfileBioText(this.bio, {this.onOpenLink, super.key});
+
+  final String bio;
+  final ValueChanged<Uri>? onOpenLink;
+
+  @override
+  Widget build(BuildContext context) => DiscordMarkdown(
+    body: bio,
+    // Read once, not followed: a bio does not change with the chat.
+    workspace: ChatScope.maybeRead(context)?.workspace,
+    textStyle: FlucordTextRole.label.style.copyWith(
+      color: context.surfaces.bodyText,
+    ),
+    onTapLink: (href) {
+      final uri = Uri.tryParse(href);
+      if (uri != null) onOpenLink?.call(uri);
+    },
+  );
+}
+
+/// Shows at most [maxHeight] of [child], clipped, and tells [onCut] after
+/// each layout that changes whether [child] is taller. A markdown body has no
+/// line count to cut at, so it is cut by height.
+class _HeightClamp extends SingleChildRenderObjectWidget {
+  const _HeightClamp({
+    required this.maxHeight,
+    required this.onCut,
+    required super.child,
+    super.key,
+  });
+
+  final double maxHeight;
+  final ValueChanged<bool> onCut;
+
+  @override
+  _RenderHeightClamp createRenderObject(BuildContext context) =>
+      _RenderHeightClamp(maxHeight, onCut);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderHeightClamp renderObject,
+  ) {
+    renderObject
+      ..maxHeight = maxHeight
+      ..onCut = onCut;
+  }
+}
+
+class _RenderHeightClamp extends RenderProxyBox {
+  _RenderHeightClamp(this._maxHeight, this.onCut);
+
+  double _maxHeight;
+  ValueChanged<bool> onCut;
+  bool? _cut;
+
+  set maxHeight(double value) {
+    if (value == _maxHeight) return;
+    _maxHeight = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child!;
+    child.layout(
+      constraints.copyWith(minHeight: 0, maxHeight: double.infinity),
+      parentUsesSize: true,
+    );
+    size = constraints.constrain(
+      Size(child.size.width, math.min(child.size.height, _maxHeight)),
+    );
+    // Half a pixel of slack for rounding in the line heights.
+    final cut = child.size.height > _maxHeight + 0.5;
+    if (cut == _cut) return;
+    _cut = cut;
+    SchedulerBinding.instance.addPostFrameCallback((_) => onCut(cut));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) => context.pushClipRect(
+    needsCompositing,
+    offset,
+    Offset.zero & size,
+    super.paint,
+  );
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) =>
+      size.contains(position) && super.hitTest(result, position: position);
 }
 
 /// The roles held here as chips with their colour, and "+" for someone who

@@ -201,6 +201,8 @@ void main() {
 
       await tester.tap(_key('profile-card-avatar'));
       await tester.tap(_key('profile-card-name'));
+      // The bio is measured as laid out, so its link comes a frame later.
+      await tester.pump();
       await tester.tap(_key('profile-card-view-bio'));
 
       expect(opened, 3);

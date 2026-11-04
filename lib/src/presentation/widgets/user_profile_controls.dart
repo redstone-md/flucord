@@ -138,7 +138,11 @@ class ProfileFormWithPreview extends StatelessWidget {
       builder: (context, constraints) => constraints.maxWidth < besideWidth
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [form, const SizedBox(height: _gap), column],
+              children: [
+                form,
+                const SizedBox(height: _gap),
+                column,
+              ],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
