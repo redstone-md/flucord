@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/reaction_repository.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
@@ -195,7 +196,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         IconButton(
           tooltip: 'Close',
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.close, size: 18),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
         ),
         const SizedBox(width: 4),
       ],
@@ -301,8 +302,8 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.auto_awesome,
+              FlucordIcon(
+                FlucordIcons.superReaction,
                 size: 12,
                 color: context.surfaces.warning,
               ),
@@ -348,7 +349,11 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
           ),
         ),
         if (row.type == DiscordReactionType.burst) ...[
-          Icon(Icons.auto_awesome, size: 11, color: context.surfaces.warning),
+          FlucordIcon(
+            FlucordIcons.superReaction,
+            size: 11,
+            color: context.surfaces.warning,
+          ),
           const SizedBox(width: 4),
           const Text('Super', style: TextStyle(fontSize: FlucordType.caption)),
         ],
@@ -363,7 +368,11 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     ),
     child: Row(
       children: [
-        Icon(Icons.error_outline, size: 15, color: context.surfaces.errorText),
+        FlucordIcon(
+          FlucordIcons.error,
+          size: 15,
+          color: context.surfaces.errorText,
+        ),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(

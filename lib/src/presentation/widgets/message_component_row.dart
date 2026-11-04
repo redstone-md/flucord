@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_component_controller.dart';
 import '../../domain/message_component.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_type.dart';
 import 'component_directory_picker.dart';
 import '../../theme/flucord_theme.dart';
@@ -139,7 +140,7 @@ class _Button extends StatelessWidget {
         Text(label),
         if (component.isLink) ...[
           const SizedBox(width: 4),
-          const Icon(Icons.open_in_new, size: 12),
+          const FlucordIcon(FlucordIcons.openExternal, size: 12),
         ],
       ],
     );

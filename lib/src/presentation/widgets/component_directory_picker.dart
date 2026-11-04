@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/message_component.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -159,7 +160,7 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
             onChanged: (value) => setState(() => _query = value),
             decoration: const InputDecoration(
               isDense: true,
-              prefixIcon: Icon(Icons.search, size: 18),
+              prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
               hintText: 'Search',
             ),
           ),

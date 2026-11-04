@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -168,8 +169,8 @@ class _ReactionChip extends StatelessWidget {
                   ),
                   if (reaction.burstCount > 0) ...[
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.auto_awesome,
+                    FlucordIcon(
+                      FlucordIcons.superReaction,
                       size: 10,
                       color: burstColor == null
                           ? context.surfaces.warning

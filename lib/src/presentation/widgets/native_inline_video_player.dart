@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -325,12 +326,12 @@ class InlineVideoControls extends StatelessWidget {
       child: Row(
         children: [
           _controlButton(
-            icon: state.isPlaying ? Icons.pause : Icons.play_arrow,
+            icon: state.isPlaying ? FlucordIcons.pause : FlucordIcons.play,
             tooltip: state.isPlaying ? 'Pause' : 'Play',
             onPressed: onTogglePlayback,
           ),
           _controlButton(
-            icon: state.isMuted ? Icons.volume_off : Icons.volume_up,
+            icon: state.isMuted ? FlucordIcons.volumeOff : FlucordIcons.volume,
             tooltip: state.isMuted ? 'Unmute' : 'Mute',
             onPressed: onToggleMute,
           ),
@@ -363,7 +364,9 @@ class InlineVideoControls extends StatelessWidget {
             ),
           ),
           _controlButton(
-            icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            icon: isFullscreen
+                ? FlucordIcons.exitFullscreen
+                : FlucordIcons.fullscreen,
             tooltip: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
             onPressed: onFullscreen,
           ),
@@ -373,12 +376,12 @@ class InlineVideoControls extends StatelessWidget {
   }
 
   Widget _controlButton({
-    required IconData icon,
+    required FlucordIconData icon,
     required String tooltip,
     required VoidCallback onPressed,
   }) => IconButton(
     onPressed: onPressed,
-    icon: Icon(icon, size: 18, color: Colors.white),
+    icon: FlucordIcon(icon, size: 18, color: Colors.white),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
     constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -457,7 +460,7 @@ final class _FullscreenVideoPage extends StatelessWidget {
                 child: SafeArea(
                   child: IconButton.filledTonal(
                     onPressed: close,
-                    icon: const Icon(Icons.close),
+                    icon: const FlucordIcon(FlucordIcons.clear),
                     tooltip: 'Exit fullscreen',
                   ),
                 ),
@@ -482,8 +485,8 @@ class _InlineVideoError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.video_file_outlined,
+          FlucordIcon(
+            FlucordIcons.videoFile,
             color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 8),

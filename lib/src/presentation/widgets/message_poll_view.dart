@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -28,7 +29,7 @@ class MessagePollView extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.poll_outlined, size: 17),
+              const FlucordIcon(FlucordIcons.poll, size: 17),
               const SizedBox(width: 7),
               Expanded(
                 child: Text(

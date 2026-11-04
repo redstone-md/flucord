@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/message_attachment_view.dart';
 import 'package:flucord/src/presentation/widgets/native_inline_video_player.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets('renders video attachments through the native video boundary', (
@@ -120,7 +122,7 @@ void main() {
     await tester.tap(find.byTooltip('Exit fullscreen'));
 
     expect(exits, 1);
-    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+    expect(findFlucordIcon(FlucordIcons.exitFullscreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

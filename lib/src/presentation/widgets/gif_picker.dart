@@ -130,7 +130,7 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
                   unawaited(widget.controller.searchNow(value)),
               decoration: const InputDecoration(
                 isDense: true,
-                prefixIcon: Icon(Icons.search, size: 18),
+                prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
                 hintText: 'Search Tenor',
               ),
             ),
@@ -325,7 +325,7 @@ class _TileFrame extends StatelessWidget {
             fit: BoxFit.cover,
             excludeFromSemantics: true,
             errorBuilder: (_, _, _) => const Center(
-              child: Icon(Icons.broken_image_outlined, size: 18),
+              child: FlucordIcon(FlucordIcons.brokenImage, size: 18),
             ),
           ),
         ),

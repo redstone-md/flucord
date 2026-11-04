@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -40,7 +41,7 @@ class ApplicationCommandMenuButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       onPressed: () => unawaited(_open(context)),
-      icon: const Icon(Icons.apps),
+      icon: const FlucordIcon(FlucordIcons.apps),
     );
   }
 
