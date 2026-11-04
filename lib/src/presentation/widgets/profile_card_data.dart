@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../domain/user_profile.dart';
 import 'discord_relationship_avatar.dart';
 
@@ -10,8 +11,8 @@ import 'discord_relationship_avatar.dart';
 ///
 /// The host builds it from what it knows, and every part the host cannot
 /// fill stays empty: the card hides a part with nothing in it rather than
-/// guessing. A member, a Social SDK friend and (later) the account's own
-/// profile each have their own factory.
+/// guessing. A member, a Social SDK friend and the account's own profile
+/// each have their own factory.
 @immutable
 final class ProfileCardData {
   const ProfileCardData({
@@ -33,6 +34,7 @@ final class ProfileCardData {
     this.bio = '',
     this.activity,
     this.roles,
+    this.memberSince,
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
@@ -94,6 +96,37 @@ final class ProfileCardData {
     );
   }
 
+  /// The account's own profile while it is being edited: [profile] says who
+  /// it is, the rest are the form's current values, saved or not. The
+  /// images are the staged ones where the user picked new ones.
+  factory ProfileCardData.ownProfile(
+    UserProfile profile, {
+    required String displayName,
+    required String pronouns,
+    required String bio,
+    required int? accentColor,
+    required String? avatarUrl,
+    required String? bannerUrl,
+    UserPresence? presence,
+  }) {
+    final name = displayName.isEmpty ? profile.username : displayName;
+    return ProfileCardData(
+      userId: profile.userId,
+      displayName: name,
+      monogram: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+      username: profile.hasLegacyDiscriminator
+          ? '${profile.username}#${profile.discriminator}'
+          : _nonEmpty(profile.username),
+      avatarUrl: avatarUrl,
+      presence: presence,
+      bannerUrl: bannerUrl,
+      accentColorValue: accentColor == null ? null : 0xff000000 | accentColor,
+      pronouns: pronouns,
+      bio: bio,
+      memberSince: DiscordSnowflake.createdAt(profile.userId),
+    );
+  }
+
   final String userId;
   final String displayName;
 
@@ -125,6 +158,9 @@ final class ProfileCardData {
   /// The roles they hold in this server, highest first. Null outside a
   /// server, which hides the section.
   final List<CommunityRole>? roles;
+
+  /// When the account was made. Null hides the line.
+  final DateTime? memberSince;
 
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {

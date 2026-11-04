@@ -19,6 +19,7 @@ import '../../application/voice_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../theme/flucord_icons.dart';
@@ -423,7 +424,15 @@ class _Body extends StatelessWidget {
         builder: (_, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            UserProfileSection(controller: profile),
+            UserProfileSection(
+              controller: profile,
+              presence: switch (controller.settings?.status.status) {
+                final status? when status.isNotEmpty => UserPresence(
+                  status: Presence.fromWire(status),
+                ),
+                _ => null,
+              },
+            ),
             const SizedBox(height: 28),
             // Below the profile rather than beside it: these two change what
             // somebody signs in with, and mixing them into the same form is

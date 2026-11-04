@@ -6,9 +6,11 @@ import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
 import 'flucord_controls.dart';
-import 'user_settings_controls.dart';
+import 'profile_card.dart';
 import 'remote_identity_image.dart';
+import 'user_settings_controls.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
 const profileAccentSwatches = <int>[
@@ -99,67 +101,110 @@ class ProfileField extends StatelessWidget {
   );
 }
 
-/// The round avatar, with the controls that replace or clear it.
-class ProfileAvatarButton extends StatelessWidget {
-  const ProfileAvatarButton({
+/// The form on the left and the live preview in a 300 px column on the
+/// right. Where the two do not fit side by side, the preview goes under the
+/// form.
+class ProfileFormWithPreview extends StatelessWidget {
+  const ProfileFormWithPreview({
+    required this.form,
+    required this.preview,
+    super.key,
+  });
+
+  /// The narrowest width that still fits the form beside the preview.
+  static const besideWidth = 680.0;
+  static const _gap = 32.0;
+
+  final Widget form;
+  final Widget preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final column = Column(
+      key: const ValueKey('profile-preview'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Preview',
+          style: FlucordTextRole.caption.style.copyWith(
+            color: context.surfaces.captionText,
+          ),
+        ),
+        const SizedBox(height: 8),
+        preview,
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < besideWidth
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [form, const SizedBox(height: _gap), column],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: form),
+                const SizedBox(width: _gap),
+                SizedBox(width: ProfileCard.width, child: column),
+              ],
+            ),
+    );
+  }
+}
+
+/// The avatar as it is now, with the buttons that replace or remove it.
+class ProfileAvatarRow extends StatelessWidget {
+  const ProfileAvatarRow({
     required this.url,
-    required this.initial,
+    required this.monogram,
     required this.onPick,
     required this.onRemove,
     super.key,
   });
 
+  static const _size = 80.0;
+
   final String? url;
-  final String initial;
+
+  /// What stands in where there is no avatar.
+  final String monogram;
   final VoidCallback onPick;
   final VoidCallback? onRemove;
 
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) => Row(
     children: [
-      Container(
-        width: 76,
-        height: 76,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: context.surfaces.canvas,
-          border: Border.all(color: context.surfaces.raised, width: 5),
-        ),
-        child: RemoteIdentityImage(
-          url: url,
-          fallback: Center(
-            child: Text(
-              initial.isEmpty ? '?' : initial.characters.first.toUpperCase(),
-              style: const TextStyle(
-                fontSize: FlucordType.display,
-                fontWeight: FontWeight.w500,
+      ClipOval(
+        child: SizedBox.square(
+          dimension: _size,
+          child: RemoteIdentityImage(
+            url: url,
+            fallback: ColoredBox(
+              color: context.surfaces.control,
+              child: Center(
+                child: Text(
+                  monogram,
+                  style: FlucordTextRole.display.style.copyWith(
+                    color: FlucordFixedColors.onFill,
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
-      Positioned(
-        right: 0,
-        bottom: 0,
-        child: ProfileImageActions(
-          label: 'avatar',
-          compact: true,
-          onPick: onPick,
-          onRemove: onRemove,
-        ),
-      ),
+      const SizedBox(width: 16),
+      ProfileImageButtons(label: 'avatar', onPick: onPick, onRemove: onRemove),
     ],
   );
 }
 
-/// Replace and remove, for one image.
-class ProfileImageActions extends StatelessWidget {
-  const ProfileImageActions({
+/// "Change" and "Remove" for one profile image.
+class ProfileImageButtons extends StatelessWidget {
+  const ProfileImageButtons({
     required this.label,
     required this.onPick,
     required this.onRemove,
-    this.compact = false,
     super.key,
   });
 
@@ -168,73 +213,26 @@ class ProfileImageActions extends StatelessWidget {
 
   /// Null when there is nothing stored to remove.
   final VoidCallback? onRemove;
-  final bool compact;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
     children: [
-      _Button(
-        buttonKey: ValueKey('profile-pick-$label'),
-        tooltip: 'Change $label',
-        icon: FlucordIcons.edit,
-        compact: compact,
+      FlucordButton(
+        key: ValueKey('profile-pick-$label'),
+        label: 'Change $label',
         onPressed: onPick,
       ),
-      if (onRemove != null) ...[
-        const SizedBox(width: 4),
-        _Button(
-          buttonKey: ValueKey('profile-remove-$label'),
-          tooltip: 'Remove $label',
-          icon: FlucordIcons.clear,
-          compact: compact,
-          onPressed: onRemove!,
+      if (onRemove case final remove?)
+        FlucordButton(
+          key: ValueKey('profile-remove-$label'),
+          label: 'Remove $label',
+          kind: FlucordButtonKind.ghost,
+          onPressed: remove,
         ),
-      ],
     ],
   );
-}
-
-class _Button extends StatelessWidget {
-  const _Button({
-    required this.buttonKey,
-    required this.tooltip,
-    required this.icon,
-    required this.compact,
-    required this.onPressed,
-  });
-
-  final Key buttonKey;
-  final String tooltip;
-  final FlucordIconData icon;
-  final bool compact;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = compact ? 24.0 : 28.0;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: FlucordFixedColors.scrim,
-        shape: const CircleBorder(),
-        child: InkWell(
-          key: buttonKey,
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: FlucordIcon(
-              icon,
-              size: compact ? 13 : 15,
-              color: FlucordFixedColors.onFill,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// The banner colour behind the profile, or none at all.
