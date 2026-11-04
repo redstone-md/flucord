@@ -12,7 +12,7 @@ import 'support/session_harness.dart';
 const _messageId = '900000000000000081';
 const _friendAsset = 'a_8f1c0e2b7d4a6c9e3b5f1a0d2c4e6b8a';
 const _ownAsset = '3c5e7a9b1d2f4a6c8e0b2d4f6a8c0e1b';
-const _decorationSku = '1144058844004233369';
+const _decorationSku = '100000000000000321';
 
 const _presets = 'https://cdn.discordapp.com/avatar-decoration-presets';
 const _friendStill = '$_presets/$_friendAsset.png?size=96&passthrough=false';

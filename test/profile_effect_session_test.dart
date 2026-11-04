@@ -13,8 +13,8 @@ const _messageId = '900000000000000071';
 const _profilePath = '/api/v9/users/${SessionHarness.friendId}/profile';
 const _cataloguePath = '/api/v9/user-profile-effects';
 
-const _sakuraId = '1139323097930027001';
-const _lanternId = '1139323097930027002';
+const _sakuraId = '100000000000000301';
+const _lanternId = '100000000000000302';
 const _effects = 'https://cdn.discordapp.com/assets/profile_effects/effects';
 const _sakuraIntro = '$_effects/sakura/intro.png';
 const _sakuraLoop = '$_effects/sakura/loop.png';
@@ -34,7 +34,7 @@ Map<String, Object?> _catalogue() => {
     {
       'type': 1,
       'id': _sakuraId,
-      'sku_id': '1139323098370424901',
+      'sku_id': '100000000000000311',
       'title': 'Sakura',
       'accessibilityLabel': 'Falling petals',
       'animationType': 1,
@@ -68,7 +68,7 @@ Map<String, Object?> _catalogue() => {
     {
       'type': 1,
       'id': _lanternId,
-      'sku_id': '1139323098370424902',
+      'sku_id': '100000000000000312',
       'reducedMotionSrc': '$_effects/lantern/reducedMotion.png',
       'effects': [
         {
