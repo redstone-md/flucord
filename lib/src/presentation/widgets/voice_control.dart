@@ -63,6 +63,8 @@ final class VoiceControl {
          null || GoLiveController(isSupported: false) =>
            'Screen sharing needs a Discord session',
          GoLiveController(isSharing: true) => 'Stop streaming',
+         GoLiveController(canEncode: false) =>
+           'Screen sharing is not available in this build',
          _ => 'Share your screen',
        },
        icon = goLive?.isSharing ?? false
