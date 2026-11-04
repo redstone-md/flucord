@@ -260,8 +260,8 @@ class _InvalidInvite extends StatelessWidget {
     final surfaces = context.surfaces;
     return _InviteLayout(
       caption: sentByMe
-          ? 'You sent an invite, but'
-          : 'You received an invite, but',
+          ? 'You sent an invite, but…'
+          : 'You received an invite, but…',
       tile: DecoratedBox(
         decoration: BoxDecoration(
           color: surfaces.danger.withValues(alpha: _tileAlpha),
@@ -270,7 +270,7 @@ class _InvalidInvite extends StatelessWidget {
         child: FlucordIcon(FlucordIcons.mail, color: surfaces.danger),
       ),
       title: Text(
-        'Invalid Invite',
+        'Invalid invite',
         style: FlucordTextRole.heading.style.copyWith(color: surfaces.danger),
       ),
       detail: Text(

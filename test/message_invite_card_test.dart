@@ -54,11 +54,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('You sent an invite, but'), findsOneWidget);
+    expect(find.text('You sent an invite, but…'), findsOneWidget);
     expect(find.text('Try sending a new invite'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Join'), findsNothing);
     final danger = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger;
-    final title = tester.widget<Text>(find.text('Invalid Invite'));
+    final title = tester.widget<Text>(find.text('Invalid invite'));
     expect(title.style?.color, danger);
     final hint = tester.widget<Text>(find.text('Try sending a new invite'));
     expect(hint.style?.color, isNot(danger), reason: 'danger is only the tile');
