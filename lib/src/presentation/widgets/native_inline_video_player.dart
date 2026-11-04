@@ -41,6 +41,10 @@ final class InlineVideoViewState {
   final bool isMuted;
   final bool isCompleted;
 
+  /// A spinner turns forever, so it shows only while the player plays and
+  /// waits for data. A paused player shows its play icon.
+  bool get showsSpinner => isPlaying && isBuffering;
+
   InlineVideoViewState copyWith({
     Duration? position,
     Duration? duration,
@@ -272,7 +276,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
                 if (_error != null)
                   _InlineVideoError(onRetry: _initialize)
                 else ...[
-                  if (_viewState.isBuffering)
+                  if (_viewState.showsSpinner)
                     const Center(
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
@@ -435,7 +439,7 @@ final class _FullscreenVideoPage extends StatelessWidget {
                 builder: (context, state, _) => Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (state.isBuffering)
+                    if (state.showsSpinner)
                       const Center(
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),

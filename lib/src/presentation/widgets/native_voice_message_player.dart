@@ -45,6 +45,10 @@ final class VoiceMessageViewState {
   final bool isBuffering;
   final bool isCompleted;
 
+  /// A spinner turns forever, so it shows only while the player plays and
+  /// waits for data. A paused player shows its play icon.
+  bool get showsSpinner => isPlaying && isBuffering;
+
   VoiceMessageViewState copyWith({
     Duration? position,
     Duration? duration,
@@ -273,7 +277,7 @@ class VoiceMessageControls extends StatelessWidget {
             tooltip: state.isPlaying
                 ? 'Pause voice message'
                 : 'Play voice message',
-            icon: state.isBuffering
+            icon: state.showsSpinner
                 ? const SizedBox.square(
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
