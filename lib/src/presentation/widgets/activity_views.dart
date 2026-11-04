@@ -239,30 +239,42 @@ class ActivityCard extends StatelessWidget {
           _ActivityArtwork(activity: activity, size: _artSize),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                line(verb.isEmpty ? 'Activity' : verb, caption),
-                const SizedBox(height: 2),
-                line(
-                  activity.name,
-                  FlucordTextRole.label.strong.copyWith(color: surfaces.text),
+            // Lifted so the letters, not the line boxes, centre on the art.
+            child: Transform.translate(
+              offset: Offset(
+                0,
+                -FlucordType.opticalLift(
+                  FlucordTextRole.caption,
+                  details.isEmpty && state == null
+                      ? FlucordTextRole.label
+                      : FlucordTextRole.caption,
                 ),
-                if (details.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  line(details, caption),
-                ],
-                if (state != null) ...[
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  line(verb.isEmpty ? 'Activity' : verb, caption),
                   const SizedBox(height: 2),
                   line(
-                    party != null && party.hasSize
-                        ? '$state (${party.currentSize} of ${party.maxSize})'
-                        : state,
-                    caption,
+                    activity.name,
+                    FlucordTextRole.label.strong.copyWith(color: surfaces.text),
                   ),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    line(details, caption),
+                  ],
+                  if (state != null) ...[
+                    const SizedBox(height: 2),
+                    line(
+                      party != null && party.hasSize
+                          ? '$state (${party.currentSize} of ${party.maxSize})'
+                          : state,
+                      caption,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

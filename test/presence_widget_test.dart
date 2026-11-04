@@ -15,6 +15,7 @@ import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/self_presence_scope.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -397,6 +398,46 @@ void main() {
       );
       expect(kind.left, greaterThan(art.right));
       expect(kind.top, greaterThanOrEqualTo(art.top));
+    });
+
+    testWidgets('the text beside the art sits in its middle by eye', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivityCard(
+              activity: UserActivity(
+                name: 'Dota 2',
+                details: 'Ranked match',
+                timestamps: ActivityTimestamps(
+                  startMs: _now.millisecondsSinceEpoch - 80 * 60000,
+                ),
+              ),
+              now: _now,
+            ),
+          ),
+        ),
+      );
+
+      final card = find.byKey(const ValueKey('activity-card'));
+      final art = tester.getRect(
+        find.descendant(of: card, matching: find.byType(ClipRRect)).first,
+      );
+      final kind = tester.getRect(
+        find.descendant(of: card, matching: find.text('Playing')),
+      );
+      final details = tester.getRect(
+        find.descendant(of: card, matching: find.textContaining('Ranked')),
+      );
+      final lift = FlucordType.opticalLift(
+        FlucordTextRole.caption,
+        FlucordTextRole.caption,
+      );
+      expect(
+        (kind.top + details.bottom) / 2,
+        closeTo(art.center.dy - lift, 0.01),
+      );
     });
 
     testWidgets('a unicode emoji renders beside the status text', (
