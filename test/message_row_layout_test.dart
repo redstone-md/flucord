@@ -15,6 +15,8 @@ const _openerBody = 'the first line of a new author';
 const _followUpBody = 'a second line from the same author';
 const _mentionBody = 'a line that names you';
 
+final _longName = List.filled(30, 'longname').join();
+
 /// The highlight that wraps one message: hover and mention fill it.
 Finder _surface(String id) => find.byKey(ValueKey('message-surface-$id'));
 
@@ -203,6 +205,46 @@ void main() {
       expect(text.height, 18);
       expect(reply.bottom, lessThanOrEqualTo(name.top));
     });
+
+    testSession(
+      'a long name gives way to the quoted text',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await session.dispatch('MESSAGE_CREATE', {
+          ...rawMessage(
+            id: replyId,
+            channelId: SessionHarness.channelId,
+            guildId: SessionHarness.guildId,
+            authorId: SessionHarness.currentUserId,
+            content: 'my answer',
+          ),
+          'referenced_message': rawMessage(
+            id: quotedId,
+            channelId: SessionHarness.channelId,
+            authorId: SessionHarness.friendId,
+            content: 'the question',
+          ),
+        });
+
+        expect(
+          _in(session, replyId, find.textContaining(_longName)),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        final text = tester.getRect(
+          _in(session, replyId, find.textContaining('the question')),
+        );
+        expect(text.width, greaterThan(0));
+      },
+      ready: SessionHarness.defaultReady()
+        ..['users'] = [
+          {
+            'id': SessionHarness.friendId,
+            'username': 'friend',
+            'global_name': _longName,
+          },
+        ],
+    );
 
     testSession('starts at the text column with a 16 px avatar', (
       tester,

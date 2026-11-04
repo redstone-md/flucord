@@ -24,6 +24,10 @@ class MessageReplyPreview extends StatelessWidget {
   static const _avatarSize = 16.0;
   static const _gap = 4.0;
 
+  /// The most of the line a long name may take, so the quoted text still
+  /// shows beside it.
+  static const _nameShare = 0.5;
+
   final MessageReply reply;
 
   /// Who wrote the quoted message, or null when this client never met them.
@@ -44,46 +48,55 @@ class MessageReplyPreview extends StatelessWidget {
     final label = FlucordTextRole.label.style;
     return SizedBox(
       height: height,
-      child: Row(
-        children: [
-          if (author == null)
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: surfaces.control,
-                shape: BoxShape.circle,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            if (author == null)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: surfaces.control,
+                  shape: BoxShape.circle,
+                ),
+                child: const SizedBox.square(dimension: _avatarSize),
+              )
+            else
+              MemberAvatar(
+                member: author,
+                size: _avatarSize,
+                showPresence: false,
+                spaceId: spaceId,
               ),
-              child: const SizedBox.square(dimension: _avatarSize),
-            )
-          else
-            MemberAvatar(
-              member: author,
-              size: _avatarSize,
-              showPresence: false,
-              spaceId: spaceId,
+            const SizedBox(width: _gap),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth * _nameShare,
+              ),
+              child: Text(
+                author?.displayName ?? 'Unknown user',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: label.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: nameColor ?? surfaces.muted,
+                ),
+              ),
             ),
-          const SizedBox(width: _gap),
-          Text(
-            author?.displayName ?? 'Unknown user',
-            maxLines: 1,
-            style: label.copyWith(
-              fontWeight: FontWeight.w500,
-              color: nameColor ?? surfaces.muted,
+            if (author != null) NameTags(member: author, showsClan: false),
+            const SizedBox(width: _gap),
+            Expanded(
+              child: Text(
+                reply.body.isEmpty
+                    ? 'Message unavailable'
+                    : messagePreviewText(context, reply.body, workspace),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: label.copyWith(color: surfaces.captionText),
+              ),
             ),
-          ),
-          if (author != null) NameTags(member: author, showsClan: false),
-          const SizedBox(width: _gap),
-          Expanded(
-            child: Text(
-              reply.body.isEmpty
-                  ? 'Message unavailable'
-                  : messagePreviewText(context, reply.body, workspace),
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: label.copyWith(color: surfaces.captionText),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
