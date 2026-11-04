@@ -67,7 +67,7 @@ void main() {
     ) async {
       final before = tester.getSize(find.byType(Scaffold).first).width;
 
-      await tester.tap(find.byKey(const ValueKey('open-user-settings')));
+      await tester.tap(find.byKey(const ValueKey('account-settings')));
       await session.settle();
       final navigation = find.byKey(
         const ValueKey('settings-nav-accessibility'),
@@ -271,7 +271,7 @@ void main() {
       testSession(
         'the user settings window stays on screen at $name',
         (tester, session) async {
-          await tester.tap(find.byKey(const ValueKey('open-user-settings')));
+          await tester.tap(find.byKey(const ValueKey('account-settings')));
           await session.settle();
 
           _expectInside(
