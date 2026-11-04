@@ -447,7 +447,10 @@ final class _FakeRepository implements UserProfileRepository {
   }
 
   @override
-  Future<OtherUserProfile?> loadProfileOf(String userId) async => null;
+  Future<OtherUserProfile?> loadProfileOf(
+    String userId, {
+    String? serverId,
+  }) async => null;
 
   void push(UserProfile profile) {
     _loaded = true;

@@ -89,12 +89,16 @@ final class ProfileCardData {
         null => null,
       },
       presence: presence,
-      bannerUrl: DiscordCdn.userBanner(member.id, profile?.bannerHash),
+      bannerUrl: switch (profile?.serverProfile) {
+        ServerProfile(:final guildId, bannerHash: final hash?) =>
+          DiscordCdn.guildMemberBanner(guildId, member.id, hash),
+        _ => DiscordCdn.userBanner(member.id, profile?.bannerHash),
+      },
       accentColorValue: switch (profile?.accentColor) {
         final rgb? => DiscordRgb(rgb).opaque,
         null => member.colorValue,
       },
-      pronouns: profile?.pronouns ?? '',
+      pronouns: profile?.effectivePronouns ?? '',
       clanTag: tags.clanTag,
       nameStyle: tags.nameStyle,
       badges: profile?.badges ?? const [],
@@ -110,7 +114,7 @@ final class ProfileCardData {
           if (workspace?.spaceOrNull(server.id) case final space?)
             (space: space, nickname: server.nickname),
       ],
-      bio: profile?.bio ?? '',
+      bio: profile?.effectiveBio ?? '',
       // Discord's card shows a plain "Playing" too, not only rich presence.
       activity: presence.doing.firstOrNull,
       voiceRoom: voiceRoom,

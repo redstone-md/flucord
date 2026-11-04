@@ -276,6 +276,35 @@ final class ProfileConnection {
   int get hashCode => Object.hash(type, name, id, verified);
 }
 
+/// What somebody set for one server: Discord's `guild_member_profile`.
+///
+/// Each field is null where the server profile does not set it, and the
+/// user profile's value shows instead.
+final class ServerProfile {
+  const ServerProfile({
+    required this.guildId,
+    this.bio,
+    this.pronouns,
+    this.bannerHash,
+  });
+
+  final String guildId;
+  final String? bio;
+  final String? pronouns;
+  final String? bannerHash;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServerProfile &&
+      other.guildId == guildId &&
+      other.bio == bio &&
+      other.pronouns == pronouns &&
+      other.bannerHash == bannerHash;
+
+  @override
+  int get hashCode => Object.hash(guildId, bio, pronouns, bannerHash);
+}
+
 /// A server both this account and the profile's user belong to.
 final class MutualServer {
   const MutualServer({required this.id, this.nickname});
@@ -347,6 +376,7 @@ final class OtherUserProfile {
     this.connections = const [],
     this.mutualServers = const [],
     this.mutualFriends = const [],
+    this.serverProfile,
   });
 
   final String userId;
@@ -376,7 +406,16 @@ final class OtherUserProfile {
   /// Friends both accounts share. Same absence rules as [mutualServers].
   final List<MutualFriend> mutualFriends;
 
+  /// The profile set for the server it was read in, or null outside a
+  /// server or where the person set none.
+  final ServerProfile? serverProfile;
+
   String get effectiveName => displayName.isEmpty ? username : displayName;
+
+  /// The server profile's bio where it sets one, else the user profile's.
+  String get effectiveBio => serverProfile?.bio ?? bio;
+
+  String get effectivePronouns => serverProfile?.pronouns ?? pronouns;
 
   bool get hasLegacyDiscriminator =>
       discriminator.isNotEmpty && discriminator != '0';
@@ -394,10 +433,12 @@ abstract interface class UserProfileRepository {
   /// Applies [patch] and returns the profile the server echoed back.
   Future<UserProfile?> apply(UserProfilePatch patch);
 
-  /// Reads somebody else's profile.
+  /// Reads somebody else's profile, with what they set for [serverId] when
+  /// it is given.
   ///
   /// Null when Discord refused the read, which is an answer about the
   /// relationship rather than a fault: the route needs a mutual server, a
   /// friend link, or a pending request, and a stranger meets none of them.
-  Future<OtherUserProfile?> loadProfileOf(String userId);
+  /// A failure that may pass, such as a rate limit, throws instead.
+  Future<OtherUserProfile?> loadProfileOf(String userId, {String? serverId});
 }

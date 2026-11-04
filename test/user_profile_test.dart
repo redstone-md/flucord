@@ -481,7 +481,10 @@ final class _FakeTransport implements DiscordUserProfileTransport {
   }
 
   @override
-  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+  Future<Map<String, Object?>?> readUserProfile(
+    String userId, {
+    String? guildId,
+  }) async {
     requestedProfileIds.add(userId);
     if (refuseProfile) return null;
     return {
