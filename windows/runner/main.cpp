@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include "flutter_window.h"
+#include "start_menu_shortcut.h"
 #include "utils.h"
 
 #include <protocol_handler_windows/protocol_handler_windows_plugin_c_api.h>
@@ -27,6 +28,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+  // Must match the appName the Dart side gives local_notifier, which is also
+  // the AppUserModelID in windows/installer/flucord.iss.
+  RepairStartMenuShortcut(L"Flucord");
 
   flutter::DartProject project(L"data");
 

@@ -43,6 +43,10 @@ final class LocalDesktopNotificationGateway
 
   final Set<LocalNotification> _notifications = {};
 
+  /// On Windows the app name is also the AppUserModelID and the name of the
+  /// Start Menu shortcut the plugin keeps. `windows/runner/main.cpp` repairs
+  /// that shortcut on start and the installer reuses the ID, so all three
+  /// must agree.
   @override
   Future<void> initialize() => localNotifier.setup(
     appName: 'Flucord',

@@ -15,6 +15,7 @@ add_executable(${BINARY_NAME} WIN32
   "discord_social_sdk_wire.cpp"
   "flutter_window.cpp"
   "main.cpp"
+  "start_menu_shortcut.cpp"
   "utils.cpp"
   "video_texture_bridge.cpp"
   "win32_window.cpp"

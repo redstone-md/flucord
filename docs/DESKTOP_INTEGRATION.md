@@ -30,6 +30,15 @@ their channel is not focused. One shared controller describes system events
 and falls back to poll, sticker, attachment, or embed content for bodyless
 messages. Clicking a notification restores the window and opens its channel.
 
+On Windows, local_notifier gives the process the AppUserModelID `Flucord` and
+keeps a Start Menu shortcut for it at
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Flucord.lnk`. The taskbar
+button takes its icon from that shortcut, and the plugin never checks where
+it points. So on every start, before Flutter runs, the runner points the
+shortcut at the running exe if it points anywhere else
+(`windows/runner/start_menu_shortcut.cpp`). The installer's Start Menu
+shortcut carries the same ID, and the uninstaller removes both.
+
 The native tray lifecycle runs on all three desktop platforms. Its Open item
 and tooltip/menu label reflect the local unread-channel count, and Quit performs
 deterministic teardown. Window close hides only after tray creation succeeds;
