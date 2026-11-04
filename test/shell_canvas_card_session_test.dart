@@ -96,6 +96,23 @@ void main() {
     expect(tester.getRect(find.byType(ConversationPane)), tester.getRect(card));
   }, size: window);
 
+  // 1004 px leaves the conversation 356 px beside the widest panel, over the
+  // 352 px the composer needs.
+  testSession('a side panel sits beside the chat when both fit', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(SessionHarness.channelId);
+    await tester.tap(find.byKey(const ValueKey('toggle-pins')));
+    await session.settle();
+
+    final panel = tester.getRect(
+      find.byKey(const ValueKey('pinned-messages-panel')),
+    );
+    expect(find.byType(ConversationPane), findsOneWidget);
+    expect(tester.getRect(find.byType(ConversationPane)).right, panel.left);
+  }, size: const Size(1004, 900));
+
   testSession('a direct message and its profile open inside the card too', (
     tester,
     session,

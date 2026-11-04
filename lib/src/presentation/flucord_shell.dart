@@ -61,6 +61,7 @@ import 'widgets/pinned_messages_panel.dart';
 import 'widgets/leave_server_dialog.dart';
 import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/rail_tile.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
@@ -83,7 +84,6 @@ part 'flucord_shell_canvas.dart';
 /// window frame), so the sidebar and the account panel show at every window
 /// size the app allows.
 const double _channelSidebarMinWidth = 640;
-const double _railWidth = 72;
 const double _channelSidebarWidth = 236;
 
 /// The widest side panel, the search results.
@@ -390,7 +390,7 @@ class FlucordShell extends StatelessWidget {
                       final panelCovers =
                           sidePanel != null &&
                           constraints.maxWidth -
-                                  _railWidth -
+                                  RailMetrics.width -
                                   (showChannels ? _channelSidebarWidth : 0) -
                                   FlucordTheme.canvasInset -
                                   _sidePanelMaxWidth <
