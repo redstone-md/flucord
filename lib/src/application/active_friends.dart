@@ -19,7 +19,7 @@ final class ActiveFriend {
   List<UserActivity> get doing => person.presenceDetail?.doing ?? const [];
 }
 
-/// The guild voice channel a friend sits in, with everybody seated there.
+/// The guild voice channel somebody sits in, with everybody seated there.
 @immutable
 final class ActiveFriendRoom {
   const ActiveFriendRoom({
@@ -43,10 +43,7 @@ List<ActiveFriend> activeFriends(
   required ChatWorkspace workspace,
   required Map<String, List<VoiceParticipantStateEvent>> seatedByChannel,
 }) {
-  final seatOf = {
-    for (final seats in seatedByChannel.values)
-      for (final seat in seats) seat.userId: seat,
-  };
+  final seatOf = _seatsByUser(seatedByChannel);
   return [
     for (final id in friendIds)
       if (workspace.memberOrNull(id) case final person?)
@@ -56,6 +53,22 @@ List<ActiveFriend> activeFriends(
         ),
   ].where((friend) => friend.room != null || friend.doing.isNotEmpty).toList();
 }
+
+/// The guild voice channel [userId] sits in, or null when they sit in none
+/// the workspace knows.
+ActiveFriendRoom? voiceRoomOf(
+  String userId, {
+  required ChatWorkspace workspace,
+  required Map<String, List<VoiceParticipantStateEvent>> seatedByChannel,
+}) =>
+    _roomOf(_seatsByUser(seatedByChannel)[userId], workspace, seatedByChannel);
+
+Map<String, VoiceParticipantStateEvent> _seatsByUser(
+  Map<String, List<VoiceParticipantStateEvent>> seatedByChannel,
+) => {
+  for (final seats in seatedByChannel.values)
+    for (final seat in seats) seat.userId: seat,
+};
 
 ActiveFriendRoom? _roomOf(
   VoiceParticipantStateEvent? seat,
