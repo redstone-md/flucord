@@ -1,3 +1,20 @@
+/// What to call the service Discord names [type], falling back to Discord's
+/// own identifier rather than to wording invented here.
+String connectionServiceName(String type) => switch (type) {
+  'battlenet' => 'Battle.net',
+  'epicgames' => 'Epic Games',
+  'leagueoflegends' => 'League of Legends',
+  'playstation' => 'PlayStation Network',
+  'riotgames' => 'Riot Games',
+  'twitter' => 'X / Twitter',
+  _ =>
+    type
+        .split(RegExp(r'[_-]+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' '),
+};
+
 /// One third-party account linked to this Discord account.
 ///
 /// The id is the third party's own id for the account, not a Discord
@@ -40,22 +57,7 @@ final class AccountConnection {
 
   bool get isPublic => visibility == 1;
 
-  /// What to call the service, falling back to Discord's own identifier
-  /// rather than to wording invented here.
-  String get serviceName => switch (type) {
-    'battlenet' => 'Battle.net',
-    'epicgames' => 'Epic Games',
-    'leagueoflegends' => 'League of Legends',
-    'playstation' => 'PlayStation Network',
-    'riotgames' => 'Riot Games',
-    'twitter' => 'X / Twitter',
-    _ =>
-      type
-          .split(RegExp(r'[_-]+'))
-          .where((part) => part.isNotEmpty)
-          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-          .join(' '),
-  };
+  String get serviceName => connectionServiceName(type);
 
   @override
   bool operator ==(Object other) =>

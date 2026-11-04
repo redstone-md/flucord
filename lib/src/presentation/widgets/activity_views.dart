@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/active_friends.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/monogram.dart';
 import '../../theme/flucord_icons.dart';
@@ -7,6 +8,7 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'art_tile.dart';
+import 'flucord_button.dart';
 import 'remote_identity_image.dart';
 
 /// Formats how long an activity has run or has left, in whole minutes:
@@ -193,27 +195,26 @@ class ActivitySummaryLine extends StatelessWidget {
   }
 }
 
-/// What somebody is doing, as the profile card draws it: the artwork, and
-/// beside it the kind ("Playing"), the name, the details with the time, and
-/// the state.
-///
-/// The art sits 8 in from the card's edge, so the card is
-/// [FlucordRadius.framed] around the art's [FlucordRadius.medium].
+/// What somebody is doing, as the profile card and the full profile draw it:
+/// the artwork, and beside it the kind ("Playing"), the name, the details
+/// with the time, and the state.
 class ActivityCard extends StatelessWidget {
-  const ActivityCard({required this.activity, required this.now, super.key});
-
-  static const _artSize = 56.0;
-  static const _padding = 8.0;
+  const ActivityCard({
+    required this.activity,
+    required this.now,
+    this.artSize = ActivityFrame.cardArt,
+    super.key,
+  });
 
   final UserActivity activity;
 
   /// Captured by the caller rather than read here, so the card renders the
   /// same value twice in a row and a test can pin the clock.
   final DateTime now;
+  final double artSize;
 
   @override
   Widget build(BuildContext context) {
-    final surfaces = context.surfaces;
     final party = activity.party;
     final state = activity.state;
     final details = [
@@ -221,13 +222,106 @@ class ActivityCard extends StatelessWidget {
       ?ActivityElapsed.line(activity.timestamps, now),
     ].join(' · ');
     final verb = activity.type.verb;
+    return ActivityFrame(
+      key: const ValueKey('activity-card'),
+      art: _ActivityArtwork(activity: activity, size: artSize),
+      kind: verb.isEmpty ? 'Activity' : verb,
+      title: activity.name,
+      lines: [
+        if (details.isNotEmpty) details,
+        if (state != null)
+          party != null && party.hasSize
+              ? '$state (${party.currentSize} of ${party.maxSize})'
+              : state,
+      ],
+    );
+  }
+}
+
+/// The voice channel somebody sits in: the server's art, "In voice", the
+/// channel, and the server with how many people are there. [onJoin] puts a
+/// Join button at the end of the row.
+class VoiceRoomCard extends StatelessWidget {
+  const VoiceRoomCard({
+    required this.room,
+    this.onJoin,
+    this.artSize = ActivityFrame.cardArt,
+    super.key,
+  });
+
+  final ActiveFriendRoom room;
+  final VoidCallback? onJoin;
+  final double artSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final space = room.space;
+    return ActivityFrame(
+      key: const ValueKey('voice-room-card'),
+      art: ArtTile(
+        url: space.iconUrl,
+        monogram: space.monogram,
+        color: Color(space.colorValue),
+        size: artSize,
+      ),
+      kind: 'In voice',
+      title: room.channel.name,
+      lines: ['in ${space.name} · ${peopleCount(room.people.length)}'],
+      trailing: switch (onJoin) {
+        final join? => FlucordButton(
+          key: const ValueKey('voice-room-join'),
+          label: 'Join',
+          onPressed: join,
+        ),
+        null => null,
+      },
+    );
+  }
+}
+
+/// "1 person", "3 people".
+String peopleCount(int count) => count == 1 ? '1 person' : '$count people';
+
+/// The card every activity is drawn in: [art] 8 in from the edge, and beside
+/// it a small [kind] caption over the [title] and the caption [lines], the
+/// block centred on the art by eye. [trailing] sits at the row's end.
+///
+/// The art has [FlucordRadius.medium] corners 8 in, so the card is
+/// [FlucordRadius.framed] around it.
+class ActivityFrame extends StatelessWidget {
+  const ActivityFrame({
+    required this.art,
+    required this.kind,
+    required this.title,
+    this.lines = const [],
+    this.trailing,
+    super.key,
+  });
+
+  /// The art's size in the profile card.
+  static const cardArt = 56.0;
+
+  /// The art's size in the full profile window.
+  static const windowArt = 64.0;
+
+  static const _padding = 8.0;
+
+  final Widget art;
+  final String kind;
+  final String title;
+  final List<String> lines;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final caption = FlucordTextRole.caption.style.copyWith(
       color: surfaces.muted,
     );
     Widget line(String text, TextStyle style) =>
         Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    final trailing = this.trailing;
     return Container(
-      key: const ValueKey('activity-card'),
       padding: const EdgeInsets.fromLTRB(_padding, _padding, 12, _padding),
       decoration: BoxDecoration(
         color: surfaces.inset,
@@ -236,7 +330,7 @@ class ActivityCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _ActivityArtwork(activity: activity, size: _artSize),
+          art,
           const SizedBox(width: 12),
           Expanded(
             // Lifted so the letters, not the line boxes, centre on the art.
@@ -245,7 +339,7 @@ class ActivityCard extends StatelessWidget {
                 0,
                 -FlucordType.opticalLift(
                   FlucordTextRole.caption,
-                  details.isEmpty && state == null
+                  lines.isEmpty
                       ? FlucordTextRole.label
                       : FlucordTextRole.caption,
                 ),
@@ -254,29 +348,21 @@ class ActivityCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  line(verb.isEmpty ? 'Activity' : verb, caption),
+                  line(kind, caption),
                   const SizedBox(height: 2),
                   line(
-                    activity.name,
+                    title,
                     FlucordTextRole.label.strong.copyWith(color: surfaces.text),
                   ),
-                  if (details.isNotEmpty) ...[
+                  for (final text in lines) ...[
                     const SizedBox(height: 2),
-                    line(details, caption),
-                  ],
-                  if (state != null) ...[
-                    const SizedBox(height: 2),
-                    line(
-                      party != null && party.hasSize
-                          ? '$state (${party.currentSize} of ${party.maxSize})'
-                          : state,
-                      caption,
-                    ),
+                    line(text, caption),
                   ],
                 ],
               ),
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 12), trailing],
         ],
       ),
     );

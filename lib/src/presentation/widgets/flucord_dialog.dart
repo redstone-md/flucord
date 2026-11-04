@@ -40,14 +40,16 @@ class FlucordDialog extends StatelessWidget {
        maxHeight = null,
        alignment = null,
        insetPadding = null,
-       fullWindow = false;
+       fullWindow = false,
+       large = false;
 
   /// The frame with [child] inside it at the size it asks for, within
   /// [maxWidth] and [maxHeight]. [actions] and [confirm] add the same footer
   /// as the default form, under [child].
   ///
   /// [alignment] and [insetPadding] place a dialog that belongs near what
-  /// opened it, such as the inbox under its button.
+  /// opened it, such as the inbox under its button. [large] rounds a big
+  /// window, such as the full profile, at [FlucordRadius.window].
   const FlucordDialog.frame({
     required Widget this.child,
     this.actions,
@@ -57,6 +59,7 @@ class FlucordDialog extends StatelessWidget {
     this.maxHeight,
     this.alignment,
     this.insetPadding,
+    this.large = false,
     super.key,
   }) : title = null,
        description = null,
@@ -76,7 +79,8 @@ class FlucordDialog extends StatelessWidget {
       maxHeight = null,
       alignment = null,
       insetPadding = null,
-      fullWindow = true;
+      fullWindow = true,
+      large = false;
 
   final Widget? title;
 
@@ -99,6 +103,7 @@ class FlucordDialog extends StatelessWidget {
   final AlignmentGeometry? alignment;
   final EdgeInsets? insetPadding;
   final bool fullWindow;
+  final bool large;
 
   static const _padding = 20.0;
 
@@ -119,6 +124,12 @@ class FlucordDialog extends StatelessWidget {
       );
     }
     return Dialog(
+      shape: large
+          ? RoundedRectangleBorder(
+              borderRadius: FlucordRadius.window,
+              side: BorderSide(color: context.surfaces.border),
+            )
+          : null,
       alignment: alignment,
       insetPadding: insetPadding,
       clipBehavior: Clip.antiAlias,

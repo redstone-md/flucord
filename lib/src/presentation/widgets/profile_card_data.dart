@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../application/active_friends.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
@@ -9,7 +10,17 @@ import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
 import 'discord_relationship_avatar.dart';
 
-/// Everything the profile card shows about one person.
+/// A friend both people share, with their status where the workspace knows
+/// it.
+typedef ProfileMutualFriend = ({MutualFriend friend, UserPresence? presence});
+
+/// A server both people are in, with what the person is called there.
+typedef ProfileMutualServer = ({CommunitySpace space, String? nickname});
+
+/// When the person joined the server the profile was opened in.
+typedef ProfileServerSince = ({String serverName, DateTime since});
+
+/// Everything the profile card and the full profile show about one person.
 ///
 /// The host builds it from what it knows, and every part the host cannot
 /// fill stays empty: the card hides a part with nothing in it rather than
@@ -32,23 +43,38 @@ final class ProfileCardData {
     this.clanTag,
     this.badges = const [],
     this.mutualFriends = const [],
-    this.mutualServerCount = 0,
+    this.mutualServers = const [],
     this.bio = '',
     this.activity,
+    this.voiceRoom,
     this.roles,
     this.memberSince,
+    this.serverSince,
+    this.friendsSince,
+    this.connections = const [],
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
   /// over it once it arrives. [roles] are the roles they hold in the server
   /// the card was opened in, or null outside a server.
+  ///
+  /// [workspace] names the mutual servers and gives the mutual friends their
+  /// status; a server it does not hold is left out. [friendsSince] and
+  /// [voiceRoom] come from the friend list and the voice seats.
   factory ProfileCardData.member(
     Member member, {
     String? spaceId,
     OtherUserProfile? profile,
     List<CommunityRole>? roles,
+    ChatWorkspace? workspace,
+    DateTime? friendsSince,
+    ActiveFriendRoom? voiceRoom,
   }) {
     final presence = member.presenceOrCoarse;
+    final space = spaceId == null ? null : workspace?.spaceOrNull(spaceId);
+    final joined = spaceId == null
+        ? null
+        : member.membershipIn(spaceId)?.joinedAt;
     return ProfileCardData(
       userId: member.id,
       displayName: member.displayName,
@@ -69,12 +95,29 @@ final class ProfileCardData {
       pronouns: profile?.pronouns ?? '',
       clanTag: member.clanTag,
       badges: profile?.badges ?? const [],
-      mutualFriends: profile?.mutualFriends ?? const [],
-      mutualServerCount: profile?.mutualServers.length ?? 0,
+      mutualFriends: [
+        for (final friend in profile?.mutualFriends ?? const <MutualFriend>[])
+          (
+            friend: friend,
+            presence: workspace?.memberOrNull(friend.id)?.presenceOrCoarse,
+          ),
+      ],
+      mutualServers: [
+        for (final server in profile?.mutualServers ?? const <MutualServer>[])
+          if (workspace?.spaceOrNull(server.id) case final space?)
+            (space: space, nickname: server.nickname),
+      ],
       bio: profile?.bio ?? '',
       // Discord's card shows a plain "Playing" too, not only rich presence.
       activity: presence.doing.firstOrNull,
+      voiceRoom: voiceRoom,
       roles: roles,
+      memberSince: DiscordSnowflake.createdAt(member.id),
+      serverSince: space == null || joined == null
+          ? null
+          : (serverName: space.name, since: joined),
+      friendsSince: friendsSince,
+      connections: profile?.connections ?? const [],
     );
   }
 
@@ -99,6 +142,10 @@ final class ProfileCardData {
               details: activity.details,
               state: activity.state,
             ),
+      memberSince: DiscordSnowflake.createdAt(user.id),
+      friendsSince: relationship.kind == DiscordRelationshipKind.friend
+          ? relationship.since
+          : null,
     );
   }
 
@@ -156,12 +203,15 @@ final class ProfileCardData {
   final String pronouns;
   final ClanTag? clanTag;
   final List<ProfileBadge> badges;
-  final List<MutualFriend> mutualFriends;
-  final int mutualServerCount;
+  final List<ProfileMutualFriend> mutualFriends;
+  final List<ProfileMutualServer> mutualServers;
   final String bio;
 
   /// What they are doing now, drawn in its own card.
   final UserActivity? activity;
+
+  /// The voice channel they sit in. Null when they sit in none.
+  final ActiveFriendRoom? voiceRoom;
 
   /// The roles they hold in this server, highest first. Null outside a
   /// server, which hides the section.
@@ -169,6 +219,16 @@ final class ProfileCardData {
 
   /// When the account was made. Null hides the line.
   final DateTime? memberSince;
+
+  /// When they joined the server the profile was opened in. Null outside a
+  /// server or where Discord did not say.
+  final ProfileServerSince? serverSince;
+
+  /// When the two became friends. Null for someone who is not a friend.
+  final DateTime? friendsSince;
+
+  /// Their linked accounts on other services.
+  final List<ProfileConnection> connections;
 
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {

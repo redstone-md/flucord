@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/active_friends.dart';
 import '../../application/guild_member_admin_controller.dart';
 import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
@@ -10,36 +11,57 @@ import 'flucord_dialog.dart';
 import 'member_moderation_section.dart';
 import 'profile_card.dart';
 import 'profile_card_data.dart';
+import 'profile_card_route.dart';
 import 'profile_note_section.dart';
 
-/// The profile card for a workspace member.
+/// How a member's profile is drawn: the popout card, or the full profile
+/// window it opens.
+enum ProfileLayout { card, window }
+
+/// The profile card, or the full profile window, for a workspace member.
 ///
 /// Draws what the workspace knows at once, then lays the fetched profile
-/// over it when it arrives: banner, accent, pronouns, bio, badges and the
-/// mutual counts. Opening the card starts that fetch. A fetch that fails or
-/// is refused leaves the parts it would have filled hidden.
+/// over it when it arrives: banner, accent, pronouns, bio, badges, the
+/// mutuals and the connections. Opening it starts that fetch. A fetch that
+/// fails or is refused leaves the parts it would have filled hidden.
 class MemberProfileCard extends StatefulWidget {
   const MemberProfileCard({
     required this.member,
+    this.layout = ProfileLayout.card,
     this.spaceId,
-    this.roles = const [],
+    this.workspace,
+    this.friendsSince,
+    this.voiceRoom,
     this.profile,
     this.moderationBuilder,
     this.onMessage,
     this.onAddFriend,
     this.onReport,
     this.onBlock,
+    this.onOpenFullProfile,
+    this.onOpenProfile,
+    this.onOpenServer,
+    this.onJoinVoice,
+    this.onOpenLink,
     this.now,
     super.key,
   });
 
   final Member member;
+  final ProfileLayout layout;
 
   /// The server the card was opened in, or null outside one.
   final String? spaceId;
 
-  /// The workspace's roles, which the member's role ids are read against.
-  final List<CommunityRole> roles;
+  /// What the member's role ids, mutual servers and mutual friends are read
+  /// against.
+  final ChatWorkspace? workspace;
+
+  /// When the account and the member became friends, or null.
+  final DateTime? friendsSince;
+
+  /// The voice channel the member sits in, or null.
+  final ActiveFriendRoom? voiceRoom;
 
   /// Fetches the full profile and keeps the note. Null on a host with no
   /// account behind it.
@@ -61,6 +83,13 @@ class MemberProfileCard extends StatefulWidget {
 
   /// Blocks the member. Null for the same reason as [onReport].
   final VoidCallback? onBlock;
+
+  /// See [ProfileCardActions] for these.
+  final VoidCallback? onOpenFullProfile;
+  final OpenProfileCard? onOpenProfile;
+  final ValueChanged<String>? onOpenServer;
+  final ValueChanged<String>? onJoinVoice;
+  final ValueChanged<Uri>? onOpenLink;
   final DateTime? now;
 
   @override
@@ -90,16 +119,37 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
     listenable: Listenable.merge([widget.profile, _moderation]),
     builder: (context, _) {
       final roles = _heldRoles();
-      return ProfileCard(
-        data: ProfileCardData.member(
-          widget.member,
-          spaceId: widget.spaceId,
-          profile: widget.profile?.profile,
-          roles: roles,
-        ),
-        actions: _actions(context, held: {...?roles?.map((role) => role.id)}),
-        now: widget.now,
+      final data = ProfileCardData.member(
+        widget.member,
+        spaceId: widget.spaceId,
+        profile: widget.profile?.profile,
+        roles: roles,
+        workspace: widget.workspace,
+        friendsSince: widget.friendsSince,
+        voiceRoom: widget.voiceRoom,
       );
+      final actions = _actions(
+        context,
+        held: {...?roles?.map((role) => role.id)},
+      );
+      return switch (widget.layout) {
+        ProfileLayout.card => ProfileCard(
+          data: data,
+          actions: actions,
+          now: widget.now,
+        ),
+        ProfileLayout.window => FullProfile(
+          data: data,
+          actions: actions,
+          note: switch (widget.profile) {
+            final profile? when profile.isSupported => ProfileNoteSection(
+              controller: profile,
+            ),
+            _ => null,
+          },
+          now: widget.now,
+        ),
+      };
     },
   );
 
@@ -109,7 +159,7 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
     final spaceId = widget.spaceId;
     if (spaceId == null) return null;
     final rolesById = {
-      for (final role in widget.roles)
+      for (final role in widget.workspace?.roles ?? const <CommunityRole>[])
         if (role.spaceId == spaceId) role.id: role,
     };
     return HeldRoles.ofIds(
@@ -140,12 +190,19 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
         for (final role in assignable.values)
           if (!held.contains(role.id)) role.asCommunityRole,
       ],
+      onOpenFullProfile: widget.onOpenFullProfile,
+      onOpenProfile: widget.onOpenProfile,
+      onOpenServer: widget.onOpenServer,
+      onJoinVoice: widget.onJoinVoice,
+      onOpenLink: widget.onOpenLink,
       menu: [
         ProfileCardMenuEntry.copyUserId(
           widget.member.id,
           key: const ValueKey('copy-member-id'),
         ),
-        if (widget.profile case final profile? when profile.isSupported)
+        // The window shows the note in place.
+        if (widget.profile case final profile?
+            when profile.isSupported && widget.layout == ProfileLayout.card)
           ProfileCardMenuEntry(
             key: const ValueKey('profile-card-note'),
             label: 'Note',

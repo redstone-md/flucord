@@ -245,7 +245,7 @@ Future<FakeGuildManagementRepository> _pumpCard(
           child: MemberProfileCard(
             member: workspace.memberById(lowMemberId),
             spaceId: guildId,
-            roles: workspace.roles,
+            workspace: workspace,
             moderationBuilder: () => GuildMemberAdminController(
               repository,
               WorkspacePermissions(

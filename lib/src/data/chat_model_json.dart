@@ -184,6 +184,7 @@ final class ChatModelJson {
         'flags': entry.value.flags,
         'pending': entry.value.isPending,
         'timeout': entry.value.timeoutUntil?.toIso8601String(),
+        'joined': entry.value.joinedAt?.toIso8601String(),
       },
   });
 
@@ -202,6 +203,7 @@ final class ChatModelJson {
 
   static GuildMembership _membershipFrom(Map<String, Object?> raw) {
     final timeout = raw['timeout'] as String?;
+    final joined = raw['joined'] as String?;
     return GuildMembership(
       roleIds: (raw['roles'] as List? ?? const []).whereType<String>().toList(
         growable: false,
@@ -209,6 +211,7 @@ final class ChatModelJson {
       flags: raw['flags'] as int? ?? 0,
       isPending: raw['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+      joinedAt: joined == null ? null : DateTime.tryParse(joined),
     );
   }
 }
