@@ -53,14 +53,22 @@ void main() {
     );
   });
 
-  testWidgets('a Room that is connected offers no retry', (tester) async {
+  testWidgets('a Room that is connected or reconnecting offers no retry', (
+    tester,
+  ) async {
     final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
-    await _say(tester, room, VoiceConnectionStatus.reconnecting);
+    for (final status in [
+      VoiceConnectionStatus.ready,
+      VoiceConnectionStatus.reconnecting,
+    ]) {
+      await _say(tester, room, status);
 
-    expect(
-      find.byKey(const ValueKey('voice-room-retry-connection')),
-      findsNothing,
-    );
+      expect(
+        find.byKey(const ValueKey('voice-room-retry-connection')),
+        findsNothing,
+        reason: '$status',
+      );
+    }
   });
 
   testWidgets('a muted Room says it is muted', (tester) async {
