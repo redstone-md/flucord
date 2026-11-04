@@ -297,6 +297,25 @@ void main() {
       expect(first.previewedCodes, ['aurora']);
       expect(second.previewedCodes, ['aurora']);
     });
+
+    test('a late failure from the last session keeps the new lookup', () async {
+      final first = _FakeGuildManagement()
+        ..previewFailure = const SocketException('offline')
+        ..previewHold = Completer<void>();
+      final second = _FakeGuildManagement();
+      final controller = ChatController(_Repository(guildManagement: first));
+      addTearDown(controller.dispose);
+      await controller.load();
+      final stale = controller.cachedInvitePreview('aurora');
+
+      await controller.useRepository(_Repository(guildManagement: second));
+      await controller.cachedInvitePreview('aurora');
+      first.previewHold!.complete();
+      await expectLater(stale, throwsA(isA<GuildAccessException>()));
+      await controller.cachedInvitePreview('aurora');
+
+      expect(second.previewedCodes, ['aurora']);
+    });
   });
 
   group('create', () {
@@ -731,6 +750,9 @@ final class _FakeGuildManagement implements GuildManagementRepository {
   /// Thrown by the next preview, then cleared.
   Object? previewFailure;
 
+  /// When set, every preview waits for it before it answers.
+  Completer<void>? previewHold;
+
   final List<String> previewedCodes = [];
   final List<String> joinedCodes = [];
   final List<String> createdNames = [];
@@ -741,6 +763,7 @@ final class _FakeGuildManagement implements GuildManagementRepository {
     previewedCodes.add(code);
     final failure = previewFailure;
     previewFailure = null;
+    await previewHold?.future;
     if (failure != null) throw failure;
     return const InvitePreview(
       code: 'aurora',
