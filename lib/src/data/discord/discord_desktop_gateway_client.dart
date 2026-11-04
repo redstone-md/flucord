@@ -352,7 +352,7 @@ final class DiscordDesktopGatewayClient
       case DiscordDesktopGatewayDispatch():
         _captureBootstrap(action);
         if (action.name == 'READY' || action.name == 'RESUMED') {
-          _diagnose(action.name.toLowerCase());
+          AppLog.info('discord.gateway', action.name.toLowerCase());
           _emitStatus(DiscordGatewayStatus.connected);
         }
         if (action.name == 'READY') {
@@ -521,10 +521,10 @@ final class DiscordDesktopGatewayClient
   void _heartbeat() {
     _lastHeartbeatSentAt = DateTime.now();
     final action = _protocol.heartbeatDue();
-    _diagnose(
-      'heartbeat',
-      action is DiscordDesktopGatewayReconnect ? 'unanswered' : 'sent',
-    );
+    // A heartbeat that goes out is routine; only one left unanswered is news.
+    if (action is DiscordDesktopGatewayReconnect) {
+      _diagnose('heartbeat', 'unanswered');
+    }
     _apply(action);
   }
 
@@ -609,7 +609,7 @@ final class DiscordDesktopGatewayClient
     _ => '${error.runtimeType}: $error',
   };
 
-  /// Says what the session just did, where it can be read.
+  /// Records a problem the session ran into and handled.
   ///
   /// The voice sockets identify with this session's id, so its reconnects are
   /// the first thing to check when Discord starts answering voice with

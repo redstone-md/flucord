@@ -42,6 +42,10 @@ AppLog.error('connection', 'bootstrap failed',     // dead operation
     error: error, stackTrace: stackTrace);
 ```
 
+A warning is for a problem. Routine work writes nothing: the gateway logs
+no heartbeat that goes out, only one left unanswered, and its ready and
+resumed lines are info.
+
 The scope is the subsystem: `voice`, `golive`, `stream`, `desktop`,
 `discord.gateway`, `connection`, and so on. Most modules already funnel
 their diagnostics through one private `_diagnose` helper; add the line

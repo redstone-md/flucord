@@ -39,6 +39,9 @@ DefaultGroupName=Flucord
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+; The one per-user path, [UninstallDelete] below, is meant: local_notifier
+; always writes its shortcut to the user's own Start Menu.
+UsedUserAreasWarning=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
@@ -67,9 +70,15 @@ Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Flucord"; Filename: "{app}\flucord.exe"
+; The AppUserModelID is the appName the app gives local_notifier, so the
+; taskbar button and toasts both find this shortcut.
+Name: "{group}\Flucord"; Filename: "{app}\flucord.exe"; AppUserModelID: "Flucord"
 Name: "{group}\Uninstall Flucord"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Flucord"; Filename: "{app}\flucord.exe"; Tasks: desktopicon
+
+[UninstallDelete]
+; The shortcut local_notifier creates on first start, outside the group above.
+Type: files; Name: "{userprograms}\Flucord.lnk"
 
 [Run]
 Filename: "{app}\flucord.exe"; Description: "{cm:LaunchProgram,Flucord}"; Flags: nowait postinstall skipifsilent
