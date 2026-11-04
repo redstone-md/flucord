@@ -184,7 +184,6 @@ class ProfileCard extends StatelessWidget {
                   metrics: _ProfileMetrics.card,
                   backdrop: surfaces.raised,
                   actions: actions,
-                  onOpenFullProfile: actions.onOpenFullProfile,
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -292,15 +291,15 @@ final class _ProfileMetrics {
 }
 
 /// The banner, the avatar over its bottom edge and the custom status beside
-/// the avatar. [actions] put add friend and "more" on the banner, as the
-/// card has them; the window leaves them out and has its own row.
+/// the avatar. [actions] put add friend and "more" on the banner and make
+/// the avatar open the full profile, as the card has them; the window leaves
+/// them out and has its own row.
 class _Header extends StatelessWidget {
   const _Header({
     required this.data,
     required this.metrics,
     required this.backdrop,
     this.actions = const ProfileCardActions(),
-    this.onOpenFullProfile,
   });
 
   final ProfileCardData data;
@@ -309,9 +308,6 @@ class _Header extends StatelessWidget {
   /// The colour the header sits on, which rings the avatar.
   final Color backdrop;
   final ProfileCardActions actions;
-
-  /// A click on the avatar calls it.
-  final VoidCallback? onOpenFullProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -364,7 +360,7 @@ class _Header extends StatelessWidget {
             child: _FullProfileLink(
               linkKey: const ValueKey('profile-card-avatar'),
               name: data.displayName,
-              onOpen: onOpenFullProfile,
+              onOpen: actions.onOpenFullProfile,
               child: avatar,
             ),
           ),
