@@ -211,7 +211,7 @@ class ChannelSidebar extends StatelessWidget {
               ),
               child: _SidebarNavRow(
                 key: const ValueKey('toggle-friends'),
-                icon: FlucordIcons.members,
+                icon: FlucordIcons.friends,
                 label: 'Friends',
                 selected: friends.isPanelOpen,
                 onPressed: friends.togglePanel,

@@ -57,7 +57,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: row, matching: findFlucordIcon(FlucordIcons.members)),
+      find.descendant(of: row, matching: findFlucordIcon(FlucordIcons.friends)),
       findsOneWidget,
     );
     expect(
