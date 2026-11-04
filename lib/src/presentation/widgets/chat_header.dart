@@ -59,6 +59,12 @@ class ChatHeader extends StatelessWidget {
 
   static const _searchWidth = 200.0;
 
+  /// The room on either side of the line between the name and the topic.
+  static const _topicGap = 12.0;
+
+  /// A topic narrower than this says nothing, so it is left out.
+  static const _minTopicWidth = 48.0;
+
   /// The room between two buttons.
   static const _buttonGap = 4.0;
 
@@ -186,37 +192,74 @@ class ChatHeader extends StatelessWidget {
                 color: surfaces.muted,
               ),
         const SizedBox(width: 8),
-        Flexible(
-          fit: FlexFit.loose,
-          child: Text(
-            channel.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: FlucordTextRole.heading.style.copyWith(color: surfaces.text),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final nameStyle = FlucordTextRole.heading.style.copyWith(
+                color: surfaces.text,
+              );
+              final name = Text(
+                channel.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: nameStyle,
+              );
+              // The name comes first and is never cut for the topic: the
+              // topic shows only in the room the whole name leaves.
+              final topicRoom =
+                  box.maxWidth -
+                  _widthOf(context, channel.name, nameStyle) -
+                  2 * _topicGap -
+                  1;
+              if (!showTopic ||
+                  channel.topic.isEmpty ||
+                  topicRoom < _minTopicWidth) {
+                return Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: name,
+                );
+              }
+              return Row(
+                children: [
+                  name,
+                  const SizedBox(width: _topicGap),
+                  Container(
+                    key: const ValueKey('chat-header-divider'),
+                    width: 1,
+                    height: FlucordIconButton.iconSize,
+                    color: surfaces.border,
+                  ),
+                  const SizedBox(width: _topicGap),
+                  Expanded(
+                    child: Text(
+                      channel.topic,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        color: surfaces.captionText,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
-        if (showTopic && channel.topic.isNotEmpty) ...[
-          const SizedBox(width: 12),
-          Container(
-            key: const ValueKey('chat-header-divider'),
-            width: 1,
-            height: FlucordIconButton.iconSize,
-            color: surfaces.border,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              channel.topic,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlucordTextRole.caption.style.copyWith(
-                color: surfaces.captionText,
-              ),
-            ),
-          ),
-        ],
       ],
     );
+  }
+
+  /// How wide [text] draws on one line in [style].
+  static double _widthOf(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
   }
 
   Widget _controls(
