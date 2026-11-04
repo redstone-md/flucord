@@ -27,6 +27,13 @@ abstract final class FlucordRadius {
   /// pickers, profile cards and the incoming call card.
   static const overlay = BorderRadius.all(Radius.circular(16));
 
+  /// A large window over the interface, such as the full profile. Its inner
+  /// card sits 8 in and takes [overlay], so the corners stay parallel.
+  static const window = BorderRadius.all(windowCorner);
+
+  /// One corner of [window].
+  static const windowCorner = Radius.circular(24);
+
   /// A pill or a circle, whatever the height.
   static const full = BorderRadius.all(Radius.circular(999));
 }
