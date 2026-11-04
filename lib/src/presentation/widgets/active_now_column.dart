@@ -189,7 +189,8 @@ class _ActiveFriendCard extends StatelessWidget {
                 color: Color(room.space.colorValue),
               ),
               title: room.channel.name,
-              caption: '${room.space.name} · ${_people(room.people.length)}',
+              caption:
+                  '${room.space.name} · ${peopleCount(room.people.length)}',
               trailing: OverlappingFaces(
                 size: 20,
                 ringColor: surfaces.raised,
@@ -217,8 +218,6 @@ class _ActiveFriendCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _people(int count) => count == 1 ? '1 person' : '$count people';
 }
 
 /// The thin line between a card's top and one of its blocks.

@@ -210,6 +210,7 @@ Future<void> _pumpCard(
           child: MemberProfileCard(
             member: _member,
             spaceId: 'guild-1',
+            workspace: _workspace,
             profile: controller,
           ),
         ),
@@ -218,6 +219,22 @@ Future<void> _pumpCard(
   );
   await tester.pumpAndSettle();
 }
+
+/// Holds the one mutual server, which the card names from here.
+final _workspace = ChatWorkspace(
+  spaces: const [
+    CommunitySpace(
+      id: '666666666666666666',
+      name: 'Flucord HQ',
+      monogram: 'FH',
+      colorValue: 0xff2e4a7a,
+    ),
+  ],
+  channels: const [],
+  members: const [_member],
+  messages: const [],
+  currentMemberId: '111111111111111111',
+);
 
 const _member = Member(
   id: '222222222222222222',

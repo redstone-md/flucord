@@ -433,13 +433,15 @@ void main() {
 
   group('the radius scale', () {
     test(
-      'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16 and full',
+      'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16, '
+      'window 24 and full',
       () {
         expect(FlucordRadius.small, BorderRadius.circular(4));
         expect(FlucordRadius.control, BorderRadius.circular(6));
         expect(FlucordRadius.medium, BorderRadius.circular(8));
         expect(FlucordRadius.large, BorderRadius.circular(12));
         expect(FlucordRadius.overlay, BorderRadius.circular(16));
+        expect(FlucordRadius.window, BorderRadius.circular(24));
         expect(FlucordRadius.full, BorderRadius.circular(999));
       },
     );

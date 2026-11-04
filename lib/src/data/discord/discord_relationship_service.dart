@@ -162,6 +162,10 @@ final class DiscordRelationshipService {
         username: username.isEmpty ? null : username,
       ),
       kind: _kind(payload['type']),
+      since: switch (payload['since']) {
+        final String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 

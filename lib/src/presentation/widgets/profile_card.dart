@@ -4,13 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/discord/discord_cdn.dart';
+import '../../domain/account_connections.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
+import 'art_tile.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
+import 'flucord_dialog.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'name_tags.dart';
@@ -18,14 +24,17 @@ import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
+import 'profile_card_route.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 
+part 'profile_card_full.dart';
+part 'profile_card_full_side.dart';
 part 'profile_card_parts.dart';
 part 'profile_card_preview.dart';
 
-/// What the person looking at a card can do from it. Each action the host
-/// leaves out takes its control off the card.
+/// What the person looking at a card or the full profile can do from it.
+/// Each action the host leaves out takes its control away.
 @immutable
 final class ProfileCardActions {
   const ProfileCardActions({
@@ -34,6 +43,11 @@ final class ProfileCardActions {
     this.onAddRole,
     this.addableRoles = const [],
     this.menu = const [],
+    this.onOpenFullProfile,
+    this.onOpenProfile,
+    this.onOpenServer,
+    this.onJoinVoice,
+    this.onOpenLink,
   });
 
   /// Opens the DM with what was typed in the message field.
@@ -49,8 +63,24 @@ final class ProfileCardActions {
   /// The roles [onAddRole] may give.
   final List<CommunityRole> addableRoles;
 
-  /// The rows of the banner's "more" menu.
+  /// The rows of the "more" menu.
   final List<ProfileCardMenuEntry> menu;
+
+  /// Opens the full profile window. The card's avatar, its name and "View
+  /// full bio" call it.
+  final VoidCallback? onOpenFullProfile;
+
+  /// Opens a mutual friend's card beside their row.
+  final OpenProfileCard? onOpenProfile;
+
+  /// Opens a mutual server, by id.
+  final ValueChanged<String>? onOpenServer;
+
+  /// Opens the voice channel the person sits in, by id.
+  final ValueChanged<String>? onJoinVoice;
+
+  /// Opens a linked account's page.
+  final ValueChanged<Uri>? onOpenLink;
 }
 
 /// One row of the card's "more" menu.
@@ -103,10 +133,6 @@ class ProfileCard extends StatelessWidget {
       _preview = true;
 
   static const width = 300.0;
-  static const _bannerHeight = 72.0;
-  static const _avatarSize = 80.0;
-  static const _ring = 4.0;
-  static const _avatarTop = 32.0;
   static const _padding = 16.0;
 
   final ProfileCardData data;
@@ -152,7 +178,13 @@ class ProfileCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _Header(data: data, actions: actions),
+                _Header(
+                  data: data,
+                  metrics: _HeaderMetrics.card,
+                  backdrop: surfaces.raised,
+                  actions: actions,
+                  onOpenFullProfile: actions.onOpenFullProfile,
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     _padding,
@@ -163,11 +195,18 @@ class ProfileCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: _spaced([
-                      _Names(data: data),
+                      _Names(
+                        data: data,
+                        backdrop: surfaces.raised,
+                        onOpenFullProfile: actions.onOpenFullProfile,
+                      ),
                       if (_preview)
                         _AboutSections(data: data)
                       else if (data.bio.isNotEmpty)
-                        _Bio(bio: data.bio),
+                        _Bio(
+                          bio: data.bio,
+                          onViewFull: actions.onOpenFullProfile,
+                        ),
                       if (data.activity case final activity?)
                         ActivityCard(
                           activity: activity,
@@ -200,25 +239,80 @@ class ProfileCard extends StatelessWidget {
   ];
 }
 
-/// The banner with its buttons, the avatar over its bottom edge and the
-/// custom status beside the avatar.
+/// The sizes of the banner and the avatar, in the card and in the window.
+@immutable
+final class _HeaderMetrics {
+  const _HeaderMetrics({
+    required this.bannerHeight,
+    required this.avatarSize,
+    required this.ring,
+    required this.avatarTop,
+    required this.padding,
+    required this.dot,
+  });
+
+  static const card = _HeaderMetrics(
+    bannerHeight: 72,
+    avatarSize: 80,
+    ring: 4,
+    avatarTop: 32,
+    padding: ProfileCard._padding,
+    dot: 16,
+  );
+
+  static const window = _HeaderMetrics(
+    bannerHeight: 120,
+    avatarSize: 96,
+    ring: 6,
+    avatarTop: 72,
+    padding: 20,
+    dot: 18,
+  );
+
+  final double bannerHeight;
+  final double avatarSize;
+
+  /// The band of [_Header.backdrop] around the avatar.
+  final double ring;
+
+  /// Where the avatar's top sits below the banner's top.
+  final double avatarTop;
+  final double padding;
+  final double dot;
+
+  double get height => avatarTop + avatarSize + ring;
+  double get statusLeft => padding + avatarSize + ring + 8;
+}
+
+/// The banner, the avatar over its bottom edge and the custom status beside
+/// the avatar. [actions] put add friend and "more" on the banner, as the
+/// card has them; the window leaves them out and has its own row.
 class _Header extends StatelessWidget {
-  const _Header({required this.data, required this.actions});
+  const _Header({
+    required this.data,
+    required this.metrics,
+    required this.backdrop,
+    this.actions = const ProfileCardActions(),
+    this.onOpenFullProfile,
+  });
 
   final ProfileCardData data;
+  final _HeaderMetrics metrics;
+
+  /// The colour the header sits on, which rings the avatar.
+  final Color backdrop;
   final ProfileCardActions actions;
 
-  static const _height =
-      ProfileCard._avatarTop + ProfileCard._avatarSize + ProfileCard._ring;
-  static const _statusLeft =
-      ProfileCard._padding + ProfileCard._avatarSize + ProfileCard._ring + 8;
+  /// A click on the avatar calls it.
+  final VoidCallback? onOpenFullProfile;
 
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final accent = data.accentColorValue;
+    final avatar = _Avatar(data: data, metrics: metrics, backdrop: backdrop);
     return SizedBox(
-      height: _height,
+      height: metrics.height,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -226,7 +320,7 @@ class _Header extends StatelessWidget {
             left: 0,
             right: 0,
             top: 0,
-            height: ProfileCard._bannerHeight,
+            height: metrics.bannerHeight,
             child: ColoredBox(
               key: const ValueKey('profile-card-banner'),
               color: accent == null ? surfaces.control : Color(accent),
@@ -258,18 +352,26 @@ class _Header extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: ProfileCard._padding - ProfileCard._ring,
-            top: ProfileCard._avatarTop - ProfileCard._ring,
-            child: _Avatar(data: data),
+            left: metrics.padding - metrics.ring,
+            top: metrics.avatarTop - metrics.ring,
+            child: switch (onOpenFullProfile) {
+              final open? => _FullProfileLink(
+                key: const ValueKey('profile-card-avatar'),
+                label: 'View ${data.displayName} full profile',
+                onOpen: open,
+                child: avatar,
+              ),
+              null => avatar,
+            },
           ),
           if (data.customStatus case final status?)
             Positioned(
-              left: _statusLeft,
-              right: ProfileCard._padding,
-              top: ProfileCard._bannerHeight - 14,
+              left: metrics.statusLeft,
+              right: metrics.padding,
+              top: metrics.bannerHeight - 14,
               child: Align(
                 alignment: AlignmentDirectional.centerStart,
-                child: _StatusBubble(text: status),
+                child: _StatusBubble(text: status, fill: backdrop),
               ),
             ),
         ],
@@ -281,31 +383,29 @@ class _Header extends StatelessWidget {
 /// The avatar in a ring of the card's colour, with its decoration and the
 /// status dot.
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.data});
+  const _Avatar({
+    required this.data,
+    required this.metrics,
+    required this.backdrop,
+  });
 
   final ProfileCardData data;
-
-  static const _outer = ProfileCard._avatarSize + 2 * ProfileCard._ring;
-  static const _decoration = ProfileCard._avatarSize * 1.2;
-  static const _dot = 16.0;
+  final _HeaderMetrics metrics;
+  final Color backdrop;
 
   @override
   Widget build(BuildContext context) {
-    final surfaces = context.surfaces;
     final colorValue = data.avatarColorValue;
     return SizedBox.square(
-      dimension: _outer,
+      dimension: metrics.avatarSize + 2 * metrics.ring,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
           DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: surfaces.raised,
-            ),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: backdrop),
             child: Padding(
-              padding: const EdgeInsets.all(ProfileCard._ring),
+              padding: EdgeInsets.all(metrics.ring),
               child: ClipOval(
                 child: ProfileAvatarImage(
                   url: data.avatarUrl,
@@ -317,7 +417,7 @@ class _Avatar extends StatelessWidget {
           ),
           if (data.decorationUrl case final url?)
             SizedBox.square(
-              dimension: _decoration,
+              dimension: metrics.avatarSize * 1.2,
               child: RemoteIdentityImage(
                 key: const ValueKey('profile-card-decoration'),
                 url: url,
@@ -326,13 +426,13 @@ class _Avatar extends StatelessWidget {
             ),
           if (data.presence case final presence?)
             Positioned(
-              right: ProfileCard._ring,
-              bottom: ProfileCard._ring,
+              right: metrics.ring,
+              bottom: metrics.ring,
               child: PresenceIndicator(
                 presence: presence,
-                size: _dot + 6,
+                size: metrics.dot + 6,
                 borderWidth: 3,
-                borderColor: surfaces.raised,
+                borderColor: backdrop,
               ),
             ),
         ],
@@ -342,9 +442,10 @@ class _Avatar extends StatelessWidget {
 }
 
 class _StatusBubble extends StatelessWidget {
-  const _StatusBubble({required this.text});
+  const _StatusBubble({required this.text, required this.fill});
 
   final String text;
+  final Color fill;
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +454,7 @@ class _StatusBubble extends StatelessWidget {
       key: const ValueKey('profile-card-custom-status'),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: surfaces.raised,
+        color: fill,
         borderRadius: FlucordRadius.large,
         border: Border.all(color: surfaces.border),
       ),
@@ -407,28 +508,32 @@ class _BannerButton extends StatelessWidget {
   );
 }
 
+/// Opens [entries] under the widget at [context] and runs the chosen one.
+Future<void> _openMenu(
+  BuildContext context,
+  List<ProfileCardMenuEntry> entries,
+) async {
+  final chosen = await showMenu<ProfileCardMenuEntry>(
+    context: context,
+    position: menuBelow(context),
+    items: [
+      for (final entry in entries)
+        FlucordMenuItem(
+          key: entry.key,
+          value: entry,
+          icon: entry.icon,
+          label: entry.label,
+          danger: entry.danger,
+        ),
+    ],
+  );
+  chosen?.onSelected();
+}
+
 class _MoreButton extends StatelessWidget {
   const _MoreButton({required this.entries});
 
   final List<ProfileCardMenuEntry> entries;
-
-  Future<void> _open(BuildContext context) async {
-    final chosen = await showMenu<ProfileCardMenuEntry>(
-      context: context,
-      position: menuBelow(context),
-      items: [
-        for (final entry in entries)
-          FlucordMenuItem(
-            key: entry.key,
-            value: entry,
-            icon: entry.icon,
-            label: entry.label,
-            danger: entry.danger,
-          ),
-      ],
-    );
-    chosen?.onSelected();
-  }
 
   @override
   Widget build(BuildContext context) => Builder(
@@ -436,7 +541,32 @@ class _MoreButton extends StatelessWidget {
       key: const ValueKey('profile-card-more'),
       icon: FlucordIcons.more,
       tooltip: 'More',
-      onPressed: () => _open(context),
+      onPressed: () => _openMenu(context, entries),
+    ),
+  );
+}
+
+/// Makes [child] open the full profile: a pointer, a click and a button to
+/// assistive technology.
+class _FullProfileLink extends StatelessWidget {
+  const _FullProfileLink({
+    required this.label,
+    required this.onOpen,
+    required this.child,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback onOpen;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onOpen, child: child),
     ),
   );
 }

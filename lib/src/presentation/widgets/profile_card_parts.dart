@@ -1,10 +1,23 @@
 part of 'profile_card.dart';
 
-/// The name, then the username line, the badges and the mutual line.
+/// The name, then the username line, the badges and, in the card, the mutual
+/// line. The window has tabs for the mutuals and a larger name.
 class _Names extends StatelessWidget {
-  const _Names({required this.data});
+  const _Names({
+    required this.data,
+    required this.backdrop,
+    this.onOpenFullProfile,
+    this.inWindow = false,
+  });
 
   final ProfileCardData data;
+
+  /// The colour the names sit on, which rings the mutual friends' faces.
+  final Color backdrop;
+
+  /// A click on the name calls it.
+  final VoidCallback? onOpenFullProfile;
+  final bool inWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -14,15 +27,28 @@ class _Names extends StatelessWidget {
       if (data.pronouns.isNotEmpty) data.pronouns,
     ].join(' · ');
     final clan = data.clanTag;
+    final name = Text(
+      data.displayName,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: (inWindow ? FlucordTextRole.display : FlucordTextRole.title).style
+          .copyWith(color: surfaces.text),
+    );
+    final showsMutual =
+        !inWindow &&
+        (data.mutualFriends.isNotEmpty || data.mutualServers.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          data.displayName,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: FlucordTextRole.title.style.copyWith(color: surfaces.text),
-        ),
+        switch (onOpenFullProfile) {
+          final open? => _FullProfileLink(
+            key: const ValueKey('profile-card-name'),
+            label: 'View ${data.displayName} full profile',
+            onOpen: open,
+            child: name,
+          ),
+          null => name,
+        },
         if (handle.isNotEmpty || clan != null) ...[
           const SizedBox(height: 2),
           Row(
@@ -49,12 +75,13 @@ class _Names extends StatelessWidget {
             padding: const EdgeInsets.only(top: 6),
             child: _Badges(badges: data.badges),
           ),
-        if (data.mutualFriends.isNotEmpty || data.mutualServerCount > 0)
+        if (showsMutual)
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: _MutualLine(
               friends: data.mutualFriends,
-              serverCount: data.mutualServerCount,
+              serverCount: data.mutualServers.length,
+              ringColor: backdrop,
             ),
           ),
       ],
@@ -128,12 +155,17 @@ class _Badges extends StatelessWidget {
 /// Up to three mutual friends' faces and the two counts. The host leaves
 /// it out when both counts are zero.
 class _MutualLine extends StatelessWidget {
-  const _MutualLine({required this.friends, required this.serverCount});
+  const _MutualLine({
+    required this.friends,
+    required this.serverCount,
+    required this.ringColor,
+  });
 
   static const _face = 16.0;
 
-  final List<MutualFriend> friends;
+  final List<ProfileMutualFriend> friends;
   final int serverCount;
+  final Color ringColor;
 
   static String _count(int count, String noun) =>
       '$count mutual $noun${count == 1 ? '' : 's'}';
@@ -148,11 +180,11 @@ class _MutualLine extends StatelessWidget {
         if (faces.isNotEmpty) ...[
           OverlappingFaces(
             size: _face,
-            ringColor: surfaces.raised,
+            ringColor: ringColor,
             faces: [
               for (final face in faces)
                 RemoteIdentityImage(
-                  url: face.avatarUrl,
+                  url: face.friend.avatarUrl,
                   fallback: ColoredBox(color: surfaces.muted),
                 ),
             ],
@@ -177,20 +209,15 @@ class _MutualLine extends StatelessWidget {
   }
 }
 
-/// The bio, cut after a few lines with "View full bio" to open the rest.
-class _Bio extends StatefulWidget {
-  const _Bio({required this.bio});
+/// The bio, cut after a few lines. A bio that does not fit gets "View full
+/// bio", which opens the full profile; a bio that fits has no link.
+class _Bio extends StatelessWidget {
+  const _Bio({required this.bio, this.onViewFull});
 
   static const _lines = 3;
 
   final String bio;
-
-  @override
-  State<_Bio> createState() => _BioState();
-}
-
-class _BioState extends State<_Bio> {
-  bool _expanded = false;
+  final VoidCallback? onViewFull;
 
   @override
   Widget build(BuildContext context) {
@@ -198,32 +225,37 @@ class _BioState extends State<_Bio> {
     final style = FlucordTextRole.label.style.copyWith(
       color: surfaces.bodyText,
     );
+    final text = Text(
+      bio,
+      key: const ValueKey('profile-card-bio'),
+      maxLines: _lines,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final open = onViewFull;
+    if (open == null) return text;
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Measured at the card's width and text scale: the same characters
+        // fit or not depending on where the lines break.
         final painter = TextPainter(
-          text: TextSpan(text: widget.bio, style: style),
-          maxLines: _Bio._lines,
+          text: TextSpan(text: bio, style: style),
+          maxLines: _lines,
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
         )..layout(maxWidth: constraints.maxWidth);
-        final cut = !_expanded && painter.didExceedMaxLines;
+        final cut = painter.didExceedMaxLines;
         painter.dispose();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.bio,
-              key: const ValueKey('profile-card-bio'),
-              maxLines: _expanded ? null : _Bio._lines,
-              overflow: _expanded ? null : TextOverflow.ellipsis,
-              style: style,
-            ),
+            text,
             if (cut)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: InkWell(
                   key: const ValueKey('profile-card-view-bio'),
-                  onTap: () => setState(() => _expanded = true),
+                  onTap: open,
                   borderRadius: FlucordRadius.small,
                   child: Text(
                     'View full bio',

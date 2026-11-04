@@ -160,22 +160,19 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
       anchor: popupAnchorOf(rowContext),
       builder: (close) {
         _closeCard = close;
-        return ListenableBuilder(
-          listenable: widget.controller,
-          builder: (_, _) {
-            // The latest copy, so a new status or an answered request shows
-            // at once. One that is gone keeps its last copy for the frame
-            // before the card closes.
-            final current =
-                widget.controller.relationships
-                    .where((item) => item.user.id == relationship.user.id)
-                    .firstOrNull ??
-                relationship;
-            return ProfileCard(
-              data: ProfileCardData.relationship(current),
-              actions: _profileActions(current, close),
-            );
-          },
+        return _latest(
+          relationship,
+          (current) => ProfileCard(
+            data: ProfileCardData.relationship(current),
+            actions: _profileActions(
+              current,
+              close,
+              onOpenFullProfile: () {
+                close();
+                unawaited(_showFullProfile(relationship));
+              },
+            ),
+          ),
         );
       },
     );
@@ -183,15 +180,47 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     if (mounted) setState(() => _openUserId = null);
   }
 
+  /// Opens [relationship]'s full profile. The SDK has no profile route, so
+  /// it shows the name, the status and the game.
+  Future<void> _showFullProfile(DiscordRelationship relationship) =>
+      showFullProfile(
+        context: context,
+        builder: (close) => _latest(
+          relationship,
+          (current) => FullProfile(
+            data: ProfileCardData.relationship(current),
+            actions: _profileActions(current, close),
+          ),
+        ),
+      );
+
+  /// Builds [build] with the latest copy of [relationship], so a new status
+  /// or an answered request shows at once. One that is gone keeps its last
+  /// copy for the frame before the card closes.
+  Widget _latest(
+    DiscordRelationship relationship,
+    Widget Function(DiscordRelationship current) build,
+  ) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (_, _) => build(
+      widget.controller.relationships
+              .where((item) => item.user.id == relationship.user.id)
+              .firstOrNull ??
+          relationship,
+    ),
+  );
+
   /// Copy the id, and for a friend the message field: it opens the DM and
   /// sends what was typed.
   ProfileCardActions _profileActions(
     DiscordRelationship relationship,
-    VoidCallback close,
-  ) {
+    VoidCallback close, {
+    VoidCallback? onOpenFullProfile,
+  }) {
     final user = relationship.user;
     final dm = DiscordSocialDmScope.of(context);
     return ProfileCardActions(
+      onOpenFullProfile: onOpenFullProfile,
       onMessage: relationship.kind == DiscordRelationshipKind.friend
           ? (text) {
               close();

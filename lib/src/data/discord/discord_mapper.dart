@@ -442,6 +442,7 @@ final class DiscordMapper {
   /// The permission-relevant half of a guild member payload.
   GuildMembership membership(Map<String, Object?> payload) {
     final timeout = payload['communication_disabled_until'] as String?;
+    final joined = payload['joined_at'] as String?;
     return GuildMembership(
       roleIds: (payload['roles'] as List? ?? const [])
           .whereType<String>()
@@ -449,6 +450,7 @@ final class DiscordMapper {
       flags: payload['flags'] as int? ?? 0,
       isPending: payload['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+      joinedAt: joined == null ? null : DateTime.tryParse(joined),
     );
   }
 

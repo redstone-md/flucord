@@ -1,4 +1,5 @@
-/// A member's standing in one guild, reduced to what permissions depend on.
+/// A member's standing in one guild, reduced to what permissions depend on,
+/// and when they joined, which the full profile shows.
 ///
 /// Kept apart from the display-facing member record because these fields have
 /// no visual meaning at all: they exist only to feed the clamps Discord applies
@@ -11,6 +12,7 @@ final class GuildMembership {
     this.flags = 0,
     this.isPending = false,
     this.timeoutUntil,
+    this.joinedAt,
   });
 
   /// Member flag `IS_GUEST`.
@@ -32,6 +34,9 @@ final class GuildMembership {
   /// `communication_disabled_until`. In the past, or null, means not timed out.
   final DateTime? timeoutUntil;
 
+  /// `joined_at`, or null when the payload did not carry it.
+  final DateTime? joinedAt;
+
   bool get isGuest => flags & guestFlag != 0;
 
   bool get isQuarantined => flags & quarantinedFlags != 0;
@@ -50,6 +55,7 @@ final class GuildMembership {
       flags: flags,
       isPending: isPending,
       timeoutUntil: timeoutUntil,
+      joinedAt: joinedAt,
     );
   }
 
@@ -59,6 +65,7 @@ final class GuildMembership {
       other.flags == flags &&
       other.isPending == isPending &&
       other.timeoutUntil == timeoutUntil &&
+      other.joinedAt == joinedAt &&
       _sameRoles(other.roleIds);
 
   bool _sameRoles(List<String> other) {
@@ -70,6 +77,11 @@ final class GuildMembership {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(roleIds), flags, isPending, timeoutUntil);
+  int get hashCode => Object.hash(
+    Object.hashAll(roleIds),
+    flags,
+    isPending,
+    timeoutUntil,
+    joinedAt,
+  );
 }
