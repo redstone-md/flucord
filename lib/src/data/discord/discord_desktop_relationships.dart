@@ -11,9 +11,11 @@ import 'discord_desktop_api_client.dart';
 import 'discord_relationship_service.dart';
 import 'discord_rest_client.dart';
 
-/// The read-only face the surfaces see of the desktop session's friend graph.
+/// The desktop session's friend graph as the surfaces see it: they read it,
+/// and send every relationship change (requests, accepts, removals) through
+/// it.
 ///
-/// The service itself also folds dispatches in, which is not something a
+/// The service behind it also folds dispatches in, which is not something a
 /// surface should be able to do by holding the same object.
 final class DiscordDesktopRelationships
     implements DesktopRelationshipRepository {

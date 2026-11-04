@@ -530,7 +530,7 @@ class _Avatar extends StatelessWidget {
           ),
           if (data.decorationUrl case final url?)
             SizedBox.square(
-              dimension: metrics.avatarSize * 1.2,
+              dimension: metrics.avatarSize * MemberAvatar.decorationScale,
               child: RemoteIdentityImage(
                 key: const ValueKey('profile-card-decoration'),
                 url: url,

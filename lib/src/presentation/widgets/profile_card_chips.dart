@@ -24,14 +24,11 @@ class _MoreChip extends StatelessWidget {
   final double height;
   final VoidCallback onToggle;
 
-  static TextStyle _style(BuildContext context) =>
-      FlucordTextRole.caption.style.copyWith(color: context.surfaces.bodyText);
-
   /// The folded chip's width for [hidden], as it will lay out.
   static double widthOf(BuildContext context, int hidden, double height) =>
       math.max(
         height,
-        2 * _padding + _textWidth(context, '+$hidden', _style(context)),
+        2 * _padding + _textWidth(context, '+$hidden', _chipTextStyle(context)),
       );
 
   @override
@@ -64,7 +61,7 @@ class _MoreChip extends StatelessWidget {
                         size: 12,
                         color: surfaces.bodyText,
                       )
-                    : Text('+$hidden', style: _style(context)),
+                    : Text('+$hidden', style: _chipTextStyle(context)),
               ),
             ),
           ),
@@ -73,6 +70,10 @@ class _MoreChip extends StatelessWidget {
     );
   }
 }
+
+/// The text of a role chip and of the "+N" chip.
+TextStyle _chipTextStyle(BuildContext context) =>
+    FlucordTextRole.caption.style.copyWith(color: context.surfaces.bodyText);
 
 /// The width [text] takes in [style] here, rounded up so a row measured
 /// with it never comes out narrower than the row laid out.
@@ -334,12 +335,13 @@ class _RoleChip extends StatefulWidget {
   final CommunityRole role;
   final VoidCallback? onRemove;
 
-  static TextStyle _style(BuildContext context) =>
-      FlucordTextRole.caption.style.copyWith(color: context.surfaces.bodyText);
-
   /// The chip's width for a role called [name], as it will lay out.
   static double widthOf(BuildContext context, String name) =>
-      _start + _mark + _gap + _textWidth(context, name, _style(context)) + _end;
+      _start +
+      _mark +
+      _gap +
+      _textWidth(context, name, _chipTextStyle(context)) +
+      _end;
 
   @override
   State<_RoleChip> createState() => _RoleChipState();
@@ -403,7 +405,7 @@ class _RoleChipState extends State<_RoleChip> {
                 role.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _RoleChip._style(context),
+                style: _chipTextStyle(context),
               ),
             ),
           ],

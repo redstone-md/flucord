@@ -1,3 +1,5 @@
+import 'chat_models.dart';
+
 /// One 20 ms frame of a recording in progress.
 final class VoiceMessageRecordingProgress {
   const VoiceMessageRecordingProgress({
@@ -33,6 +35,10 @@ final class PendingVoiceMessage {
   final int size;
   final double durationSecs;
   final String waveform;
+
+  /// The recording as the file a message uploads.
+  PendingAttachment get attachment =>
+      PendingAttachment(name: name, path: path, size: size);
 }
 
 abstract interface class VoiceMessageRecorder {

@@ -612,13 +612,7 @@ final class DiscordDesktopChatRepository
     final payload = await _nonceFactory.sendDraft(
       channelId: channelId,
       body: '',
-      attachments: [
-        PendingAttachment(
-          name: voiceMessage.name,
-          path: voiceMessage.path,
-          size: voiceMessage.size,
-        ),
-      ],
+      attachments: [voiceMessage.attachment],
       replyToMessageId: null,
       suppressNotifications: false,
       textToSpeech: false,

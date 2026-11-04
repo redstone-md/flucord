@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../domain/profile_effect.dart';
+import 'motion_scope.dart';
 
 /// A profile effect over a card, scaled to the card's width. Place it in a
 /// [Stack] over the card, which clips it.
@@ -50,9 +51,7 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final plays =
-        TickerMode.valuesOf(context).enabled &&
-        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+    final plays = MotionScope.allows(context);
     if (plays && !_ticker.isActive && _nextChange != null) {
       _ticker.start();
     } else if (!plays && _ticker.isActive) {

@@ -66,13 +66,7 @@ extension DiscordApiClientMessages on DiscordApiClient {
         nonce: nonce,
         enforceNonce: enforceNonce,
       ),
-      [
-        PendingAttachment(
-          name: voiceMessage.name,
-          path: voiceMessage.path,
-          size: voiceMessage.size,
-        ),
-      ],
+      [voiceMessage.attachment],
       guardedByNonce: enforceNonce,
     );
   }
