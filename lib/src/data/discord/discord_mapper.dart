@@ -352,7 +352,7 @@ final class DiscordMapper {
   /// The tags on [user]. A user object without `primary_guild`,
   /// `collectibles` or `display_name_styles` says nothing about that part;
   /// one where it is null says there is none.
-  MemberTags tags(Map<String, Object?> user) => MemberTags(
+  static MemberTags tags(Map<String, Object?> user) => MemberTags(
     isBot: user['bot'] == true,
     clanTag: _clanTag(user),
     nameplate: _nameplate(user['collectibles']),
@@ -394,7 +394,7 @@ final class DiscordMapper {
   ///
   /// Discord keeps a tag the user turned off, with `identity_enabled` false or
   /// null. Such a tag is not drawn anywhere, so it is dropped here.
-  ClanTag? _clanTag(Map<String, Object?> user) {
+  static ClanTag? _clanTag(Map<String, Object?> user) {
     final clan = user['primary_guild'];
     if (clan is! Map || clan['identity_enabled'] != true) return null;
     final tag = clan['tag'];

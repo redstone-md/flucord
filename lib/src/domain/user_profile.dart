@@ -1,3 +1,5 @@
+import 'chat_models.dart';
+
 /// The account's own profile, as it appears to everyone else.
 ///
 /// Distinct from [UserSettings], which is how this client behaves: a profile is
@@ -358,6 +360,7 @@ final class OtherUserProfile {
     this.bannerHash,
     this.accentColor,
     this.decoration,
+    this.tags,
     this.badges = const [],
     this.connections = const [],
     this.mutualServers = const [],
@@ -377,6 +380,10 @@ final class OtherUserProfile {
   final int? accentColor;
 
   final ProfileDecoration? decoration;
+
+  /// The tags the profile's user object carries, or null when it was not
+  /// read from one.
+  final MemberTags? tags;
   final List<ProfileBadge> badges;
   final List<ProfileConnection> connections;
 
