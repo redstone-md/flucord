@@ -84,21 +84,11 @@ final class ChatModelJson {
     );
   }
 
-  static String? nameplate(Nameplate? value) => value == null
-      ? null
-      : jsonEncode({'asset': value.asset, 'palette': value.palette?.wireValue});
+  static String? nameplate(Nameplate? value) =>
+      value == null ? null : jsonEncode(value.toJson());
 
-  static Nameplate? nameplateFrom(String? source) {
-    if (source == null) return null;
-    final raw = jsonDecode(source);
-    if (raw is! Map) return null;
-    final asset = raw['asset'];
-    if (asset is! String) return null;
-    return Nameplate(
-      asset: asset,
-      palette: NameplatePalette.fromWire(raw['palette']),
-    );
-  }
+  static Nameplate? nameplateFrom(String? source) =>
+      source == null ? null : Nameplate.fromJson(jsonDecode(source));
 
   static String? nameStyle(NameStyle? value) => value == null
       ? null

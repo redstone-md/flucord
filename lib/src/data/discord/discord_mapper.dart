@@ -359,17 +359,9 @@ final class DiscordMapper {
 
   /// The nameplate in a user's `collectibles`. Collectibles without one say
   /// the user has none.
-  static Nameplate? _nameplate(Object? collectibles) {
-    if (collectibles is! Map) return null;
-    final nameplate = collectibles['nameplate'];
-    if (nameplate is! Map) return null;
-    final asset = nameplate['asset'];
-    if (asset is! String || asset.isEmpty) return null;
-    return Nameplate(
-      asset: asset,
-      palette: NameplatePalette.fromWire(nameplate['palette']),
-    );
-  }
+  static Nameplate? _nameplate(Object? collectibles) => collectibles is Map
+      ? Nameplate.fromJson(collectibles['nameplate'])
+      : null;
 
   static NameStyle? _nameStyle(Object? styles) {
     if (styles is! Map) return null;
