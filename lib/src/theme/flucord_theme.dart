@@ -16,6 +16,11 @@ abstract final class FlucordTheme {
   /// rows all fade by this much.
   static const disabledAlpha = 0.38;
 
+  /// How far the canvas card sits in from the window on the top, right and
+  /// bottom, showing the rail colour around it. Its corner is
+  /// [FlucordRadius.large].
+  static const canvasInset = 8.0;
+
   /// Buttons, tabs and selects are this tall; a field is [_controlFieldHeight].
   static const _controlHeight = 32.0;
   static const _controlFieldHeight = 36.0;
