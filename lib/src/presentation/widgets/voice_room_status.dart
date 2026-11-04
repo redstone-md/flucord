@@ -32,8 +32,7 @@ String voiceRoomStatusLabel(VoiceController controller) {
 String? voiceRoomWarning(VoiceController controller) {
   if (controller.joinBlockedReason case final reason?) return reason;
   if (controller.connectionStatus == VoiceConnectionStatus.failure) {
-    return 'Discord refused the voice connection. Leaving and rejoining the '
-        'channel usually re-establishes it.';
+    return 'Discord voice did not answer, or refused the connection.';
   }
   if (controller.deviceError case final error?) {
     // The reason is included rather than summarised: "in use by another
@@ -50,6 +49,12 @@ String? voiceRoomWarning(VoiceController controller) {
   }
   return null;
 }
+
+/// Whether the room should offer to join again after its connection failed.
+bool voiceRoomOffersConnectionRetry(VoiceController controller) =>
+    controller.isConnected &&
+    controller.hasDiscordSignaling &&
+    controller.connectionStatus == VoiceConnectionStatus.failure;
 
 /// Whether the room should offer to open the audio devices again.
 bool voiceRoomOffersDeviceRetry(VoiceController controller) =>

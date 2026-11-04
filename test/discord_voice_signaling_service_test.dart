@@ -480,6 +480,24 @@ void main() {
       expect(room.gateway.updates[1].selfMute, isTrue);
     });
 
+    test(
+      'Try again on a connection that gave up rejoins the channel',
+      () async {
+        final room = await joinedRoom();
+        room.client.emitStatus(VoiceConnectionStatus.failure);
+        await _flushEvents();
+        room.gateway.updates.clear();
+
+        await room.voice.retryConnection();
+
+        expect(room.gateway.updates.map((update) => update.channelId), [
+          null,
+          'voice-1',
+        ]);
+        expect(room.voice.connectionStatus, VoiceConnectionStatus.joining);
+      },
+    );
+
     test('on a failed connection rejoins with the new choice', () async {
       final room = await joinedRoom();
       room.client.emitStatus(VoiceConnectionStatus.failure);

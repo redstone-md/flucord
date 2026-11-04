@@ -366,6 +366,26 @@ final class VoiceController extends ChangeNotifier {
     }
   });
 
+  /// Joins the Room again after its connection failed.
+  ///
+  /// The same join the Room was entered with. A join into the channel the
+  /// session already wants, on a failed connection, makes the signaling
+  /// service leave and rejoin, and Discord answers that with a fresh voice
+  /// server.
+  Future<void> retryConnection() => _run(() async {
+    // A second press waits behind the first, which already rejoined.
+    if (_connectedChannelId == null ||
+        _connectionStatus != VoiceConnectionStatus.failure) {
+      return;
+    }
+    _connectionStatus = VoiceConnectionStatus.joining;
+    _logStatus('retrying', _connectionStatus);
+    if (!await _sendJoin()) {
+      _connectionStatus = VoiceConnectionStatus.disconnected;
+      _logStatus('join not sent', _connectionStatus);
+    }
+  });
+
   /// Opens the selected microphone, and keeps the reason when it will not
   /// open.
   ///
