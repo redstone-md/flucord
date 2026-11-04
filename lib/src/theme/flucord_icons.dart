@@ -221,6 +221,18 @@ abstract final class FlucordIcons {
   static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
   static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
 
+  // Voice, threads, forums and events (FLUCORD-84).
+  static const event = FlucordIconData(HugeIcons.strokeRoundedCalendar03);
+  static const eventUnavailable = FlucordIconData(
+    HugeIcons.strokeRoundedCalendarRemove01,
+  );
+  static const archive = FlucordIconData(HugeIcons.strokeRoundedArchive);
+  static const filterOff = FlucordIconData(HugeIcons.strokeRoundedFilterRemove);
+  static const newPost = FlucordIconData(HugeIcons.strokeRoundedCommentAdd01);
+  static const raiseHand = FlucordIconData(HugeIcons.strokeRoundedHand);
+  static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
+  static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
+
   // Accounts, connection and status (FLUCORD-84).
   static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);
   static const credential = FlucordIconData(HugeIcons.strokeRoundedKey01);

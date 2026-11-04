@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 
 const _room = ValueKey('voice-surface-room');
 const _chat = ValueKey('voice-surface-chat');
@@ -97,7 +98,10 @@ void main() {
       // segment to land on the one the InkWell itself installed.
       Focus.of(
         tester.element(
-          find.descendant(of: find.byKey(_chat), matching: find.byType(Icon)),
+          find.descendant(
+            of: find.byKey(_chat),
+            matching: find.byType(FlucordIcon),
+          ),
         ),
       ).requestFocus();
       await tester.pump();

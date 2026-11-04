@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_social_activity_controller.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_friends_scope.dart';
@@ -104,8 +105,8 @@ class _Header extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
     child: Row(
       children: [
-        Icon(
-          Icons.headset_mic_outlined,
+        FlucordIcon(
+          FlucordIcons.voiceCall,
           size: 20,
           color: connected ? context.surfaces.success : context.surfaces.muted,
         ),
@@ -137,7 +138,7 @@ class _Header extends StatelessWidget {
           tooltip: 'Close participants',
           visualDensity: VisualDensity.compact,
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, size: 18),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
         ),
       ],
     ),
@@ -227,7 +228,11 @@ class _ParticipantRow extends StatelessWidget {
             ),
           ),
           if (speaking)
-            Icon(Icons.graphic_eq, color: context.surfaces.success, size: 20),
+            FlucordIcon(
+              FlucordIcons.speaking,
+              color: context.surfaces.success,
+              size: 20,
+            ),
           if (!currentUser) ...[
             const SizedBox(width: 4),
             if (pending)
@@ -249,12 +254,12 @@ class _ParticipantRow extends StatelessWidget {
                     : 'Mute ${user.displayName}',
                 visualDensity: VisualDensity.compact,
                 onPressed: onToggleMuted,
-                icon: Icon(
+                icon: FlucordIcon(
                   error != null
-                      ? Icons.refresh
+                      ? FlucordIcons.refresh
                       : locallyMuted
-                      ? Icons.volume_off_outlined
-                      : Icons.volume_up_outlined,
+                      ? FlucordIcons.volumeOff
+                      : FlucordIcons.volume,
                   size: 19,
                   color: locallyMuted
                       ? context.surfaces.accentIcon

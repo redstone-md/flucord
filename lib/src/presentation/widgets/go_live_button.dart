@@ -7,6 +7,7 @@ import '../../application/go_live_controller.dart';
 import '../../application/stream_quality_controller.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/stream_quality.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -45,7 +46,7 @@ class GoLiveButton extends StatelessWidget {
         key: const ValueKey('go-live-toggle'),
         tooltip: 'Screen sharing needs a Discord session',
         onPressed: null,
-        icon: const Icon(Icons.screen_share_outlined),
+        icon: const FlucordIcon(FlucordIcons.screenShare),
       );
     }
     final streaming = controller.isSharing;
@@ -82,8 +83,8 @@ class GoLiveButton extends StatelessWidget {
                   ),
                 ),
           color: streaming ? context.surfaces.danger : null,
-          icon: Icon(
-            streaming ? Icons.stop_screen_share : Icons.screen_share_outlined,
+          icon: FlucordIcon(
+            streaming ? FlucordIcons.screenShareOff : FlucordIcons.screenShare,
           ),
         ),
         if (quality case final quality? when controller.canEncode)
@@ -99,10 +100,10 @@ class GoLiveButton extends StatelessWidget {
                 paused: controller.status != GoLiveStatus.paused,
               ),
             ),
-            icon: Icon(
+            icon: FlucordIcon(
               controller.status == GoLiveStatus.paused
-                  ? Icons.play_arrow
-                  : Icons.pause,
+                  ? FlucordIcons.play
+                  : FlucordIcons.pause,
             ),
           ),
         if (controller.error case final error?)
@@ -114,8 +115,8 @@ class GoLiveButton extends StatelessWidget {
             message:
                 'Discord did not accept the stream: '
                 '${_describe(error)}',
-            child: Icon(
-              Icons.error_outline,
+            child: FlucordIcon(
+              FlucordIcons.error,
               key: const ValueKey('go-live-error'),
               size: 15,
               color: Theme.of(context).colorScheme.error,
@@ -169,7 +170,7 @@ class _QualityMenu extends StatelessWidget {
     return PopupMenuButton<void>(
       key: const ValueKey('go-live-quality'),
       tooltip: 'Stream quality',
-      icon: const Icon(Icons.expand_more, size: 18),
+      icon: const FlucordIcon(FlucordIcons.chevronDown, size: 18),
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32),
       itemBuilder: (context) => [
@@ -214,8 +215,8 @@ class _QualityMenu extends StatelessWidget {
     child: Row(
       children: [
         Expanded(child: Text(label)),
-        Icon(
-          selected ? Icons.radio_button_checked : Icons.radio_button_off,
+        FlucordIcon(
+          selected ? FlucordIcons.radioOn : FlucordIcons.radioOff,
           size: 16,
         ),
       ],

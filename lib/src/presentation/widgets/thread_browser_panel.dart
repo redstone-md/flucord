@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -60,14 +61,14 @@ class ThreadBrowserPanel extends StatelessWidget {
     }
     if (error != null && activeThreads.isEmpty && archivedThreads.isEmpty) {
       return _ThreadPanelState(
-        icon: Icons.error_outline,
+        icon: FlucordIcons.error,
         title: 'Threads unavailable',
         action: TextButton(onPressed: onRefresh, child: const Text('Retry')),
       );
     }
     if (activeThreads.isEmpty && archivedThreads.isEmpty) {
       return const _ThreadPanelState(
-        icon: Icons.forum_outlined,
+        icon: FlucordIcons.threads,
         title: 'No threads yet',
       );
     }
@@ -110,7 +111,7 @@ class ThreadBrowserPanel extends StatelessWidget {
             child: TextButton.icon(
               key: const ValueKey('load-more-archived-threads'),
               onPressed: onLoadMore,
-              icon: const Icon(Icons.expand_more, size: 18),
+              icon: const FlucordIcon(FlucordIcons.chevronDown, size: 18),
               label: const Text('Load more'),
             ),
           ),
@@ -133,7 +134,7 @@ class LockedThreadComposerNotice extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(Icons.lock_outline, size: 17, color: context.surfaces.muted),
+        FlucordIcon(FlucordIcons.lock, size: 17, color: context.surfaces.muted),
         const SizedBox(width: 9),
         const Expanded(
           child: Text(
@@ -192,13 +193,13 @@ class _ThreadPanelHeader extends StatelessWidget {
         IconButton(
           key: const ValueKey('refresh-threads'),
           onPressed: onRefresh,
-          icon: const Icon(Icons.refresh, size: 18),
+          icon: const FlucordIcon(FlucordIcons.refresh, size: 18),
           tooltip: 'Refresh threads',
         ),
         IconButton(
           key: const ValueKey('close-threads-panel'),
           onPressed: onClose,
-          icon: const Icon(Icons.close, size: 18),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
           tooltip: 'Close threads',
         ),
         const SizedBox(width: 4),
@@ -243,8 +244,8 @@ class _ThreadRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
         child: Row(
           children: [
-            Icon(
-              thread.isArchived ? Icons.archive_outlined : Icons.forum_outlined,
+            FlucordIcon(
+              thread.isArchived ? FlucordIcons.archive : FlucordIcons.threads,
               size: 18,
               color: context.surfaces.muted,
             ),
@@ -280,8 +281,8 @@ class _ThreadRow extends StatelessWidget {
             if (thread.isLocked)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Icon(
-                  Icons.lock_outline,
+                child: FlucordIcon(
+                  FlucordIcons.lock,
                   size: 15,
                   color: context.surfaces.muted,
                 ),
@@ -323,7 +324,11 @@ class _InlineArchiveError extends StatelessWidget {
     padding: const EdgeInsets.only(top: 10),
     child: Row(
       children: [
-        Icon(Icons.error_outline, size: 16, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.error,
+          size: 16,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(
@@ -344,7 +349,7 @@ class _ThreadPanelState extends StatelessWidget {
     this.action,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final Widget? action;
 
@@ -353,7 +358,7 @@ class _ThreadPanelState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 26, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 10),
         Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'create_forum_post_dialog.dart';
@@ -164,7 +165,7 @@ class _ForumToolbar extends StatelessWidget {
             FilledButton.icon(
               key: const ValueKey('create-forum-post'),
               onPressed: onCreatePost,
-              icon: const Icon(Icons.add, size: 17),
+              icon: const FlucordIcon(FlucordIcons.add, size: 17),
               label: const Text('New post'),
             ),
           ],
@@ -235,14 +236,14 @@ class _ForumPostSlivers extends StatelessWidget {
     }
     if (error != null && activePosts.isEmpty && archivedPosts.isEmpty) {
       return _ForumState(
-        icon: Icons.error_outline,
+        icon: FlucordIcons.error,
         title: 'Posts unavailable',
         action: TextButton(onPressed: onRefresh, child: const Text('Retry')),
       );
     }
     if (activePosts.isEmpty && archivedPosts.isEmpty) {
       return _ForumState(
-        icon: hasTagFilter ? Icons.filter_alt_off : Icons.forum_outlined,
+        icon: hasTagFilter ? FlucordIcons.filterOff : FlucordIcons.forum,
         title: hasTagFilter ? 'No posts match these tags' : 'No posts yet',
       );
     }
@@ -337,7 +338,7 @@ class _ForumFooter extends StatelessWidget {
       child: error != null
           ? TextButton.icon(
               onPressed: onRefresh,
-              icon: const Icon(Icons.refresh, size: 16),
+              icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
               label: const Text('Retry archived posts'),
             )
           : isLoading
@@ -349,7 +350,7 @@ class _ForumFooter extends StatelessWidget {
           ? TextButton.icon(
               key: const ValueKey('load-more-forum-posts'),
               onPressed: onLoadMore,
-              icon: const Icon(Icons.expand_more, size: 18),
+              icon: const FlucordIcon(FlucordIcons.chevronDown, size: 18),
               label: const Text('Load more posts'),
             )
           : const SizedBox.shrink(),
@@ -360,7 +361,7 @@ class _ForumFooter extends StatelessWidget {
 class _ForumState extends StatelessWidget {
   const _ForumState({required this.icon, required this.title, this.action});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final Widget? action;
 
@@ -369,7 +370,7 @@ class _ForumState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 28, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 28, color: context.surfaces.muted),
         const SizedBox(height: 10),
         Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,
