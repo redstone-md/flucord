@@ -77,12 +77,11 @@ final class GuildMembership {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(
-        Object.hashAll(roleIds),
-        flags,
-        isPending,
-        timeoutUntil,
-        joinedAt,
-      );
+  int get hashCode => Object.hash(
+    Object.hashAll(roleIds),
+    flags,
+    isPending,
+    timeoutUntil,
+    joinedAt,
+  );
 }

@@ -747,13 +747,15 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
-  /// The one profile card every surface opens for a member of [spaceId].
-  /// [close] closes it, before any action that leaves it.
+  /// The one profile card every surface opens for a member of [spaceId], or
+  /// with [layout] the full profile window it opens. [close] closes it,
+  /// before any action that leaves it.
   Widget _memberCard(
     BuildContext context, {
     required Member member,
     required String spaceId,
     required VoidCallback close,
+    ProfileLayout layout = ProfileLayout.card,
   }) {
     final workspace = chatController.workspace!;
     final friends = friendsController;
@@ -765,11 +767,25 @@ extension _FlucordShellNavigation on FlucordShell {
       close();
       unawaited(action());
     };
-    Widget card() => MemberProfileCard(
+    Widget card(
+      Map<String, List<VoiceParticipantStateEvent>> seated,
+    ) => MemberProfileCard(
       key: ValueKey(member.id),
       member: member,
+      layout: layout,
       spaceId: inServer ? spaceId : null,
-      roles: workspace.roles,
+      workspace: workspace,
+      friendsSince: switch (friends?.relationshipWith(member.id)) {
+        final DiscordRelationship relationship
+            when relationship.kind == DiscordRelationshipKind.friend =>
+          relationship.since,
+        _ => null,
+      },
+      voiceRoom: voiceRoomOf(
+        member.id,
+        workspace: workspace,
+        seatedByChannel: seated,
+      ),
       profile: memberProfileController,
       moderationBuilder: inServer
           ? () => _memberAdminController(spaceId, member.id)
@@ -789,10 +805,41 @@ extension _FlucordShellNavigation on FlucordShell {
           ? closing(() => _reportMember(context, member))
           : null,
       onBlock: canReport ? closing(() => _blockMember(context, member)) : null,
+      onOpenFullProfile: layout == ProfileLayout.card
+          ? closing(
+              () => showFullProfile(
+                context: context,
+                builder: (closeWindow) => _memberCard(
+                  context,
+                  member: member,
+                  spaceId: spaceId,
+                  close: closeWindow,
+                  layout: ProfileLayout.window,
+                ),
+              ),
+            )
+          : null,
+      onOpenProfile: (userId, anchor) =>
+          unawaited(_openMemberCard(context, spaceId, userId, anchor)),
+      onOpenServer: (serverId) {
+        close();
+        _selectSpace(serverId);
+      },
+      onJoinVoice: (channelId) {
+        close();
+        _openVoiceRoom(channelId);
+      },
+      onOpenLink: (uri) => unawaited(externalLinkLauncher.open(uri)),
     );
-    return friends == null
-        ? card()
-        : ListenableBuilder(listenable: friends, builder: (_, _) => card());
+    // A member's "In voice" follows the seats.
+    return _onSeats(
+      (seated) => friends == null
+          ? card(seated)
+          : ListenableBuilder(
+              listenable: friends,
+              builder: (_, _) => card(seated),
+            ),
+    );
   }
 
   /// A friend who shares no server or DM with the account, as the

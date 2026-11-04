@@ -25,14 +25,15 @@ abstract final class FlucordRadius {
 
   /// Anything that opens over the interface: dialogs, menus, popovers,
   /// pickers, profile cards and the incoming call card.
-  static const overlay = BorderRadius.all(Radius.circular(16));
+  static const overlay = BorderRadius.all(overlayCorner);
+
+  /// One corner of [overlay], for a shape rounded on some sides only, such
+  /// as the full profile's card.
+  static const overlayCorner = Radius.circular(16);
 
   /// A large window over the interface, such as the full profile. Its inner
   /// card sits 8 in and takes [overlay], so the corners stay parallel.
-  static const window = BorderRadius.all(windowCorner);
-
-  /// One corner of [window].
-  static const windowCorner = Radius.circular(24);
+  static const window = BorderRadius.all(Radius.circular(24));
 
   /// A pill or a circle, whatever the height.
   static const full = BorderRadius.all(Radius.circular(999));

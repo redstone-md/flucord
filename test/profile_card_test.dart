@@ -32,6 +32,20 @@ const _gamers = CommunityRole(
   position: 1,
 );
 
+const _playAndDay = CommunitySpace(
+  id: 'guild-2',
+  name: 'Play&day',
+  monogram: 'P&',
+  colorValue: 0xff7a2e2e,
+);
+
+const _forge = CommunitySpace(
+  id: 'guild-1',
+  name: 'The Forge',
+  monogram: 'TF',
+  colorValue: 0xff2e4a7a,
+);
+
 Future<void> _pump(
   WidgetTester tester,
   ProfileCardData data, {
@@ -58,8 +72,8 @@ ProfileCardData _with({
   String pronouns = '',
   ClanTag? clanTag,
   List<ProfileBadge> badges = const [],
-  List<MutualFriend> mutualFriends = const [],
-  int mutualServerCount = 0,
+  List<ProfileMutualFriend> mutualFriends = const [],
+  List<ProfileMutualServer> mutualServers = const [],
   String bio = '',
   UserActivity? activity,
   List<CommunityRole>? roles,
@@ -73,7 +87,7 @@ ProfileCardData _with({
   clanTag: clanTag,
   badges: badges,
   mutualFriends: mutualFriends,
-  mutualServerCount: mutualServerCount,
+  mutualServers: mutualServers,
   bio: bio,
   activity: activity,
   roles: roles,
@@ -154,30 +168,69 @@ void main() {
       tester,
       _with(
         mutualFriends: const [
-          MutualFriend(id: 'a', displayName: 'A'),
-          MutualFriend(id: 'b', displayName: 'B'),
+          (friend: MutualFriend(id: 'a', displayName: 'A'), presence: null),
+          (friend: MutualFriend(id: 'b', displayName: 'B'), presence: null),
         ],
-        mutualServerCount: 1,
+        mutualServers: const [(space: _playAndDay, nickname: null)],
       ),
     );
     expect(find.text('2 mutual friends · 1 mutual server'), findsOneWidget);
 
-    await _pump(tester, _with(mutualServerCount: 2));
+    await _pump(
+      tester,
+      _with(
+        mutualServers: const [
+          (space: _playAndDay, nickname: null),
+          (space: _forge, nickname: null),
+        ],
+      ),
+    );
     expect(find.text('2 mutual servers'), findsOneWidget);
   });
 
-  testWidgets('a long bio is cut and opens with "View full bio"', (
+  testWidgets(
+    'the avatar, the name and "View full bio" open the full profile',
+    (tester) async {
+      final bio = List.filled(40, 'Carry player, lobby after nine.').join(' ');
+      var opened = 0;
+      await _pump(
+        tester,
+        _with(bio: bio),
+        actions: ProfileCardActions(onOpenFullProfile: () => opened++),
+      );
+
+      await tester.tap(_key('profile-card-avatar'));
+      await tester.tap(_key('profile-card-name'));
+      await tester.tap(_key('profile-card-view-bio'));
+
+      expect(opened, 3);
+    },
+  );
+
+  testWidgets('a bio that fits in the card has no "View full bio"', (
+    tester,
+  ) async {
+    // Three lines at most, which is the card's limit. Measured, not counted:
+    // the same number of characters in one long word would not fit.
+    await _pump(
+      tester,
+      _with(bio: 'Carry player.\nLobby after nine.\nRust on weekends.'),
+      actions: ProfileCardActions(onOpenFullProfile: () {}),
+    );
+
+    expect(_key('profile-card-bio'), findsOneWidget);
+    expect(_key('profile-card-view-bio'), findsNothing);
+  });
+
+  testWidgets('a card with no full profile behind it opens nothing', (
     tester,
   ) async {
     final bio = List.filled(40, 'Carry player, lobby after nine.').join(' ');
     await _pump(tester, _with(bio: bio));
 
-    final cut = tester.getSize(_key('profile-card-bio')).height;
-    await tester.tap(_key('profile-card-view-bio'));
-    await tester.pump();
-
-    expect(tester.getSize(_key('profile-card-bio')).height, greaterThan(cut));
     expect(_key('profile-card-view-bio'), findsNothing);
+    expect(_key('profile-card-name'), findsNothing);
+    expect(_key('profile-card-avatar'), findsNothing);
   });
 
   testWidgets('a short bio has no "View full bio"', (tester) async {

@@ -189,7 +189,8 @@ class _ActiveFriendCard extends StatelessWidget {
                 color: Color(room.space.colorValue),
               ),
               title: room.channel.name,
-              caption: '${room.space.name} · ${peopleCount(room.people.length)}',
+              caption:
+                  '${room.space.name} · ${peopleCount(room.people.length)}',
               trailing: OverlappingFaces(
                 size: 20,
                 ringColor: surfaces.raised,
