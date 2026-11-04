@@ -9,6 +9,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'art_tile.dart';
 import 'flucord_button.dart';
+import 'optically_centred.dart';
 import 'remote_identity_image.dart';
 
 /// Formats how long an activity has run or has left, in whole minutes:
@@ -333,17 +334,12 @@ class ActivityFrame extends StatelessWidget {
           art,
           const SizedBox(width: 12),
           Expanded(
-            // Lifted so the letters, not the line boxes, centre on the art.
-            child: Transform.translate(
-              offset: Offset(
-                0,
-                -FlucordType.opticalLift(
-                  FlucordTextRole.caption,
-                  lines.isEmpty
-                      ? FlucordTextRole.label
-                      : FlucordTextRole.caption,
-                ),
-              ),
+            child: OpticallyCentred(
+              lines: [
+                FlucordTextRole.caption,
+                FlucordTextRole.label,
+                for (final _ in lines) FlucordTextRole.caption,
+              ],
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,

@@ -147,4 +147,30 @@ void main() {
       closeTo(tile.center.dy - lift, 0.01),
     );
   });
+
+  testWidgets('a name with no caption sits in the middle of the tile by eye', (
+    tester,
+  ) async {
+    final card = await openFor(
+      tester,
+      const CommunitySpace(
+        id: 'forge',
+        name: 'The Forge',
+        monogram: 'TF',
+        colorValue: 0xff456b5a,
+      ),
+    );
+
+    final tile = tester.getRect(
+      find.descendant(of: card, matching: find.byType(ClipRRect)).first,
+    );
+    final name = tester.getRect(
+      find.descendant(of: card, matching: find.text('The Forge')),
+    );
+    final lift = FlucordType.opticalLift(
+      FlucordTextRole.heading,
+      FlucordTextRole.heading,
+    );
+    expect(name.center.dy, closeTo(tile.center.dy - lift, 0.01));
+  });
 }

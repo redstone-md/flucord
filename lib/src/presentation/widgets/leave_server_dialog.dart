@@ -5,6 +5,7 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
+import 'optically_centred.dart';
 import 'rail_tile.dart';
 import 'remote_identity_image.dart';
 
@@ -80,16 +81,14 @@ class _LeftServerCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Transform.translate(
-              offset: Offset(
-                0,
-                -FlucordType.opticalLift(
-                  FlucordTextRole.heading,
-                  FlucordTextRole.caption,
-                ),
-              ),
+            child: OpticallyCentred(
+              lines: [
+                FlucordTextRole.heading,
+                if (caption != null) FlucordTextRole.caption,
+              ],
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     space.name,
