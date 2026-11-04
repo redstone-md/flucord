@@ -106,9 +106,7 @@ class _PersonRow extends StatelessWidget {
           url: person.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Center(
-              child: FlucordIcon(FlucordIcons.person, size: 16),
-            ),
+            child: const FlucordIcon(FlucordIcons.person, size: 16),
           ),
         ),
       ),

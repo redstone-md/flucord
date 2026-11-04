@@ -220,9 +220,7 @@ class _MembershipAvatar extends StatelessWidget {
           url: avatarUrl ?? account.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Center(
-              child: FlucordIcon(FlucordIcons.person, size: 16),
-            ),
+            child: const FlucordIcon(FlucordIcons.person, size: 16),
           ),
         ),
       ),

@@ -83,6 +83,25 @@ void main() {
     expect(tester.getSize(find.byType(FlucordIcon)), const Size.square(32));
   });
 
+  testWidgets('keeps its size and centres in a larger fixed box', (
+    tester,
+  ) async {
+    // As a Material Icon does, so an avatar fallback needs no Center.
+    await tester.pumpWidget(
+      host(
+        const SizedBox.square(
+          key: ValueKey('box'),
+          dimension: 40,
+          child: FlucordIcon(FlucordIcons.person, size: 18),
+        ),
+      ),
+    );
+    final glyph = tester.getRect(find.byType(SvgPicture));
+
+    expect(glyph.size, const Size.square(18));
+    expect(glyph.center, tester.getCenter(find.byKey(const ValueKey('box'))));
+  });
+
   testWidgets('draws at a 1.75 stroke in the icon theme colour', (
     tester,
   ) async {

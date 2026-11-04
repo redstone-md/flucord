@@ -244,9 +244,7 @@ class _InvalidInvite extends StatelessWidget {
           color: surfaces.danger.withValues(alpha: _tileAlpha),
           borderRadius: FlucordRadius.large,
         ),
-        child: Center(
-          child: FlucordIcon(FlucordIcons.mail, color: surfaces.danger),
-        ),
+        child: FlucordIcon(FlucordIcons.mail, color: surfaces.danger),
       ),
       title: Text(
         'Invalid Invite',

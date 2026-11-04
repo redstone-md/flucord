@@ -33,12 +33,10 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
             height: 18,
             child: _isBusy(controller.state)
                 ? const CircularProgressIndicator(strokeWidth: 2)
-                : Center(
-                    child: FlucordIcon(
-                      presentation.icon,
-                      size: 17,
-                      color: presentation.color,
-                    ),
+                : FlucordIcon(
+                    presentation.icon,
+                    size: 17,
+                    color: presentation.color,
                   ),
           ),
           const SizedBox(width: 10),

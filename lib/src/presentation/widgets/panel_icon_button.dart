@@ -80,9 +80,7 @@ class PanelIconButton extends StatelessWidget {
           child: SizedBox(
             width: size,
             height: size,
-            child: Center(
-              child: FlucordIcon(icon, size: _iconSize, color: colour),
-            ),
+            child: FlucordIcon(icon, size: _iconSize, color: colour),
           ),
         ),
       ),

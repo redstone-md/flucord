@@ -354,12 +354,10 @@ class _MessageRequestRow extends StatelessWidget {
                 else
                   SizedBox.square(
                     dimension: _SidebarMetrics.personAvatarSize,
-                    child: Center(
-                      child: FlucordIcon(
-                        FlucordIcons.person,
-                        size: _SidebarMetrics.iconSize,
-                        color: surfaces.muted,
-                      ),
+                    child: FlucordIcon(
+                      FlucordIcons.person,
+                      size: _SidebarMetrics.iconSize,
+                      color: surfaces.muted,
                     ),
                   ),
                 const SizedBox(width: _SidebarMetrics.iconGap),

@@ -96,7 +96,6 @@ class _ConnectedAccountRow extends StatelessWidget {
                 color: context.surfaces.raised,
                 borderRadius: FlucordRadius.medium,
               ),
-              alignment: Alignment.center,
               child: FlucordIcon(
                 _serviceIcon(connection.type),
                 size: 17,

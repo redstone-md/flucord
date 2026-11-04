@@ -167,12 +167,10 @@ class _OAuthAvatar extends StatelessWidget {
           url: account?.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: Center(
-              child: FlucordIcon(
-                account == null ? FlucordIcons.person : FlucordIcons.authorized,
-                size: 18,
-                color: color,
-              ),
+            child: FlucordIcon(
+              account == null ? FlucordIcons.person : FlucordIcons.authorized,
+              size: 18,
+              color: color,
             ),
           ),
         ),

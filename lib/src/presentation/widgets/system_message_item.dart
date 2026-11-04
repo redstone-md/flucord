@@ -140,7 +140,7 @@ final class _SystemMessageDescriptor {
       DiscordMessageType.guildBoostTier1 ||
       DiscordMessageType.guildBoostTier2 ||
       DiscordMessageType.guildBoostTier3 => FlucordIcons.boost,
-      DiscordMessageType.channelFollowAdd => FlucordIcons.notify,
+      DiscordMessageType.channelFollowAdd => FlucordIcons.notifications,
       DiscordMessageType.guildDiscoveryRequalified => FlucordIcons.explore,
       DiscordMessageType.guildDiscoveryDisqualified ||
       DiscordMessageType.guildDiscoveryGracePeriodInitialWarning ||
