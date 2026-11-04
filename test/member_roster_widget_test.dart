@@ -329,6 +329,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('closes the profile when the member list goes away', (
+    tester,
+  ) async {
+    final repository = _FakeMemberListRepository()..cached = sample;
+    final controller = GuildMemberListController(() => repository);
+    addTearDown(controller.dispose);
+    var showList = true;
+    late StateSetter updateHost;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            updateHost = setState;
+            return Scaffold(
+              body: Row(
+                children: [
+                  const Expanded(child: SizedBox()),
+                  if (showList)
+                    MemberSidebar(
+                      members: const [_jack, _mira],
+                      spaceId: 'guild-1',
+                      channelId: 'channel-1',
+                      memberList: controller,
+                      cardFor: (member, _) =>
+                          MemberProfileCard(member: member, spaceId: 'guild-1'),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('member-row-222222222222222222')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+
+    updateHost(() => showList = false);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('renders the roster in a compact window without overflow', (
     tester,
   ) async {

@@ -89,6 +89,11 @@ class _MemberSidebarState extends State<MemberSidebar> {
 
   @override
   void dispose() {
+    // A card left open would point at a row that is gone. Not during the
+    // build: closing pops a route.
+    if (_closeCard case final close?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => close());
+    }
     _searchDebounce?.cancel();
     _search.dispose();
     widget.memberList
