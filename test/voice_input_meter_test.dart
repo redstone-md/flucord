@@ -7,8 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The bar runs from -65 to -30 dB over 350 px: 10 px per dB.
-const double _width = 350;
+/// The bar draws -80 to 0 dB over 400 px: 5 px per dB. The gate holds the
+/// threshold between -65 and -30 dB.
+const double _width = 400;
 const double _min = -65;
 const double _max = -30;
 const _meterKey = ValueKey('meter');
@@ -35,8 +36,8 @@ void main() {
                 child: VoiceInputMeter(
                   key: _meterKey,
                   source: levels,
-                  min: _min,
-                  max: _max,
+                  minThreshold: _min,
+                  maxThreshold: _max,
                   threshold: threshold,
                   onThresholdChanged: changes.add,
                 ),
@@ -50,11 +51,26 @@ void main() {
       tester.getTopLeft(find.byKey(_meterKey)).dx;
 
   testWidgets('the mark sits at the stored threshold', (tester) async {
-    await pumpMeter(tester, threshold: -45);
-    expect(tester.getCenter(find.byKey(_markKey)).dx - barLeft(tester), 200);
+    await pumpMeter(tester, threshold: -50);
+    expect(tester.getCenter(find.byKey(_markKey)).dx - barLeft(tester), 150);
 
     await pumpMeter(tester, threshold: -60);
-    expect(tester.getCenter(find.byKey(_markKey)).dx - barLeft(tester), 50);
+    expect(tester.getCenter(find.byKey(_markKey)).dx - barLeft(tester), 100);
+  });
+
+  testWidgets('speech at -20 dB does not fill the bar', (tester) async {
+    await pumpMeter(tester);
+    levels.add(-20);
+    await tester.pump();
+
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+    expect(
+      tester.renderObject(find.byKey(const ValueKey('voice-input-meter-bar'))),
+      paints..rect(
+        rect: const Rect.fromLTRB(0, 7, 300, 13),
+        color: surfaces.success,
+      ),
+    );
   });
 
   testWidgets('automatic sensitivity has no mark', (tester) async {
@@ -66,7 +82,16 @@ void main() {
     await pumpMeter(tester, threshold: -45);
     await tester.drag(find.byKey(_markKey), const Offset(40, 0));
     expect(changes, isNotEmpty);
-    expect(changes.last, closeTo(-41, 0.01));
+    expect(changes.last, closeTo(-37, 0.01));
+  });
+
+  testWidgets("the mark stops at the gate's limits", (tester) async {
+    await pumpMeter(tester, threshold: -45);
+    await tester.drag(find.byKey(_markKey), const Offset(150, 0));
+    expect(changes.last, _max);
+
+    await tester.drag(find.byKey(_markKey), const Offset(-150, 0));
+    expect(changes.last, _min);
   });
 
   testWidgets('the arrow keys move the threshold a decibel at a time', (
@@ -113,11 +138,11 @@ void main() {
       tester.renderObject(find.byKey(const ValueKey('voice-input-meter-bar'))),
       paints
         ..rect(
-          rect: const Rect.fromLTRB(0, 7, 200, 13),
+          rect: const Rect.fromLTRB(0, 7, 175, 13),
           color: surfaces.warning,
         )
         ..rect(
-          rect: const Rect.fromLTRB(200, 7, 300, 13),
+          rect: const Rect.fromLTRB(175, 7, 225, 13),
           color: surfaces.success,
         ),
     );
@@ -137,7 +162,7 @@ void main() {
     expect(
       bar,
       paints..rect(
-        rect: const Rect.fromLTRB(0, 7, 100, 13),
+        rect: const Rect.fromLTRB(0, 7, 125, 13),
         color: surfaces.warning,
       ),
     );
@@ -157,7 +182,7 @@ void main() {
     expect(
       bar,
       paints..rect(
-        rect: const Rect.fromLTRB(0, 7, 100, 13),
+        rect: const Rect.fromLTRB(0, 7, 125, 13),
         color: surfaces.success,
       ),
     );

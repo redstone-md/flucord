@@ -251,9 +251,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     },
     roles: [
       for (final role in fresh.roles)
-        if (cached.roleOrNull(role.id) case final existing
-            when existing == null || _roleChanged(role, existing))
-          role,
+        if (cached.roleOrNull(role.id) != role) role,
     ],
     ownMemberships: _ownMembershipChanges(cached: cached, fresh: fresh),
     emojisBySpace: _changedPerSpace(
@@ -386,13 +384,6 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       next.iconUrl != cached.iconUrl ||
       next.ownerId != cached.ownerId ||
       next.requiresMultiFactorAuth != cached.requiresMultiFactorAuth;
-
-  static bool _roleChanged(CommunityRole next, CommunityRole cached) =>
-      next.name != cached.name ||
-      next.position != cached.position ||
-      next.colorValue != cached.colorValue ||
-      next.permissions != cached.permissions ||
-      next.hoist != cached.hoist;
 
   static bool _categoryChanged(ChannelCategory next, ChannelCategory cached) =>
       next.name != cached.name || next.position != cached.position;

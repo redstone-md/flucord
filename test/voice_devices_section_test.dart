@@ -229,15 +229,18 @@ void main() {
       find.text('The microphone opens when your voice passes the mark.'),
       findsOneWidget,
     );
-    // The mark starts halfway along the meter, at the midpoint of the gate's
-    // range.
+    // The mark starts at the midpoint of the gate's range, drawn where that
+    // level is on the meter's -80 to 0 dB scale.
     final meter = tester.getRect(find.byKey(meterKey));
-    expect(tester.getCenter(find.byKey(markKey)).dx, meter.center.dx);
+    expect(
+      tester.getCenter(find.byKey(markKey)).dx,
+      closeTo(meter.left + meter.width * 32.5 / 80, 0.01),
+    );
     expect(controller.inputSensitivity, -47.5);
 
-    await tester.drag(find.byKey(markKey), Offset(meter.width / 7, 0));
+    await tester.drag(find.byKey(markKey), Offset(meter.width / 16, 0));
     await tester.pumpAndSettle();
-    // A seventh of the 35 dB range.
+    // A sixteenth of the 80 dB scale.
     expect(controller.inputSensitivity, closeTo(-42.5, 0.01));
     expect(
       repository.saved!.inputSensitivity,

@@ -176,6 +176,56 @@ void main() {
   });
 
   testSession(
+    'a deleted group DM stays gone until a CHANNEL_CREATE brings it back',
+    (tester, session) async {
+      await session.dispatch('CHANNEL_DELETE', {'id': _groupId, 'type': 3});
+      expect(_row(_groupId), findsNothing);
+
+      // A late recipient event names a group the account has left.
+      await session.dispatch('CHANNEL_RECIPIENT_ADD', {
+        'channel_id': _groupId,
+        'user': _newcomer,
+      });
+      expect(_row(_groupId), findsNothing);
+
+      await session.dispatch('CHANNEL_CREATE', {
+        'id': _groupId,
+        'type': 3,
+        'name': null,
+        'recipients': [
+          {'id': _friendId, 'username': 'friend', 'global_name': 'Friend'},
+          _newcomer,
+        ],
+      });
+      expect(_inRow(_groupId, 'Friend, Newcomer'), findsOneWidget);
+    },
+    ready: _readyWithGroup(),
+  );
+
+  testSession(
+    'a closed DM comes back with the next message from the other side',
+    (tester, session) async {
+      expect(_row(_dmId), findsOneWidget);
+      await session.dispatch('CHANNEL_DELETE', {'id': _dmId, 'type': 1});
+      expect(_row(_dmId), findsNothing);
+
+      await session.dispatch('MESSAGE_CREATE', {
+        'id': '500000000000000031',
+        'channel_id': _dmId,
+        'channel_type': 1,
+        'author': {
+          'id': _friendId,
+          'username': 'friend',
+          'global_name': 'Friend',
+        },
+        'content': 'still there?',
+        'timestamp': '2026-11-04T10:00:00.000000+00:00',
+      });
+      expect(_row(_dmId), findsOneWidget);
+    },
+  );
+
+  testSession(
     'a recipient who joins or leaves renames an unnamed group',
     (tester, session) async {
       await session.dispatch('CHANNEL_RECIPIENT_ADD', {
