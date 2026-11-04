@@ -436,7 +436,8 @@ are excluded from the denominator and are never reported as implemented.
   `MESSAGE_REQUEST_NOTIFICATION_SENT`.
 - **Purpose**: friend graph, blocked users, group DM membership.
 - **UI surface**: Friends, DM sidebar.
-- **Contract**: `READY.relationships`, `PUT/DELETE /users/@me/relationships`.
+- **Contract**: `READY.relationships`, `PUT/DELETE /users/@me/relationships/{id}`,
+  `POST /users/@me/relationships` (by username).
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: the full Discord Social SDK relationship path — list,
@@ -453,7 +454,20 @@ are excluded from the denominator and are never reported as implemented.
   want an answer — and its own writes: sending a request, accepting one,
   declining, cancelling, removing and blocking, all over
   `PUT`/`DELETE /users/@me/relationships/{id}`. Accepting is the same call as
-  asking, which is how Discord spells it. Nothing is patched locally on a
+  asking, which is how Discord spells it. A request by username goes to
+  `POST /users/@me/relationships` with the username and a null
+  discriminator, as the official client sends it. A refusal is a typed result
+  with Discord's error code, and each known code has its own message: 10013
+  and 80004 (unknown user), 80007 (already friends), 80000 and 80001 (not
+  accepting requests; Discord asks clients not to reveal a block), 80002
+  (bot), 80003 (self), 30002 (friend limit), 40002 (unverified account),
+  340007 (limited), 80005 (no incoming request), and 429 (too many requests).
+  Any other code reads as a general refusal. A captcha challenge opens the
+  same captcha view as sign-in, and the request goes again with
+  `X-Captcha-Key`, `X-Captcha-Rqtoken` and `X-Captcha-Session-Id`. Every
+  failure is logged with its status and code, never a name. Each row shows
+  the person's avatar, or Discord's default avatar, with the presence badge on
+  it, and so does each suggestion. Nothing is patched locally on a
   write: Discord echoes every change back as a dispatch, and a list edited in
   two places would disagree with itself. A relationship the account never
   asked for — somebody it plays with, or a kind newer than this build — is
@@ -479,7 +493,8 @@ are excluded from the denominator and are never reported as implemented.
   from the request's ack rather than the channel's. The request-tracking
   dispatch above is a Social SDK path and stays there.
 - **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`,
-  `friends_panel_test.dart`, `chat_controller_read_state_request_cases.dart`
+  `friends_panel_test.dart`, `friends_page_session_test.dart`,
+  `friends_requests_session_test.dart`, `chat_controller_read_state_request_cases.dart`
   (in `chat_controller_read_state_test.dart`).
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
