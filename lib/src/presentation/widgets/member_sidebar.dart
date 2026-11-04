@@ -479,7 +479,6 @@ class _MemberRow extends StatelessWidget {
         ],
       ),
     );
-    final nameplate = member.tags.nameplate;
     return Opacity(
       opacity: offline ? 0.58 : 1,
       child: Material(
@@ -497,15 +496,12 @@ class _MemberRow extends StatelessWidget {
             borderRadius: FlucordRadius.control,
             child: SizedBox(
               height: MemberRosterView.rowHeight,
-              child: switch (nameplate) {
-                final nameplate? => NameplateBackdrop(
-                  nameplate: nameplate,
-                  placement: NameplatePlacement.memberList,
-                  selected: selected,
-                  child: content,
-                ),
-                null => content,
-              },
+              child: WithNameplate(
+                nameplate: member.tags.nameplate,
+                placement: NameplatePlacement.memberList,
+                selected: selected,
+                child: content,
+              ),
             ),
           ),
         ),

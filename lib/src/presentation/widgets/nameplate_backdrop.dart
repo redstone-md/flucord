@@ -247,11 +247,7 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     final start = (textEnd / width).clamp(0.0, 1.0);
     final end = ((textEnd + NameplateBackdrop._fade) / width).clamp(start, 1.0);
     return LinearGradient(
-      colors: [
-        Colors.transparent,
-        Colors.transparent,
-        Colors.black,
-      ],
+      colors: [Colors.transparent, Colors.transparent, Colors.black],
       stops: [0, start, end],
     ).createShader(bounds);
   }
@@ -269,6 +265,34 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     );
     return text.localToGlobal(Offset(width, 0), ancestor: row).dx;
   }
+}
+
+/// [child] over [nameplate]'s backdrop, or [child] alone for somebody
+/// without one.
+class WithNameplate extends StatelessWidget {
+  const WithNameplate({
+    required this.nameplate,
+    required this.placement,
+    required this.child,
+    this.selected = false,
+    super.key,
+  });
+
+  final Nameplate? nameplate;
+  final NameplatePlacement placement;
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => switch (nameplate) {
+    final nameplate? => NameplateBackdrop(
+      nameplate: nameplate,
+      placement: placement,
+      selected: selected,
+      child: child,
+    ),
+    null => child,
+  };
 }
 
 class _NameplateScope extends InheritedWidget {

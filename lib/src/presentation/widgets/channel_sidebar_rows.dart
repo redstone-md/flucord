@@ -544,8 +544,11 @@ class _ChannelRow extends StatelessWidget {
           child: ExcludeSemantics(
             child: SizedBox(
               height: height,
-              child: _withNameplate(
-                Row(
+              child: WithNameplate(
+                nameplate: recipient?.tags.nameplate,
+                placement: NameplatePlacement.directMessages,
+                selected: selected,
+                child: Row(
                   children: [
                     SizedBox(
                       width: indented
@@ -640,17 +643,6 @@ class _ChannelRow extends StatelessWidget {
       ),
     );
   }
-
-  /// [content] over the nameplate of the DM's person, when they have one.
-  Widget _withNameplate(Widget content) => switch (recipient?.tags.nameplate) {
-    final nameplate? => NameplateBackdrop(
-      nameplate: nameplate,
-      placement: NameplatePlacement.directMessages,
-      selected: selected,
-      child: content,
-    ),
-    null => content,
-  };
 
   /// The activity line for a DM's person, or null for a channel or somebody
   /// doing nothing.
