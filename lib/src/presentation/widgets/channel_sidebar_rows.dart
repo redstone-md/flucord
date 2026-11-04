@@ -2,24 +2,15 @@ part of 'channel_sidebar.dart';
 
 /// The channel list's sizes, from the FLUCORD-68 design.
 abstract final class _SidebarMetrics {
-  static const headerHeight = 48.0;
+  static const headerHeight = SidebarRowMetrics.headerHeight;
   static const rowHeight = 30.0;
-
-  /// A row that shows a person, such as a direct message: room for the
-  /// avatar and an activity line under the name.
-  static const personRowHeight = 40.0;
-  static const personAvatarSize = 28.0;
-
-  /// The space between rows, so two filled rows never touch.
-  static const rowGap = 2.0;
-
-  /// How far the list sits in from the sidebar's edges.
-  static const listInset = 8.0;
-
-  /// A row's padding on either side of its content.
-  static const rowPadding = 8.0;
-  static const iconSize = 16.0;
-  static const iconGap = 8.0;
+  static const personRowHeight = SidebarRowMetrics.personRowHeight;
+  static const personAvatarSize = SidebarRowMetrics.personAvatarSize;
+  static const rowGap = SidebarRowMetrics.rowGap;
+  static const listInset = SidebarRowMetrics.listInset;
+  static const rowPadding = SidebarRowMetrics.rowPadding;
+  static const iconSize = SidebarRowMetrics.iconSize;
+  static const iconGap = SidebarRowMetrics.iconGap;
 
   /// Where a row's name starts, measured from the row's start.
   static const nameStart = rowPadding + iconSize + iconGap;

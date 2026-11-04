@@ -23,6 +23,7 @@ import 'discord_social_sdk_scope.dart';
 import 'oauth_account_footer.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
+import 'sidebar_row_metrics.dart';
 
 class OAuthAccountSidebar extends StatelessWidget {
   const OAuthAccountSidebar({required this.account, super.key});
@@ -49,7 +50,7 @@ class OAuthAccountSidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: _SidebarRow.headerHeight,
+            height: SidebarRowMetrics.headerHeight,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: AlignmentDirectional.centerStart,
             decoration: BoxDecoration(
@@ -66,12 +67,12 @@ class OAuthAccountSidebar extends StatelessWidget {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(_SidebarRow.listInset),
+              padding: const EdgeInsets.all(SidebarRowMetrics.listInset),
               children: [
                 _SidebarRow(
                   leading: FlucordIcon(
                     FlucordIcons.friends,
-                    size: _SidebarRow.iconSize,
+                    size: SidebarRowMetrics.iconSize,
                     color: navigation.friendsSelected
                         ? surfaces.text
                         : surfaces.muted,
@@ -86,9 +87,9 @@ class OAuthAccountSidebar extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    _SidebarRow.padding,
+                    SidebarRowMetrics.rowPadding,
                     16,
-                    _SidebarRow.padding,
+                    SidebarRowMetrics.rowPadding,
                     4,
                   ),
                   child: Text('Direct messages', style: caption),
@@ -98,7 +99,7 @@ class OAuthAccountSidebar extends StatelessWidget {
                     padding: EdgeInsets.all(12),
                     child: Center(
                       child: SizedBox.square(
-                        dimension: _SidebarRow.iconSize,
+                        dimension: SidebarRowMetrics.iconSize,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
@@ -107,7 +108,7 @@ class OAuthAccountSidebar extends StatelessWidget {
                     dmController.conversations.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: _SidebarRow.padding,
+                      horizontal: SidebarRowMetrics.rowPadding,
                     ),
                     child: Text('No recent conversations', style: caption),
                   )
@@ -119,7 +120,7 @@ class OAuthAccountSidebar extends StatelessWidget {
                       ),
                       leading: DiscordRelationshipAvatar(
                         user: conversation.user,
-                        size: _SidebarRow.avatarSize,
+                        size: SidebarRowMetrics.personAvatarSize,
                         presenceBorderColor: surfaces.surface,
                       ),
                       label: conversation.user.displayName,
@@ -399,14 +400,6 @@ class _SidebarRow extends StatelessWidget {
     this.rowKey,
   });
 
-  static const headerHeight = 48.0;
-  static const height = 40.0;
-  static const listInset = 8.0;
-  static const padding = 8.0;
-  static const avatarSize = 28.0;
-  static const iconSize = 16.0;
-  static const gap = 8.0;
-
   /// The selected row's fill: the text colour, faintly.
   static const selectedAlpha = 0.06;
 
@@ -423,7 +416,7 @@ class _SidebarRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: SidebarRowMetrics.rowGap),
       child: Material(
         color: selected
             ? surfaces.text.withValues(alpha: selectedAlpha)
@@ -434,15 +427,17 @@ class _SidebarRow extends StatelessWidget {
           borderRadius: FlucordRadius.control,
           onTap: onTap,
           child: Container(
-            height: height,
-            padding: const EdgeInsets.symmetric(horizontal: padding),
+            height: SidebarRowMetrics.personRowHeight,
+            padding: const EdgeInsets.symmetric(
+              horizontal: SidebarRowMetrics.rowPadding,
+            ),
             child: Row(
               children: [
                 SizedBox.square(
-                  dimension: avatarSize,
+                  dimension: SidebarRowMetrics.personAvatarSize,
                   child: Center(child: leading),
                 ),
-                const SizedBox(width: gap),
+                const SizedBox(width: SidebarRowMetrics.iconGap),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
