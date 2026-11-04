@@ -119,9 +119,17 @@ final class MemberTags {
 
   /// These tags laid over [known]: a clan tag the payload left out keeps the
   /// one in [known].
-  MemberTags over(MemberTags known) => knowsClanTag || !known.knowsClanTag
-      ? this
-      : MemberTags(isBot: isBot, clanTag: known.clanTag);
+  ///
+  /// A bot stays a bot. An account never stops being one, and a partial user
+  /// object may leave `bot` out, which reads as false.
+  MemberTags over(MemberTags known) {
+    final bot = isBot || known.isBot;
+    if (knowsClanTag) return MemberTags(isBot: bot, clanTag: clanTag);
+    if (known.knowsClanTag) {
+      return MemberTags(isBot: bot, clanTag: known.clanTag);
+    }
+    return MemberTags.clanTagUnsaid(isBot: bot);
+  }
 
   @override
   bool operator ==(Object other) =>

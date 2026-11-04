@@ -11,10 +11,12 @@ mixin _SqliteChatCacheEntities implements ChatCache {
 
   @override
   Future<void> writeMemberTags(String memberId, MemberTags tags) async {
+    final row = SqliteChatCache._tagsToRow(tags);
+    if (row.isEmpty) return;
     _writes.add(
       (transaction) => transaction.update(
         'members',
-        SqliteChatCache._tagsToRow(tags),
+        row,
         where: 'id = ?',
         whereArgs: [memberId],
       ),

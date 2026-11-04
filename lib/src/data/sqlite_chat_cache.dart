@@ -779,9 +779,11 @@ final class SqliteChatCache
   };
 
   /// A clan tag the payload left out is no column at all, so a write keeps
-  /// the stored one.
+  /// the stored one. So is a false bot flag: it may only mean the payload
+  /// left `bot` out, and an account never stops being a bot. A new row takes
+  /// the column's default of 0.
   static Map<String, Object?> _tagsToRow(MemberTags tags) => {
-    'is_bot': tags.isBot ? 1 : 0,
+    if (tags.isBot) 'is_bot': 1,
     if (tags.knowsClanTag) 'clan_tag_json': ChatModelJson.clanTag(tags.clanTag),
   };
 

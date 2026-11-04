@@ -93,6 +93,33 @@ void main() {
     },
   );
 
+  test('a later write without the bot flag keeps it', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    addTearDown(cache.close);
+    Member helper(MemberTags tags) => Member(
+      id: _authorId,
+      displayName: 'Helper',
+      initials: 'H',
+      role: 'Member',
+      presence: Presence.offline,
+      colorValue: 0xff456b5a,
+      tags: tags,
+    );
+
+    await cache.writeMessage(
+      _message(),
+      member: helper(const MemberTags(isBot: true)),
+    );
+    await cache.writeMemberTags(_authorId, const MemberTags.clanTagUnsaid());
+    await cache.writeMember(helper(const MemberTags()));
+    final author = (await cache.readChannelHistory('channel-1')).members;
+
+    expect(author.single.isBot, isTrue);
+  });
+
   test('a member cached before v25 opens as a person with no tag', () async {
     final directory = await Directory.systemTemp.createTemp(
       'flucord-member-tags-migration-',
