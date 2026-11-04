@@ -28,6 +28,7 @@ import 'display_name.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
+import 'motion_scope.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
@@ -315,7 +316,7 @@ class _MessageItemState extends State<MessageItem> {
                 ),
                 child: Stack(
                   children: [
-                    _surface(context),
+                    MotionHoverRegion(child: _surface(context)),
                     if (_rowFocus.hasPrimaryFocus)
                       Positioned.fill(
                         child: IgnorePointer(

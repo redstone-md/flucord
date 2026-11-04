@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import 'presence_indicator.dart';
+import 'presence_scope.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
@@ -13,6 +14,7 @@ class MemberAvatar extends StatelessWidget {
     this.showPresence = true,
     this.spaceId,
     this.presenceBorderColor,
+    this.livePresence = true,
     super.key,
   });
 
@@ -21,6 +23,11 @@ class MemberAvatar extends StatelessWidget {
   final bool showPresence;
   final String? spaceId;
   final Color? presenceBorderColor;
+
+  /// Whether the badge follows the presence the app holds for [member] now,
+  /// through [PresenceScope]. Off for a presence given from elsewhere, such
+  /// as the account's own.
+  final bool livePresence;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
@@ -56,7 +63,11 @@ class MemberAvatar extends StatelessWidget {
             bottom: -1,
             child: PresenceIndicator(
               key: ValueKey('member-presence-${member.id}'),
-              presence: member.presenceOrCoarse,
+              presence:
+                  (livePresence
+                          ? PresenceScope.memberOf(context, member)
+                          : member)
+                      .presenceOrCoarse,
               size: size * 0.34,
               borderColor: presenceBorderColor,
             ),

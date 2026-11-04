@@ -55,6 +55,7 @@ class AccountPanel extends StatelessWidget {
       children: [
         MemberAvatar(
           member: member.withPresence(self),
+          livePresence: false,
           size: 32,
           presenceBorderColor: context.surfaces.rail,
         ),

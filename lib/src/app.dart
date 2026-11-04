@@ -9,6 +9,8 @@ import 'app_composition.dart';
 import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/accessibility_dials.dart';
 import 'presentation/widgets/accessibility_scope.dart';
+import 'presentation/widgets/motion_scope.dart';
+import 'presentation/widgets/presence_scope.dart';
 import 'presentation/widgets/spell_check_scope.dart';
 import 'presentation/widgets/attachment_download_scope.dart';
 import 'presentation/widgets/chat_scope.dart';
@@ -122,10 +124,16 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _composition.accessibility,
           child: AccessibilityDials(
             controller: _composition.accessibility,
-            child: NameStyleScope(
-              videos: const MediaKitNameplateVideos(),
-              fonts: _composition.nameFonts,
-              child: child!,
+            child: MotionScope(
+              window: _composition.windowVisible,
+              child: PresenceScope(
+                chat: _composition.chat,
+                child: NameStyleScope(
+                  videos: const MediaKitNameplateVideos(),
+                  fonts: _composition.nameFonts,
+                  child: child!,
+                ),
+              ),
             ),
           ),
         ),

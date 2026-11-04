@@ -601,7 +601,8 @@ class _ChannelRow extends StatelessWidget {
                             // What the person is doing, the way the member list
                             // says it. With nothing to say the name sits
                             // centred.
-                            if (_activityOf(person) case final summary?)
+                            if (_activityOf(context, person)
+                                case final summary?)
                               ActivitySummaryLine(summary: summary),
                           ],
                         ),
@@ -636,7 +637,7 @@ class _ChannelRow extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          row,
+          MotionHoverRegion(child: row),
           // The selected row is read the moment it opens, so only the others
           // carry the marker.
           if (showsUnread && !selected)
@@ -654,12 +655,14 @@ class _ChannelRow extends StatelessWidget {
 
   /// The activity line for a DM's person, or null for a channel or somebody
   /// doing nothing.
-  static ActivitySummary? _activityOf(Member? person) => switch (person) {
-    final person? => ActivitySummary.of(
-      person.presenceDetail?.activities ?? const [],
-    ),
-    null => null,
-  };
+  static ActivitySummary? _activityOf(BuildContext context, Member? person) =>
+      switch (person) {
+        final person? => ActivitySummary.of(
+          PresenceScope.memberOf(context, person).presenceDetail?.activities ??
+              const [],
+        ),
+        null => null,
+      };
 
   static FlucordIconData _iconFor(ConversationChannel channel) {
     if (channel.isDirectMessage) return FlucordIcons.person;

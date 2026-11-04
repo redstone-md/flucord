@@ -69,6 +69,7 @@ class ReactionGlyph extends StatelessWidget {
         borderRadius: FlucordRadius.small,
         child: RemoteIdentityImage(
           url: emoji.imageUrl,
+          animatesOnHover: false,
           // The account's animate-emoji answer, read here so the flag from
           // any device redraws the strip.
           playsAnimations: UserSettingsScope.displayOf(

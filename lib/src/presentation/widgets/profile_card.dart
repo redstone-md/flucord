@@ -20,6 +20,7 @@ import 'flucord_dialog.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'member_avatar.dart';
+import 'motion_scope.dart';
 import 'name_tags.dart';
 import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
@@ -154,78 +155,82 @@ class ProfileCard extends StatelessWidget {
     final screen = MediaQuery.sizeOf(context);
     // The popout is a route of its own; the preview is part of the page.
     final opensAsRoute = _preview ? null : true;
-    return Semantics(
-      scopesRoute: opensAsRoute,
-      namesRoute: opensAsRoute,
-      explicitChildNodes: true,
-      label: '${data.displayName} profile',
-      child: Material(
-        key: const ValueKey('profile-card'),
-        color: surfaces.raised,
-        elevation: _preview ? 0 : 12,
-        shadowColor: FlucordFixedColors.shadow,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: FlucordRadius.overlay,
-          side: BorderSide(color: surfaces.border),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: width.clamp(0.0, screen.width - 16),
-            maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+    return MotionHoverRegion(
+      // The card is one hover target: its avatar and banner play while the
+      // pointer is anywhere on it.
+      child: Semantics(
+        scopesRoute: opensAsRoute,
+        namesRoute: opensAsRoute,
+        explicitChildNodes: true,
+        label: '${data.displayName} profile',
+        child: Material(
+          key: const ValueKey('profile-card'),
+          color: surfaces.raised,
+          elevation: _preview ? 0 : 12,
+          shadowColor: FlucordFixedColors.shadow,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: FlucordRadius.overlay,
+            side: BorderSide(color: surfaces.border),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(
-                  data: data,
-                  metrics: _ProfileMetrics.card,
-                  backdrop: surfaces.raised,
-                  actions: actions,
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    _padding,
-                    12,
-                    _padding,
-                    _padding,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: width.clamp(0.0, screen.width - 16),
+              maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Header(
+                    data: data,
+                    metrics: _ProfileMetrics.card,
+                    backdrop: surfaces.raised,
+                    actions: actions,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 12,
-                    children: [
-                      _Names(
-                        data: data,
-                        metrics: _ProfileMetrics.card,
-                        backdrop: surfaces.raised,
-                        onOpenFullProfile: actions.onOpenFullProfile,
-                      ),
-                      if (_preview)
-                        _AboutSections(data: data)
-                      else if (data.bio.isNotEmpty)
-                        _Bio(
-                          bio: data.bio,
-                          onViewFull: actions.onOpenFullProfile,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      _padding,
+                      12,
+                      _padding,
+                      _padding,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      spacing: 12,
+                      children: [
+                        _Names(
+                          data: data,
+                          metrics: _ProfileMetrics.card,
+                          backdrop: surfaces.raised,
+                          onOpenFullProfile: actions.onOpenFullProfile,
                         ),
-                      if (data.activity case final activity?)
-                        ActivityCard(
-                          activity: activity,
-                          now: now ?? DateTime.now(),
-                        ),
-                      if (showsRoles)
-                        _Roles(
-                          roles: roles,
-                          addable: actions.addableRoles,
-                          onAdd: actions.onAddRole,
-                        ),
-                      if (actions.onMessage case final send?)
-                        _MessageField(name: data.displayName, onSubmit: send),
-                    ],
+                        if (_preview)
+                          _AboutSections(data: data)
+                        else if (data.bio.isNotEmpty)
+                          _Bio(
+                            bio: data.bio,
+                            onViewFull: actions.onOpenFullProfile,
+                          ),
+                        if (data.activity case final activity?)
+                          ActivityCard(
+                            activity: activity,
+                            now: now ?? DateTime.now(),
+                          ),
+                        if (showsRoles)
+                          _Roles(
+                            roles: roles,
+                            addable: actions.addableRoles,
+                            onAdd: actions.onAddRole,
+                          ),
+                        if (actions.onMessage case final send?)
+                          _MessageField(name: data.displayName, onSubmit: send),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

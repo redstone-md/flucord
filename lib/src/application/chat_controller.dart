@@ -147,6 +147,9 @@ final class ChatController extends ChangeNotifier {
   final Map<String, DateTime> _typingRequests = {};
   final Map<String, UserPresence> _heldPresences = {};
   Timer? _presenceFold;
+
+  /// Hears each presence fold. Presence never notifies this controller.
+  final PresenceChanges presenceChanges = PresenceChanges();
   final _typingSignal = _TypingSignal();
   final _archivedThreadState = _ArchivedThreadState();
 
@@ -950,6 +953,7 @@ final class ChatController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _presenceFold?.cancel();
+    presenceChanges.dispose();
     _clearTyping();
     _typingSignal.dispose();
     unawaited(_readStateSubscription?.cancel());

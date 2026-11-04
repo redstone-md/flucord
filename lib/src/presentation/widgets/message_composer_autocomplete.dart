@@ -443,6 +443,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
           borderRadius: FlucordRadius.small,
           child: RemoteIdentityImage(
             url: suggestion.emojiUrl,
+            animatesOnHover: false,
             fallback: Container(
               color: color.withValues(alpha: 0.16),
               alignment: Alignment.center,

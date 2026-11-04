@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data_uri_image.dart';
+import 'motion_scope.dart';
 
 /// An avatar, banner or icon from Discord's CDN over [fallback]. A staged
 /// picture the user has not saved yet comes as a `data:` URI instead.
@@ -9,7 +10,7 @@ class RemoteIdentityImage extends StatelessWidget {
     required this.url,
     required this.fallback,
     this.imageKey,
-    this.animatesOnHover = false,
+    this.animatesOnHover = true,
     this.playsAnimations = true,
     super.key,
   });
@@ -19,7 +20,10 @@ class RemoteIdentityImage extends StatelessWidget {
   final Key? imageKey;
 
   /// Whether an animated asset holds still until the pointer is on it, which
-  /// is what Discord does with an animated icon. A still asset ignores this.
+  /// is what Discord does with avatars, icons and status emoji. The pointer
+  /// counts on the [MotionHoverRegion] around the image, such as its row or
+  /// card, or on the image itself without one. Emoji that Discord plays all
+  /// the time pass false. A still asset ignores this.
   final bool animatesOnHover;
 
   /// The account's answer to whether emoji may move at all. Off means the
@@ -80,7 +84,8 @@ class RemoteIdentityImage extends StatelessWidget {
   }
 }
 
-/// Swaps a still asset for its animated form while the pointer is over it.
+/// Swaps a still asset for its animated form while the pointer is over it
+/// and the motion rule allows it.
 class _HoverAnimatedImage extends StatefulWidget {
   const _HoverAnimatedImage({
     required this.still,
@@ -100,9 +105,15 @@ class _HoverAnimatedImageState extends State<_HoverAnimatedImage> {
   bool _hovered = false;
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
-    onEnter: (_) => setState(() => _hovered = true),
-    onExit: (_) => setState(() => _hovered = false),
-    child: widget.builder(_hovered ? widget.animated : widget.still),
-  );
+  Widget build(BuildContext context) {
+    final region = MotionHoverRegion.hoveredOf(context);
+    final playing = (region ?? _hovered) && MotionScope.allows(context);
+    final image = widget.builder(playing ? widget.animated : widget.still);
+    if (region != null) return image;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: image,
+    );
+  }
 }

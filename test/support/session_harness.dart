@@ -345,6 +345,13 @@ final class SessionHarness {
   /// Gives the window the focus back, as the platform layer reports it.
   void focusWindow() => _window.setFocused(true);
 
+  /// Minimizes the window, as the platform layer reports it, which suspends
+  /// the app.
+  void minimizeWindow() => _window.setVisible(false);
+
+  /// Brings the minimized window back, as the platform layer reports it.
+  void restoreWindow() => _window.setVisible(true);
+
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
 
@@ -675,6 +682,8 @@ final class _FakeDesktopWindow implements DesktopIntegration {
   StreamSubscription<DesktopMessageNotification>? _subscription;
 
   void setFocused(bool value) => _surface.setApplicationActive(value);
+
+  void setVisible(bool value) => _surface.setWindowVisible(value);
 
   @override
   Future<void> initialize() async {}

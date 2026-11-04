@@ -61,35 +61,40 @@ class FullProfile extends StatelessWidget {
     large: true,
     maxWidth: _maxWidth,
     maxHeight: _maxHeight,
-    child: Semantics(
-      scopesRoute: true,
-      namesRoute: true,
-      explicitChildNodes: true,
-      label: '${data.displayName} profile',
-      child: SizedBox.expand(
-        key: const ValueKey('full-profile'),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: _cardInset, top: _cardInset),
-              child: SizedBox(
-                width: _cardWidth,
-                child: _FullProfileCard(
-                  data: data,
-                  actions: actions,
-                  note: note,
+    child: MotionHoverRegion(
+      child: Semantics(
+        scopesRoute: true,
+        namesRoute: true,
+        explicitChildNodes: true,
+        label: '${data.displayName} profile',
+        child: SizedBox.expand(
+          key: const ValueKey('full-profile'),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: _cardInset,
+                  top: _cardInset,
+                ),
+                child: SizedBox(
+                  width: _cardWidth,
+                  child: _FullProfileCard(
+                    data: data,
+                    actions: actions,
+                    note: note,
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: _FullProfileSide(
-                data: data,
-                actions: actions,
-                now: now ?? DateTime.now(),
+              Expanded(
+                child: _FullProfileSide(
+                  data: data,
+                  actions: actions,
+                  now: now ?? DateTime.now(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

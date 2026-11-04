@@ -14,9 +14,11 @@ import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_roster_view.dart';
 import 'display_name.dart';
+import 'motion_scope.dart';
 import 'name_tags.dart';
 import 'nameplate_backdrop.dart';
 import 'popup_anchor.dart';
+import 'presence_scope.dart';
 import 'profile_card_route.dart';
 
 /// The right-hand member panel.
@@ -293,13 +295,14 @@ class _MemberSidebarState extends State<MemberSidebar> {
   /// the groups in the roles' order, and one with no hoisted role under
   /// Online.
   Widget _buildCachedMembers(List<Member> visibleMembers) {
+    bool online(Member member) => PresenceScope.isOnline(context, member);
     final offline = visibleMembers
-        .where((member) => !member.presence.isOnline)
+        .where((member) => !online(member))
         .toList(growable: false);
     final roleGroups = <CommunityRole, List<Member>>{};
     final ungrouped = <Member>[];
     for (final member in visibleMembers) {
-      if (!member.presence.isOnline) continue;
+      if (!online(member)) continue;
       final hoisted = _rolesOf(member).hoisted;
       if (hoisted == null) {
         ungrouped.add(member);
@@ -432,11 +435,12 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final offline = !member.presence.isOnline;
+    final live = PresenceScope.memberOf(context, member);
+    final offline = !live.presence.isOnline;
     // No role line when there is nothing to show: the group label above
     // already names the role. The name then sits in the middle of the row.
     final summary = ActivitySummary.of(
-      member.presenceDetail?.activities ?? const [],
+      live.presenceDetail?.activities ?? const [],
       inVoice: inVoice,
     );
     final content = Padding(
@@ -500,11 +504,13 @@ class _MemberRow extends StatelessWidget {
             borderRadius: FlucordRadius.control,
             child: SizedBox(
               height: MemberRosterView.rowExtentOf(context),
-              child: WithNameplate(
-                nameplate: member.tags.nameplate,
-                placement: NameplatePlacement.memberList,
-                selected: selected,
-                child: content,
+              child: MotionHoverRegion(
+                child: WithNameplate(
+                  nameplate: member.tags.nameplate,
+                  placement: NameplatePlacement.memberList,
+                  selected: selected,
+                  child: content,
+                ),
               ),
             ),
           ),

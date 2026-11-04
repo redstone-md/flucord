@@ -657,6 +657,7 @@ class _EmojiGlyph extends StatelessWidget {
         borderRadius: FlucordRadius.small,
         child: RemoteIdentityImage(
           url: choice.imageUrl,
+          animatesOnHover: false,
           // The account's animate-emoji answer, read here so the flag from
           // any device redraws the picker.
           playsAnimations: UserSettingsScope.displayOf(

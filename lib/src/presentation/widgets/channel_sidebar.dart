@@ -17,6 +17,8 @@ import 'activity_label.dart';
 import 'activity_views.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
+import 'motion_scope.dart';
+import 'presence_scope.dart';
 import 'nameplate_backdrop.dart';
 import 'count_badge.dart';
 import 'direct_message_views.dart';
