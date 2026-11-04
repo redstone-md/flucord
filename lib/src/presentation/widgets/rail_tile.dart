@@ -28,7 +28,7 @@ class RailMonogram extends StatelessWidget {
     child: Text(
       text,
       style: FlucordTextRole.label.style.copyWith(
-        color: Colors.white,
+        color: FlucordFixedColors.onFill,
         fontWeight: FontWeight.w500,
       ),
     ),

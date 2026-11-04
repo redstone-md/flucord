@@ -176,13 +176,13 @@ abstract final class FlucordTheme {
     final scheme = ColorScheme(
       brightness: brightness,
       primary: brand,
-      onPrimary: Colors.white,
+      onPrimary: FlucordFixedColors.onFill,
       secondary: success,
       onSecondary: const Color(0xff051b10),
       // Widgets and Material's own fields draw error text in this, so it is the
       // readable error text. A danger fill takes `surfaces.danger` instead.
       error: errorText,
-      onError: Colors.white,
+      onError: FlucordFixedColors.onFill,
       surface: surface,
       onSurface: text,
     );
@@ -327,7 +327,7 @@ abstract final class FlucordTheme {
         trackHeight: 4,
         activeTrackColor: brand,
         inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
-        thumbColor: Colors.white,
+        thumbColor: FlucordFixedColors.onFill,
         overlayColor: brand.withValues(alpha: 0.24),
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
         trackShape: const RoundedRectSliderTrackShape(),
@@ -335,6 +335,25 @@ abstract final class FlucordTheme {
       extensions: [surfaces],
     );
   }
+}
+
+/// Colours that are the same in every theme, because what lies under them
+/// is not the theme's: a strong colour fill, a photo or a video.
+abstract final class FlucordFixedColors {
+  /// Text and marks on a strong fill: the accent, danger, a space's colour.
+  static const onFill = Color(0xFFFFFFFF);
+
+  /// Behind a video, where the picture does not reach.
+  static const media = Color(0xFF000000);
+
+  /// The round backing of a control drawn over a picture.
+  static const scrim = Color.fromRGBO(0, 0, 0, 0.55);
+
+  /// The bar of controls over a playing video.
+  static const mediaControls = Color.fromRGBO(0, 0, 0, 0.82);
+
+  /// The star on a favourite.
+  static const favourite = Color(0xFFF0B232);
 }
 
 @immutable

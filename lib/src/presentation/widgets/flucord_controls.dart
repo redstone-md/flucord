@@ -247,7 +247,9 @@ class FlucordToggle extends StatelessWidget {
                         width: knob,
                         height: knob,
                         decoration: BoxDecoration(
-                          color: value ? Colors.white : surfaces.muted,
+                          color: value
+                              ? FlucordFixedColors.onFill
+                              : surfaces.muted,
                           shape: BoxShape.circle,
                         ),
                       ),
