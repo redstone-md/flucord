@@ -285,17 +285,14 @@ final class ChatWorkspace {
 
   CommunitySpace? spaceOrNull(String id) => _spaceById[id];
 
+  /// The roles [member] holds in [spaceId] that the workspace knows.
+  HeldRoles heldRolesOf(Member member, String spaceId) =>
+      HeldRoles.of(member, spaceId, roleOrNull);
+
   /// The colour [member]'s name has in [spaceId]: that of their highest role
   /// with a colour. Null when no role gives one, and in a space with no roles.
-  int? nameColorOf(Member member, String spaceId) {
-    CommunityRole? top;
-    for (final roleId in member.membershipIn(spaceId)?.roleIds ?? const []) {
-      final role = roleOrNull(roleId);
-      if (role?.colorValue == null) continue;
-      if (top == null || role!.position > top.position) top = role;
-    }
-    return top?.colorValue;
-  }
+  int? nameColorOf(Member member, String spaceId) =>
+      heldRolesOf(member, spaceId).nameColor;
 
   ChannelCategory? categoryOrNull(String id) => _categoryById[id];
 
@@ -945,7 +942,6 @@ final class ChatWorkspace {
     if (previous == null) return incoming;
     return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
       avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
       avatarUrlsBySpace: {
         ...previous.avatarUrlsBySpace,

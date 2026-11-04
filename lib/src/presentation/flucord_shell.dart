@@ -647,8 +647,8 @@ class FlucordShell extends StatelessWidget {
                                       builder: (_, _) => MemberSidebar(
                                         seatedByChannel:
                                             voiceController.seatedByChannel,
-                                        nameColorOf: (member) => workspace
-                                            .nameColorOf(member, spaceId),
+                                        heldRolesOf: (member) => workspace
+                                            .heldRolesOf(member, spaceId),
                                         members: workspace.members,
                                         spaceId: spaceId,
                                         channelId: channel?.id,

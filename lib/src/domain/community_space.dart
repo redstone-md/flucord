@@ -85,6 +85,7 @@ final class CommunityRole {
     required this.position,
     this.colorValue,
     this.permissions,
+    this.hoist = false,
   });
 
   final String id;
@@ -92,6 +93,9 @@ final class CommunityRole {
   final String name;
   final int position;
   final int? colorValue;
+
+  /// Whether the member list shows the role's members in a group of its own.
+  final bool hoist;
 
   /// The role's guild-wide permission bits, or null when this record came from
   /// a source that never carried them.
@@ -104,4 +108,56 @@ final class CommunityRole {
 
   /// True for the `@everyone` role, which Discord keys by the guild's own id.
   bool get isEveryone => id == spaceId;
+}
+
+/// The roles a member holds in one server, highest first.
+///
+/// Built from the workspace's roles by id, so a role's name, place, colour and
+/// grouping are read from one record and follow it when it changes.
+final class HeldRoles {
+  const HeldRoles(this.highestFirst);
+
+  /// The roles [member] holds in [spaceId] that [roleOf] knows. Two roles at
+  /// the same position are ordered as Discord orders them: by id.
+  factory HeldRoles.of(
+    Member member,
+    String spaceId,
+    CommunityRole? Function(String roleId) roleOf,
+  ) {
+    final roleIds = member.membershipIn(spaceId)?.roleIds ?? const [];
+    if (roleIds.isEmpty) return none;
+    return HeldRoles(
+      [for (final roleId in roleIds) ?roleOf(roleId)]..sort(
+        (left, right) => left.position != right.position
+            ? right.position.compareTo(left.position)
+            : DiscordSnowflake.compare(left.id, right.id),
+      ),
+    );
+  }
+
+  static const none = HeldRoles([]);
+
+  final List<CommunityRole> highestFirst;
+
+  CommunityRole? get top => highestFirst.isEmpty ? null : highestFirst.first;
+
+  /// The role whose group the member list shows the member in.
+  CommunityRole? get hoisted {
+    for (final role in highestFirst) {
+      if (role.hoist) return role;
+    }
+    return null;
+  }
+
+  /// The colour of the member's name: that of the highest role with one.
+  int? get nameColor {
+    for (final role in highestFirst) {
+      if (role.colorValue case final color?) return color;
+    }
+    return null;
+  }
+
+  /// The name of the highest role, or [member]'s own label when they hold
+  /// none here.
+  String nameFor(Member member) => top?.name ?? member.role;
 }

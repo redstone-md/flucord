@@ -143,7 +143,6 @@ final class Member {
     required this.presence,
     required this.colorValue,
     this.spaceIds = const {},
-    this.rolesBySpace = const {},
     this.avatarUrl,
     this.avatarUrlsBySpace = const {},
     this.membershipsBySpace = const {},
@@ -154,11 +153,13 @@ final class Member {
   final String id;
   final String displayName;
   final String initials;
+
+  /// What the member is outside any server's roles, such as "Discord user".
+  /// Inside a server, the roles say it: see `HeldRoles.nameFor`.
   final String role;
   final Presence presence;
   final int colorValue;
   final Set<String> spaceIds;
-  final Map<String, String> rolesBySpace;
   final String? avatarUrl;
   final Map<String, String> avatarUrlsBySpace;
 
@@ -188,7 +189,6 @@ final class Member {
   UserPresence get presenceOrCoarse =>
       presenceDetail ?? UserPresence(status: presence);
 
-  String roleFor(String spaceId) => rolesBySpace[spaceId] ?? role;
   String? avatarUrlFor(String? spaceId) =>
       spaceId == null ? avatarUrl : avatarUrlsBySpace[spaceId] ?? avatarUrl;
   GuildMembership? membershipIn(String spaceId) => membershipsBySpace[spaceId];
@@ -199,7 +199,6 @@ final class Member {
     Presence? presence,
     int? colorValue,
     Set<String>? spaceIds,
-    Map<String, String>? rolesBySpace,
     String? avatarUrl,
     Map<String, String>? avatarUrlsBySpace,
     Map<String, GuildMembership>? membershipsBySpace,
@@ -213,7 +212,6 @@ final class Member {
     presence: presence ?? this.presence,
     colorValue: colorValue ?? this.colorValue,
     spaceIds: spaceIds ?? this.spaceIds,
-    rolesBySpace: rolesBySpace ?? this.rolesBySpace,
     avatarUrl: avatarUrl ?? this.avatarUrl,
     avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
     membershipsBySpace: membershipsBySpace ?? this.membershipsBySpace,
@@ -234,7 +232,6 @@ final class Member {
     if (spaces.isEmpty) return null;
     return copyWith(
       spaceIds: spaces,
-      rolesBySpace: {...rolesBySpace}..remove(spaceId),
       avatarUrlsBySpace: {...avatarUrlsBySpace}..remove(spaceId),
       membershipsBySpace: {...membershipsBySpace}..remove(spaceId),
     );
@@ -267,10 +264,6 @@ final class Member {
       other.presenceDetail == presenceDetail &&
       other.tags == tags &&
       const SetEquality<String>().equals(other.spaceIds, spaceIds) &&
-      const MapEquality<String, String>().equals(
-        other.rolesBySpace,
-        rolesBySpace,
-      ) &&
       const MapEquality<String, String>().equals(
         other.avatarUrlsBySpace,
         avatarUrlsBySpace,

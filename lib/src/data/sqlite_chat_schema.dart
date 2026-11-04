@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 25;
+  static const version = 29;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -72,7 +72,8 @@ abstract final class SqliteChatSchema {
         name TEXT NOT NULL,
         position INTEGER NOT NULL,
         color_value INTEGER,
-        permissions TEXT
+        permissions TEXT,
+        hoist INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await database.execute('''
@@ -84,7 +85,6 @@ abstract final class SqliteChatSchema {
         presence INTEGER NOT NULL,
         color_value INTEGER NOT NULL,
         space_ids_json TEXT NOT NULL,
-        roles_by_space_json TEXT NOT NULL,
         avatar_url TEXT,
         avatar_urls_by_space_json TEXT NOT NULL,
         memberships_json TEXT,
@@ -388,6 +388,14 @@ abstract final class SqliteChatSchema {
       );
       await _addColumn(database, 'members', 'clan_tag_json TEXT');
     }
+    if (oldVersion < 29) {
+      // A role's name, place and grouping are read from the roles table by id,
+      // so a member row no longer keeps a copy of its top role's name. A role
+      // row written before this version reads as not hoisted until Discord
+      // next sends the role.
+      await _addColumn(database, 'roles', 'hoist INTEGER NOT NULL DEFAULT 0');
+      await _dropColumn(database, 'members', 'roles_by_space_json');
+    }
   }
 
   /// Adds a column, skipping tables this database does not have.
@@ -410,6 +418,18 @@ abstract final class SqliteChatSchema {
     );
     if (existing.isEmpty) return;
     await database.execute('ALTER TABLE $table ADD $definition');
+  }
+
+  /// Drops a column, skipping a table or a column this database does not
+  /// have, for the reason [_addColumn] gives.
+  static Future<void> _dropColumn(
+    Database database,
+    String table,
+    String column,
+  ) async {
+    final columns = await database.rawQuery('PRAGMA table_info($table)');
+    if (!columns.any((row) => row['name'] == column)) return;
+    await database.execute('ALTER TABLE $table DROP COLUMN $column');
   }
 
   static Future<void> _createGuildStickers(DatabaseExecutor database) async {

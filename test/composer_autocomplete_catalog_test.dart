@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/composer_autocomplete_catalog.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/guild_membership.dart';
 
 void main() {
   test('parses and replaces the active mention token at the caret', () {
@@ -201,7 +202,9 @@ final _workspace = ChatWorkspace(
       presence: Presence.online,
       colorValue: 0xff57f287,
       spaceIds: {'guild-1'},
-      rolesBySpace: {'guild-1': 'Moderator'},
+      membershipsBySpace: {
+        'guild-1': GuildMembership(roleIds: ['role-1']),
+      },
     ),
     Member(
       id: 'bot-1',

@@ -144,17 +144,13 @@ void main() {
     });
 
     test('keeps the member fields the clamps depend on', () {
-      final member = DiscordMapper().guildMember(
-        const {
-          'user': {'id': 'member-1', 'username': 'Ada'},
-          'roles': ['role-1', 'role-2'],
-          'flags': GuildMembership.guestFlag,
-          'pending': true,
-          'communication_disabled_until': '2026-07-26T12:00:00.000Z',
-        },
-        'guild-1',
-        const [],
-      );
+      final member = DiscordMapper().guildMember(const {
+        'user': {'id': 'member-1', 'username': 'Ada'},
+        'roles': ['role-1', 'role-2'],
+        'flags': GuildMembership.guestFlag,
+        'pending': true,
+        'communication_disabled_until': '2026-07-26T12:00:00.000Z',
+      }, 'guild-1');
 
       final membership = member.membershipIn('guild-1')!;
       expect(membership.roleIds, ['role-1', 'role-2']);

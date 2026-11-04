@@ -40,7 +40,7 @@ class MemberSidebar extends StatefulWidget {
     this.onBlock,
     this.moderationBuilder,
     this.seatedByChannel = const {},
-    this.nameColorOf,
+    this.heldRolesOf,
     super.key,
   });
 
@@ -48,9 +48,10 @@ class MemberSidebar extends StatefulWidget {
   /// in this space reads "In voice" when they are doing nothing else.
   final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
 
-  /// The colour of a member's top coloured role here, or null for the plain
-  /// text colour.
-  final int? Function(Member member)? nameColorOf;
+  /// The roles a member holds here, which colour their name, group them while
+  /// no roster has arrived, and name their role in the popover. Null on a host
+  /// with no roles to read.
+  final HeldRoles Function(Member member)? heldRolesOf;
 
   /// Each list starts with a group label, which carries its own space above.
   static const _listPadding = EdgeInsets.fromLTRB(8, 0, 8, 16);
@@ -319,26 +320,41 @@ class _MemberSidebarState extends State<MemberSidebar> {
     );
   }
 
+  HeldRoles _rolesOf(Member member) =>
+      widget.heldRolesOf?.call(member) ?? HeldRoles.none;
+
   /// Grouping the cached member table locally, used until a roster arrives.
+  ///
+  /// As Discord does: an online member goes under their highest hoisted role,
+  /// the groups in the roles' order, and one with no hoisted role under
+  /// Online.
   Widget _buildCachedMembers(List<Member> visibleMembers) {
-    final online = visibleMembers
-        .where((member) => member.presence.isOnline)
-        .toList(growable: false);
     final offline = visibleMembers
         .where((member) => !member.presence.isOnline)
         .toList(growable: false);
-    final roleGroups = <String, List<Member>>{};
-    for (final member in online) {
-      roleGroups
-          .putIfAbsent(member.roleFor(widget.spaceId), () => [])
-          .add(member);
+    final roleGroups = <CommunityRole, List<Member>>{};
+    final ungrouped = <Member>[];
+    for (final member in visibleMembers) {
+      if (!member.presence.isOnline) continue;
+      final hoisted = _rolesOf(member).hoisted;
+      if (hoisted == null) {
+        ungrouped.add(member);
+      } else {
+        roleGroups.putIfAbsent(hoisted, () => []).add(member);
+      }
     }
+    final groups = roleGroups.entries.toList(growable: false)
+      ..sort((left, right) => right.key.position.compareTo(left.key.position));
     return ListView(
       padding: MemberSidebar._listPadding,
       children: [
-        for (final entry in roleGroups.entries) ...[
-          MemberGroupLabel(label: entry.key, count: entry.value.length),
-          for (final member in entry.value) _rowFor(member),
+        for (final MapEntry(key: role, value: members) in groups) ...[
+          MemberGroupLabel(label: role.name, count: members.length),
+          for (final member in members) _rowFor(member),
+        ],
+        if (ungrouped.isNotEmpty) ...[
+          MemberGroupLabel(label: 'Online', count: ungrouped.length),
+          for (final member in ungrouped) _rowFor(member),
         ],
         if (offline.isNotEmpty) ...[
           MemberGroupLabel(label: 'Offline', count: offline.length),
@@ -354,7 +370,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
       member: member,
       spaceId: widget.spaceId,
       inVoice: _seatedHere.contains(member.id),
-      nameColor: widget.nameColorOf?.call(member),
+      nameColor: _rolesOf(member).nameColor,
       link: link,
       selected: member.id == _selectedMember?.id,
       onPressed: (context) => _showMember(context, member, link),
@@ -392,7 +408,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
             child: MemberProfilePopover(
               member: member,
               spaceId: widget.spaceId,
-              roleColor: widget.nameColorOf?.call(member),
+              roles: _rolesOf(member),
               profile: widget.profile,
               canMessage: member.id != widget.currentMemberId,
               moderation: _moderation,

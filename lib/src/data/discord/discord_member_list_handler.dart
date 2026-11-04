@@ -34,10 +34,6 @@ final class DiscordMemberListHandler {
     required String channelId,
   }) => _directory.memberListIdFor(guildId: guildId, channelId: channelId);
 
-  /// The guild's raw role payloads, which a member payload is mapped against.
-  List<Map<String, Object?>> rolesOf(String guildId) =>
-      _directory.rolesOf(guildId);
-
   /// Applies one dispatch and returns the members it carried.
   ///
   /// A member-list item is the first and often only place this transport
@@ -81,10 +77,8 @@ final class DiscordMemberListHandler {
   List<Member> _acceptListUpdate(Map<String, Object?> data) {
     final update = DiscordMemberListUpdate.fromDispatch(data);
     if (update == null) return const [];
-    final roles = _directory.rolesOf(update.guildId);
     final members = [
-      for (final item in update.memberItems)
-        _memberOf(item, update.guildId, roles),
+      for (final item in update.memberItems) _memberOf(item, update.guildId),
     ];
     _updates.add(_store.apply(update));
     return members;
@@ -96,12 +90,8 @@ final class DiscordMemberListHandler {
   /// none — but on this transport the enclosing item is where presence first
   /// appears, so it has to be applied here or the roster renders everyone as
   /// offline.
-  Member _memberOf(
-    DiscordMemberListItem item,
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) {
-    final member = _mapper.guildMember(item.member!, guildId, roles);
+  Member _memberOf(DiscordMemberListItem item, String guildId) {
+    final member = _mapper.guildMember(item.member!, guildId);
     final status = item.presence?['status'];
     return status is String
         ? member.copyWith(presence: _mapper.presence(status))

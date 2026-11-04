@@ -702,7 +702,7 @@ extension _FlucordShellNavigation on FlucordShell {
           child: MemberProfilePopover(
             member: member,
             spaceId: spaceId,
-            roleColor: workspace!.nameColorOf(member, spaceId),
+            roles: workspace!.heldRolesOf(member, spaceId),
             profile: profile,
             canMessage: member.id != workspace.currentMemberId,
             onMessage: () {

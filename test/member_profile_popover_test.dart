@@ -188,7 +188,6 @@ const _jack = Member(
   presence: Presence.online,
   colorValue: 0xff48745f,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Architect'},
 );
 
 const _mira = Member(
@@ -199,7 +198,6 @@ const _mira = Member(
   presence: Presence.online,
   colorValue: 0xff665f82,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Product design'},
 );
 
 const _roman = Member(
@@ -210,5 +208,4 @@ const _roman = Member(
   presence: Presence.offline,
   colorValue: 0xff506674,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Infrastructure'},
 );

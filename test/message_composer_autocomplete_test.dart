@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/composer_autocomplete_catalog.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/guild_membership.dart';
 import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -304,7 +305,9 @@ final _workspace = ChatWorkspace(
       presence: Presence.online,
       colorValue: 0xff57f287,
       spaceIds: {'guild-1'},
-      rolesBySpace: {'guild-1': 'Moderator'},
+      membershipsBySpace: {
+        'guild-1': GuildMembership(roleIds: ['role-1']),
+      },
     ),
   ],
   roles: const [

@@ -59,7 +59,6 @@ Member _member(String id, String name, {UserPresence? presence}) => Member(
   presence: presence?.status ?? Presence.offline,
   colorValue: 0xff665f82,
   spaceIds: const {'guild-1'},
-  rolesBySpace: const {'guild-1': 'Engineer'},
   presenceDetail: presence,
 );
 

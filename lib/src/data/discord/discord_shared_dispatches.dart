@@ -25,14 +25,12 @@ final class DiscordSharedDispatches {
     required DiscordMapper mapper,
     required DiscordDirectMessages directMessages,
     required String? Function() currentMemberId,
-    required List<Map<String, Object?>> Function(String guildId) rolesOf,
     required DiscordUpdatedMessage updatedMessage,
     required StreamController<ChatRepositoryEvent> events,
   }) : _cache = cache,
        _mapper = mapper,
        _directMessages = directMessages,
        _currentMemberId = currentMemberId,
-       _rolesOf = rolesOf,
        _events = events,
        _reactions = DiscordReactionHandler(
          cache,
@@ -51,7 +49,6 @@ final class DiscordSharedDispatches {
   final DiscordMapper _mapper;
   final DiscordDirectMessages _directMessages;
   final String? Function() _currentMemberId;
-  final List<Map<String, Object?>> Function(String guildId) _rolesOf;
   final StreamController<ChatRepositoryEvent> _events;
   final DiscordReactionHandler _reactions;
   final DiscordMessageUpdateHandler _updates;
@@ -194,7 +191,7 @@ final class DiscordSharedDispatches {
   Future<void> _upsertMember(Map<String, Object?> data) async {
     final guildId = data['guild_id'] as String?;
     if (guildId == null || data['user'] is! Map) return;
-    final member = _mapper.guildMember(data, guildId, _rolesOf(guildId));
+    final member = _mapper.guildMember(data, guildId);
     _events.publish(MemberUpsertedEvent(member));
     await _cache.writeMember(member);
   }

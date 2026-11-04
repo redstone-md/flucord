@@ -734,6 +734,7 @@ final class SqliteChatCache
     'position': role.position,
     'color_value': role.colorValue,
     'permissions': role.permissions?.toString(),
+    'hoist': role.hoist ? 1 : 0,
   };
 
   static Map<String, Object?> _categoryToRow(ChannelCategory category) => {
@@ -758,6 +759,7 @@ final class SqliteChatCache
     position: row['position']! as int,
     colorValue: row['color_value'] as int?,
     permissions: DiscordPermissions.tryParse(row['permissions']),
+    hoist: row['hoist'] == 1,
   );
 
   static Map<String, Object?> _channelToRow(
@@ -850,7 +852,6 @@ final class SqliteChatCache
     'presence': member.presence.index,
     'color_value': member.colorValue,
     'space_ids_json': ChatModelJson.strings(member.spaceIds),
-    'roles_by_space_json': ChatModelJson.stringMap(member.rolesBySpace),
     'avatar_url': member.avatarUrl,
     'avatar_urls_by_space_json': ChatModelJson.stringMap(
       member.avatarUrlsBySpace,
@@ -874,9 +875,6 @@ final class SqliteChatCache
     presence: Presence.values[row['presence']! as int],
     colorValue: row['color_value']! as int,
     spaceIds: ChatModelJson.stringsFrom(row['space_ids_json']! as String),
-    rolesBySpace: ChatModelJson.stringMapFrom(
-      row['roles_by_space_json']! as String,
-    ),
     avatarUrl: row['avatar_url'] as String?,
     avatarUrlsBySpace: ChatModelJson.stringMapFrom(
       row['avatar_urls_by_space_json']! as String,

@@ -60,7 +60,6 @@ void main() {
         'everyone',
       );
       expect(directory.guildIds, ['guild-1']);
-      expect(directory.rolesOf('guild-1').single['name'], '@everyone');
     });
 
     test('prefers a server supplied member list id', () {
@@ -226,8 +225,6 @@ void main() {
         });
 
       expect(directory.guildIds, ['guild-1']);
-      expect(directory.rolesOf('guild-1'), isEmpty);
-      expect(directory.rolesOf('missing'), isEmpty);
       // No readable `@everyone` permissions means the channel is not public.
       expect(
         directory.memberListIdFor(guildId: 'guild-1', channelId: 'channel-1'),
@@ -331,7 +328,7 @@ void main() {
         '222222222222222222',
       ]);
       expect(members.first.presence, Presence.online);
-      expect(members.first.role, 'Architects');
+      expect(members.first.membershipIn('guild-1')?.roleIds, ['role-a']);
       // No presence in the item leaves the member where the mapper puts it.
       expect(members.last.presence, Presence.offline);
       expect(published.single.rows, hasLength(3));

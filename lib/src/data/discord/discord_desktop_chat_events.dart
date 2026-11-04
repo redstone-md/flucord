@@ -391,7 +391,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       next.name != cached.name ||
       next.position != cached.position ||
       next.colorValue != cached.colorValue ||
-      next.permissions != cached.permissions;
+      next.permissions != cached.permissions ||
+      next.hoist != cached.hoist;
 
   static bool _categoryChanged(ChannelCategory next, ChannelCategory cached) =>
       next.name != cached.name || next.position != cached.position;

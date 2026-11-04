@@ -36,10 +36,6 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
             _handleTyping(event.data);
           case 'GUILD_CREATE':
             _handleGuildSnapshot(event.data);
-          case 'GUILD_ROLE_CREATE' ||
-              'GUILD_ROLE_UPDATE' ||
-              'GUILD_ROLE_DELETE':
-            _foldRole(event);
           case 'GUILD_EMOJIS_UPDATE':
             unawaited(_handleGuildEmojis(event.data));
           case 'GUILD_STICKERS_UPDATE':
@@ -75,40 +71,16 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
     _events.add(TypingStartedEvent(channelId: channelId, memberId: memberId));
   }
 
-  /// Keeps the raw roles a later member payload is mapped against. The shared
-  /// dispatches announce the change.
-  void _foldRole(DiscordGatewayDispatch event) {
-    final change = DiscordRoleDispatch.read(event.name, event.data);
-    if (change == null) return;
-    final roles = _rolesByGuild[change.guildId];
-    if (roles != null) _rolesByGuild[change.guildId] = change.applyTo(roles);
-  }
-
   void _handleGuildSnapshot(Map<String, Object?> data) {
     final guildId = data['id'] as String?;
     if (guildId == null) return;
     if (data['emojis'] is List) unawaited(_handleGuildEmojis(data));
-    final roles = data['roles'];
-    if (roles is List) {
-      _rolesByGuild[guildId] = roles
-          .whereType<Map>()
-          .map((role) => role.cast<String, Object?>())
-          .toList(growable: false);
-    }
     final members = data['members'];
     if (members is List && !_events.isClosed) {
       for (final raw in members.whereType<Map>()) {
         final payload = raw.cast<String, Object?>();
         if (payload['user'] is! Map) continue;
-        _events.add(
-          MemberUpsertedEvent(
-            _mapper.guildMember(
-              payload,
-              guildId,
-              _rolesByGuild[guildId] ?? const [],
-            ),
-          ),
-        );
+        _events.add(MemberUpsertedEvent(_mapper.guildMember(payload, guildId)));
       }
     }
     final presences = data['presences'];

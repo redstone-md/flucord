@@ -246,7 +246,7 @@ abstract final class DiscordGuildAdminMapper {
       mapper: mapper,
       members: [
         for (final member in objects('members'))
-          if (member['user'] is Map) mapper.guildMember(member, guildId, roles),
+          if (member['user'] is Map) mapper.guildMember(member, guildId),
       ],
     );
     return guild.channels.isEmpty ? null : guild;
