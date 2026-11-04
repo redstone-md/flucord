@@ -35,11 +35,34 @@ abstract final class FlucordTheme {
     ),
   );
 
-  static OutlineInputBorder fieldBorder(Color color, double width) =>
-      OutlineInputBorder(
-        borderRadius: FlucordRadius.control,
-        borderSide: BorderSide(color: color, width: width),
-      );
+  /// The frame of a field people type in: the inset fill, a 1 px border,
+  /// the focus ring when focused and a danger border on an error. It sits
+  /// darker than what is around it, so it reads as the place to type.
+  ///
+  /// The theme's fields take it at the control corner. Search and the
+  /// composer pass their own [radius].
+  static InputDecorationTheme recessedField(
+    FlucordSurfaceTheme surfaces, {
+    BorderRadius radius = FlucordRadius.control,
+  }) {
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide(color: color, width: width),
+    );
+    final resting = outline(surfaces.border, 1);
+    final error = outline(surfaces.danger, _focusRingWidth);
+    return InputDecorationTheme(
+      filled: true,
+      fillColor: surfaces.inset,
+      isDense: true,
+      border: resting,
+      enabledBorder: resting,
+      disabledBorder: resting,
+      focusedBorder: outline(surfaces.focusRing, _focusRingWidth),
+      errorBorder: error,
+      focusedErrorBorder: error,
+    );
+  }
 
   /// How far a link moves from the accent toward the text colour. On a dark
   /// theme that is a lighter tint: frame B's #A497F8 next to its #8B7CF6.
@@ -174,6 +197,30 @@ abstract final class FlucordTheme {
     final textTheme = FlucordType.textTheme(
       base.textTheme,
     ).apply(bodyColor: text, displayColor: text);
+    final surfaces = FlucordSurfaceTheme(
+      rail: rail,
+      canvas: canvas,
+      surface: surface,
+      raised: raised,
+      inset: inset,
+      control: control,
+      text: text,
+      bodyText: readableText(bodyText),
+      muted: muted,
+      captionText: readableText(captionText),
+      border: border,
+      brand: brand,
+      brandPressed: brandPressed,
+      success: success,
+      warning: warning,
+      mention: mention,
+      danger: danger,
+      offline: offline,
+      link: readableText(Color.lerp(brand, text, _linkTint)!),
+      errorText: errorText,
+      accentIcon: focusRing,
+      focusRing: focusRing,
+    );
     return base.copyWith(
       canvasColor: canvas,
       cardColor: raised,
@@ -268,22 +315,13 @@ abstract final class FlucordTheme {
       ),
       // Fields are recessed: darker than what they sit on, with a thin
       // border, so it is plain where to type.
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: inset,
-        isDense: true,
+      inputDecorationTheme: recessedField(surfaces).copyWith(
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: (_controlFieldHeight - _fieldLineHeight) / 2,
         ),
         hintStyle: FlucordTextRole.body.style.copyWith(color: captionText),
         errorStyle: FlucordTextRole.caption.style.copyWith(color: errorText),
-        border: fieldBorder(border, 1),
-        enabledBorder: fieldBorder(border, 1),
-        disabledBorder: fieldBorder(border, 1),
-        focusedBorder: fieldBorder(focusRing, _focusRingWidth),
-        errorBorder: fieldBorder(danger, _focusRingWidth),
-        focusedErrorBorder: fieldBorder(danger, _focusRingWidth),
       ),
       sliderTheme: SliderThemeData(
         trackHeight: 4,
@@ -294,32 +332,7 @@ abstract final class FlucordTheme {
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
         trackShape: const RoundedRectSliderTrackShape(),
       ),
-      extensions: [
-        FlucordSurfaceTheme(
-          rail: rail,
-          canvas: canvas,
-          surface: surface,
-          raised: raised,
-          inset: inset,
-          control: control,
-          text: text,
-          bodyText: readableText(bodyText),
-          muted: muted,
-          captionText: readableText(captionText),
-          border: border,
-          brand: brand,
-          brandPressed: brandPressed,
-          success: success,
-          warning: warning,
-          mention: mention,
-          danger: danger,
-          offline: offline,
-          link: readableText(Color.lerp(brand, text, _linkTint)!),
-          errorText: errorText,
-          accentIcon: focusRing,
-          focusRing: focusRing,
-        ),
-      ],
+      extensions: [surfaces],
     );
   }
 }
