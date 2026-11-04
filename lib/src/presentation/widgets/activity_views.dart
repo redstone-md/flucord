@@ -7,20 +7,25 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
-/// Formats the durations a rich presence card shows.
+/// Formats how long an activity has run or has left, in whole minutes:
+/// "35 min", "2 h", "1 h 20 min". The profile card and the Active now column
+/// both read it, so the two never disagree.
 abstract final class ActivityElapsed {
-  /// `H:MM:SS` past an hour, `MM:SS` below it — the shape Discord uses, which
-  /// keeps a two-minute track from reading as `00:02:11`.
-  static String format(Duration span) {
-    final seconds = span.inSeconds;
-    final minutes = (seconds ~/ 60) % 60;
-    final hours = seconds ~/ 3600;
-    final rest = seconds % 60;
-    final body =
-        '${minutes.toString().padLeft(2, '0')}:'
-        '${rest.toString().padLeft(2, '0')}';
-    return hours > 0 ? '$hours:$body' : body;
+  /// [span] in hours and minutes, or null under a minute, where there is no
+  /// time worth reading yet.
+  static String? format(Duration span) {
+    final hours = span.inHours;
+    final minutes = span.inMinutes % 60;
+    if (hours == 0) return minutes == 0 ? null : '$minutes min';
+    return minutes == 0 ? '$hours h' : '$hours h $minutes min';
   }
+
+  /// How long the activity has run at [now], or null without a start.
+  static String? since(ActivityTimestamps? timestamps, DateTime now) =>
+      switch (timestamps?.elapsedAt(now)) {
+        final span? => format(span),
+        null => null,
+      };
 
   /// The timing line, or null when the activity carries no usable stamp.
   ///
@@ -28,14 +33,14 @@ abstract final class ActivityElapsed {
   /// from its start, while a match with an end counts down to it.
   static String? line(ActivityTimestamps? timestamps, DateTime now) {
     if (timestamps == null) return null;
-    if (timestamps.isCountDown) {
-      final remaining = timestamps.remainingAt(now);
-      if (remaining != null) return '${format(remaining)} left';
-    }
-    final elapsed = timestamps.elapsedAt(now);
-    if (elapsed != null) return '${format(elapsed)} elapsed';
     final remaining = timestamps.remainingAt(now);
-    return remaining == null ? null : '${format(remaining)} left';
+    final elapsed = timestamps.elapsedAt(now);
+    final (span, word) =
+        remaining != null && (timestamps.isCountDown || elapsed == null)
+        ? (remaining, 'left')
+        : (elapsed, 'elapsed');
+    final text = span == null ? null : format(span);
+    return text == null ? null : '$text $word';
   }
 }
 

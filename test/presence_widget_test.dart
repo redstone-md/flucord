@@ -252,18 +252,20 @@ void main() {
   });
 
   group('activity views', () {
-    test('formats elapsed and remaining time the way Discord does', () {
-      expect(ActivityElapsed.format(const Duration(seconds: 5)), '00:05');
-      expect(
-        ActivityElapsed.format(const Duration(minutes: 2, seconds: 11)),
-        '02:11',
-      );
+    test('formats time in whole hours and minutes', () {
+      expect(ActivityElapsed.format(const Duration(minutes: 35)), '35 min');
+      expect(ActivityElapsed.format(const Duration(hours: 2)), '2 h');
       expect(
         ActivityElapsed.format(
-          const Duration(hours: 3, minutes: 4, seconds: 5),
+          const Duration(hours: 1, minutes: 20, seconds: 59),
         ),
-        '3:04:05',
+        '1 h 20 min',
       );
+      // Under a minute is no time worth reading yet.
+      expect(ActivityElapsed.format(const Duration(seconds: 59)), isNull);
+    });
+
+    test('a timing line counts up from the start or down to the end', () {
       expect(ActivityElapsed.line(null, _now), isNull);
       expect(ActivityElapsed.line(const ActivityTimestamps(), _now), isNull);
       expect(
@@ -271,35 +273,37 @@ void main() {
           ActivityTimestamps(startMs: _now.millisecondsSinceEpoch - 61000),
           _now,
         ),
-        '01:01 elapsed',
+        '1 min elapsed',
       );
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(
+            startMs: _now.millisecondsSinceEpoch - 61000,
             endMs: _now.millisecondsSinceEpoch + 61000,
             isCountDown: true,
           ),
           _now,
         ),
-        '01:01 left',
+        '1 min left',
       );
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(endMs: _now.millisecondsSinceEpoch + 61000),
           _now,
         ),
-        '01:01 left',
+        '1 min left',
       );
+      // The last seconds of a countdown say nothing rather than "0 min".
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(
-            startMs: _now.millisecondsSinceEpoch - 1000,
+            startMs: _now.millisecondsSinceEpoch - 600000,
             endMs: _now.millisecondsSinceEpoch + 1000,
             isCountDown: true,
           ),
           _now,
         ),
-        '00:01 left',
+        isNull,
       );
     });
 
@@ -339,7 +343,7 @@ void main() {
                 name: 'A cup',
                 type: ActivityType.competing,
                 timestamps: ActivityTimestamps(
-                  startMs: _now.millisecondsSinceEpoch - 5000,
+                  startMs: _now.millisecondsSinceEpoch - 5 * 60000,
                 ),
               ),
               now: _now,
@@ -348,7 +352,7 @@ void main() {
         ),
       );
 
-      expect(find.text('00:05 elapsed'), findsOneWidget);
+      expect(find.text('5 min elapsed'), findsOneWidget);
       expect(find.byKey(const ValueKey('activity-large-image')), findsNothing);
     });
 

@@ -113,7 +113,7 @@ class _ActiveFriendCard extends StatelessWidget {
     final person = friend.person;
     final room = friend.room;
     final main = friend.doing.firstOrNull;
-    final elapsed = _elapsed(main?.timestamps, now);
+    final elapsed = ActivityElapsed.since(main?.timestamps, now);
     // A rich presence gets its own block, and the time moves there.
     final rich = main?.details == null ? null : main;
     final summary = ActivitySummary.of(friend.doing, inVoice: room != null);
@@ -327,17 +327,6 @@ class _Faces extends StatelessWidget {
         ),
     ],
   );
-}
-
-/// How long an activity has run, as "1 h 20 min" or "35 min". Null when it
-/// carries no start or has run for less than a minute.
-String? _elapsed(ActivityTimestamps? timestamps, DateTime now) {
-  final span = timestamps?.elapsedAt(now);
-  if (span == null || span.inMinutes < 1) return null;
-  final hours = span.inHours;
-  final minutes = span.inMinutes % 60;
-  if (hours == 0) return '$minutes min';
-  return minutes == 0 ? '$hours h' : '$hours h $minutes min';
 }
 
 /// The first letters of the first two words, as a server's monogram reads:
