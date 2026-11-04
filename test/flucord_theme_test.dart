@@ -252,6 +252,12 @@ void main() {
         );
 
         test(
+          'a field placeholder reaches 4.5:1',
+          () =>
+              expectContrast(theme.inputDecorationTheme.hintStyle!.color!, 4.5),
+        );
+
+        test(
           'link text reaches 4.5:1',
           () => expectContrast(surfaces.link, 4.5),
         );

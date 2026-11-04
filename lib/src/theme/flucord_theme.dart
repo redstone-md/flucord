@@ -325,7 +325,9 @@ abstract final class FlucordTheme {
           horizontal: 12,
           vertical: (_controlFieldHeight - _fieldLineHeight) / 2,
         ),
-        hintStyle: FlucordTextRole.body.style.copyWith(color: captionText),
+        hintStyle: FlucordTextRole.body.style.copyWith(
+          color: surfaces.captionText,
+        ),
         errorStyle: FlucordTextRole.caption.style.copyWith(color: errorText),
       ),
       sliderTheme: SliderThemeData(
