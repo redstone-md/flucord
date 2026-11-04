@@ -182,7 +182,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
               OutlinedButton.icon(
                 key: const ValueKey('forum-post-add-attachments'),
                 onPressed: _isCreating ? null : _pickAttachments,
-                icon: const FlucordIcon(FlucordIcons.attach, size: 16),
+                icon: const FlucordIcon(FlucordIcons.attachment, size: 16),
                 label: const Text('Add files'),
               ),
               const SizedBox(width: 10),

@@ -161,7 +161,7 @@ class _ForumMediaPreview extends StatelessWidget {
           )
         : _MediaPlaceholder(
             icon: attachment?.isVideo == true
-                ? FlucordIcons.video
+                ? FlucordIcons.videoFile
                 : attachment == null
                 ? FlucordIcons.mediaChannel
                 : FlucordIcons.file,

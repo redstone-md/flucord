@@ -648,7 +648,7 @@ class _TileVolumeSlider extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
-            const FlucordIcon(FlucordIcons.voiceChannel, size: 14),
+            const FlucordIcon(FlucordIcons.volume, size: 14),
             const SizedBox(width: 6),
             Expanded(
               child: SliderTheme(

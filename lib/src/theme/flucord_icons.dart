@@ -227,22 +227,11 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedCalendarRemove01,
   );
   static const archive = FlucordIconData(HugeIcons.strokeRoundedArchive);
-  static const mediaChannel = FlucordIconData(HugeIcons.strokeRoundedAlbum02);
-  static const brokenImage = FlucordIconData(
-    HugeIcons.strokeRoundedImageNotFound01,
-  );
-  static const video = FlucordIconData(HugeIcons.strokeRoundedPlayCircle);
-  static const file = FlucordIconData(HugeIcons.strokeRoundedFile01);
   static const filterOff = FlucordIconData(HugeIcons.strokeRoundedFilterRemove);
   static const newPost = FlucordIconData(HugeIcons.strokeRoundedCommentAdd01);
-  static const stage = FlucordIconData(HugeIcons.strokeRoundedPodcast);
   static const raiseHand = FlucordIconData(HugeIcons.strokeRoundedHand);
   static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
   static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
-  static const volumeOff = FlucordIconData(HugeIcons.strokeRoundedVolumeOff);
-  // Media controls keep their direction in right-to-left text.
-  static const play = FlucordIconData(HugeIcons.strokeRoundedPlay);
-  static const pause = FlucordIconData(HugeIcons.strokeRoundedPause);
 
   // Accounts, connection and status (FLUCORD-84).
   static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);

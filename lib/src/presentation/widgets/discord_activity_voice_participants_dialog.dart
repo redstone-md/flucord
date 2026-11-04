@@ -259,7 +259,7 @@ class _ParticipantRow extends StatelessWidget {
                       ? FlucordIcons.refresh
                       : locallyMuted
                       ? FlucordIcons.volumeOff
-                      : FlucordIcons.voiceChannel,
+                      : FlucordIcons.volume,
                   size: 19,
                   color: locallyMuted
                       ? context.surfaces.accentIcon
