@@ -564,7 +564,7 @@ class _MemberRow extends StatelessWidget {
               onSecondaryTap: () => onPressed(context),
               borderRadius: FlucordRadius.control,
               child: Container(
-                height: MemberRosterView.rowHeight,
+                height: MemberRosterView.rowExtentOf(context),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
