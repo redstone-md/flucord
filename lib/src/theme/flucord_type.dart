@@ -51,6 +51,26 @@ abstract final class FlucordType {
   /// is too close to Regular to read as bold in running text.
   static const writtenBold = TextStyle(fontWeight: FontWeight.w600);
 
+  // Golos Text's vertical metrics, as a share of the font size. From the
+  // font file: 1000 units per em, ascent 980, descent 220, cap height 700.
+  static const _ascent = 0.98;
+  static const _descent = 0.22;
+  static const _capHeight = 0.70;
+
+  /// How far to lift lines of text, from [first] to [last], so their
+  /// letters sit in the middle of what stands beside them, such as a
+  /// picture.
+  ///
+  /// The font keeps more room above its capitals than below its baseline,
+  /// so text centred by its box looks a little low next to a picture.
+  static double opticalLift(FlucordTextRole first, FlucordTextRole last) {
+    double halfLeading(FlucordTextRole role) =>
+        (role.lineHeight - role.size * (_ascent + _descent)) / 2;
+    final above = halfLeading(first) + (_ascent - _capHeight) * first.size;
+    final below = halfLeading(last) + _descent * last.size;
+    return (above - below) / 2;
+  }
+
   /// Every size on the scale, smallest first.
   static const sizes = [appTag, clanTag, caption, label, body, title, display];
 

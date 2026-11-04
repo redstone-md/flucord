@@ -237,6 +237,8 @@ class _Card extends StatelessWidget {
   final Key? closeKey;
   final Widget body;
 
+  static const _closeInset = 16.0;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -256,25 +258,37 @@ class _Card extends StatelessWidget {
             SizedBox(
               height: 64,
               child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(40, 0, 16, 0),
+                // The close button keeps the same 16 from the top as from
+                // the side, and the title sits on the button's centre line.
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  40,
+                  _closeInset,
+                  _closeInset,
+                  0,
+                ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Semantics(
-                        header: true,
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: FlucordTextRole.title.style.copyWith(
-                            color: surfaces.text,
+                      child: Container(
+                        height: FlucordIconButton.size,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: FlucordTextRole.title.style.copyWith(
+                              color: surfaces.text,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     if (busy)
                       const Padding(
-                        padding: EdgeInsetsDirectional.only(end: 12),
+                        padding: EdgeInsetsDirectional.fromSTEB(0, 6, 12, 0),
                         child: SizedBox.square(
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
@@ -300,32 +314,46 @@ class _CloseButton extends StatelessWidget {
 
   final Key? buttonKey;
 
+  static const _hintGap = 2.0;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        IconButton(
-          key: buttonKey,
-          tooltip: 'Close',
-          onPressed: () => Navigator.of(context).maybePop(),
-          iconSize: FlucordIconButton.iconSize,
-          style: FlucordIconButton.squareStyle.copyWith(
-            backgroundColor: WidgetStatePropertyAll(surfaces.quietFill),
+    final hint = FlucordTextRole.caption.style.copyWith(
+      color: surfaces.captionText,
+    );
+    // As wide as the button, so the button's edge is the bar's edge. The
+    // hint is wider than the button and centres under it.
+    return SizedBox(
+      width: FlucordIconButton.size,
+      height: FlucordIconButton.size + _hintGap + hint.fontSize! * hint.height!,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          IconButton(
+            key: buttonKey,
+            tooltip: 'Close',
+            onPressed: () => Navigator.of(context).maybePop(),
+            iconSize: FlucordIconButton.iconSize,
+            style: FlucordIconButton.squareStyle.copyWith(
+              backgroundColor: WidgetStatePropertyAll(surfaces.quietFill),
+            ),
+            icon: FlucordIcon(FlucordIcons.clear, color: surfaces.text),
           ),
-          icon: FlucordIcon(FlucordIcons.clear, color: surfaces.text),
-        ),
-        const SizedBox(height: 2),
-        ExcludeSemantics(
-          child: Text(
-            FlucordKeyHint.escape,
-            style: FlucordTextRole.caption.style.copyWith(
-              color: surfaces.captionText,
+          Positioned(
+            top: FlucordIconButton.size + _hintGap,
+            left: -FlucordIconButton.size,
+            right: -FlucordIconButton.size,
+            child: ExcludeSemantics(
+              child: Text(
+                FlucordKeyHint.escape,
+                textAlign: TextAlign.center,
+                style: hint,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
