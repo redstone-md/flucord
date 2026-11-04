@@ -1,6 +1,6 @@
 part of 'channel_sidebar.dart';
 
-/// The channel list's sizes, from the FLUCORD-68 design.
+/// The channel list's sizes.
 abstract final class _SidebarMetrics {
   static const headerHeight = 48.0;
   static const rowHeight = 30.0;
@@ -44,9 +44,6 @@ abstract final class _SidebarMetrics {
 
   /// The unread marker on the sidebar's edge.
   static const unreadMarker = Size(4, 8);
-
-  /// The selected row's fill: the text colour, faintly.
-  static const selectedAlpha = 0.06;
 }
 
 /// A server's sidebar header: its name, and every action on the server in the
@@ -269,9 +266,7 @@ class _SidebarNavRow extends StatelessWidget {
         button: true,
         selected: selected,
         child: Material(
-          color: selected
-              ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
-              : Colors.transparent,
+          color: selected ? surfaces.quietFill : Colors.transparent,
           borderRadius: FlucordRadius.control,
           child: InkWell(
             onTap: onPressed,
@@ -560,9 +555,7 @@ class _ChannelRow extends StatelessWidget {
       button: true,
       selected: selected,
       child: Material(
-        color: selected
-            ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
-            : Colors.transparent,
+        color: selected ? surfaces.quietFill : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(
           key: ValueKey('channel-${channel.id}'),

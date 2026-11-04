@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
+import 'support/type_scale.dart';
 
 const _botId = '100000000000000007';
 const _botMessageId = '900000000000000021';
@@ -39,6 +40,18 @@ Finder _in(Finder row, Finder matching) =>
 
 /// Bots carry an APP tag and clan members a clan chip, beside the name.
 void main() {
+  testSession('a row with both tags stays on the type scale', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(SessionHarness.channelId);
+    await session.dispatch('MESSAGE_CREATE', _fromBot());
+
+    expect(find.text('APP'), findsWidgets);
+    expect(find.text('CODE'), findsWidgets);
+    expectTextOnTypeScale(tester);
+  });
+
   testSession('a bot author shows the clan chip and APP beside the name', (
     tester,
     session,

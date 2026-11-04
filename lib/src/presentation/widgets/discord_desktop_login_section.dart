@@ -43,7 +43,10 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
                 ),
               ),
               if (connected)
-                const _StateLabel(label: 'Connected', color: Color(0xff3ba55d)),
+                _StateLabel(
+                  label: 'Connected',
+                  color: context.surfaces.success,
+                ),
             ],
           ),
           const SizedBox(height: 14),

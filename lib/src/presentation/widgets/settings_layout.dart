@@ -7,6 +7,7 @@ import '../../theme/flucord_type.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
+import 'flucord_icon_button.dart';
 
 /// One page in the settings navigation.
 final class SettingsNavEntry {
@@ -309,14 +310,11 @@ class _CloseButton extends StatelessWidget {
           key: buttonKey,
           tooltip: 'Close',
           onPressed: () => Navigator.of(context).maybePop(),
-          style: IconButton.styleFrom(
-            backgroundColor: surfaces.quietFill,
-            fixedSize: const Size.square(28),
-            minimumSize: const Size.square(28),
-            padding: EdgeInsets.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          iconSize: FlucordIconButton.iconSize,
+          style: FlucordIconButton.squareStyle.copyWith(
+            backgroundColor: WidgetStatePropertyAll(surfaces.quietFill),
           ),
-          icon: FlucordIcon(FlucordIcons.clear, size: 16, color: surfaces.text),
+          icon: FlucordIcon(FlucordIcons.clear, color: surfaces.text),
         ),
         const SizedBox(height: 2),
         ExcludeSemantics(

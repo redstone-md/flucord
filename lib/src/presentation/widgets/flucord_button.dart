@@ -50,17 +50,8 @@ class FlucordButton extends StatelessWidget {
   /// [FilledButton] is a primary button too.
   static ButtonStyle styleOf(BuildContext context, FlucordButtonKind kind) {
     final surfaces = context.surfaces;
-    final shared = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12),
-      ),
-      textStyle: WidgetStatePropertyAll(
-        FlucordTextRole.label.style.copyWith(fontWeight: FontWeight.w500),
-      ),
-      shape: const WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: FlucordRadius.control),
-      ),
+    final shared = FlucordTheme.buttonFrame(
+      Theme.of(context).textTheme.labelLarge,
     );
     return switch (kind) {
       FlucordButtonKind.primary => shared,
@@ -71,7 +62,7 @@ class FlucordButton extends StatelessWidget {
       FlucordButtonKind.danger => shared.copyWith(
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.disabled)
-              ? surfaces.danger.withValues(alpha: 0.38)
+              ? surfaces.danger.withValues(alpha: FlucordTheme.disabledAlpha)
               : surfaces.danger,
         ),
         foregroundColor: WidgetStatePropertyAll(
@@ -87,7 +78,7 @@ class FlucordButton extends StatelessWidget {
   static WidgetStateProperty<Color> _disabledAware(Color color) =>
       WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.disabled)
-            ? color.withValues(alpha: 0.38)
+            ? color.withValues(alpha: FlucordTheme.disabledAlpha)
             : color,
       );
 

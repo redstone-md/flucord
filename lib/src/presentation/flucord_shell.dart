@@ -54,6 +54,7 @@ import 'widgets/incoming_call_overlay.dart';
 import 'widgets/member_profile_popover.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_search_panel.dart';
+import 'widgets/navigation_theme.dart';
 import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
@@ -390,7 +391,7 @@ class FlucordShell extends StatelessWidget {
                           constraints.maxWidth -
                                   _railWidth -
                                   (showChannels ? _channelSidebarWidth : 0) -
-                                  _canvasInset -
+                                  FlucordTheme.canvasInset -
                                   _sidePanelMaxWidth <
                               _conversationMinWidth;
                       return Row(
@@ -410,22 +411,29 @@ class FlucordShell extends StatelessWidget {
                               connectionController.mode,
                               themeMode,
                             ],
-                            builder: (_) => ServerRail(
-                              spaces: workspace.spaces,
-                              activity: activityBySpaceId,
-                              selectedSpaceId: spaceId,
-                              onSelectSpace: _selectSpace,
-                              onToggleTheme: onToggleTheme,
-                              onOpenConnections: () =>
-                                  _openConnections(context),
-                              onAddServer: canManageServers
-                                  ? () => unawaited(_addServer(context))
-                                  : null,
-                              onOpenSpaceMenu: (spaceId, position) => unawaited(
-                                _openSpaceMenu(context, spaceId, position),
+                            builder: (_) => NavigationTheme(
+                              child: ServerRail(
+                                spaces: workspace.spaces,
+                                activity: activityBySpaceId,
+                                selectedSpaceId: spaceId,
+                                onSelectSpace: _selectSpace,
+                                onToggleTheme: onToggleTheme,
+                                onOpenConnections: () =>
+                                    _openConnections(context),
+                                onAddServer: canManageServers
+                                    ? () => unawaited(_addServer(context))
+                                    : null,
+                                onOpenSpaceMenu: (spaceId, position) =>
+                                    unawaited(
+                                      _openSpaceMenu(
+                                        context,
+                                        spaceId,
+                                        position,
+                                      ),
+                                    ),
+                                sessionMode: connectionController.mode,
+                                isDark: themeMode == ThemeMode.dark,
                               ),
-                              sessionMode: connectionController.mode,
-                              isDark: themeMode == ThemeMode.dark,
                             ),
                           ),
                           if (showChannels)
@@ -484,87 +492,97 @@ class FlucordShell extends StatelessWidget {
                                       spaceId,
                                     ),
                                   ],
-                                  builder: (_) => ChannelSidebar(
-                                    space: space,
-                                    friends: friendsController,
-                                    categories: categories,
-                                    currentMember: currentMember,
-                                    memberOf: _memberOf,
-                                    channelOf: _channelOf,
-                                    seatedByChannel: seats,
-                                    speakingUserIds: speaking,
-                                    // Discord opens a profile from these rows with
-                                    // either mouse button. Ours were labels.
-                                    onOpenMemberProfile: (userId) => unawaited(
-                                      _openMemberCard(context, spaceId, userId),
-                                    ),
-                                    // A voice connection outlives the room view, so
-                                    // leaving it has to stay reachable from wherever
-                                    // the user has navigated to since.
-                                    voiceConnectionBar: VoiceConnectionBar(
-                                      controller: voiceController,
-                                      camera: selfVideoController,
-                                      channelNameFor: (id) =>
-                                          _channelOf(id)?.name,
-                                      serverNameFor: _serverNameOf,
-                                      onOpenChannel: _openVoiceRoom,
-                                    ),
-                                    channels: channels,
-                                    selectedChannelId: channelId,
-                                    collapsedCategoryIds: workspaceController
-                                        .collapsedCategoryIds,
-                                    onToggleCategory:
-                                        workspaceController.toggleCategory,
-                                    onNewDirectMessage: () =>
-                                        _openDirectMessage(context),
-                                    onAcceptMessageRequest: (channelId) =>
-                                        unawaited(
-                                          chatController.acceptMessageRequest(
-                                            channelId,
-                                          ),
-                                        ),
-                                    onDeclineMessageRequest: (channelId) =>
-                                        unawaited(
-                                          chatController.declineMessageRequest(
-                                            channelId,
-                                          ),
-                                        ),
-                                    scheduledEventCount: chatController
-                                        .scheduledEventsFor(space.id)
-                                        .length,
-                                    isLoadingScheduledEvents: chatController
-                                        .isLoadingScheduledEvents(space.id),
-                                    scheduledEventsError: chatController
-                                        .scheduledEventsError(space.id),
-                                    onOpenEvents: () =>
-                                        _openScheduledEvents(context, space),
-                                    onOpenServerSettings: canOpenSettings
-                                        ? () => unawaited(
-                                            _openGuildSettings(
+                                  builder: (_) => NavigationTheme(
+                                    child: ChannelSidebar(
+                                      space: space,
+                                      friends: friendsController,
+                                      categories: categories,
+                                      currentMember: currentMember,
+                                      memberOf: _memberOf,
+                                      channelOf: _channelOf,
+                                      seatedByChannel: seats,
+                                      speakingUserIds: speaking,
+                                      // Discord opens a profile from these rows with
+                                      // either mouse button. Ours were labels.
+                                      onOpenMemberProfile: (userId) =>
+                                          unawaited(
+                                            _openMemberCard(
                                               context,
-                                              space,
-                                              administration,
+                                              spaceId,
+                                              userId,
                                             ),
-                                          )
-                                        : null,
-                                    onLeaveServer: canManageServers
-                                        ? () => unawaited(
-                                            _leaveServer(context, space),
-                                          )
-                                        : null,
-                                    onReportServer: () =>
-                                        unawaited(_reportSpace(context, space)),
-                                    onSelectChannel: _selectChannel,
-                                    readState: chatController.readState,
-                                    onNotificationRequest: (request, target) =>
-                                        _applyNotificationRequest(
-                                          request,
-                                          space: space,
-                                          channel: target,
-                                        ),
-                                    sessionMode: connectionController.mode,
-                                    connectionStatus:
-                                        chatController.connectionStatus,
+                                          ),
+                                      // A voice connection outlives the room view, so
+                                      // leaving it has to stay reachable from wherever
+                                      // the user has navigated to since.
+                                      voiceConnectionBar: VoiceConnectionBar(
+                                        controller: voiceController,
+                                        camera: selfVideoController,
+                                        channelNameFor: (id) =>
+                                            _channelOf(id)?.name,
+                                        serverNameFor: _serverNameOf,
+                                        onOpenChannel: _openVoiceRoom,
+                                      ),
+                                      channels: channels,
+                                      selectedChannelId: channelId,
+                                      collapsedCategoryIds: workspaceController
+                                          .collapsedCategoryIds,
+                                      onToggleCategory:
+                                          workspaceController.toggleCategory,
+                                      onNewDirectMessage: () =>
+                                          _openDirectMessage(context),
+                                      onAcceptMessageRequest: (channelId) =>
+                                          unawaited(
+                                            chatController.acceptMessageRequest(
+                                              channelId,
+                                            ),
+                                          ),
+                                      onDeclineMessageRequest: (channelId) =>
+                                          unawaited(
+                                            chatController
+                                                .declineMessageRequest(
+                                                  channelId,
+                                                ),
+                                          ),
+                                      scheduledEventCount: chatController
+                                          .scheduledEventsFor(space.id)
+                                          .length,
+                                      isLoadingScheduledEvents: chatController
+                                          .isLoadingScheduledEvents(space.id),
+                                      scheduledEventsError: chatController
+                                          .scheduledEventsError(space.id),
+                                      onOpenEvents: () =>
+                                          _openScheduledEvents(context, space),
+                                      onOpenServerSettings: canOpenSettings
+                                          ? () => unawaited(
+                                              _openGuildSettings(
+                                                context,
+                                                space,
+                                                administration,
+                                              ),
+                                            )
+                                          : null,
+                                      onLeaveServer: canManageServers
+                                          ? () => unawaited(
+                                              _leaveServer(context, space),
+                                            )
+                                          : null,
+                                      onReportServer: () => unawaited(
+                                        _reportSpace(context, space),
+                                      ),
+                                      onSelectChannel: _selectChannel,
+                                      readState: chatController.readState,
+                                      onNotificationRequest:
+                                          (request, target) =>
+                                              _applyNotificationRequest(
+                                                request,
+                                                space: space,
+                                                channel: target,
+                                              ),
+                                      sessionMode: connectionController.mode,
+                                      connectionStatus:
+                                          chatController.connectionStatus,
+                                    ),
                                   ),
                                 );
                               },

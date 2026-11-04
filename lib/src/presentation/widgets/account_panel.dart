@@ -10,7 +10,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
-import 'panel_icon_button.dart';
+import 'flucord_icon_button.dart';
 import 'streamer_mode_scope.dart';
 import 'self_presence_scope.dart';
 import 'self_status_menu.dart';
@@ -120,23 +120,23 @@ class AccountPanel extends StatelessWidget {
                 : SelfStatusMenu(controller: presence, child: identity),
           ),
           if (voice != null) ...[
-            PanelIconButton.control(
-              buttonKey: const ValueKey('account-mute'),
+            FlucordIconButton.control(
+              key: const ValueKey('account-mute'),
               control: VoiceControl.mute(voice),
-              size: _buttonSize,
+              dimension: _buttonSize,
             ),
-            PanelIconButton.control(
-              buttonKey: const ValueKey('account-deafen'),
+            FlucordIconButton.control(
+              key: const ValueKey('account-deafen'),
               control: VoiceControl.deafen(voice),
-              size: _buttonSize,
+              dimension: _buttonSize,
             ),
           ],
           if (settings != null)
-            PanelIconButton(
-              buttonKey: const ValueKey('account-settings'),
+            FlucordIconButton(
+              key: const ValueKey('account-settings'),
               tooltip: 'User settings',
               icon: FlucordIcons.settings,
-              size: _buttonSize,
+              dimension: _buttonSize,
               onPressed: () => unawaited(
                 UserSettingsDialog.showFromScopes(
                   context,

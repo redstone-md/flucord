@@ -5,7 +5,6 @@ import '../../application/connection_controller.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
-import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
 import '../../theme/flucord_icons.dart';
@@ -22,8 +21,6 @@ import 'member_avatar.dart';
 import 'count_badge.dart';
 import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
-import 'theme_scope.dart';
-import 'user_settings_scope.dart';
 
 part 'channel_sidebar_rows.dart';
 
@@ -169,15 +166,7 @@ class ChannelSidebar extends StatelessWidget {
       readState: _readState,
       channelOf: channelOf,
     );
-    // The account's dark-sidebar answer, read here so the flag from any
-    // device repaints the rail. It only applies to the built-in light
-    // palette: an installed theme is never overridden, its author picked
-    // the panel colours on purpose.
-    final darkSidebar =
-        UserSettingsScope.appearanceOf(context).drawsDarkSidebar &&
-        Theme.of(context).brightness == Brightness.light &&
-        ThemeScope.maybeOf(context) == null;
-    final content = Container(
+    return Container(
       key: const ValueKey('channel-sidebar'),
       width: 236,
       decoration: BoxDecoration(color: context.surfaces.rail),
@@ -256,13 +245,6 @@ class ChannelSidebar extends StatelessWidget {
           ),
         ],
       ),
-    );
-    if (!darkSidebar) return content;
-    // The whole rail repaints with the dark palette, so the rows keep a
-    // readable foreground instead of light-theme text on a dark ground.
-    return Theme(
-      data: FlucordTheme.fromPalette(FlucordPalette.dark),
-      child: content,
     );
   }
 
