@@ -230,6 +230,43 @@ void main() {
       routes: _routes(userEffect: {'id': _sakuraId}),
     );
   }
+
+  testSession(
+    "the profile settings preview shows the account's own effect",
+    (tester, session) async {
+      await tester.tap(find.byKey(const ValueKey('account-settings')));
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('settings-nav-profile')));
+      await session.settle();
+      final preview = find.descendant(
+        of: find.byKey(const ValueKey('settings-section-profile')),
+        matching: _card,
+      );
+
+      expect(_layers(tester, preview), [_sakuraIntro]);
+    },
+    routes: (transport) => transport
+      ..on('GET', _cataloguePath, (_) => jsonResponse(_catalogue()))
+      ..on(
+        'GET',
+        '/api/v9/users/@me',
+        (_) => jsonResponse({
+          'id': SessionHarness.currentUserId,
+          'username': 'me',
+          'discriminator': '0',
+        }),
+      )
+      ..on(
+        'GET',
+        '/api/v9/users/${SessionHarness.currentUserId}/profile',
+        (_) => jsonResponse({
+          'user': {'id': SessionHarness.currentUserId, 'username': 'me'},
+          'user_profile': {
+            'profile_effect': {'id': _sakuraId},
+          },
+        }),
+      ),
+  );
 }
 
 void _blur(SessionHarness session) => session.blurWindow();

@@ -159,7 +159,8 @@ final class ProfileCardData {
 
   /// The account's own profile while it is being edited: [profile] says who
   /// it is, the rest are the form's current values, saved or not. The
-  /// images are the staged ones where the user picked new ones.
+  /// images are the staged ones where the user picked new ones. [published]
+  /// gives the collectibles.
   factory ProfileCardData.ownProfile(
     UserProfile profile, {
     required String displayName,
@@ -169,6 +170,7 @@ final class ProfileCardData {
     required String? avatarUrl,
     required String? bannerUrl,
     UserPresence? presence,
+    OtherUserProfile? published,
   }) {
     final name = displayName.isEmpty ? profile.username : displayName;
     return ProfileCardData(
@@ -187,6 +189,7 @@ final class ProfileCardData {
       pronouns: pronouns,
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),
+      effect: _wornEffect(published),
     );
   }
 

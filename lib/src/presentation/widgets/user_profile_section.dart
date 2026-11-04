@@ -144,6 +144,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
         () => DiscordCdn.userBanner(profile.userId, profile.bannerHash),
       ),
       presence: widget.presence,
+      published: controller.published,
     );
     return Column(
       key: const ValueKey('settings-section-profile'),

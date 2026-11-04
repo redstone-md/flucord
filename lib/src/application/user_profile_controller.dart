@@ -25,6 +25,7 @@ final class UserProfileController extends ChangeNotifier {
   StreamSubscription<UserProfile>? _updates;
   bool _bound = false;
 
+  OtherUserProfile? _published;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _credentialRefused = false;
@@ -45,6 +46,10 @@ final class UserProfileController extends ChangeNotifier {
   }
 
   UserProfile? get profile => _repository?.current;
+
+  /// The account's profile as other people read it, with the collectibles
+  /// the editable profile does not carry. Null until it loads.
+  OtherUserProfile? get published => _published;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   Object? get error => _error;
@@ -76,12 +81,26 @@ final class UserProfileController extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      await repository.load();
+      final own = await repository.load();
+      if (own != null) await _loadPublished(repository, own.userId);
     } on Object catch (error) {
       _error = error;
     } finally {
       _isLoading = false;
       _notify();
+    }
+  }
+
+  /// A failure here leaves the preview without collectibles, not the editor
+  /// without a profile.
+  Future<void> _loadPublished(
+    UserProfileRepository repository,
+    String userId,
+  ) async {
+    try {
+      _published = await repository.loadProfileOf(userId);
+    } on Object {
+      _published = null;
     }
   }
 
