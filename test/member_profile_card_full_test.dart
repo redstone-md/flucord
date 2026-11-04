@@ -303,7 +303,7 @@ const _fullProfile = OtherUserProfile(
   avatarHash: 'mhash',
   bannerHash: 'a_bhash',
   accentColor: 0x5865f2,
-  decoration: ProfileDecoration(asset: 'a_deco'),
+  tags: MemberTags(decoration: AvatarDecoration(asset: 'a_deco')),
   badges: [
     ProfileBadge(
       id: 'legacy_username',

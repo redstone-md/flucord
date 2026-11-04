@@ -568,6 +568,7 @@ class _ChannelRow extends StatelessWidget {
                       MemberAvatar(
                         member: person,
                         size: _SidebarMetrics.personAvatarSize,
+                        decorated: true,
                         // The dot is cut out of the rail it sits on.
                         presenceBorderColor: surfaces.rail,
                       )

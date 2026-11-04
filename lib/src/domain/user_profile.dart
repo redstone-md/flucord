@@ -220,26 +220,6 @@ final class ProfileBadge {
   int get hashCode => Object.hash(id, description, icon, link);
 }
 
-/// The avatar decoration somebody wears, as the profile route reports it.
-///
-/// `asset` names a file under the CDN's `avatar-decoration-presets`, as
-/// Discord's image reference gives it.
-final class ProfileDecoration {
-  const ProfileDecoration({required this.asset, this.skuId});
-
-  final String asset;
-  final String? skuId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ProfileDecoration &&
-      other.asset == asset &&
-      other.skuId == skuId;
-
-  @override
-  int get hashCode => Object.hash(asset, skuId);
-}
-
 /// A third-party account shown on somebody's profile.
 ///
 /// Only what the profile route hands back: the connection's type, the
@@ -375,7 +355,6 @@ final class OtherUserProfile {
     this.avatarHash,
     this.bannerHash,
     this.accentColor,
-    this.decoration,
     this.tags,
     this.badges = const [],
     this.connections = const [],
@@ -397,8 +376,6 @@ final class OtherUserProfile {
 
   /// A 24-bit RGB value, or null when the account set none.
   final int? accentColor;
-
-  final ProfileDecoration? decoration;
 
   /// The tags the profile's user object carries, or null when it was not
   /// read from one.

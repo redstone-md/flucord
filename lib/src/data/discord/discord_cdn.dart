@@ -41,12 +41,13 @@ final class DiscordCdn {
   static String? badgeIcon(String icon) =>
       _named(icon, '/badge-icons/$icon.png');
 
-  /// The avatar decoration somebody wears. `passthrough` keeps an animated
-  /// one moving.
+  /// The avatar decoration somebody wears. An animated one (`a_`) comes
+  /// with `passthrough=true`, which keeps it moving; `passthrough=false` is
+  /// its first frame.
   static String? avatarDecoration(String asset, {int size = 96}) => _named(
     asset,
     '/avatar-decoration-presets/$asset.png',
-    {'size': '$size', 'passthrough': 'true'},
+    {'size': '$size', if (asset.startsWith('a_')) 'passthrough': 'true'},
   );
 
   /// The still picture of a nameplate, by its `asset` path, which ends in a

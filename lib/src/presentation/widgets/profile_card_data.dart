@@ -86,10 +86,7 @@ final class ProfileCardData {
       username: member.username ?? _nonEmpty(profile?.username),
       avatarUrl: member.avatarUrlFor(spaceId),
       avatarColorValue: member.colorValue,
-      decorationUrl: switch (profile?.decoration) {
-        final decoration? => DiscordCdn.avatarDecoration(decoration.asset),
-        null => null,
-      },
+      decorationUrl: _decorationUrl(tags.decoration),
       presence: presence,
       bannerUrl: switch (profile?.serverProfile) {
         ServerProfile(:final guildId, bannerHash: final hash?) =>
@@ -181,6 +178,7 @@ final class ProfileCardData {
           ? '${profile.username}#${profile.discriminator}'
           : _nonEmpty(profile.username),
       avatarUrl: avatarUrl,
+      decorationUrl: _decorationUrl(published?.tags?.decoration),
       presence: presence,
       bannerUrl: bannerUrl,
       accentColorValue: accentColor == null
@@ -253,6 +251,12 @@ final class ProfileCardData {
     final String text when text.isNotEmpty => text,
     _ => null,
   };
+
+  static String? _decorationUrl(AvatarDecoration? decoration) =>
+      switch (decoration) {
+        final decoration? => DiscordCdn.avatarDecoration(decoration.asset),
+        null => null,
+      };
 
   /// How [profile]'s effect looks, unless it has expired.
   static ProfileEffectConfig? _wornEffect(OtherUserProfile? profile) =>

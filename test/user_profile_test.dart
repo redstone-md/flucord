@@ -98,8 +98,8 @@ void main() {
       expect(profile.avatarHash, 'mhash');
       expect(profile.bannerHash, 'a_bhash');
       expect(profile.accentColor, 0x5865f2);
-      expect(profile.decoration?.asset, 'a_deco');
-      expect(profile.decoration?.skuId, '444444444444444444');
+      expect(profile.tags?.decoration?.asset, 'a_deco');
+      expect(profile.tags?.decoration?.skuId, '444444444444444444');
       expect(profile.badges.single.description, contains('mira#1234'));
       expect(profile.connections, hasLength(2));
       expect(profile.connections.first.type, 'twitter');
@@ -129,7 +129,7 @@ void main() {
       expect(profile.avatarHash, isNull);
       expect(profile.bannerHash, isNull);
       expect(profile.accentColor, isNull);
-      expect(profile.decoration, isNull);
+      expect(profile.tags?.decoration, isNull);
       expect(profile.badges, isEmpty);
       expect(profile.connections, isEmpty);
       expect(profile.mutualServers, isEmpty);

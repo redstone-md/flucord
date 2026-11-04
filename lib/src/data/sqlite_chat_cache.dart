@@ -874,6 +874,8 @@ final class SqliteChatCache
       'nameplate_json': ChatModelJson.nameplate(tags.nameplate),
     if (tags.knows(TagPart.nameStyle))
       'name_style_json': ChatModelJson.nameStyle(tags.nameStyle),
+    if (tags.knows(TagPart.decoration))
+      'decoration_json': ChatModelJson.decoration(tags.decoration),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -896,6 +898,9 @@ final class SqliteChatCache
       clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
       nameplate: ChatModelJson.nameplateFrom(row['nameplate_json'] as String?),
       nameStyle: ChatModelJson.nameStyleFrom(row['name_style_json'] as String?),
+      decoration: ChatModelJson.decorationFrom(
+        row['decoration_json'] as String?,
+      ),
     ),
     username: row['username'] as String?,
   );

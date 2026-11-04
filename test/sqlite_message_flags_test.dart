@@ -10,7 +10,7 @@ void main() {
   setUpAll(sqfliteFfiInit);
 
   test('SQLite v22 retains raw Discord message flags', () async {
-    expect(SqliteChatSchema.version, 30);
+    expect(SqliteChatSchema.version, 31);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

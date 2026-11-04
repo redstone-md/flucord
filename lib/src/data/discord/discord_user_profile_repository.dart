@@ -181,7 +181,6 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     final id = user['id'];
     if (id is! String || id.isEmpty) return null;
     final metadata = _object(payload['user_profile']) ?? const {};
-    final decorationData = _object(user['avatar_decoration_data']);
     return OtherUserProfile(
       userId: id,
       username: _text(user['username']),
@@ -195,12 +194,6 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       accentColor: metadata['accent_color'] is int
           ? metadata['accent_color']! as int
           : null,
-      decoration: decorationData == null
-          ? null
-          : ProfileDecoration(
-              asset: _text(decorationData['asset']),
-              skuId: _nullableText(decorationData['sku_id']),
-            ),
       tags: DiscordMapper.tags(user),
       badges: [
         for (final badge in _objects(payload['badges']))

@@ -90,6 +90,12 @@ final class ChatModelJson {
   static Nameplate? nameplateFrom(String? source) =>
       source == null ? null : Nameplate.fromJson(jsonDecode(source));
 
+  static String? decoration(AvatarDecoration? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+
+  static AvatarDecoration? decorationFrom(String? source) =>
+      source == null ? null : AvatarDecoration.fromJson(jsonDecode(source));
+
   static String? nameStyle(NameStyle? value) => value == null
       ? null
       : jsonEncode({

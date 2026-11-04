@@ -73,11 +73,20 @@ class RemoteIdentityImage extends StatelessWidget {
   ///
   /// Discord serves an `a_`-prefixed hash as both `.gif` and `.webp`, the
   /// second being its first frame, so the two addresses differ only in their
-  /// extension. The size and quality arguments ride along in the query.
+  /// extension. The size and quality arguments ride along in the query. An
+  /// avatar decoration is an animated PNG that `passthrough=false` stills.
   static String? _stillFrameOf(String url) {
     final uri = Uri.tryParse(url);
     final path = uri?.path;
-    if (uri == null || path == null || !path.endsWith('.gif')) return null;
+    if (uri == null || path == null) return null;
+    if (uri.queryParameters['passthrough'] == 'true') {
+      return uri
+          .replace(
+            queryParameters: {...uri.queryParameters, 'passthrough': 'false'},
+          )
+          .toString();
+    }
+    if (!path.endsWith('.gif')) return null;
     return uri
         .replace(path: '${path.substring(0, path.length - 4)}.webp')
         .toString();

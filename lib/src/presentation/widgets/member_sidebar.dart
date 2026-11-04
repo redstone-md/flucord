@@ -455,6 +455,7 @@ class _MemberRow extends StatelessWidget {
             member: member,
             size: 28,
             spaceId: spaceId,
+            decorated: true,
             presenceBorderColor: surfaces.surface,
           ),
           const SizedBox(width: 8),
