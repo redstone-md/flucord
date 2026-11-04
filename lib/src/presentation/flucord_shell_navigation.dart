@@ -606,16 +606,24 @@ extension _FlucordShellNavigation on FlucordShell {
     ),
   );
 
-  /// The friends doing something now. Rebuilt on the seats alone, since the
-  /// controller also fires on every speaking change.
+  /// Builds [build] again whenever someone takes or leaves a voice seat. Only
+  /// the seats: the voice controller itself also fires on every speaking
+  /// change, which these views do not show.
+  Widget _onSeats(
+    Widget Function(Map<String, List<VoiceParticipantStateEvent>> seated) build,
+  ) => ListenableBuilder(
+    listenable: voiceController.seats,
+    builder: (_, _) => build(voiceController.seatedByChannel),
+  );
+
+  /// The friends doing something now.
   Widget _activeNow(ChatWorkspace workspace, FriendsController friends) =>
-      ListenableBuilder(
-        listenable: voiceController.seats,
-        builder: (_, _) => ActiveNowColumn(
+      _onSeats(
+        (seated) => ActiveNowColumn(
           friends: activeFriends(
             [for (final friend in friends.friends) friend.user.id],
             workspace: workspace,
-            seatedByChannel: voiceController.seatedByChannel,
+            seatedByChannel: seated,
           ),
           onOpenRoom: (channel) => _openVoiceRoom(channel.id),
         ),

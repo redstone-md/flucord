@@ -109,7 +109,7 @@ class _FlucordMenuItemState<T> extends State<FlucordMenuItem<T>> {
             child: InkWell(
               onTap: item.enabled ? _choose : null,
               canRequestFocus: item.enabled,
-              borderRadius: FlucordRadius.medium,
+              borderRadius: FlucordRadius.large,
               child: Opacity(
                 opacity: item.enabled ? 1 : FlucordTheme.disabledAlpha,
                 child: row,

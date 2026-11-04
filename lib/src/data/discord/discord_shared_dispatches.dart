@@ -115,6 +115,7 @@ final class DiscordSharedDispatches {
           'THREAD_UPDATE':
         unawaited(_upsertChannel(event.data));
       case 'CHANNEL_DELETE' || 'THREAD_DELETE':
+        _forgetDirectMessage(event.data);
         unawaited(_channels.delete(event.data));
       case 'CHANNEL_RECIPIENT_ADD':
         unawaited(_recipientChanged(event.data, added: true));
@@ -185,6 +186,11 @@ final class DiscordSharedDispatches {
     if (currentUserId != null) {
       await _directMessages.acceptChannel(data, currentUserId);
     }
+  }
+
+  void _forgetDirectMessage(Map<String, Object?> data) {
+    final id = data['id'];
+    if (data['guild_id'] == null && id is String) _directMessages.forget(id);
   }
 
   Future<void> _recipientChanged(

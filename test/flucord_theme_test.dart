@@ -288,10 +288,8 @@ void main() {
         for (final status in Presence.values) {
           test(
             'the ${status.name} status reaches 3:1',
-            () => expectContrast(
-              PresenceIndicator.colorOf(surfaces, status),
-              3,
-            ),
+            () =>
+                expectContrast(PresenceIndicator.colorOf(surfaces, status), 3),
           );
         }
       });
@@ -408,14 +406,17 @@ void main() {
   });
 
   group('the radius scale', () {
-    test('runs small 4, control 6, medium 8, large 12 and full', () {
-      expect(FlucordRadius.small, BorderRadius.circular(4));
-      expect(FlucordRadius.control, BorderRadius.circular(6));
-      expect(FlucordRadius.medium, BorderRadius.circular(8));
-      expect(FlucordRadius.large, BorderRadius.circular(12));
-      expect(FlucordRadius.overlay, BorderRadius.circular(12));
-      expect(FlucordRadius.full, BorderRadius.circular(999));
-    });
+    test(
+      'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16 and full',
+      () {
+        expect(FlucordRadius.small, BorderRadius.circular(4));
+        expect(FlucordRadius.control, BorderRadius.circular(6));
+        expect(FlucordRadius.medium, BorderRadius.circular(8));
+        expect(FlucordRadius.large, BorderRadius.circular(12));
+        expect(FlucordRadius.overlay, BorderRadius.circular(16));
+        expect(FlucordRadius.full, BorderRadius.circular(999));
+      },
+    );
 
     test('buttons take the control corner', () {
       final theme = FlucordTheme.dark;
@@ -488,7 +489,7 @@ void main() {
     });
 
     test(
-      'a dialog sits on the raised colour with a border and 12 px corners',
+      'a dialog sits on the raised colour with a border and overlay corners',
       () {
         final dialog = theme.dialogTheme;
 
@@ -496,7 +497,7 @@ void main() {
         expect(
           dialog.shape,
           RoundedRectangleBorder(
-            borderRadius: FlucordRadius.large,
+            borderRadius: FlucordRadius.overlay,
             side: BorderSide(color: surfaces.border),
           ),
         );
