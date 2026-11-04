@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/microphone_level_source.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -144,7 +145,7 @@ class _VoiceInputMeterState extends State<VoiceInputMeter> {
               painter: _LevelPainter(
                 level: _fraction(_level),
                 mark: threshold == null ? null : _fraction(threshold),
-                track: surfaces.text.withValues(alpha: 0.08),
+                track: surfaces.quietFill,
                 belowMark: surfaces.warning,
                 pastMark: surfaces.success,
               ),
@@ -205,8 +206,8 @@ class _VoiceInputMeterState extends State<VoiceInputMeter> {
             onHorizontalDragUpdate: (details) =>
                 _setAt(details.localPosition.dx, width),
             child: Stack(
-              // The mark is centred on the threshold, so at either end half
-              // of it sits past the bar, as Discord's does.
+              // The mark is centred on the threshold: at a limit on the
+              // bar's end, half of it hangs past, as Discord's does.
               clipBehavior: Clip.none,
               children: [
                 bar,
@@ -255,8 +256,7 @@ class _Mark extends StatelessWidget {
   );
 }
 
-/// The 6 px track and the level drawn over it, split at the mark when there
-/// is one.
+/// The level over its track, split at the mark when there is one.
 class _LevelPainter extends CustomPainter {
   const _LevelPainter({
     required this.level,
@@ -267,7 +267,6 @@ class _LevelPainter extends CustomPainter {
   });
 
   static const double _barHeight = 6;
-  static const Radius _radius = Radius.circular(3);
 
   /// How far along the bar the level and the mark are, from 0 to 1.
   final double level;
@@ -281,7 +280,7 @@ class _LevelPainter extends CustomPainter {
     final top = (size.height - _barHeight) / 2;
     final bottom = top + _barHeight;
     canvas.drawRRect(
-      RRect.fromLTRBR(0, top, size.width, bottom, _radius),
+      FlucordRadius.full.toRRect(Rect.fromLTRB(0, top, size.width, bottom)),
       Paint()..color = track,
     );
     final levelEnd = level * size.width;
@@ -290,7 +289,9 @@ class _LevelPainter extends CustomPainter {
     final split = math.min((mark ?? 0) * size.width, levelEnd);
     canvas
       ..save()
-      ..clipRRect(RRect.fromLTRBR(0, top, levelEnd, bottom, _radius));
+      ..clipRRect(
+        FlucordRadius.full.toRRect(Rect.fromLTRB(0, top, levelEnd, bottom)),
+      );
     if (split > 0) {
       canvas.drawRect(
         Rect.fromLTRB(0, top, split, bottom),
