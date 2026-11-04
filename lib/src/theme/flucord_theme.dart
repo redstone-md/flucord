@@ -331,7 +331,7 @@ abstract final class FlucordTheme {
       sliderTheme: SliderThemeData(
         trackHeight: 4,
         activeTrackColor: brand,
-        inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+        inactiveTrackColor: text.withValues(alpha: 0.1),
         thumbColor: FlucordFixedColors.onFill,
         overlayColor: brand.withValues(alpha: 0.24),
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
