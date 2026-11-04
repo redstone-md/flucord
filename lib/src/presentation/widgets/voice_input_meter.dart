@@ -11,6 +11,10 @@ import '../../theme/flucord_type.dart';
 /// The microphone's live level on one bar, with the input sensitivity as a
 /// mark to drag along it, the way Discord draws it.
 ///
+/// The bar draws [floor] to [ceiling] dB, a wider span than the threshold
+/// may take: speech sits around the middle and room noise near the start,
+/// so the level reads the same whatever limits the gate has.
+///
 /// With no [threshold] the gate is automatic: the bar shows the level only.
 /// With one, the level is the warning colour below the mark and the success
 /// colour past it, so it is plain which sounds open the microphone. The mark
@@ -21,8 +25,8 @@ import '../../theme/flucord_type.dart';
 class VoiceInputMeter extends StatefulWidget {
   const VoiceInputMeter({
     required this.source,
-    required this.min,
-    required this.max,
+    required this.minThreshold,
+    required this.maxThreshold,
     required this.onThresholdChanged,
     this.threshold,
     super.key,
@@ -31,8 +35,12 @@ class VoiceInputMeter extends StatefulWidget {
   final MicrophoneLevelSource source;
 
   /// The bar's two ends, in dB relative to full scale.
-  final double min;
-  final double max;
+  static const double floor = -80;
+  static const double ceiling = 0;
+
+  /// The range the mark may move in, in dB relative to full scale.
+  final double minThreshold;
+  final double maxThreshold;
 
   /// The level the microphone opens at, or null for the automatic gate.
   final double? threshold;
@@ -84,16 +92,24 @@ class _VoiceInputMeterState extends State<VoiceInputMeter> {
   }
 
   /// Where [dbfs] falls along the bar, from 0 to 1.
-  double _fraction(double dbfs) => dbfs.isFinite
-      ? ((dbfs - widget.min) / (widget.max - widget.min)).clamp(0.0, 1.0)
+  static double _fraction(double dbfs) => dbfs.isFinite
+      ? ((dbfs - VoiceInputMeter.floor) /
+                (VoiceInputMeter.ceiling - VoiceInputMeter.floor))
+            .clamp(0.0, 1.0)
       : 0;
 
+  double _held(double dbfs) =>
+      dbfs.clamp(widget.minThreshold, widget.maxThreshold);
+
   void _setAt(double x, double width) => widget.onThresholdChanged(
-    widget.min + (x / width).clamp(0.0, 1.0) * (widget.max - widget.min),
+    _held(
+      VoiceInputMeter.floor +
+          x / width * (VoiceInputMeter.ceiling - VoiceInputMeter.floor),
+    ),
   );
 
   void _step(double threshold, double by) =>
-      widget.onThresholdChanged((threshold + by).clamp(widget.min, widget.max));
+      widget.onThresholdChanged(_held(threshold + by));
 
   KeyEventResult _handleKey(double threshold, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -164,15 +180,15 @@ class _VoiceInputMeterState extends State<VoiceInputMeter> {
     required double width,
     required Color focusRing,
   }) {
-    final held = threshold.clamp(widget.min, widget.max);
+    final held = _held(threshold);
     return Semantics(
       slider: true,
       focusable: true,
       focused: _focused,
       label: 'Input sensitivity',
       value: _decibels(held),
-      increasedValue: _decibels(math.min(held + _keyStep, widget.max)),
-      decreasedValue: _decibels(math.max(held - _keyStep, widget.min)),
+      increasedValue: _decibels(_held(held + _keyStep)),
+      decreasedValue: _decibels(_held(held - _keyStep)),
       onIncrease: () => _step(held, _keyStep),
       onDecrease: () => _step(held, -_keyStep),
       child: Focus(

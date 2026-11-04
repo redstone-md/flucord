@@ -277,8 +277,7 @@ class _SensitivityRow extends StatelessWidget {
 
   final VoiceController controller;
 
-  /// The meter's whole range, in dB relative to full scale: the range the
-  /// gate holds a threshold to.
+  /// The range the gate holds a threshold to, in dB relative to full scale.
   static const double _min = VoiceActivityGate.lowestThreshold;
   static const double _max = VoiceActivityGate.highestThreshold;
 
@@ -304,8 +303,8 @@ class _SensitivityRow extends StatelessWidget {
         VoiceInputMeter(
           key: const ValueKey('voice-settings-input-sensitivity'),
           source: controller,
-          min: _min,
-          max: _max,
+          minThreshold: _min,
+          maxThreshold: _max,
           threshold: sensitivity,
           onThresholdChanged: (value) =>
               unawaited(controller.setInputSensitivity(value)),
