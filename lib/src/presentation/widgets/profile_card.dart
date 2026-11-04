@@ -14,6 +14,7 @@ import 'profile_card_data.dart';
 import 'remote_identity_image.dart';
 
 part 'profile_card_parts.dart';
+part 'profile_card_preview.dart';
 
 /// What the person looking at a card can do from it. Each action the host
 /// leaves out takes its control off the card.
@@ -73,7 +74,15 @@ class ProfileCard extends StatelessWidget {
     this.actions = const ProfileCardActions(),
     this.now,
     super.key,
-  });
+  }) : _preview = false;
+
+  /// The account's own card on the profile settings page. It sits flat in
+  /// the page with no actions, and shows "About me" and "Member since" under
+  /// a divider.
+  const ProfileCard.preview({required this.data, super.key})
+    : actions = const ProfileCardActions(),
+      now = null,
+      _preview = true;
 
   static const width = 300.0;
   static const _bannerHeight = 72.0;
@@ -89,6 +98,8 @@ class ProfileCard extends StatelessWidget {
   /// when the card opens unless a test pins it.
   final DateTime? now;
 
+  final bool _preview;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -96,15 +107,17 @@ class ProfileCard extends StatelessWidget {
     final showsRoles =
         roles != null && (roles.isNotEmpty || actions.onAddRole != null);
     final screen = MediaQuery.sizeOf(context);
+    // The popout is a route of its own; the preview is part of the page.
+    final opensAsRoute = _preview ? null : true;
     return Semantics(
-      scopesRoute: true,
-      namesRoute: true,
+      scopesRoute: opensAsRoute,
+      namesRoute: opensAsRoute,
       explicitChildNodes: true,
       label: '${data.displayName} profile',
       child: Material(
         key: const ValueKey('profile-card'),
         color: surfaces.raised,
-        elevation: 12,
+        elevation: _preview ? 0 : 12,
         shadowColor: Colors.black,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
@@ -133,7 +146,10 @@ class ProfileCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: _spaced([
                       _Names(data: data),
-                      if (data.bio.isNotEmpty) _Bio(bio: data.bio),
+                      if (_preview)
+                        _AboutSections(data: data)
+                      else if (data.bio.isNotEmpty)
+                        _Bio(bio: data.bio),
                       if (data.activity case final activity?)
                         ActivityCard(
                           activity: activity,
