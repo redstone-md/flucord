@@ -114,10 +114,10 @@ class _ReportDialogState extends State<ReportDialog> {
         children: [
           const FlucordIcon(FlucordIcons.checkCircle, size: 32),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Thanks for the report.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: FlucordTextRole.label.strong,
           ),
           const SizedBox(height: 6),
           Text(
@@ -241,10 +241,7 @@ class _ReportDialogState extends State<ReportDialog> {
         Expanded(
           child: Text(
             node.header ?? 'Report',
-            style: const TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w700,
-            ),
+            style: FlucordTextRole.heading.style,
           ),
         ),
       ],

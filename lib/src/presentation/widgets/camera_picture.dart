@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_theme.dart';
 
 /// One participant's camera, drawn in their tile from the texture it is
 /// decoded on (ADR-0009). The tile is rebuilt only when the texture changes;
@@ -13,7 +14,7 @@ class CameraPicture extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ColoredBox(
     key: const ValueKey('camera-picture'),
-    color: Colors.black,
+    color: FlucordFixedColors.media,
     child: FittedBox(
       fit: BoxFit.cover,
       clipBehavior: Clip.hardEdge,

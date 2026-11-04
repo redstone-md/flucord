@@ -185,14 +185,8 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     child: Row(
       children: [
         const SizedBox(width: 16),
-        const Expanded(
-          child: Text(
-            'Reactions',
-            style: TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        Expanded(
+          child: Text('Reactions', style: FlucordTextRole.heading.style),
         ),
         const SizedBox(width: 16),
       ],
@@ -289,10 +283,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         ),
         Text(
           '${_selected.normalCount} normal',
-          style: const TextStyle(
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w600,
-          ),
+          style: FlucordTextRole.caption.strong,
         ),
         if (_selected.burstCount > 0)
           Row(

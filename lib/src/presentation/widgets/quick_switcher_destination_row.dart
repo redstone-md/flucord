@@ -17,10 +17,10 @@ class _DestinationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = selected
-        ? Colors.white
+        ? FlucordFixedColors.onFill
         : Theme.of(context).colorScheme.onSurface;
     final metadata = selected
-        ? Colors.white.withValues(alpha: 0.72)
+        ? FlucordFixedColors.onFill.withValues(alpha: 0.72)
         : context.surfaces.muted;
     final activity = [
       if (destination.unread) 'unread',
@@ -65,10 +65,8 @@ class _DestinationRow extends StatelessWidget {
                           destination.path,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: FlucordTextRole.label.strong.copyWith(
                             color: foreground,
-                            fontSize: FlucordType.label,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),

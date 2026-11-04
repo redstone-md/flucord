@@ -96,13 +96,7 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Forward message',
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text('Forward message', style: FlucordTextRole.heading.style),
         const SizedBox(height: 10),
         TextField(
           key: const ValueKey('message-forward-search'),
@@ -243,10 +237,7 @@ class _DestinationRow extends StatelessWidget {
                     destination.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.label,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.label.strong,
                   ),
                   const SizedBox(height: 2),
                   Text(

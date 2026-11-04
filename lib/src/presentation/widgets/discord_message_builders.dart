@@ -82,7 +82,7 @@ final class _MentionBuilder extends MarkdownElementBuilder {
               label,
               style: (parentStyle ?? preferredStyle)?.copyWith(
                 color: foreground,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -232,7 +232,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
         '/${element.textContent}',
         style: (parentStyle ?? preferredStyle)?.copyWith(
           color: context.surfaces.link,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
       ),
     ),

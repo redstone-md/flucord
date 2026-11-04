@@ -57,12 +57,9 @@ final class _DeveloperBotTransportSectionState
       initiallyExpanded: false,
       tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      title: const Text(
+      title: Text(
         'Developer bot transport',
-        style: TextStyle(
-          fontSize: FlucordType.label,
-          fontWeight: FontWeight.w600,
-        ),
+        style: FlucordTextRole.label.strong,
       ),
       subtitle: Text(
         'Optional application-bot workspace. This is not your Discord account.',

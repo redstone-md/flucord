@@ -186,10 +186,8 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
     final text = TextPainter(
       text: TextSpan(
         text: speaker.name,
-        style: const TextStyle(
-          color: Color(0xFFFFFFFF),
-          fontSize: FlucordType.label,
-          fontWeight: FontWeight.w600,
+        style: FlucordTextRole.label.strong.copyWith(
+          color: const Color(0xFFFFFFFF),
         ),
       ),
       textDirection: TextDirection.ltr,

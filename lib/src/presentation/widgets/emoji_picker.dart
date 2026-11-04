@@ -666,10 +666,7 @@ class _EmojiGlyph extends StatelessWidget {
             child: Center(
               child: Text(
                 choice.fallback,
-                style: const TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: FlucordTextRole.caption.strong,
               ),
             ),
           ),

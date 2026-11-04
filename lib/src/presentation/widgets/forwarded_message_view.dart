@@ -140,10 +140,8 @@ class _SourceLine extends StatelessWidget {
               source.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: FlucordTextRole.caption.strong.copyWith(
                 color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
-                fontWeight: FontWeight.w600,
               ),
             ),
           ),

@@ -331,7 +331,7 @@ abstract final class FlucordTheme {
       sliderTheme: SliderThemeData(
         trackHeight: 4,
         activeTrackColor: brand,
-        inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+        inactiveTrackColor: text.withValues(alpha: 0.1),
         thumbColor: FlucordFixedColors.onFill,
         overlayColor: brand.withValues(alpha: 0.24),
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
@@ -348,11 +348,18 @@ abstract final class FlucordFixedColors {
   /// Text and marks on a strong fill: the accent, danger, a space's colour.
   static const onFill = Color(0xFFFFFFFF);
 
+  /// Text and marks on a light fill, such as the warning amber, where white
+  /// would not read.
+  static const onLightFill = Color(0xFF000000);
+
   /// Behind a video, where the picture does not reach.
   static const media = Color(0xFF000000);
 
   /// The round backing of a control drawn over a picture.
   static const scrim = Color.fromRGBO(0, 0, 0, 0.55);
+
+  /// Darkens a whole picture so a label drawn across it reads.
+  static const pictureShade = Color.fromRGBO(0, 0, 0, 0.42);
 
   /// The bar of controls over a playing video.
   static const mediaControls = Color.fromRGBO(0, 0, 0, 0.82);

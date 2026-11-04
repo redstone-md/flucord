@@ -69,10 +69,7 @@ class SystemMessageItem extends StatelessWidget {
                         minimumSize: Size.zero,
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: const TextStyle(
-                          fontSize: FlucordType.caption,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        textStyle: FlucordTextRole.caption.strong,
                       ),
                       child: Text(action.label),
                     ),

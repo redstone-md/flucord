@@ -317,10 +317,8 @@ class _BlockLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: TextStyle(
-      fontSize: FlucordType.caption,
+    style: FlucordTextRole.caption.strong.copyWith(
       letterSpacing: 0.5,
-      fontWeight: FontWeight.w700,
       color: context.surfaces.muted,
     ),
   );

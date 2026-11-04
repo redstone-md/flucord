@@ -157,15 +157,7 @@ class _InboxHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const Expanded(
-            child: Text(
-              'Inbox',
-              style: TextStyle(
-                fontSize: FlucordType.title,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          Expanded(child: Text('Inbox', style: FlucordTextRole.title.style)),
           if (showMarkAllRead)
             TextButton(
               key: const ValueKey('inbox-mark-all-read'),
@@ -194,10 +186,7 @@ class _InboxTabs extends StatelessWidget {
       child: TabBar(
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w600,
-        ),
+        labelStyle: FlucordTextRole.caption.strong,
         unselectedLabelColor: context.surfaces.muted,
         tabs: [
           Tab(text: 'Unreads  ${catalog.unread.length}'),
@@ -280,10 +269,7 @@ class _UnreadRow extends StatelessWidget {
                       entry.path,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.label,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: FlucordTextRole.label.strong,
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -371,10 +357,7 @@ class _MentionGroupSection extends StatelessWidget {
                       '${group.path}  •  $count mention${count == 1 ? '' : 's'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: FlucordTextRole.caption.strong,
                     ),
                   ),
                   TextButton(
@@ -441,10 +424,7 @@ class _MentionRow extends StatelessWidget {
                           child: Text(
                             entry.author.displayName,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.caption,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: FlucordTextRole.caption.strong,
                           ),
                         ),
                         Text(
@@ -461,10 +441,8 @@ class _MentionRow extends StatelessWidget {
                       entry.path,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: FlucordTextRole.caption.strong.copyWith(
                         color: context.surfaces.mention,
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -516,7 +494,7 @@ class _InboxEmptyState extends StatelessWidget {
       children: [
         FlucordIcon(icon, size: 30, color: context.surfaces.muted),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(title, style: FlucordTextRole.label.strong),
         const SizedBox(height: 4),
         Text(
           detail,

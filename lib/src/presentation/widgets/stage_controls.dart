@@ -60,10 +60,7 @@ class StageControls extends StatelessWidget {
                   key: const ValueKey('stage-topic'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
                 Text(
                   _roleLabel(role),

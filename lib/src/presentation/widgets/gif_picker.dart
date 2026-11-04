@@ -361,17 +361,15 @@ class _CategoryTile extends StatelessWidget {
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.42),
+            decoration: const BoxDecoration(
+              color: FlucordFixedColors.pictureShade,
             ),
             child: Center(
               child: Text(
                 category.name,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
+                style: FlucordTextRole.caption.strong.copyWith(
+                  color: FlucordFixedColors.onFill,
                 ),
               ),
             ),

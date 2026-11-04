@@ -180,14 +180,8 @@ class OAuthAccountHomeView extends StatelessWidget {
             children: [
               const FlucordIcon(FlucordIcons.friends, size: 18),
               const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Friends',
-                  style: TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              Expanded(
+                child: Text('Friends', style: FlucordTextRole.label.strong),
               ),
               if (socialAvailable && friendsController != null) ...[
                 TextButton(
@@ -200,10 +194,7 @@ class OAuthAccountHomeView extends StatelessWidget {
                       : null,
                   style: TextButton.styleFrom(
                     foregroundColor: context.surfaces.success,
-                    textStyle: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    textStyle: FlucordTextRole.caption.strong,
                   ),
                   child: const Text('Add Friend'),
                 ),
@@ -311,10 +302,7 @@ class _AccountProfileCard extends StatelessWidget {
                             account.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.body,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: FlucordTextRole.heading.style,
                           ),
                         ),
                         if (account.isVerified)

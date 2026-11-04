@@ -108,13 +108,7 @@ class MessageSearchPanel extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Search results',
-                style: TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Search results', style: FlucordTextRole.label.strong),
               if (_countLabel case final label?)
                 Text(
                   label,

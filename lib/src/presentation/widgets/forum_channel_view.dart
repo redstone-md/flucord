@@ -306,10 +306,8 @@ class _ForumSectionSliver extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
         label.toUpperCase(),
-        style: TextStyle(
+        style: FlucordTextRole.caption.strong.copyWith(
           color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
         ),
       ),
     ),

@@ -59,9 +59,7 @@ class _GalleryCounter extends StatelessWidget {
       ),
       child: Text(
         '${index + 1} / $total',
-        style: const TextStyle(
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w600,
+        style: FlucordTextRole.caption.strong.copyWith(
           fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),

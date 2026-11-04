@@ -6,6 +6,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_content_view.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 import 'support/contrast.dart';
 
@@ -126,7 +127,10 @@ void main() {
     await tester.pump();
 
     expect(_plainText(tester), contains('bold'));
-    expect(_spanWithText(tester, 'bold').style?.fontWeight, FontWeight.w700);
+    expect(
+      _spanWithText(tester, 'bold').style?.fontWeight,
+      FlucordType.writtenBold.fontWeight,
+    );
     expect(_spanWithText(tester, 'italic').style?.fontStyle, FontStyle.italic);
     expect(find.text('@Mira'), findsOneWidget);
     expect(find.text('@Operator'), findsOneWidget);

@@ -38,9 +38,7 @@ class _HitGroupView extends StatelessWidget {
                 child: Text(
                   channelName == null ? 'Unknown channel' : '#$channelName',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
+                  style: FlucordTextRole.caption.strong.copyWith(
                     color: context.surfaces.muted,
                   ),
                 ),
@@ -137,9 +135,7 @@ class _SearchMessageRow extends StatelessWidget {
                       child: Text(
                         author?.displayName ?? 'Unknown user',
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: FlucordType.caption,
-                          fontWeight: FontWeight.w600,
+                        style: FlucordTextRole.caption.strong.copyWith(
                           color: isHit ? null : muted,
                         ),
                       ),
@@ -345,10 +341,7 @@ class _SearchPanelState extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
+            style: FlucordTextRole.label.strong,
           ),
           if (detail case final text?) ...[
             const SizedBox(height: 6),

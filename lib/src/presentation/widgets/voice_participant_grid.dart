@@ -66,12 +66,9 @@ class VoiceParticipantGrid extends StatelessWidget {
                 color: context.surfaces.muted,
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Waiting for participants',
-                style: TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FlucordTextRole.label.strong,
               ),
             ],
           ),
@@ -367,10 +364,8 @@ class _SelfPreview extends StatelessWidget {
                 Text(
                   'Self-preview unavailable',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: FlucordTextRole.caption.strong.copyWith(
                     color: Theme.of(context).colorScheme.error,
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -490,11 +485,7 @@ class _StreamCard extends StatelessWidget {
             key: ValueKey(key),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
-            ),
+            style: FlucordTextRole.caption.strong.copyWith(color: color),
           ),
         ),
       ],
@@ -553,10 +544,7 @@ class _StreamCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         foregroundColor: danger ? context.surfaces.danger : null,
-        textStyle: const TextStyle(
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w600,
-        ),
+        textStyle: FlucordTextRole.caption.strong,
       ),
       child: Text(label),
     ),
@@ -574,10 +562,7 @@ class _TileName extends StatelessWidget {
       name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w600,
-      ),
+      style: FlucordTextRole.caption.strong,
     );
   }
 }

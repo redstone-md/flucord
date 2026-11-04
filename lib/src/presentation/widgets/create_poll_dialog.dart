@@ -184,12 +184,9 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
               : (value) => setState(() => _allowMultiselect = value),
           contentPadding: EdgeInsets.zero,
           dense: true,
-          title: const Text(
+          title: Text(
             'Allow multiple answers',
-            style: TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
-            ),
+            style: FlucordTextRole.caption.strong,
           ),
         ),
         if (_error case final error?) ...[
@@ -261,10 +258,8 @@ class _PollFieldLabel extends StatelessWidget {
     children: [
       Text(
         label,
-        style: TextStyle(
+        style: FlucordTextRole.caption.strong.copyWith(
           color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
         ),
       ),
       const Spacer(),

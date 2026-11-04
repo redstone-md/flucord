@@ -17,6 +17,21 @@ void main() {
     expect(surfaces.surface, isNot(surfaces.canvas));
   });
 
+  test('a slider track shows in both themes', () {
+    for (final theme in [FlucordTheme.dark, FlucordTheme.light]) {
+      final surfaces = theme.extension<FlucordSurfaceTheme>()!;
+      final track = theme.sliderTheme.inactiveTrackColor!;
+
+      for (final background in [surfaces.canvas, surfaces.surface]) {
+        expect(
+          contrast(track, background),
+          greaterThan(1.15),
+          reason: '${theme.brightness.name} track on $background',
+        );
+      }
+    }
+  });
+
   test('icon buttons resolve a quiet default and a violet focus', () {
     final theme = FlucordTheme.dark;
     final surfaces = theme.extension<FlucordSurfaceTheme>()!;

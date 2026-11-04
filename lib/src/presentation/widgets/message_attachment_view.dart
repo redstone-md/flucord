@@ -231,9 +231,8 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
                     child: Text(
                       'Spoiler',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: FlucordTextRole.label.strong.copyWith(
                         color: context.surfaces.canvas,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -389,10 +388,7 @@ class _FileAttachment extends StatelessWidget {
                     attachment.fileName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.caption.strong,
                   ),
                   const SizedBox(height: 3),
                   Text(

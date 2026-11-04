@@ -155,13 +155,7 @@ class ReportElementView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (element.title != null) ...[
-          Text(
-            element.title!,
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(element.title!, style: FlucordTextRole.caption.strong),
           const SizedBox(height: 6),
         ],
         child,

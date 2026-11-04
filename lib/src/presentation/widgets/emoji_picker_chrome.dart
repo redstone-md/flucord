@@ -13,13 +13,7 @@ class _PickerHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(title, style: FlucordTextRole.label.strong),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -49,10 +43,8 @@ class _SectionLabel extends StatelessWidget {
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
+      style: FlucordTextRole.caption.strong.copyWith(
         color: context.surfaces.muted,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w700,
       ),
     ),
   );

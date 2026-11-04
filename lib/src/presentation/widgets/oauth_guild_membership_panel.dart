@@ -142,10 +142,7 @@ class _LoadedMembership extends StatelessWidget {
                 membership.nickname ?? account.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FlucordTextRole.caption.strong,
               ),
               const SizedBox(height: 2),
               for (final detail in details)

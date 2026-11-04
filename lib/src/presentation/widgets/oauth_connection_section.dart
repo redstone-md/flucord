@@ -23,13 +23,7 @@ class OAuthConnectionSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Discord account',
-            style: TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text('Discord account', style: FlucordTextRole.label.strong),
           const SizedBox(height: 6),
           Text(
             'Connect your Discord account once to bring in your profile, servers, friends and direct messages.',
@@ -191,10 +185,8 @@ class _OAuthGuildDirectory extends StatelessWidget {
       children: [
         Text(
           'AUTHORIZED SERVERS · ${guilds.length}',
-          style: TextStyle(
+          style: FlucordTextRole.caption.strong.copyWith(
             color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
         ),
@@ -261,10 +253,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     child: Center(
                       child: Text(
                         _initial(guild.name),
-                        style: const TextStyle(
-                          fontSize: FlucordType.caption,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: FlucordTextRole.caption.strong,
                       ),
                     ),
                   ),
@@ -280,10 +269,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     guild.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.caption.strong,
                   ),
                   const SizedBox(height: 2),
                   Text(

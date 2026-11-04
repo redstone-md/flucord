@@ -93,10 +93,8 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
         const SizedBox(height: 8),
         Text(
           'AUTO-ARCHIVE',
-          style: TextStyle(
+          style: FlucordTextRole.caption.strong.copyWith(
             color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 6),

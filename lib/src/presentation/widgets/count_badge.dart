@@ -55,10 +55,8 @@ class CountBadge extends StatelessWidget {
         widthFactor: 1,
         child: Text(
           count > 99 ? '99+' : '$count',
-          style: FlucordTextRole.caption.style.copyWith(
+          style: FlucordType.badgeDigits.copyWith(
             color: textColor ?? FlucordFixedColors.onFill,
-            fontWeight: FontWeight.w600,
-            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ),

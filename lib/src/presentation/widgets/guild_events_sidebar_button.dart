@@ -63,10 +63,7 @@ class GuildEventsSidebarButton extends StatelessWidget {
                   child: Text(
                     '$count',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordType.badgeDigits,
                   ),
                 ),
             ],

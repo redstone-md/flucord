@@ -94,10 +94,7 @@ class ThreadMembershipButton extends StatelessWidget {
                 : Theme.of(context).colorScheme.primary,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             visualDensity: VisualDensity.compact,
-            textStyle: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: FlucordTextRole.caption.strong,
           ),
         ),
         if (controller.error != null)

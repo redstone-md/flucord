@@ -97,7 +97,7 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
     }
     return ColoredBox(
       key: const ValueKey('go-live-picture'),
-      color: Colors.black,
+      color: FlucordFixedColors.media,
       child: FittedBox(
         fit: BoxFit.contain,
         child: SizedBox(
@@ -139,7 +139,7 @@ Widget _waiting(
 /// with one message in the middle.
 Widget _stage(String key, List<Widget> children) => ColoredBox(
   key: ValueKey(key),
-  color: Colors.black,
+  color: FlucordFixedColors.media,
   child: Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: children),
   ),
