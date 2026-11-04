@@ -14,7 +14,11 @@ import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 import 'support/zoomed_app.dart';
 
@@ -60,15 +64,51 @@ void main() {
       find.byKey(const ValueKey('discord-friend-directory')),
       findsOneWidget,
     );
-    expect(find.text('PENDING — 1'), findsOneWidget);
-    expect(find.text('ONLINE — 1'), findsOneWidget);
-    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.text('Pending — 1'), findsOneWidget);
+    expect(find.text('Online — 1'), findsOneWidget);
+    expect(find.text('Offline — 1'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('discord-friend-online-1')),
       findsOneWidget,
     );
     expect(find.text('Social SDK'), findsOneWidget);
     expect(find.text('Native social access is linked'), findsNothing);
+  });
+
+  testWidgets('a friend row is the shared 60 px row with the status glyph', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [
+        _relationship(
+          id: 'online-1',
+          name: 'Ada',
+          status: DiscordPresenceStatus.idle,
+        ),
+      ],
+    );
+    addTearDown(harness.dispose);
+
+    await _pumpAccountHome(tester, harness);
+
+    final row = find.byKey(const ValueKey('discord-friend-online-1'));
+    expect(tester.getSize(row).height, 60);
+    final avatar = find.descendant(
+      of: row,
+      matching: find.byType(DiscordRelationshipAvatar),
+    );
+    expect(tester.getSize(avatar), const Size.square(32));
+    // The same glyph member rows draw, so idle reads as a crescent here too.
+    final glyph = tester.widget<PresenceIndicator>(
+      find.descendant(of: avatar, matching: find.byType(PresenceIndicator)),
+    );
+    expect(glyph.presence.status, Presence.idle);
+    final name = tester.widget<Text>(
+      find.descendant(of: row, matching: find.text('Ada')),
+    );
+    expect(name.style?.fontSize, FlucordTextRole.label.size);
+    expect(name.style?.fontWeight, FontWeight.w500);
   });
 
   testWidgets('under zoom a row above the middle opens its profile downward', (
@@ -262,8 +302,8 @@ void main() {
       harness.gateway.mutations.single.action,
       DiscordRelationshipAction.acceptRequest,
     );
-    expect(find.text('PENDING — 1'), findsNothing);
-    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.text('Pending — 1'), findsNothing);
+    expect(find.text('Offline — 1'), findsOneWidget);
   });
 
   testWidgets('confirms removal before mutating a native friendship', (

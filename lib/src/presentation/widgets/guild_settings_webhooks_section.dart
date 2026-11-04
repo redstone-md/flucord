@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
@@ -54,7 +56,7 @@ class _GuildSettingsWebhooksSectionState
           for (final webhook in webhooks)
             GuildSettingsRow(
               key: ValueKey('guild-webhook-${webhook.id}'),
-              leading: const Icon(Icons.anchor, size: 16),
+              leading: const FlucordIcon(FlucordIcons.webhooks, size: 16),
               title: webhook.name,
               subtitle: 'Posts into #${_channelName(webhook.channelId)}',
               trailing: Row(

@@ -7,6 +7,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/expression_file_picker.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_expressions_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,9 +52,11 @@ void main() {
 
     await _pump(tester, controller);
 
-    expect(find.text('EMOJI'), findsOneWidget);
-    expect(find.text('STICKERS'), findsOneWidget);
-    expect(find.text('SOUNDS'), findsOneWidget);
+    // Each kind is headed in the heading role, in sentence case.
+    for (final heading in const ['Emoji', 'Stickers', 'Sounds']) {
+      final text = tester.widget<Text>(find.text(heading));
+      expect(text.style?.fontSize, FlucordTextRole.heading.size);
+    }
     expect(
       find.byKey(const ValueKey('guild-expressions-upload-emoji')),
       findsOneWidget,

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_controls.dart';
+import 'user_settings_controls.dart';
 import 'remote_identity_image.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
@@ -28,26 +32,11 @@ class ProfilePreviewHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: FlucordType.title,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
+    child: SettingsSectionHeader(
+      title: title,
+      subtitle:
           'How your account looks to everyone else. Changes are saved '
           'together.',
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-          ),
-        ),
-      ],
     ),
   );
 }
@@ -81,16 +70,7 @@ class ProfileField extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
+        FlucordFieldLabel(label),
         TextField(
           key: fieldKey,
           controller: controller,
@@ -153,7 +133,7 @@ class ProfileAvatarButton extends StatelessWidget {
               initial.isEmpty ? '?' : initial.characters.first.toUpperCase(),
               style: const TextStyle(
                 fontSize: FlucordType.display,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -197,7 +177,7 @@ class ProfileImageActions extends StatelessWidget {
       _Button(
         buttonKey: ValueKey('profile-pick-$label'),
         tooltip: 'Change $label',
-        icon: Icons.edit_outlined,
+        icon: FlucordIcons.edit,
         compact: compact,
         onPressed: onPick,
       ),
@@ -206,7 +186,7 @@ class ProfileImageActions extends StatelessWidget {
         _Button(
           buttonKey: ValueKey('profile-remove-$label'),
           tooltip: 'Remove $label',
-          icon: Icons.close,
+          icon: FlucordIcons.clear,
           compact: compact,
           onPressed: onRemove!,
         ),
@@ -226,7 +206,7 @@ class _Button extends StatelessWidget {
 
   final Key buttonKey;
   final String tooltip;
-  final IconData icon;
+  final FlucordIconData icon;
   final bool compact;
   final VoidCallback onPressed;
 
@@ -245,7 +225,11 @@ class _Button extends StatelessWidget {
           child: SizedBox(
             width: size,
             height: size,
-            child: Icon(icon, size: compact ? 13 : 15, color: Colors.white),
+            child: FlucordIcon(
+              icon,
+              size: compact ? 13 : 15,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -269,16 +253,7 @@ class ProfileAccentPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        'ACCENT COLOUR',
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-        ),
-      ),
-      const SizedBox(height: 8),
+      const FlucordFieldLabel('Accent colour'),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -287,8 +262,8 @@ class ProfileAccentPicker extends StatelessWidget {
             swatchKey: const ValueKey('profile-accent-none'),
             selected: value == null,
             onPressed: () => onChanged(null),
-            child: Icon(
-              Icons.format_color_reset_outlined,
+            child: FlucordIcon(
+              FlucordIcons.noColour,
               size: 15,
               color: context.surfaces.muted,
             ),
@@ -464,14 +439,14 @@ class ProfileSaveBar extends StatelessWidget {
 class ProfileNotice extends StatelessWidget {
   const ProfileNotice({required this.icon, required this.message, super.key});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String message;
 
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 18, color: context.surfaces.muted),
+      FlucordIcon(icon, size: 18, color: context.surfaces.muted),
       const SizedBox(width: 10),
       Expanded(
         child: Text(

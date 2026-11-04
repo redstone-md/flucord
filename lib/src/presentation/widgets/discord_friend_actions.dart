@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import 'destructive_confirmation.dart';
 import 'discord_social_activity_scope.dart';
+import 'flucord_menu.dart';
 
 class DiscordFriendActions extends StatelessWidget {
   const DiscordFriendActions({
@@ -47,7 +49,7 @@ class DiscordFriendActions extends StatelessWidget {
             _ActionButton(
               key: ValueKey('discord-friend-activity-invite-$userId'),
               tooltip: 'Invite to Flucord activity lobby',
-              icon: Icons.sports_esports_outlined,
+              icon: FlucordIcons.activityInvite,
               onPressed: () async {
                 final succeeded = await activityController.sendInvite(
                   relationship,
@@ -70,14 +72,14 @@ class DiscordFriendActions extends StatelessWidget {
           _ActionButton(
             key: ValueKey('discord-friend-message-$userId'),
             tooltip: 'Message',
-            icon: Icons.chat_bubble_outline,
+            icon: FlucordIcons.chat,
             onPressed: onMessage!,
           ),
         if (relationship.kind == DiscordRelationshipKind.incomingRequest) ...[
           _ActionButton(
             key: ValueKey('discord-friend-accept-$userId'),
             tooltip: 'Accept friend request',
-            icon: Icons.check,
+            icon: FlucordIcons.check,
             color: context.surfaces.success,
             onPressed: () =>
                 _perform(context, DiscordRelationshipAction.acceptRequest),
@@ -85,7 +87,7 @@ class DiscordFriendActions extends StatelessWidget {
           _ActionButton(
             key: ValueKey('discord-friend-reject-$userId'),
             tooltip: 'Reject friend request',
-            icon: Icons.close,
+            icon: FlucordIcons.clear,
             onPressed: () =>
                 _perform(context, DiscordRelationshipAction.rejectRequest),
           ),
@@ -93,7 +95,7 @@ class DiscordFriendActions extends StatelessWidget {
           _ActionButton(
             key: ValueKey('discord-friend-cancel-$userId'),
             tooltip: 'Cancel friend request',
-            icon: Icons.close,
+            icon: FlucordIcons.clear,
             onPressed: () =>
                 _perform(context, DiscordRelationshipAction.cancelRequest),
           ),
@@ -131,6 +133,7 @@ class DiscordFriendActions extends StatelessWidget {
       action == DiscordRelationshipAction.blockUser;
 }
 
+/// A round 32 px button on the quiet fill, as the friend rows draw them.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.tooltip,
@@ -141,20 +144,29 @@ class _ActionButton extends StatelessWidget {
   });
 
   final String tooltip;
-  final IconData icon;
+  final FlucordIconData icon;
   final VoidCallback onPressed;
   final Color? color;
 
+  /// The look [_MoreActions] shares, so the two buttons match.
+  static ButtonStyle styleOf(BuildContext context) => IconButton.styleFrom(
+    backgroundColor: context.surfaces.quietFill,
+    fixedSize: const Size.square(32),
+    minimumSize: const Size.square(32),
+    padding: EdgeInsets.zero,
+    shape: const CircleBorder(),
+  );
+
   @override
-  Widget build(BuildContext context) {
-    return IconButton(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.only(start: 8),
+    child: IconButton(
       tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      style: styleOf(context),
       onPressed: onPressed,
-      icon: Icon(icon, size: 17, color: color ?? context.surfaces.muted),
-    );
-  }
+      icon: FlucordIcon(icon, size: 16, color: color ?? context.surfaces.muted),
+    ),
+  );
 }
 
 class _MoreActions extends StatelessWidget {
@@ -171,23 +183,30 @@ class _MoreActions extends StatelessWidget {
       DiscordRelationshipAction.blockUser,
     ].where(relationship.supports).toList(growable: false);
     if (actions.isEmpty) return const SizedBox.shrink();
-    return PopupMenuButton<DiscordRelationshipAction>(
-      key: ValueKey('discord-friend-more-${relationship.user.id}'),
-      tooltip: 'More relationship actions',
-      onSelected: onSelected,
-      itemBuilder: (context) => [
-        for (final action in actions)
-          PopupMenuItem(
-            value: action,
-            child: Text(
-              _menuLabel(action),
-              style: action == DiscordRelationshipAction.blockUser
-                  ? TextStyle(color: context.surfaces.errorText)
-                  : null,
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 8),
+      child: PopupMenuButton<DiscordRelationshipAction>(
+        key: ValueKey('discord-friend-more-${relationship.user.id}'),
+        tooltip: 'More relationship actions',
+        style: _ActionButton.styleOf(context),
+        onSelected: onSelected,
+        itemBuilder: (context) => [
+          for (final action in actions)
+            FlucordMenuItem(
+              value: action,
+              label: _menuLabel(action),
+              icon: action == DiscordRelationshipAction.blockUser
+                  ? FlucordIcons.block
+                  : FlucordIcons.removeFriend,
+              danger: action == DiscordRelationshipAction.blockUser,
             ),
-          ),
-      ],
-      icon: Icon(Icons.more_horiz, size: 18, color: context.surfaces.muted),
+        ],
+        icon: FlucordIcon(
+          FlucordIcons.more,
+          size: 16,
+          color: context.surfaces.muted,
+        ),
+      ),
     );
   }
 

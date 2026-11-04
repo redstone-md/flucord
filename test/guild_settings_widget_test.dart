@@ -13,6 +13,7 @@ import 'package:flucord/src/presentation/widgets/guild_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_dialog.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_overview_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
 import 'support/guild_settings_fixtures.dart';
 
@@ -51,6 +52,40 @@ void main() {
     );
     // The bans page opened by itself because it is the first one available.
     expect(find.text('Raider'), findsOneWidget);
+    harness.dispose();
+  });
+
+  testWidgets('takes the window like user settings, the server as its title', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await tester.pumpAndSettle();
+
+    // The Dialog widget always spans the window; its frame is the Material.
+    expect(
+      tester.getSize(
+        find
+            .descendant(of: find.byType(Dialog), matching: find.byType(Material))
+            .first,
+      ),
+      tester.getSize(find.byType(MaterialApp)),
+    );
+    // The name field holds the same text, so the title is found as a Text.
+    final title = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data == 'The Forge',
+      ),
+    );
+    expect(title.style?.fontSize, FlucordTextRole.title.size);
+    // The page heads itself in the heading role, under the title.
+    final heading = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(GuildSettingsPanel),
+        matching: find.text('Overview'),
+      ),
+    );
+    expect(heading.style?.fontSize, FlucordTextRole.heading.size);
+    expect(heading.style?.fontWeight, FontWeight.w500);
     harness.dispose();
   });
 

@@ -139,7 +139,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Ada'), findsOneWidget);
-    expect(find.text('ONLINE — 1'), findsOneWidget);
+    expect(find.text('Online — 1'), findsOneWidget);
     expect(find.text('Discord Social SDK is not bundled'), findsNothing);
   });
 

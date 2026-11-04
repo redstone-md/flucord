@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
+import 'user_settings_controls.dart';
 
 /// A section's scrollable body, with its heading.
 ///
@@ -25,34 +29,13 @@ class GuildSettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+    padding: const EdgeInsets.fromLTRB(40, 8, 40, 24),
     children: [
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: FlucordType.body,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      fontSize: FlucordType.caption,
-                      color: context.surfaces.muted,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            child: SettingsSectionHeader(title: title, subtitle: subtitle),
           ),
           ?trailing,
         ],
@@ -82,23 +65,13 @@ class GuildSettingsField extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: FlucordType.caption,
-            letterSpacing: 0.5,
-            fontWeight: FontWeight.w700,
-            color: context.surfaces.muted,
-          ),
-        ),
-        const SizedBox(height: 6),
+        FlucordFieldLabel(label),
         child,
-        if (hint != null) ...[
+        if (hint case final hint?) ...[
           const SizedBox(height: 4),
           Text(
-            hint!,
-            style: TextStyle(
-              fontSize: FlucordType.caption,
+            hint,
+            style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.muted,
             ),
           ),
@@ -125,11 +98,21 @@ class GuildSettingsRetry extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.cloud_off, size: 28, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.offline,
+          size: 28,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(height: 10),
-        Text(message, textAlign: TextAlign.center),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: FlucordTextRole.label.style.copyWith(
+            color: context.surfaces.text,
+          ),
+        ),
         const SizedBox(height: 10),
-        TextButton(onPressed: onRetry, child: const Text('Retry')),
+        FlucordButton(label: 'Retry', onPressed: onRetry),
       ],
     ),
   );
@@ -154,27 +137,26 @@ class GuildSettingsActionError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (error == null) return const SizedBox.shrink();
+    final surfaces = context.surfaces;
     return Container(
       key: const ValueKey('guild-settings-action-error'),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: context.surfaces.inset,
-        borderRadius: FlucordRadius.small,
-        border: Border.all(color: Theme.of(context).colorScheme.error),
+        color: surfaces.inset,
+        borderRadius: FlucordRadius.control,
+        border: Border.all(color: surfaces.danger),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 16,
-            color: Theme.of(context).colorScheme.error,
-          ),
+          FlucordIcon(FlucordIcons.error, size: 16, color: surfaces.errorText),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message ?? 'That change was not saved.',
-              style: const TextStyle(fontSize: FlucordType.caption),
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.text,
+              ),
             ),
           ),
         ],
@@ -203,12 +185,16 @@ class GuildSettingsRow extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 6),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
-      color: context.surfaces.raised,
-      borderRadius: FlucordRadius.small,
+      color: context.surfaces.surface,
+      borderRadius: FlucordRadius.medium,
+      border: Border.all(color: context.surfaces.border),
     ),
     child: Row(
       children: [
-        if (leading != null) ...[leading!, const SizedBox(width: 10)],
+        if (leading case final leading?) ...[
+          leading,
+          const SizedBox(width: 10),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,14 +202,16 @@ class GuildSettingsRow extends StatelessWidget {
               Text(
                 title,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: FlucordTextRole.label.style.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: context.surfaces.text,
+                ),
               ),
-              if (subtitle != null)
+              if (subtitle case final subtitle?)
                 Text(
-                  subtitle!,
+                  subtitle,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
+                  style: FlucordTextRole.caption.style.copyWith(
                     color: context.surfaces.muted,
                   ),
                 ),
@@ -249,7 +237,9 @@ class GuildSettingsEmpty extends StatelessWidget {
       child: Text(
         message,
         textAlign: TextAlign.center,
-        style: TextStyle(color: context.surfaces.muted),
+        style: FlucordTextRole.label.style.copyWith(
+          color: context.surfaces.muted,
+        ),
       ),
     ),
   );

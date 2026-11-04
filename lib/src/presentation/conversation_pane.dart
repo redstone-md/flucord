@@ -6,7 +6,6 @@ import '../application/chat_controller.dart';
 import '../application/voice_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/direct_call_controller.dart';
-import '../application/go_live_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
@@ -273,24 +272,6 @@ class ConversationPaneState extends State<ConversationPane> {
     });
   }
 
-  /// Asks which screen to share.
-  ///
-  /// The displays come from the encoder, not from a capture library. WebRTC's
-  /// enumeration opens duplications of its own to build thumbnails with, and
-  /// Windows refuses a second duplication of a display something already
-  /// holds, which is what turned every share into "that display is no longer
-  /// attached".
-  Future<String?> _pickCaptureSource(BuildContext context) async {
-    final displays = GoLiveScope.read(context).displays;
-    // One screen, nothing to choose between.
-    if (displays.length <= 1) return displays.firstOrNull?.sourceId;
-    final picked = await showDialog<GoLiveDisplay>(
-      context: context,
-      builder: (_) => GoLiveDisplayDialog(displays: displays),
-    );
-    return picked?.sourceId;
-  }
-
   /// Opens somebody's screen share, or closes the one already on screen.
   ///
   /// An ask that is still waiting counts as open: its control has read
@@ -394,7 +375,7 @@ class ConversationPaneState extends State<ConversationPane> {
         controller: goLive,
         channelId: channel.id,
         quality: StreamQualityScope.maybeOf(context),
-        pickSource: () => _pickCaptureSource(context),
+        pickSource: () => GoLiveDisplayDialog.pick(context, goLive.displays),
         guildId: channel.guildId,
       ),
     );

@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/application/self_video_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/presentation/widgets/voice_connection_bar.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   Future<void> pump(
@@ -16,6 +21,7 @@ void main() {
     void Function(String channelId)? onOpenChannel,
     String? Function(String channelId)? nameFor,
     String? Function(String channelId)? serverFor,
+    SelfVideoController? camera,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -31,6 +37,7 @@ void main() {
                 channelNameFor: nameFor ?? (_) => 'General',
                 serverNameFor: serverFor ?? (_) => null,
                 onOpenChannel: onOpenChannel,
+                camera: camera,
               ),
             ),
           ),
@@ -66,10 +73,6 @@ void main() {
     expect(find.byKey(const ValueKey('voice-connection-bar')), findsOne);
     expect(find.text('General'), findsOne);
 
-    await tester.tap(find.byKey(const ValueKey('voice-bar-mute')));
-    await tester.pumpAndSettle();
-    expect(controller.isMuted, isTrue);
-
     await tester.tap(find.byKey(const ValueKey('voice-bar-disconnect')));
     await tester.pumpAndSettle();
 
@@ -96,27 +99,7 @@ void main() {
     expect(opened, ['voice-1']);
   });
 
-  testWidgets('deafens from wherever the user navigated to', (tester) async {
-    final signaling = _FakeSignaling();
-    final controller = VoiceController(
-      _FakeMedia(),
-      signalingServiceProvider: () => signaling,
-    );
-    addTearDown(controller.dispose);
-    addTearDown(signaling.close);
-
-    await controller.connect(guildId: 'forge', channelId: 'voice-1');
-    await pump(tester, controller);
-
-    await tester.tap(find.byKey(const ValueKey('voice-bar-deafen')));
-    await tester.pumpAndSettle();
-
-    expect(controller.isDeafened, isTrue);
-    expect(find.byTooltip('Undeafen'), findsOneWidget);
-    expect(_iconColour(tester, 'voice-bar-deafen'), _danger);
-  });
-
-  testWidgets('muted uses the danger colour, and unmuted does not', (
+  testWidgets('says Voice connected in the success colour, above the room', (
     tester,
   ) async {
     final signaling = _FakeSignaling();
@@ -128,13 +111,89 @@ void main() {
     addTearDown(signaling.close);
 
     await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+    );
     await pump(tester, controller);
-    expect(_iconColour(tester, 'voice-bar-mute'), isNot(_danger));
 
-    await tester.tap(find.byKey(const ValueKey('voice-bar-mute')));
-    await tester.pumpAndSettle();
+    final status = find.text('Voice connected');
+    final style = tester.widget<Text>(status).style!;
+    expect(style.color, _surfaces.success);
+    expect(style.fontWeight, FontWeight.w500);
+    final room = find.text('General');
+    expect(tester.widget<Text>(room).style!.color, _surfaces.captionText);
+    expect(
+      tester.getRect(room).top,
+      greaterThanOrEqualTo(tester.getRect(status).bottom),
+    );
+  });
 
-    expect(_iconColour(tester, 'voice-bar-mute'), _danger);
+  testWidgets('hang-up is a 32 px red button at the right', (tester) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    await pump(tester, controller);
+
+    final panel = tester.getRect(
+      find.byKey(const ValueKey('voice-connection-bar')),
+    );
+    final hangUp = find.byKey(const ValueKey('voice-bar-disconnect'));
+    expect(tester.getSize(hangUp), const Size.square(32));
+    expect(tester.getRect(hangUp).right, panel.right - 12);
+    expect(_iconColour(tester, 'voice-bar-disconnect'), _surfaces.danger);
+    final fill = _fillBehind(tester, 'voice-bar-disconnect');
+    expect(fill.withValues(alpha: 1), _surfaces.danger);
+    expect(fill.a, closeTo(0.12, 0.005));
+  });
+
+  testWidgets('camera, screen share and activities share the width evenly', (
+    tester,
+  ) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    final camera = SelfVideoController(
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
+      transportProvider: () => null,
+      sinkProvider: () => null,
+      isVoiceReady: () => true,
+      announceSelfVideo: ({required enabled}) async => true,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(camera.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    await pump(tester, controller, camera: camera);
+
+    final panel = tester.getRect(
+      find.byKey(const ValueKey('voice-connection-bar')),
+    );
+    const keys = [
+      'voice-bar-camera',
+      'voice-bar-share',
+      'voice-bar-activities',
+    ];
+    final buttons = [
+      for (final key in keys) tester.getRect(find.byKey(ValueKey(key))),
+    ];
+    for (final button in buttons) {
+      expect(button.height, 32);
+      expect(button.width, closeTo(buttons.first.width, 0.5));
+    }
+    expect(buttons.first.left, panel.left + 12);
+    expect(buttons.last.right, panel.right - 12);
+    for (final key in keys) {
+      expect(_fillBehind(tester, key).a, closeTo(0.05, 0.005));
+    }
   });
 
   testWidgets('names the Room and its server where there is room to read it', (
@@ -204,7 +263,7 @@ void main() {
     await controller.connect(guildId: 'forge', channelId: 'voice-1');
     await pump(tester, controller, onOpenChannel: (_) {}, nameFor: (_) => null);
 
-    // There is no channel to select. The bar still offers mute and hang-up.
+    // There is no channel to select. The bar still offers hang-up.
     expect(find.byKey(const ValueKey('voice-bar-open')), findsNothing);
     expect(find.byKey(const ValueKey('voice-bar-disconnect')), findsOne);
     expect(find.text('Voice channel'), findsOne);
@@ -226,17 +285,29 @@ void main() {
   });
 }
 
-final _danger = FlucordTheme.dark.colorScheme.error;
+final _surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
 
 /// The colour the button with [key] draws its icon in.
 Color? _iconColour(WidgetTester tester, String key) => tester
-    .widget<Icon>(
+    .widget<FlucordIcon>(
       find.descendant(
         of: find.byKey(ValueKey(key)),
-        matching: find.byType(Icon),
+        matching: find.byType(FlucordIcon),
       ),
     )
     .color;
+
+/// The fill painted behind the button with [key].
+Color _fillBehind(WidgetTester tester, String key) => tester
+    .widget<Material>(
+      find
+          .ancestor(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Material),
+          )
+          .first,
+    )
+    .color!;
 
 final class _FakeSignaling implements VoiceSignalingService {
   @override
@@ -269,6 +340,8 @@ final class _FakeSignaling implements VoiceSignalingService {
 
   @override
   Future<void> leaveVoiceChannel(String guildId) async => left.add(guildId);
+
+  void emit(VoiceSignalingEvent event) => _events.add(event);
 
   Future<void> close() => _events.close();
 }

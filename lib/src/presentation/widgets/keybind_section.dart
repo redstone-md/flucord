@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/keybind_controller.dart';
 import '../../domain/keybind.dart';
 import '../../theme/flucord_theme.dart';
@@ -119,7 +121,7 @@ class _KeybindRow extends StatelessWidget {
           key: ValueKey('keybind-clear-${action.code}'),
           tooltip: 'Clear',
           onPressed: binding == null ? null : onClear,
-          icon: const Icon(Icons.backspace_outlined, size: 16),
+          icon: const FlucordIcon(FlucordIcons.erase, size: 16),
         ),
       ],
     ),

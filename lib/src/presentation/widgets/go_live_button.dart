@@ -73,7 +73,14 @@ class GoLiveButton extends StatelessWidget {
           // says why rather than vanishing.
           onPressed: !controller.canEncode && !streaming
               ? null
-              : () => unawaited(_toggle(context, streaming: streaming)),
+              : () => unawaited(
+                  toggle(
+                    controller,
+                    channelId: channelId,
+                    guildId: guildId,
+                    pickSource: pickSource,
+                  ),
+                ),
           color: streaming ? context.surfaces.danger : null,
           icon: Icon(
             streaming ? Icons.stop_screen_share : Icons.screen_share_outlined,
@@ -118,8 +125,15 @@ class GoLiveButton extends StatelessWidget {
     );
   }
 
-  Future<void> _toggle(BuildContext context, {required bool streaming}) async {
-    if (streaming) {
+  /// Stops the running share, or asks [pickSource] what to share and starts
+  /// one in [channelId]. Shared by every share button.
+  static Future<void> toggle(
+    GoLiveController controller, {
+    required String channelId,
+    String? guildId,
+    Future<String?> Function()? pickSource,
+  }) async {
+    if (controller.isSharing) {
       await controller.stop();
       return;
     }
