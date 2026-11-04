@@ -71,6 +71,53 @@ void main() {
     expect(find.byKey(const ValueKey('profile-note-save')), findsNothing);
   });
 
+  testWidgets('a note that changes elsewhere replaces the untouched field', (
+    tester,
+  ) async {
+    final notes = _FakeNotesRepository()..held = {_member.id: 'offsite'};
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => notes,
+    );
+    addTearDown(controller.dispose);
+    await _pumpCard(tester, controller);
+    await _openNote(tester);
+
+    notes.updateElsewhere(_member.id, 'moved to the infra team');
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('profile-note-field')))
+          .controller
+          ?.text,
+      'moved to the infra team',
+    );
+  });
+
+  testWidgets('a note that changes elsewhere leaves an edit in progress', (
+    tester,
+  ) async {
+    final notes = _FakeNotesRepository()..held = {_member.id: 'offsite'};
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => notes,
+    );
+    addTearDown(controller.dispose);
+    await _pumpCard(tester, controller);
+    await _openNote(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-note-field')),
+      'my own words',
+    );
+    await tester.pump();
+    notes.updateElsewhere(_member.id, 'moved to the infra team');
+    await tester.pump();
+
+    expect(find.text('my own words'), findsOne);
+  });
+
   testWidgets('a blank save removes the note', (tester) async {
     final notes = _FakeNotesRepository()..held = {_member.id: 'stale'};
     final controller = MemberProfileController(
@@ -323,5 +370,11 @@ final class _FakeNotesRepository implements UserNotesRepository {
     }
     _updates.add(current);
     return true;
+  }
+
+  /// A note written on another device, which reaches this one as an update.
+  void updateElsewhere(String userId, String note) {
+    held[userId] = note;
+    _updates.add(current);
   }
 }
