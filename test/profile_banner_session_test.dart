@@ -140,6 +140,21 @@ void main() {
   );
 
   testSession(
+    'a banner image is as tall as in Discord\'s popout',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      // Discord's popout is 300 px wide with a 105 px banner image.
+      expect(tester.getSize(_card).width, 300);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('profile-card-banner'))),
+        const Size(300, 105),
+      );
+    },
+    routes: _profileRoute(userProfile: {'banner': 'globalbanner'}),
+  );
+
+  testSession(
     'the same person shows each server its own profile',
     (tester, session) async {
       await _openCard(tester, session);
