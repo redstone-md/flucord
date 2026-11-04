@@ -338,9 +338,9 @@ class _ReleaseDelayRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final held = controller.pushToTalkReleaseDelayMs;
-    final step = _steps.contains(held)
-        ? held
-        : _steps.reduce((a, b) => (a - held).abs() < (b - held).abs() ? a : b);
+    // A saved delay between the steps, from a hand-edited file, gets its own
+    // segment: picking the nearest step would show a delay voice does not use.
+    final steps = _steps.contains(held) ? _steps : ([..._steps, held]..sort());
     return SettingRow(
       title: 'Push-to-talk release delay',
       description:
@@ -351,10 +351,10 @@ class _ReleaseDelayRow extends StatelessWidget {
         key: const ValueKey('voice-settings-release-delay'),
         keyPrefix: 'voice-settings-release-delay',
         options: [
-          for (final step in _steps)
+          for (final step in steps)
             FlucordSegment(step, step == 0 ? 'Off' : '$step ms'),
         ],
-        selected: step,
+        selected: held,
         onSelected: (value) =>
             unawaited(controller.setPushToTalkReleaseDelayMs(value)),
       ),
