@@ -12,6 +12,8 @@ import '../../domain/external_link_launcher.dart';
 import '../../domain/navigation_memory.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'direct_message_views.dart';
+import 'member_avatar.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
@@ -721,13 +723,30 @@ class MessageListState extends State<MessageList>
         !widget.canLoadOlder &&
             !widget.isLoadingOlder &&
             widget.olderLoadError == null
-        ? _ChannelStart(channel: widget.channel)
+        ? _conversationStart()
         : _HistoryBoundary(
             isLoading: widget.isLoadingOlder,
             error: widget.olderLoadError,
             onLoad: widget.onLoadOlder,
           ),
   );
+
+  /// A DM starts on the person it is with; anything else on its name.
+  Widget _conversationStart() {
+    final recipientId = widget.channel.recipientId;
+    final person = recipientId == null
+        ? null
+        : widget.workspace.memberOrNull(recipientId);
+    if (person == null) return _ChannelStart(channel: widget.channel);
+    return DirectMessageStart(
+      avatar: MemberAvatar(
+        member: person,
+        size: DirectMessageStart.avatarSize,
+        showPresence: false,
+      ),
+      name: person.displayName,
+    );
+  }
 
   Widget _messageAt(List<ChatMessage> messages, int index) {
     final message = messages[index];

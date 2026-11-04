@@ -22,6 +22,7 @@ import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/chat_scope.dart';
 import 'widgets/conversation_summaries.dart';
+import 'widgets/direct_message_views.dart';
 import 'widgets/direct_call_scope.dart';
 import 'widgets/emoji_picker.dart';
 import 'widgets/expression_favorites_scope.dart';
@@ -522,6 +523,10 @@ class ConversationPaneState extends State<ConversationPane> {
       children: [
         ChatHeader(
           channel: channel,
+          leading: switch (_recipientOf(channel)) {
+            final person? => DirectMessageHeaderAvatar(person: person),
+            null => null,
+          },
           // Only a thread has a membership to join; every other channel gets
           // nothing rather than a control that would have nothing to act on.
           threadMembership: channel.isThread
@@ -717,6 +722,13 @@ class ConversationPaneState extends State<ConversationPane> {
         ? () => unawaited(controller.joinOngoingCall(widget.channel.id))
         : () => unawaited(controller.placeCall(widget.channel.id));
   }
+
+  /// The one other person in a DM, or null for a channel or a group DM.
+  Member? _recipientOf(ConversationChannel channel) =>
+      switch (channel.recipientId) {
+        final id? => widget.workspace.memberOrNull(id),
+        null => null,
+      };
 
   /// What the header's call button should say.
   String? _callLabel(DirectCallController? controller, bool inCall) {

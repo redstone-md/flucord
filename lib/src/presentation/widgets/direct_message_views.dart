@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/chat_models.dart';
 import '../../domain/direct_message_candidate.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'remote_identity_image.dart';
 import 'flucord_dialog.dart';
+import 'member_avatar.dart';
+import 'remote_identity_image.dart';
 
 /// Finds somebody to message. Pops with their user id.
 class DirectMessageDialog extends StatefulWidget {
@@ -48,7 +51,7 @@ class _DirectMessageDialogState extends State<DirectMessageDialog> {
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 hintText: 'Search friends and members',
-                prefixIcon: Icon(Icons.search, size: 18),
+                prefixIcon: FlucordIcon(FlucordIcons.search, size: 16),
               ),
               onChanged: (value) => setState(() => _query = value),
               onSubmitted: (_) {
@@ -103,7 +106,9 @@ class _PersonRow extends StatelessWidget {
           url: person.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Icon(Icons.person_outline, size: 16),
+            child: const Center(
+              child: FlucordIcon(FlucordIcons.person, size: 16),
+            ),
           ),
         ),
       ),
@@ -117,6 +122,8 @@ class _PersonRow extends StatelessWidget {
 class DirectMessagesEmptyView extends StatelessWidget {
   const DirectMessagesEmptyView({required this.onNewMessage, super.key});
 
+  static const _iconSize = 32.0;
+
   final VoidCallback onNewMessage;
 
   @override
@@ -124,26 +131,83 @@ class DirectMessagesEmptyView extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.forum_outlined,
-          size: 34,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        FlucordIcon(
+          FlucordIcons.directMessages,
+          size: _iconSize,
+          color: context.surfaces.muted,
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'No direct messages',
-          style: TextStyle(
-            fontSize: FlucordType.label,
-            fontWeight: FontWeight.w600,
+          style: FlucordTextRole.heading.style.copyWith(
+            color: context.surfaces.text,
           ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: onNewMessage,
-          icon: const Icon(Icons.edit_square, size: 16),
+          icon: const FlucordIcon(FlucordIcons.edit, size: 16),
           label: const Text('New message'),
         ),
       ],
     ),
   );
+}
+
+/// The person a DM is with, as the chat header draws them before the name:
+/// a small avatar with their status dot.
+class DirectMessageHeaderAvatar extends StatelessWidget {
+  const DirectMessageHeaderAvatar({required this.person, super.key});
+
+  static const size = 24.0;
+
+  final Member person;
+
+  @override
+  Widget build(BuildContext context) => MemberAvatar(
+    member: person,
+    size: size,
+    // The dot is cut out of the header it sits on.
+    presenceBorderColor: context.surfaces.canvas,
+  );
+}
+
+/// What a DM opens on, above its first message: the person, large, and a
+/// line that says this is where the history starts.
+class DirectMessageStart extends StatelessWidget {
+  const DirectMessageStart({
+    required this.avatar,
+    required this.name,
+    super.key,
+  });
+
+  /// The size [avatar] is drawn at.
+  static const avatarSize = 80.0;
+
+  final Widget avatar;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox.square(dimension: avatarSize, child: avatar),
+          const SizedBox(height: 12),
+          Text(
+            name,
+            style: FlucordTextRole.display.style.copyWith(color: surfaces.text),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'This is the beginning of your direct message history with $name.',
+            style: FlucordTextRole.body.style.copyWith(color: surfaces.muted),
+          ),
+        ],
+      ),
+    );
+  }
 }
