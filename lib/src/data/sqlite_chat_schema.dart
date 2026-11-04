@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 29;
+  static const version = 30;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -94,7 +94,9 @@ abstract final class SqliteChatSchema {
         memberships_json TEXT,
         is_bot INTEGER NOT NULL DEFAULT 0,
         clan_tag_json TEXT,
-        username TEXT
+        username TEXT,
+        nameplate_json TEXT,
+        name_style_json TEXT
       )
     ''');
     await database.execute('''
@@ -444,6 +446,12 @@ abstract final class SqliteChatSchema {
       // with no default, so a new member row that leaves it out would fail.
       await _addColumn(database, 'roles', 'hoist INTEGER NOT NULL DEFAULT 0');
       await _dropColumn(database, 'members', 'roles_by_space_json');
+    }
+    if (oldVersion < 30) {
+      // A row written before this version reads as a person with no nameplate
+      // and a plain name. Both come back the next time Discord sends the user.
+      await _addColumn(database, 'members', 'nameplate_json TEXT');
+      await _addColumn(database, 'members', 'name_style_json TEXT');
     }
   }
 

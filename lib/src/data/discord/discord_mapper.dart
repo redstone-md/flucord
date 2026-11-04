@@ -349,14 +349,45 @@ final class DiscordMapper {
         _ => null,
       };
 
-  /// The tags on [user]. A user object without `primary_guild` says nothing
-  /// about the clan tag; one where it is null says there is none.
-  MemberTags tags(Map<String, Object?> user) {
-    final isBot = user['bot'] == true;
-    if (!user.containsKey('primary_guild')) {
-      return MemberTags.clanTagUnsaid(isBot: isBot);
-    }
-    return MemberTags(isBot: isBot, clanTag: _clanTag(user));
+  /// The tags on [user]. A user object without `primary_guild`,
+  /// `collectibles` or `display_name_styles` says nothing about that part;
+  /// one where it is null says there is none.
+  MemberTags tags(Map<String, Object?> user) => MemberTags(
+    isBot: user['bot'] == true,
+    clanTag: _clanTag(user),
+    nameplate: _nameplate(user['collectibles']),
+    nameStyle: _nameStyle(user['display_name_styles']),
+    unsaid: {
+      if (!user.containsKey('primary_guild')) TagPart.clanTag,
+      if (!user.containsKey('collectibles')) TagPart.nameplate,
+      if (!user.containsKey('display_name_styles')) TagPart.nameStyle,
+    },
+  );
+
+  /// The nameplate in a user's `collectibles`. Collectibles without one say
+  /// the user has none.
+  static Nameplate? _nameplate(Object? collectibles) {
+    if (collectibles is! Map) return null;
+    final nameplate = collectibles['nameplate'];
+    if (nameplate is! Map) return null;
+    final asset = nameplate['asset'];
+    if (asset is! String || asset.isEmpty) return null;
+    return Nameplate(
+      asset: asset,
+      palette: NameplatePalette.fromWire(nameplate['palette']),
+    );
+  }
+
+  static NameStyle? _nameStyle(Object? styles) {
+    if (styles is! Map) return null;
+    return NameStyle(
+      colors: [
+        for (final color in styles['colors'] as List? ?? const [])
+          if (color is int) 0xff000000 | color,
+      ],
+      fontId: styles['font_id'] as int?,
+      effectId: styles['effect_id'] as int?,
+    );
   }
 
   /// The server tag [user] shows, or null when it shows none.

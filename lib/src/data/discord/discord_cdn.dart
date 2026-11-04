@@ -53,6 +53,24 @@ final class DiscordCdn {
           {'size': '$size', 'passthrough': 'true'},
         ).toString();
 
+  /// The still picture of a nameplate, by its `asset` path, which ends in a
+  /// slash.
+  ///
+  /// Discord's image reference does not list it. The path is
+  /// `/assets/collectibles/{asset}static.png` in the reverse-engineered client
+  /// docs (discord-userdoccers, reference.mdx "CDN Formatting": valid names
+  /// are `img.png`, `static.png` and `asset.webm`, and `size` is ignored) and
+  /// in two maintained libraries: Pycord's `Asset._from_collectible` and
+  /// Kord's `DiscordCdn.staticNameplate`. `asset.webm` is the moving one,
+  /// which this client does not play.
+  static String? nameplate(String asset) => asset.isEmpty
+      ? null
+      : Uri.https(
+          'cdn.discordapp.com',
+          '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}'
+              'static.png',
+        ).toString();
+
   static String? guildMemberAvatar(
     String guildId,
     String userId,

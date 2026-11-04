@@ -544,73 +544,77 @@ class _ChannelRow extends StatelessWidget {
           child: ExcludeSemantics(
             child: SizedBox(
               height: height,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: indented
-                        ? _SidebarMetrics.rowPadding +
-                              _SidebarMetrics.nestedIndent
-                        : _SidebarMetrics.rowPadding,
-                  ),
-                  if (person != null)
-                    MemberAvatar(
-                      member: person,
-                      size: _SidebarMetrics.personAvatarSize,
-                      // The dot is cut out of the rail it sits on.
-                      presenceBorderColor: surfaces.rail,
-                    )
-                  else if (group)
-                    GroupDirectMessageAvatar(
-                      channel: channel,
-                      size: _SidebarMetrics.personAvatarSize,
-                    )
-                  else
-                    FlucordIcon(
-                      _iconFor(channel),
-                      size: _SidebarMetrics.iconSize,
-                      color: foreground,
+              child: _withNameplate(
+                Row(
+                  children: [
+                    SizedBox(
+                      width: indented
+                          ? _SidebarMetrics.rowPadding +
+                                _SidebarMetrics.nestedIndent
+                          : _SidebarMetrics.rowPadding,
                     ),
-                  const SizedBox(width: _SidebarMetrics.iconGap),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          channel.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: FlucordTextRole.label.style.copyWith(
-                            color: foreground,
-                            fontWeight: strong
-                                ? FontWeight.w500
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        // What the person is doing, the way the member list
-                        // says it. With nothing to say the name sits centred.
-                        if (_activityOf(person) case final summary?)
-                          ActivitySummaryLine(summary: summary),
-                      ],
-                    ),
-                  ),
-                  if (muted)
-                    Padding(
-                      key: ValueKey('channel-muted-${channel.id}'),
-                      padding: const EdgeInsetsDirectional.only(end: 4),
-                      child: FlucordIcon(
-                        FlucordIcons.silent,
+                    if (person != null)
+                      MemberAvatar(
+                        member: person,
+                        size: _SidebarMetrics.personAvatarSize,
+                        // The dot is cut out of the rail it sits on.
+                        presenceBorderColor: surfaces.rail,
+                      )
+                    else if (group)
+                      GroupDirectMessageAvatar(
+                        channel: channel,
+                        size: _SidebarMetrics.personAvatarSize,
+                      )
+                    else
+                      FlucordIcon(
+                        _iconFor(channel),
                         size: _SidebarMetrics.iconSize,
                         color: foreground,
                       ),
+                    const SizedBox(width: _SidebarMetrics.iconGap),
+                    Expanded(
+                      child: NameplateText(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DisplayName(
+                              channel.name,
+                              style: FlucordTextRole.label.style.copyWith(
+                                color: foreground,
+                                fontWeight: strong
+                                    ? FontWeight.w500
+                                    : FontWeight.w400,
+                              ),
+                              nameStyle: person?.tags.nameStyle,
+                            ),
+                            // What the person is doing, the way the member list
+                            // says it. With nothing to say the name sits
+                            // centred.
+                            if (_activityOf(person) case final summary?)
+                              ActivitySummaryLine(summary: summary),
+                          ],
+                        ),
+                      ),
                     ),
-                  if (channel.mentionCount > 0)
-                    CountBadge(
-                      key: ValueKey('channel-mention-${channel.id}'),
-                      count: channel.mentionCount,
-                    ),
-                  const SizedBox(width: _SidebarMetrics.rowPadding),
-                ],
+                    if (muted)
+                      Padding(
+                        key: ValueKey('channel-muted-${channel.id}'),
+                        padding: const EdgeInsetsDirectional.only(end: 4),
+                        child: FlucordIcon(
+                          FlucordIcons.silent,
+                          size: _SidebarMetrics.iconSize,
+                          color: foreground,
+                        ),
+                      ),
+                    if (channel.mentionCount > 0)
+                      CountBadge(
+                        key: ValueKey('channel-mention-${channel.id}'),
+                        count: channel.mentionCount,
+                      ),
+                    const SizedBox(width: _SidebarMetrics.rowPadding),
+                  ],
+                ),
               ),
             ),
           ),
@@ -637,6 +641,17 @@ class _ChannelRow extends StatelessWidget {
       ),
     );
   }
+
+  /// [content] over the nameplate of the DM's person, when they have one.
+  Widget _withNameplate(Widget content) => switch (recipient?.tags.nameplate) {
+    final nameplate? => NameplateBackdrop(
+      nameplate: nameplate,
+      placement: NameplatePlacement.directMessages,
+      selected: selected,
+      child: content,
+    ),
+    null => content,
+  };
 
   /// The activity line for a DM's person, or null for a channel or somebody
   /// doing nothing.

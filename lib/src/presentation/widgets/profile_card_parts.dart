@@ -27,12 +27,12 @@ class _Names extends StatelessWidget {
       if (data.pronouns.isNotEmpty) data.pronouns,
     ].join(' · ');
     final clan = data.clanTag;
-    final name = Text(
+    final name = DisplayName(
       data.displayName,
       maxLines: 2,
-      overflow: TextOverflow.ellipsis,
       style: (inWindow ? FlucordTextRole.display : FlucordTextRole.title).style
           .copyWith(color: surfaces.text),
+      nameStyle: data.nameStyle,
     );
     final showsMutual =
         !inWindow &&
