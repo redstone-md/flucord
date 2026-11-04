@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 
+import '../domain/flucord_palette.dart';
 import '../theme/flucord_radius.dart';
 import '../theme/flucord_type.dart';
 
@@ -155,6 +156,12 @@ final class OverlayPicture {
 typedef OverlayPainter =
     Future<OverlayPicture?> Function(List<OverlaySpeaker> speakers);
 
+/// How much of the game shows through the overlay's background.
+const _backgroundAlpha = 0.8;
+
+/// How strongly a silent speaker's dot is drawn.
+const _silentAlpha = 0.4;
+
 /// Draws the speaker list the way the rest of the client would.
 ///
 /// Rendered here rather than in C++ so the overlay looks like Flucord: a
@@ -166,9 +173,14 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
 
-  final background = Paint()..color = const Color(0xCC1B1D22);
+  // The overlay sits over a game, never over the app, so it always takes
+  // the dark palette whatever theme the client is in.
+  const palette = FlucordPalette.dark;
+  final text = Color(palette.text);
+  final background = Paint()
+    ..color = Color(palette.rail).withValues(alpha: _backgroundAlpha);
   canvas.drawRRect(
-    FlucordRadius.medium.toRRect(Rect.fromLTWH(0, 0, width, height)),
+    FlucordRadius.overlay.toRRect(Rect.fromLTWH(0, 0, width, height)),
     background,
   );
 
@@ -180,21 +192,19 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
       6,
       Paint()
         ..color = speaker.isSpeaking
-            ? const Color(0xFF43B581)
-            : const Color(0x66FFFFFF),
+            ? Color(palette.success)
+            : text.withValues(alpha: _silentAlpha),
     );
-    final text = TextPainter(
+    final name = TextPainter(
       text: TextSpan(
         text: speaker.name,
-        style: FlucordTextRole.label.strong.copyWith(
-          color: const Color(0xFFFFFFFF),
-        ),
+        style: FlucordTextRole.label.strong.copyWith(color: text),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: width - 40);
-    text.paint(canvas, Offset(32, top + (rowHeight - text.height) / 2));
+    name.paint(canvas, Offset(32, top + (rowHeight - name.height) / 2));
   }
 
   final picture = recorder.endRecording();
