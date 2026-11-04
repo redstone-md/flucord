@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/data/discord/discord_user_settings_proto.dart';
+import 'package:flucord/src/data/proto/proto_message.dart';
 import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
@@ -111,4 +113,41 @@ void main() {
     expect(pane.right, tester.getRect(profile).left);
     expect(tester.getRect(profile).right, tester.getRect(card).right);
   }, size: window);
+
+  testSession(
+    'with the dark sidebar on the light theme, all navigation turns dark',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      final dark = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+      final frame = tester.widget<ColoredBox>(
+        find.ancestor(of: card, matching: find.byType(ColoredBox)).first,
+      );
+
+      // The chat stays light; what is around it is one dark ground.
+      expect(Theme.of(tester.element(card)).brightness, Brightness.light);
+      for (final navigation in [rail, sidebar]) {
+        expect(
+          containerOf(tester, navigation).decoration,
+          BoxDecoration(color: dark.rail),
+        );
+      }
+      expect(frame.color, dark.rail);
+    },
+    size: window,
+    ready: SessionHarness.defaultReady()
+      ..['user_settings_proto'] = _lightWithDarkSidebar(),
+  );
+}
+
+String _lightWithDarkSidebar() {
+  const lightOnWire = 2;
+  return DiscordUserSettingsProto.encodeBase64(
+    (ProtoMessage()..setMessage(
+          PreloadedUserSettingsField.appearance,
+          ProtoMessage()
+            ..setVarint(AppearanceField.theme, lightOnWire)
+            ..setBool(AppearanceField.darkSidebar, true),
+        ))
+        .encode(),
+  );
 }

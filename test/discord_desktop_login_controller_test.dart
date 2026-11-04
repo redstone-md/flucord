@@ -10,6 +10,7 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/flucord_palette.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 import 'package:flucord/src/presentation/widgets/discord_desktop_login_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -237,6 +238,57 @@ void main() {
     await tester.tap(find.byKey(destructiveConfirmKey));
     await tester.pumpAndSettle();
     await _pumpUntil(tester, () => vault.session == null);
+  });
+
+  testWidgets('the Connected mark is in the theme\'s success colour', (
+    tester,
+  ) async {
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    final vault = MemoryCredentialVault();
+    final connection = ConnectionController(chat, vault, _RepositoryFactory());
+    final gateway = _RemoteAuthGateway();
+    final controller = DiscordDesktopLoginController(
+      _RemoteAuthFactory(gateway),
+      connection,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(connection.dispose);
+    addTearDown(chat.dispose);
+    const success = Color(0xff00c080);
+
+    await controller.start();
+    gateway.add(
+      DiscordRemoteAuthCompleted(
+        DiscordDesktopUserSession('desktop-authorization'),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => controller.state == DiscordDesktopLoginState.connected,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.fromPalette(
+          FlucordPalette.dark.copyWith(success: success.toARGB32()),
+        ),
+        home: Scaffold(
+          body: DiscordDesktopLoginSection(
+            controller: controller,
+            connectionController: connection,
+          ),
+        ),
+      ),
+    );
+    final mark = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find
+            .ancestor(of: find.text('Connected'), matching: find.byType(Row))
+            .first,
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+
+    expect((mark.decoration as BoxDecoration).color, success);
   });
 }
 

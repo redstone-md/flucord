@@ -147,9 +147,10 @@ void main() {
     expect(tester.getSize(hangUp), const Size.square(32));
     expect(tester.getRect(hangUp).right, panel.right - 12);
     expect(_iconColour(tester, 'voice-bar-disconnect'), _surfaces.danger);
-    final fill = _fillBehind(tester, 'voice-bar-disconnect');
-    expect(fill.withValues(alpha: 1), _surfaces.danger);
-    expect(fill.a, closeTo(0.12, 0.005));
+    expect(
+      tester.renderObject(hangUp),
+      _paintsFill(_surfaces.danger.withValues(alpha: 0.12)),
+    );
   });
 
   testWidgets('camera, screen share and activities share the width evenly', (
@@ -192,7 +193,10 @@ void main() {
     expect(buttons.first.left, panel.left + 12);
     expect(buttons.last.right, panel.right - 12);
     for (final key in keys) {
-      expect(_fillBehind(tester, key).a, closeTo(0.05, 0.005));
+      expect(
+        tester.renderObject(find.byKey(ValueKey(key))),
+        _paintsFill(_surfaces.text.withValues(alpha: 0.05)),
+      );
     }
   });
 
@@ -297,17 +301,8 @@ Color? _iconColour(WidgetTester tester, String key) => tester
     )
     .color;
 
-/// The fill painted behind the button with [key].
-Color _fillBehind(WidgetTester tester, String key) => tester
-    .widget<Material>(
-      find
-          .ancestor(
-            of: find.byKey(ValueKey(key)),
-            matching: find.byType(Material),
-          )
-          .first,
-    )
-    .color!;
+/// A button that paints [fill] behind its icon.
+PaintPattern _paintsFill(Color fill) => paints..rrect(color: fill);
 
 final class _FakeSignaling implements VoiceSignalingService {
   @override

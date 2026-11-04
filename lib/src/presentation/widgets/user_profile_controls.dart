@@ -216,7 +216,7 @@ class _Button extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: FlucordFixedColors.scrim,
         shape: const CircleBorder(),
         child: InkWell(
           key: buttonKey,
@@ -228,7 +228,7 @@ class _Button extends StatelessWidget {
             child: FlucordIcon(
               icon,
               size: compact ? 13 : 15,
-              color: Colors.white,
+              color: FlucordFixedColors.onFill,
             ),
           ),
         ),

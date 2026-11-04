@@ -167,7 +167,7 @@ void main() {
       expect(find.byKey(const ValueKey('favorite-refused')), findsNothing);
     });
 
-    testWidgets('a starred item is drawn in gold', (tester) async {
+    testWidgets('a starred item draws a filled gold star', (tester) async {
       final controller = ExpressionFavoritesController(() => _FakeStore());
       addTearDown(controller.dispose);
 
@@ -179,9 +179,20 @@ void main() {
       );
 
       final star = tester.widget<FlucordIcon>(
-        findFlucordIcon(FlucordIcons.favourite),
+        findFlucordIcon(FlucordIcons.favourited),
       );
-      expect(star.color, Colors.amber);
+      expect(star.color, FlucordFixedColors.favourite);
+      expect(findFlucordIcon(FlucordIcons.favourite), findsNothing);
+    });
+
+    testWidgets('an item not starred draws the outline', (tester) async {
+      final controller = ExpressionFavoritesController(() => _FakeStore());
+      addTearDown(controller.dispose);
+
+      await _pumpStar(tester, controller, onPressed: () async => true);
+
+      expect(findFlucordIcon(FlucordIcons.favourite), findsOneWidget);
+      expect(findFlucordIcon(FlucordIcons.favourited), findsNothing);
     });
   });
 

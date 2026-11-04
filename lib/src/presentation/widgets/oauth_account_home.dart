@@ -400,9 +400,6 @@ class _SidebarRow extends StatelessWidget {
     this.rowKey,
   });
 
-  /// The selected row's fill: the text colour, faintly.
-  static const selectedAlpha = 0.06;
-
   final Widget leading;
   final String label;
   final String detail;
@@ -418,9 +415,7 @@ class _SidebarRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: SidebarRowMetrics.rowGap),
       child: Material(
-        color: selected
-            ? surfaces.text.withValues(alpha: selectedAlpha)
-            : Colors.transparent,
+        color: selected ? surfaces.quietFill : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(
           key: rowKey,

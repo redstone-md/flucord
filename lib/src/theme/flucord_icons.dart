@@ -220,7 +220,7 @@ abstract final class FlucordIcons {
   static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
   static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
 
-  // Voice, threads, forums and events (FLUCORD-84).
+  // Voice, threads, forums and events.
   static const event = FlucordIconData(HugeIcons.strokeRoundedCalendar03);
   static const eventUnavailable = FlucordIconData(
     HugeIcons.strokeRoundedCalendarRemove01,
@@ -232,7 +232,7 @@ abstract final class FlucordIcons {
   static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
   static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
 
-  // Accounts, connection and status (FLUCORD-84).
+  // Accounts, connection and status.
   static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);
   static const credential = FlucordIconData(HugeIcons.strokeRoundedKey01);
   static const desktop = FlucordIconData(HugeIcons.strokeRoundedComputer);
@@ -264,7 +264,7 @@ abstract final class FlucordIcons {
   static const caughtUp = FlucordIconData(HugeIcons.strokeRoundedMailOpen01);
   static const summary = FlucordIconData(HugeIcons.strokeRoundedSparkles);
 
-  // Messages and pickers (FLUCORD-84).
+  // Messages and pickers.
   static const chevronLeft = FlucordIconData(
     HugeIcons.strokeRoundedArrowLeft01,
     matchTextDirection: true,
@@ -304,6 +304,12 @@ abstract final class FlucordIcons {
   static const audio = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
   static const superReaction = FlucordIconData(HugeIcons.strokeRoundedSparkles);
   static const favourite = FlucordIconData(HugeIcons.strokeRoundedStar);
+
+  /// [favourite], filled in: an item that is starred. The free set has no
+  /// solid star, so the shape tells the two apart, not only the colour.
+  static final favourited = FlucordIconData(
+    _filled(HugeIcons.strokeRoundedStar),
+  );
   // System messages.
   static const boost = FlucordIconData(HugeIcons.strokeRoundedFlash);
   static const stage = FlucordIconData(HugeIcons.strokeRoundedPodcast);
@@ -324,6 +330,15 @@ abstract final class FlucordIcons {
   static const emojiObjects = FlucordIconData(HugeIcons.strokeRoundedBulb);
   static const emojiSymbols = FlucordIconData(HugeIcons.strokeRoundedFavourite);
   static const emojiFlags = FlucordIconData(HugeIcons.strokeRoundedFlag02);
+
+  /// [drawing] with every shape filled in its own stroke colour.
+  static List<List<dynamic>> _filled(List<List<dynamic>> drawing) => [
+    for (final [tag, attributes] in drawing)
+      [
+        tag,
+        {...attributes as Map<String, dynamic>, 'fill': 'currentColor'},
+      ],
+  ];
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

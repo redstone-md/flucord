@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// The app's type: one bundled font family and one scale of sizes.
 ///
 /// Every piece of text takes its size from this scale, so the interface has
-/// five sizes rather than one per widget. Nothing is under 12 px, except the
+/// a few sizes rather than one per widget. Nothing is under 12 px, except the
 /// letters inside a tag beside a name ([appTag], [clanTag]). The font dial in
 /// Accessibility then scales all of them together.
 ///
@@ -31,19 +31,22 @@ abstract final class FlucordType {
   /// The largest text, such as a channel's welcome heading.
   static const display = 24.0;
 
-  static const sizes = [caption, label, body, title, display];
-
   /// The APP tag beside a bot's name. A tag is a mark, not text to read, so it
-  /// sits under the scale, as Discord's does.
+  /// sits under the caption, as Discord's does.
   static const appTag = 10.0;
 
   /// A clan tag beside a member's name.
   static const clanTag = 11.0;
 
+  /// Every size on the scale, smallest first.
+  static const sizes = [appTag, clanTag, caption, label, body, title, display];
+
   /// The largest size on the scale that fits in [space], and never under
   /// [caption]. For text drawn to fill a box, such as an avatar's initial.
-  static double fitting(double space) =>
-      sizes.lastWhere((size) => size <= space, orElse: () => caption);
+  static double fitting(double space) => sizes.lastWhere(
+    (size) => size >= caption && size <= space,
+    orElse: () => caption,
+  );
 
   /// Material's text roles, each set to a role on the scale.
   ///
@@ -98,13 +101,13 @@ enum FlucordTextRole {
 
   final double size;
 
-  /// The height of one line in pixels, as Figma gives it.
+  /// The height of one line in pixels, as a design tool gives it.
   final double lineHeight;
 
   final FontWeight weight;
 
   /// The role as a style. The extra line space is shared evenly above and
-  /// below the text, as Figma and CSS do, so a 14/21 line sits where the
+  /// below the text, as CSS does, so a 14/21 line sits where the
   /// design puts it.
   TextStyle get style => TextStyle(
     fontFamily: FlucordType.family,

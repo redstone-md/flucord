@@ -19,7 +19,7 @@ class MessageReplyPreview extends StatelessWidget {
     super.key,
   });
 
-  /// The height of the reply line, from the Figma frame.
+  /// The height of the reply line.
   static const height = 18.0;
   static const _avatarSize = 16.0;
   static const _gap = 4.0;
@@ -117,7 +117,7 @@ class MessageReplySpine extends StatelessWidget {
   );
 }
 
-/// Draws the Figma path `M 0 12 L 0 6 Q 0 0 6 0 L 26 0`, placed at the
+/// Draws the SVG path `M 0 12 L 0 6 Q 0 0 6 0 L 26 0`, placed at the
 /// avatar's centre and the middle of the reply line. Mirrored in right-to-left
 /// text, where the avatar sits on the right.
 class _SpinePainter extends CustomPainter {

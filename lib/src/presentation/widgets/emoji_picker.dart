@@ -625,10 +625,10 @@ class _EmojiTile extends StatelessWidget {
                     right: 0,
                     bottom: 0,
                     child: FlucordIcon(
-                      FlucordIcons.favourite,
+                      FlucordIcons.favourited,
                       key: ValueKey('emoji-starred-${choice.key}'),
                       size: 9,
-                      color: Colors.amber,
+                      color: FlucordFixedColors.favourite,
                     ),
                   ),
               ],

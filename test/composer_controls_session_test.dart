@@ -322,7 +322,7 @@ void main() {
         expect(
           find.descendant(
             of: find.byKey(const ValueKey('sticker-star-$stickerId')),
-            matching: findFlucordIcon(FlucordIcons.favourite),
+            matching: findFlucordIcon(FlucordIcons.favourited),
           ),
           findsOneWidget,
         );

@@ -12,7 +12,7 @@ import '../../theme/flucord_type.dart';
 import 'go_live_button.dart';
 import 'go_live_display_dialog.dart';
 import 'go_live_scope.dart';
-import 'panel_icon_button.dart';
+import 'flucord_icon_button.dart';
 import 'voice_control.dart';
 import 'voice_room_status.dart';
 
@@ -90,12 +90,12 @@ class VoiceConnectionBar extends StatelessWidget {
             children: [
               Expanded(child: _status(context, channelId, accent)),
               const SizedBox(width: _gap),
-              PanelIconButton(
-                buttonKey: const ValueKey('voice-bar-disconnect'),
+              FlucordIconButton(
+                key: const ValueKey('voice-bar-disconnect'),
                 tooltip: 'Disconnect',
                 icon: FlucordIcons.hangUp,
                 danger: true,
-                size: _buttonSize,
+                dimension: _buttonSize,
                 fill: surfaces.danger.withValues(alpha: _hangUpFillAlpha),
                 onPressed: () => unawaited(controller.disconnect()),
               ),
@@ -107,26 +107,26 @@ class VoiceConnectionBar extends StatelessWidget {
             children: [
               if (camera case final camera? when camera.isSupported)
                 Expanded(
-                  child: PanelIconButton.control(
-                    buttonKey: const ValueKey('voice-bar-camera'),
+                  child: FlucordIconButton.control(
+                    key: const ValueKey('voice-bar-camera'),
                     control: VoiceControl.camera(camera),
-                    size: _buttonSize,
+                    dimension: _buttonSize,
                     fill: controlFill,
                   ),
                 ),
               Expanded(
-                child: PanelIconButton.control(
-                  buttonKey: const ValueKey('voice-bar-share'),
+                child: FlucordIconButton.control(
+                  key: const ValueKey('voice-bar-share'),
                   control: _screenShare(context, channelId),
-                  size: _buttonSize,
+                  dimension: _buttonSize,
                   fill: controlFill,
                 ),
               ),
               Expanded(
-                child: PanelIconButton.control(
-                  buttonKey: const ValueKey('voice-bar-activities'),
+                child: FlucordIconButton.control(
+                  key: const ValueKey('voice-bar-activities'),
                   control: const VoiceControl.activities(),
-                  size: _buttonSize,
+                  dimension: _buttonSize,
                   fill: controlFill,
                 ),
               ),

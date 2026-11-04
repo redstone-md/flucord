@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsRole;
+
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_icons.dart';
@@ -12,21 +14,24 @@ import '../../theme/flucord_type.dart';
 /// The menu's frame comes from the theme; this draws the row inside it. The
 /// row spans the frame, so the menu still opens at the pointer, and its hover
 /// is rounded and inset from the frame's edge.
-class FlucordMenuItem<T> extends PopupMenuItem<T> {
+class FlucordMenuItem<T> extends PopupMenuEntry<T> {
   const FlucordMenuItem({
     required this.label,
+    this.value,
     this.icon,
     this.leading,
     this.trailing,
     this.danger = false,
-    super.value,
-    super.enabled,
+    this.enabled = true,
     super.key,
-  }) : super(height: rowHeight, child: null);
+  });
 
   static const double rowHeight = 32;
 
   final String label;
+
+  /// What the menu returns when this row is chosen.
+  final T? value;
 
   /// The row's icon. [leading] takes its place for a mark that is not an
   /// icon, such as a status dot.
@@ -37,13 +42,22 @@ class FlucordMenuItem<T> extends PopupMenuItem<T> {
   /// Draws the row in the danger colour, for an action that destroys.
   final bool danger;
 
+  /// A disabled row is faded and cannot be chosen.
+  final bool enabled;
+
   @override
-  PopupMenuItemState<T, FlucordMenuItem<T>> createState() =>
-      _FlucordMenuItemState<T>();
+  double get height => rowHeight;
+
+  @override
+  bool represents(T? value) => value == this.value;
+
+  @override
+  State<FlucordMenuItem<T>> createState() => _FlucordMenuItemState<T>();
 }
 
-class _FlucordMenuItemState<T>
-    extends PopupMenuItemState<T, FlucordMenuItem<T>> {
+class _FlucordMenuItemState<T> extends State<FlucordMenuItem<T>> {
+  void _choose() => Navigator.pop<T>(context, widget.value);
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -82,17 +96,22 @@ class _FlucordMenuItemState<T>
       ),
     );
     return MergeSemantics(
-      child: buildSemantics(
+      child: Semantics(
+        role: SemanticsRole.menuItem,
+        enabled: item.enabled,
+        button: true,
         child: IconTheme.merge(
           data: IconThemeData(size: 16, color: surfaces.muted),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: InkWell(
-              onTap: item.enabled ? handleTap : null,
+              onTap: item.enabled ? _choose : null,
               canRequestFocus: item.enabled,
-              mouseCursor: item.mouseCursor,
               borderRadius: FlucordRadius.control,
-              child: Opacity(opacity: item.enabled ? 1 : 0.5, child: row),
+              child: Opacity(
+                opacity: item.enabled ? 1 : FlucordTheme.disabledAlpha,
+                child: row,
+              ),
             ),
           ),
         ),

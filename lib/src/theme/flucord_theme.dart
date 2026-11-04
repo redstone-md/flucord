@@ -12,6 +12,15 @@ abstract final class FlucordTheme {
   static const _nonTextContrast = 3.0;
   static const _focusRingWidth = 2.0;
 
+  /// How strongly a disabled control shows: buttons, icon buttons and menu
+  /// rows all fade by this much.
+  static const disabledAlpha = 0.38;
+
+  /// How far the canvas card sits in from the window on the top, right and
+  /// bottom, showing the rail colour around it. Its corner is
+  /// [FlucordRadius.large].
+  static const canvasInset = 8.0;
+
   /// Buttons, tabs and selects are this tall; a field is [_controlFieldHeight].
   static const _controlHeight = 32.0;
   static const _controlFieldHeight = 36.0;
@@ -19,14 +28,49 @@ abstract final class FlucordTheme {
   /// A field's text is the body role, 21 px a line.
   static const _fieldLineHeight = 21.0;
 
-  static OutlineInputBorder fieldBorder(Color color, double width) =>
-      OutlineInputBorder(
-        borderRadius: FlucordRadius.control,
-        borderSide: BorderSide(color: color, width: width),
-      );
+  /// The frame every button shares, whatever its colours: the control
+  /// height, the padding, the [label] style and the control corner. The
+  /// theme's filled button and every FlucordButton kind start from it.
+  static ButtonStyle buttonFrame(TextStyle? label) => ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(0, _controlHeight)),
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+    textStyle: WidgetStatePropertyAll(label),
+    shape: const WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: FlucordRadius.control),
+    ),
+  );
+
+  /// The frame of a field people type in: the inset fill, a 1 px border,
+  /// the focus ring when focused and a danger border on an error. It sits
+  /// darker than what is around it, so it reads as the place to type.
+  ///
+  /// The theme's fields take it at the control corner. Search and the
+  /// composer pass their own [radius].
+  static InputDecorationTheme recessedField(
+    FlucordSurfaceTheme surfaces, {
+    BorderRadius radius = FlucordRadius.control,
+  }) {
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide(color: color, width: width),
+    );
+    final resting = outline(surfaces.border, 1);
+    final error = outline(surfaces.danger, _focusRingWidth);
+    return InputDecorationTheme(
+      filled: true,
+      fillColor: surfaces.inset,
+      isDense: true,
+      border: resting,
+      enabledBorder: resting,
+      disabledBorder: resting,
+      focusedBorder: outline(surfaces.focusRing, _focusRingWidth),
+      errorBorder: error,
+      focusedErrorBorder: error,
+    );
+  }
 
   /// How far a link moves from the accent toward the text colour. On a dark
-  /// theme that is a lighter tint: frame B's #A497F8 next to its #8B7CF6.
+  /// theme that is a lighter tint: #A497F8 beside the accent #8B7CF6.
   static const _linkTint = 0.25;
 
   static ThemeData get dark => fromPalette(FlucordPalette.dark);
@@ -137,13 +181,13 @@ abstract final class FlucordTheme {
     final scheme = ColorScheme(
       brightness: brightness,
       primary: brand,
-      onPrimary: Colors.white,
+      onPrimary: FlucordFixedColors.onFill,
       secondary: success,
       onSecondary: const Color(0xff051b10),
       // Widgets and Material's own fields draw error text in this, so it is the
       // readable error text. A danger fill takes `surfaces.danger` instead.
       error: errorText,
-      onError: Colors.white,
+      onError: FlucordFixedColors.onFill,
       surface: surface,
       onSurface: text,
     );
@@ -158,6 +202,30 @@ abstract final class FlucordTheme {
     final textTheme = FlucordType.textTheme(
       base.textTheme,
     ).apply(bodyColor: text, displayColor: text);
+    final surfaces = FlucordSurfaceTheme(
+      rail: rail,
+      canvas: canvas,
+      surface: surface,
+      raised: raised,
+      inset: inset,
+      control: control,
+      text: text,
+      bodyText: readableText(bodyText),
+      muted: muted,
+      captionText: readableText(captionText),
+      border: border,
+      brand: brand,
+      brandPressed: brandPressed,
+      success: success,
+      warning: warning,
+      mention: mention,
+      danger: danger,
+      offline: offline,
+      link: readableText(Color.lerp(brand, text, _linkTint)!),
+      errorText: errorText,
+      accentIcon: focusRing,
+      focusRing: focusRing,
+    );
     return base.copyWith(
       canvasColor: canvas,
       cardColor: raised,
@@ -169,7 +237,7 @@ abstract final class FlucordTheme {
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
-              return muted.withValues(alpha: 0.38);
+              return muted.withValues(alpha: disabledAlpha);
             }
             if (states.contains(WidgetState.hovered) ||
                 states.contains(WidgetState.focused) ||
@@ -197,22 +265,14 @@ abstract final class FlucordTheme {
       // The primary button is light, with the label in the rail colour:
       // white on the violet accent does not reach 4.5:1.
       filledButtonTheme: FilledButtonThemeData(
-        style: ButtonStyle(
+        style: buttonFrame(textTheme.labelLarge).copyWith(
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
-                ? text.withValues(alpha: 0.38)
+                ? text.withValues(alpha: disabledAlpha)
                 : text,
           ),
           foregroundColor: WidgetStatePropertyAll(rail),
-          minimumSize: const WidgetStatePropertyAll(Size(0, _controlHeight)),
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: 12),
-          ),
-          textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
           side: focusSide,
-          shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: FlucordRadius.control),
-          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(style: ButtonStyle(side: focusSide)),
@@ -260,60 +320,45 @@ abstract final class FlucordTheme {
       ),
       // Fields are recessed: darker than what they sit on, with a thin
       // border, so it is plain where to type.
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: inset,
-        isDense: true,
+      inputDecorationTheme: recessedField(surfaces).copyWith(
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: (_controlFieldHeight - _fieldLineHeight) / 2,
         ),
         hintStyle: FlucordTextRole.body.style.copyWith(color: captionText),
         errorStyle: FlucordTextRole.caption.style.copyWith(color: errorText),
-        border: fieldBorder(border, 1),
-        enabledBorder: fieldBorder(border, 1),
-        disabledBorder: fieldBorder(border, 1),
-        focusedBorder: fieldBorder(focusRing, _focusRingWidth),
-        errorBorder: fieldBorder(danger, _focusRingWidth),
-        focusedErrorBorder: fieldBorder(danger, _focusRingWidth),
       ),
       sliderTheme: SliderThemeData(
         trackHeight: 4,
         activeTrackColor: brand,
         inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
-        thumbColor: Colors.white,
+        thumbColor: FlucordFixedColors.onFill,
         overlayColor: brand.withValues(alpha: 0.24),
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
         trackShape: const RoundedRectSliderTrackShape(),
       ),
-      extensions: [
-        FlucordSurfaceTheme(
-          rail: rail,
-          canvas: canvas,
-          surface: surface,
-          raised: raised,
-          inset: inset,
-          control: control,
-          text: text,
-          bodyText: readableText(bodyText),
-          muted: muted,
-          captionText: readableText(captionText),
-          border: border,
-          brand: brand,
-          brandPressed: brandPressed,
-          success: success,
-          warning: warning,
-          mention: mention,
-          danger: danger,
-          offline: offline,
-          link: readableText(Color.lerp(brand, text, _linkTint)!),
-          errorText: errorText,
-          accentIcon: focusRing,
-          focusRing: focusRing,
-        ),
-      ],
+      extensions: [surfaces],
     );
   }
+}
+
+/// Colours that are the same in every theme, because what lies under them
+/// is not the theme's: a strong colour fill, a photo or a video.
+abstract final class FlucordFixedColors {
+  /// Text and marks on a strong fill: the accent, danger, a space's colour.
+  static const onFill = Color(0xFFFFFFFF);
+
+  /// Behind a video, where the picture does not reach.
+  static const media = Color(0xFF000000);
+
+  /// The round backing of a control drawn over a picture.
+  static const scrim = Color.fromRGBO(0, 0, 0, 0.55);
+
+  /// The bar of controls over a playing video.
+  static const mediaControls = Color.fromRGBO(0, 0, 0, 0.82);
+
+  /// The star on a favourite.
+  static const favourite = Color(0xFFF0B232);
 }
 
 @immutable
