@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'data_uri_image.dart';
+
+/// An avatar, banner or icon from Discord's CDN over [fallback]. A staged
+/// picture the user has not saved yet comes as a `data:` URI instead.
 class RemoteIdentityImage extends StatelessWidget {
   const RemoteIdentityImage({
     required this.url,
@@ -51,8 +55,8 @@ class RemoteIdentityImage extends StatelessWidget {
     );
   }
 
-  Widget _image(String url) => Image.network(
-    url,
+  Widget _image(String url) => Image(
+    image: url.startsWith('data:') ? DataUriImage(url) : NetworkImage(url),
     key: imageKey,
     fit: BoxFit.cover,
     filterQuality: FilterQuality.medium,
