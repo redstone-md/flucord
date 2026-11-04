@@ -782,7 +782,7 @@ extension _FlucordShellNavigation on FlucordShell {
                 _openDirectConversation(context, member.id, text: text),
               );
             },
-      onAddFriend: friends != null && !isSelf && _canBefriend(friends, member)
+      onAddFriend: friends != null && !isSelf && friends.canBefriend(member.id)
           ? () => unawaited(friends.addFriend(member.id))
           : null,
       onReport: canReport
@@ -799,10 +799,7 @@ extension _FlucordShellNavigation on FlucordShell {
   /// relationship describes them. The workspace holds no record of them, and
   /// the card fetches the rest of their profile itself.
   Member? _friendAsMember(String userId) {
-    final user = friendsController?.all
-        .where((entry) => entry.user.id == userId)
-        .firstOrNull
-        ?.user;
+    final user = friendsController?.relationshipWith(userId)?.user;
     if (user == null) return null;
     return Member(
       id: user.id,
@@ -815,22 +812,6 @@ extension _FlucordShellNavigation on FlucordShell {
       colorValue: 0xff4a4e50,
       avatarUrl: user.avatarUrl,
     );
-  }
-
-  /// Whether a friend request to [member] makes sense: not somebody already
-  /// a friend, already asked, or blocked.
-  bool _canBefriend(FriendsController friends, Member member) {
-    if (!friends.isAvailable) return false;
-    final kind = friends.all
-        .where((entry) => entry.user.id == member.id)
-        .firstOrNull
-        ?.kind;
-    return switch (kind) {
-      DiscordRelationshipKind.friend ||
-      DiscordRelationshipKind.outgoingRequest ||
-      DiscordRelationshipKind.blocked => false,
-      _ => true,
-    };
   }
 
   /// Opens the DM with [recipientId] and sends [text] there, when given.

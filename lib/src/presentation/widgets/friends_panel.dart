@@ -84,7 +84,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
               ? _AddFriendView(controller: widget.controller)
               : _RelationshipList(
                   groups: _groupsFor(_tab),
-                  emptyText: _emptyText(_tab),
+                  emptyText: _tab.empty,
                   controller: widget.controller,
                   presenceOf: widget.presenceOf,
                   onMessage: widget.onMessage,
@@ -120,14 +120,6 @@ class _FriendsPanelState extends State<FriendsPanel> {
       FriendsTab.add => const [],
     };
   }
-
-  static String _emptyText(FriendsTab tab) => switch (tab) {
-    FriendsTab.online => 'No friends are online right now.',
-    FriendsTab.all => 'No friends yet.',
-    FriendsTab.pending => 'No pending requests.',
-    FriendsTab.blocked => 'You have not blocked anyone.',
-    FriendsTab.add => '',
-  };
 }
 
 /// One list tab: headed groups like "Online 5", or [emptyText] when every

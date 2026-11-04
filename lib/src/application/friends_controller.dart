@@ -54,6 +54,21 @@ final class FriendsController extends ChangeNotifier {
 
   List<DiscordRelationship> get all => _bind()?.relationships ?? const [];
 
+  /// The account's relationship with [userId], or null for none.
+  DiscordRelationship? relationshipWith(String userId) =>
+      all.where((entry) => entry.user.id == userId).firstOrNull;
+
+  /// Whether a friend request to [userId] makes sense: not somebody already
+  /// a friend, already asked, or blocked.
+  bool canBefriend(String userId) =>
+      isAvailable &&
+      switch (relationshipWith(userId)?.kind) {
+        DiscordRelationshipKind.friend ||
+        DiscordRelationshipKind.outgoingRequest ||
+        DiscordRelationshipKind.blocked => false,
+        _ => true,
+      };
+
   /// People Discord thinks the account may know.
   ///
   /// Anybody already in the graph is filtered out here rather than trusted to

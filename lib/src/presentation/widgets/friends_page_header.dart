@@ -8,15 +8,19 @@ import 'flucord_controls.dart';
 
 /// What the Friends page shows: one of four lists, or the Add friend view.
 enum FriendsTab {
-  online('Online'),
-  all('All'),
-  pending('Pending'),
-  blocked('Blocked'),
-  add('Add friend');
+  online('Online', empty: 'No friends are online right now.'),
+  all('All', empty: 'No friends yet.'),
+  pending('Pending', empty: 'No pending requests.'),
+  blocked('Blocked', empty: 'You have not blocked anyone.'),
+  add('Add friend', empty: '');
 
-  const FriendsTab(this.label);
+  const FriendsTab(this.label, {required this.empty});
 
   final String label;
+
+  /// What the list says when it holds nobody. Empty for Add friend, which
+  /// is not a list.
+  final String empty;
 
   /// The four lists, in the order the header offers them.
   static const lists = [online, all, pending, blocked];
