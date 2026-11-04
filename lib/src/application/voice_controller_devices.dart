@@ -11,7 +11,8 @@ extension VoiceControllerDevices on VoiceController {
     await _run(() async {
       if (_selectedInputId == deviceId) return;
       _selectedInputId = deviceId;
-      if (isConnected) {
+      // The open input meter reads the new microphone too.
+      if (isConnected || _meterSubscription != null) {
         await _mediaService.startMicrophone(deviceId);
         await _mediaService.setMicrophoneEnabled(!_isMuted);
       }
@@ -63,6 +64,7 @@ extension VoiceControllerDevices on VoiceController {
       await _silence(() async => _audioPipeline?.setEnabled(false));
     }
     await _silence(() => _mediaService.setMicrophoneEnabled(!_isMuted));
+    if (_isMuted) _meterHearsSilence();
     if (wantsUplink) {
       await _silence(() async => _audioPipeline?.setEnabled(true));
     }

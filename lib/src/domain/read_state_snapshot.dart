@@ -130,6 +130,14 @@ final class ReadStateSnapshot {
     return unreadBadgeFor(channel) == UnreadBadge.allMessages;
   }
 
+  /// Whether [message], from somebody else, counts as a mention in [channel].
+  bool countsAsMention(ConversationChannel channel, ChatMessage message) =>
+      settingsFor(channel.spaceId).countsAsMention(
+        namesAccount: message.mentionsCurrentMember,
+        mentionsEveryone: message.mentionsEveryone,
+        directMessage: channel.isDirectMessage,
+      );
+
   /// Whether a desktop notification is allowed for a message in [channel].
   ///
   /// [mentionsEveryone] is passed separately from [mentionsCurrentMember]
@@ -142,9 +150,11 @@ final class ReadStateSnapshot {
     DateTime? now,
   }) {
     if (isChannelMuted(channel, now: now)) return false;
-    final space = settingsFor(channel.spaceId);
-    final mentioned =
-        mentionsCurrentMember || (mentionsEveryone && !space.suppressEveryone);
+    final mentioned = settingsFor(channel.spaceId).countsAsMention(
+      namesAccount: mentionsCurrentMember,
+      mentionsEveryone: mentionsEveryone,
+      directMessage: channel.isDirectMessage,
+    );
     // Written as tests rather than as a switch because
     // `notificationLevelFor` never answers "ask the next level", and an arm
     // for that case would be a branch no test could ever reach.

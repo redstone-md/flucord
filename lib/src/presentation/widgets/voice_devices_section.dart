@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/voice_activity_gate.dart';
 import '../../application/voice_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/voice_media.dart';
@@ -10,6 +11,7 @@ import '../../theme/flucord_type.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'user_settings_controls.dart';
+import 'voice_input_meter.dart';
 
 /// Which microphone and which speakers voice uses.
 ///
@@ -267,17 +269,18 @@ class _DeviceSelect extends StatelessWidget {
 ///
 /// Discord offers the same pair, and the automatic one is what makes a
 /// gate fit a room nobody measured: the floor is learned from whatever is
-/// there, and the manual one is for the microphone that never fits.
+/// there, and the manual one is for the microphone that never fits. The
+/// live meter under it is what makes a level chosen by hand mean something:
+/// the mark sits on the bar the voice moves.
 class _SensitivityRow extends StatelessWidget {
   const _SensitivityRow({required this.controller});
 
   final VoiceController controller;
 
-  /// The slider's whole range, in dB relative to full scale. The gate
-  /// clamps to its own range, so the two ends here are the same ones it
-  /// uses.
-  static const double _min = -65;
-  static const double _max = -30;
+  /// The meter's whole range, in dB relative to full scale: the range the
+  /// gate holds a threshold to.
+  static const double _min = VoiceActivityGate.lowestThreshold;
+  static const double _max = VoiceActivityGate.highestThreshold;
 
   @override
   Widget build(BuildContext context) {
@@ -292,23 +295,22 @@ class _SensitivityRow extends StatelessWidget {
           description: automatic
               ? 'Flucord learns how loud the room is and opens the microphone '
                     'when you speak above it.'
-              : 'The microphone opens above the level chosen here, whatever '
-                    'the room sounds like.',
+              : 'The microphone opens when your voice passes the mark.',
           value: !automatic,
           onChanged: (value) => unawaited(
             controller.setInputSensitivity(value ? (_min + _max) / 2 : null),
           ),
         ),
-        if (!automatic)
-          _LabelledSlider(
-            sliderKey: const ValueKey('voice-settings-input-sensitivity'),
-            min: _min,
-            max: _max,
-            value: sensitivity.clamp(_min, _max),
-            valueLabel: '${sensitivity.toStringAsFixed(0)} dB',
-            onChanged: (value) =>
-                unawaited(controller.setInputSensitivity(value)),
-          ),
+        VoiceInputMeter(
+          key: const ValueKey('voice-settings-input-sensitivity'),
+          source: controller,
+          min: _min,
+          max: _max,
+          threshold: sensitivity,
+          onThresholdChanged: (value) =>
+              unawaited(controller.setInputSensitivity(value)),
+        ),
+        const SizedBox(height: 12),
       ],
     );
   }

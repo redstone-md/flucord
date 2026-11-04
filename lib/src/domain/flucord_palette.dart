@@ -112,11 +112,13 @@ final class FlucordPalette {
     border: 0xffd7d9dc,
     brand: 0xff5865f2,
     brandPressed: 0xff4752c4,
-    success: 0xff23a55a,
-    warning: 0xfff0b232,
+    // The status colours are darker than Discord's light ones, so a status
+    // dot reaches 3:1 on every light surface, the darkest included.
+    success: 0xff1f9250,
+    warning: 0xffa9760c,
     mention: 0xfff23f42,
     danger: 0xffda373c,
-    offline: 0xff80848e,
+    offline: 0xff7c808b,
   );
 
   FlucordPalette copyWith({

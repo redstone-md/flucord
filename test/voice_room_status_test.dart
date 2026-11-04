@@ -35,6 +35,34 @@ void main() {
     });
   }
 
+  testWidgets('a Room whose connection failed offers to try again', (
+    tester,
+  ) async {
+    final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
+    await _say(tester, room, VoiceConnectionStatus.failure);
+    room.signaling.frames.clear();
+
+    await tester.tap(find.byKey(const ValueKey('voice-room-retry-connection')));
+    await tester.pumpAndSettle();
+
+    expect(room.signaling.frames.single.channelId, 'voice-1');
+    expect(find.text('Joining voice channel...'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice-room-retry-connection')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a Room that is connected offers no retry', (tester) async {
+    final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
+    await _say(tester, room, VoiceConnectionStatus.reconnecting);
+
+    expect(
+      find.byKey(const ValueKey('voice-room-retry-connection')),
+      findsNothing,
+    );
+  });
+
   testWidgets('a muted Room says it is muted', (tester) async {
     final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
     await _say(tester, room, VoiceConnectionStatus.ready);

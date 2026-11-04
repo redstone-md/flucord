@@ -82,7 +82,8 @@ void _recoveryCases() {
       await rig.lastDial.closeFromServer(4014);
       await _flushEvents();
       rig.killMediaSocket();
-      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      // Several times as long as a redial would take to come.
+      await Future<void>.delayed(_RecoveryRig.firstRedial * 4);
 
       expect(rig.dials, hasLength(1));
     });
@@ -233,6 +234,10 @@ final class _RecoveryRig implements DiscordVoiceSocketConnector {
       maxDaveProtocolVersion: 0,
       socketConnector: this,
       udpTransport: udp,
+      reconnectBackoff: VoiceReconnectBackoff(
+        firstDelay: firstRedial,
+        jitter: () => 0,
+      ),
     );
     _subscription = client.events.listen((event) {
       if (event is VoiceSignalingStatusEvent) statuses.add(event);
@@ -249,6 +254,9 @@ final class _RecoveryRig implements DiscordVoiceSocketConnector {
       discoveryResend: discoveryResend,
     ),
   );
+
+  /// Short, so a redial comes quickly on a clock that real sockets keep real.
+  static const firstRedial = Duration(milliseconds: 100);
 
   final _LoopbackMediaServer server;
   final IoDiscordVoiceUdpTransport udp;

@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
@@ -281,6 +283,17 @@ void main() {
           'the focus ring reaches 3:1',
           () => expectContrast(surfaces.focusRing, 3),
         );
+
+        // A status dot is an icon, so it needs 3:1 against what is behind it.
+        for (final status in Presence.values) {
+          test(
+            'the ${status.name} status reaches 3:1',
+            () => expectContrast(
+              PresenceIndicator.colorOf(surfaces, status),
+              3,
+            ),
+          );
+        }
       });
     });
 

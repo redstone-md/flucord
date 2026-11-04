@@ -12,6 +12,7 @@ import '../../theme/flucord_type.dart';
 import 'go_live_button.dart';
 import 'go_live_display_dialog.dart';
 import 'go_live_scope.dart';
+import 'flucord_button.dart';
 import 'flucord_icon_button.dart';
 import 'voice_control.dart';
 import 'voice_room_status.dart';
@@ -140,6 +141,18 @@ class VoiceConnectionBar extends StatelessWidget {
                 key: const ValueKey('voice-bar-warning'),
                 style: FlucordTextRole.caption.style.copyWith(
                   color: surfaces.errorText,
+                ),
+              ),
+            ),
+          if (voiceRoomOffersConnectionRetry(controller))
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(top: _gap),
+                child: FlucordButton(
+                  key: const ValueKey('voice-bar-retry-connection'),
+                  label: 'Try again',
+                  onPressed: () => unawaited(controller.retryConnection()),
                 ),
               ),
             ),

@@ -75,12 +75,14 @@ extension ChatControllerReadState on ChatController {
         .messagesFor(channel.id)
         .where((item) => item.sentAt.isBefore(message.sentAt))
         .lastOrNull;
+    final snapshot = readState;
     final mentionCount = workspace
         .messagesFor(channel.id)
         .where(
           (item) =>
               !item.sentAt.isBefore(message.sentAt) &&
-              item.mentionsCurrentMember,
+              item.authorId != workspace.currentMemberId &&
+              snapshot.countsAsMention(channel, item),
         )
         .length;
     await repository
