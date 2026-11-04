@@ -238,28 +238,58 @@ final class ProfileDecoration {
 
 /// A third-party account shown on somebody's profile.
 ///
-/// Only what the profile route hands back: the connection's type and its
-/// public name. Whether it is verified is kept because the profile marks it.
+/// Only what the profile route hands back: the connection's type, the
+/// service's own id for the account, and its public name. Whether it is
+/// verified is kept because the profile marks it.
 final class ProfileConnection {
   const ProfileConnection({
     required this.type,
     required this.name,
+    this.id = '',
     this.verified = false,
   });
 
   final String type;
   final String name;
+
+  /// The service's id for the account. Empty when the payload had none.
+  final String id;
   final bool verified;
+
+  /// The account's page on the service, built the way Discord's client
+  /// builds it. Null for a service with no public page, such as Battle.net.
+  Uri? get link => switch (type) {
+    'github' => _page('https://github.com/', name),
+    'twitter' => _page('https://x.com/', name),
+    'twitch' => _page('https://www.twitch.tv/', name),
+    'reddit' => _page('https://www.reddit.com/user/', name),
+    'instagram' => _page('https://www.instagram.com/', name),
+    'tiktok' => _page('https://www.tiktok.com/@', name),
+    'ebay' => _page('https://www.ebay.com/usr/', name),
+    'steam' => _page('https://steamcommunity.com/profiles/', id),
+    'youtube' => _page('https://www.youtube.com/channel/', id),
+    'spotify' => _page('https://open.spotify.com/user/', id),
+    'roblox' => _page('https://www.roblox.com/users/', id, '/profile'),
+    'bluesky' => _page('https://bsky.app/profile/', id),
+    'domain' => _page('https://', name),
+    _ => null,
+  };
+
+  static Uri? _page(String prefix, String part, [String suffix = '']) =>
+      part.isEmpty
+      ? null
+      : Uri.tryParse('$prefix${Uri.encodeComponent(part)}$suffix');
 
   @override
   bool operator ==(Object other) =>
       other is ProfileConnection &&
       other.type == type &&
       other.name == name &&
+      other.id == id &&
       other.verified == verified;
 
   @override
-  int get hashCode => Object.hash(type, name, verified);
+  int get hashCode => Object.hash(type, name, id, verified);
 }
 
 /// A server both this account and the profile's user belong to.

@@ -158,6 +158,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
             ProfileConnection(
               type: _text(connection['type']),
               name: _text(connection['name']),
+              id: _text(connection['id']),
               verified: connection['verified'] == true,
             ),
       ],
