@@ -57,10 +57,10 @@ class _LeftServerCard extends StatelessWidget {
     final caption = _caption(MaterialLocalizations.of(context));
     return Container(
       key: const ValueKey('leave-server-card'),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
         color: surfaces.inset,
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.framed,
         border: Border.all(color: surfaces.border),
       ),
       child: Row(

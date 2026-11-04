@@ -1,6 +1,7 @@
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/leave_server_dialog.dart';
 import 'package:flucord/src/presentation/widgets/rail_tile.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,6 +84,32 @@ void main() {
     expect(
       find.descendant(of: card, matching: find.byType(Text)),
       findsNWidgets(2),
+    );
+  });
+
+  testWidgets('the card keeps its corner parallel to the server tile', (
+    tester,
+  ) async {
+    final card = await openFor(
+      tester,
+      const CommunitySpace(
+        id: 'forge',
+        name: 'The Forge',
+        monogram: 'TF',
+        colorValue: 0xff456b5a,
+      ),
+    );
+
+    final box = tester.widget<Container>(card);
+    final decoration = box.decoration! as BoxDecoration;
+    final tile = tester.widget<ClipRRect>(
+      find.descendant(of: card, matching: find.byType(ClipRRect)).first,
+    );
+    final gap = (box.padding! as EdgeInsets).left;
+    expect(decoration.borderRadius, FlucordRadius.framed);
+    expect(
+      FlucordRadius.framed.topLeft.x,
+      (tile.borderRadius as BorderRadius).topLeft.x + gap,
     );
   });
 }

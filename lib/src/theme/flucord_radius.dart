@@ -18,6 +18,11 @@ abstract final class FlucordRadius {
   /// The canvas card, server tiles, and rows inside a menu.
   static const large = BorderRadius.all(Radius.circular(12));
 
+  /// A card that holds a picture with [medium] corners 8 in from its edge,
+  /// such as an activity or a server card. 8 + 8, so the two corners stay
+  /// parallel.
+  static const framed = BorderRadius.all(Radius.circular(16));
+
   /// Anything that opens over the interface: dialogs, menus, popovers,
   /// pickers, profile cards and the incoming call card.
   static const overlay = BorderRadius.all(Radius.circular(16));

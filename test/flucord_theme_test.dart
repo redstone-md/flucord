@@ -407,7 +407,7 @@ void main() {
 
   group('the radius scale', () {
     test(
-      'runs small 4, control 6, medium 8, large 12, overlay 16 and full',
+      'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16 and full',
       () {
         expect(FlucordRadius.small, BorderRadius.circular(4));
         expect(FlucordRadius.control, BorderRadius.circular(6));
