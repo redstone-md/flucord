@@ -1,0 +1,351 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../application/active_friends.dart';
+import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
+import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'activity_views.dart';
+import 'member_avatar.dart';
+import 'rail_tile.dart';
+import 'remote_identity_image.dart';
+
+/// The Friends page's right column: one card per friend who is playing,
+/// listening, watching or sitting in voice.
+class ActiveNowColumn extends StatefulWidget {
+  const ActiveNowColumn({
+    required this.friends,
+    required this.onOpenRoom,
+    this.now,
+    super.key,
+  });
+
+  static const width = 340.0;
+
+  final List<ActiveFriend> friends;
+
+  /// Opens the voice channel a friend sits in.
+  final ValueChanged<ConversationChannel> onOpenRoom;
+
+  /// A fixed clock for tests. Without one the elapsed times follow the real
+  /// clock, redrawn each minute.
+  final DateTime? now;
+
+  @override
+  State<ActiveNowColumn> createState() => _ActiveNowColumnState();
+}
+
+class _ActiveNowColumnState extends State<ActiveNowColumn> {
+  Timer? _minutes;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.now == null) {
+      _minutes = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _minutes?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final now = widget.now ?? DateTime.now();
+    return Container(
+      key: const ValueKey('active-now'),
+      width: ActiveNowColumn.width,
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: surfaces.border)),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Active now',
+            style: FlucordTextRole.heading.style.copyWith(color: surfaces.text),
+          ),
+          const SizedBox(height: 16),
+          if (widget.friends.isEmpty)
+            Text(
+              "It's quiet for now",
+              style: FlucordTextRole.label.style.copyWith(
+                color: surfaces.muted,
+              ),
+            ),
+          for (final friend in widget.friends)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ActiveFriendCard(
+                friend: friend,
+                now: now,
+                onOpenRoom: widget.onOpenRoom,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveFriendCard extends StatelessWidget {
+  const _ActiveFriendCard({
+    required this.friend,
+    required this.now,
+    required this.onOpenRoom,
+  });
+
+  final ActiveFriend friend;
+  final DateTime now;
+  final ValueChanged<ConversationChannel> onOpenRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final person = friend.person;
+    final room = friend.room;
+    final main = friend.doing.firstOrNull;
+    final elapsed = _elapsed(main?.timestamps, now);
+    // A rich presence gets its own block, and the time moves there.
+    final rich = main?.details == null ? null : main;
+    final summary = ActivitySummary.of(friend.doing, inVoice: room != null);
+    final card = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: surfaces.raised,
+        border: Border.all(color: surfaces.border),
+        borderRadius: FlucordRadius.medium,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              MemberAvatar(
+                member: person,
+                size: 32,
+                presenceBorderColor: surfaces.raised,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      person.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.label.strong.copyWith(
+                        color: surfaces.text,
+                      ),
+                    ),
+                    if (summary != null)
+                      Row(
+                        children: [
+                          Flexible(
+                            child: ActivitySummaryLine(summary: summary),
+                          ),
+                          if (rich == null && elapsed != null)
+                            Text(
+                              ' · $elapsed',
+                              style: FlucordTextRole.caption.style.copyWith(
+                                color: surfaces.muted,
+                              ),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (rich != null) ...[
+            const _CardDivider(),
+            _Block(
+              art: _ArtTile(
+                url: rich.assets?.largeImageUrl,
+                monogram: _monogram(rich.name),
+                color: surfaces.control,
+              ),
+              title: rich.details!,
+              caption: [?rich.state, ?elapsed].join(' · '),
+            ),
+          ],
+          if (room != null) ...[
+            const _CardDivider(),
+            _Block(
+              art: _ArtTile(
+                url: room.space.iconUrl,
+                monogram: room.space.monogram,
+                color: Color(room.space.colorValue),
+              ),
+              title: room.channel.name,
+              caption: '${room.space.name} · ${_people(room.people.length)}',
+              trailing: _Faces(people: room.people.take(3).toList()),
+            ),
+          ],
+        ],
+      ),
+    );
+    return Semantics(
+      container: true,
+      button: room != null,
+      child: Material(
+        key: ValueKey('active-friend-${person.id}'),
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: room == null ? null : () => onOpenRoom(room.channel),
+          borderRadius: FlucordRadius.medium,
+          child: card,
+        ),
+      ),
+    );
+  }
+
+  static String _people(int count) => count == 1 ? '1 person' : '$count people';
+}
+
+/// The thin line between a card's top and one of its blocks.
+class _CardDivider extends StatelessWidget {
+  const _CardDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Divider(height: 1, thickness: 1, color: context.surfaces.border),
+  );
+}
+
+/// A card's second block: a 40 px tile, a title, a caption, and maybe
+/// something on the right.
+class _Block extends StatelessWidget {
+  const _Block({
+    required this.art,
+    required this.title,
+    required this.caption,
+    this.trailing,
+  });
+
+  final Widget art;
+  final String title;
+  final String caption;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return Row(
+      children: [
+        art,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.strong.copyWith(
+                  color: surfaces.text,
+                ),
+              ),
+              if (caption.isNotEmpty)
+                Text(
+                  caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: FlucordTextRole.caption.style.copyWith(
+                    color: surfaces.muted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (trailing case final trailing?) ...[
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ],
+    );
+  }
+}
+
+/// Artwork on a 40 px tile, or [monogram] on [color] when there is none.
+class _ArtTile extends StatelessWidget {
+  const _ArtTile({
+    required this.url,
+    required this.monogram,
+    required this.color,
+  });
+
+  final String? url;
+  final String monogram;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: FlucordRadius.medium,
+    child: SizedBox.square(
+      dimension: 40,
+      child: ColoredBox(
+        color: color,
+        child: RemoteIdentityImage(url: url, fallback: RailMonogram(monogram)),
+      ),
+    ),
+  );
+}
+
+/// Up to three faces from a voice channel, overlapping a little.
+class _Faces extends StatelessWidget {
+  const _Faces({required this.people});
+
+  final List<Member> people;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final person in people)
+        Align(
+          widthFactor: 0.8,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: context.surfaces.raised, width: 2),
+            ),
+            child: MemberAvatar(member: person, size: 20, showPresence: false),
+          ),
+        ),
+    ],
+  );
+}
+
+/// How long an activity has run, as "1 h 20 min" or "35 min". Null when it
+/// carries no start or has run for less than a minute.
+String? _elapsed(ActivityTimestamps? timestamps, DateTime now) {
+  final span = timestamps?.elapsedAt(now);
+  if (span == null || span.inMinutes < 1) return null;
+  final hours = span.inHours;
+  final minutes = span.inMinutes % 60;
+  if (hours == 0) return '$minutes min';
+  return minutes == 0 ? '$hours h' : '$hours h $minutes min';
+}
+
+/// The first letters of the first two words, as a server's monogram reads:
+/// "Dota 2" is "D2".
+String _monogram(String name) => name
+    .trim()
+    .split(RegExp(r'\s+'))
+    .where((word) => word.isNotEmpty)
+    .take(2)
+    .map((word) => String.fromCharCode(word.runes.first).toUpperCase())
+    .join();
