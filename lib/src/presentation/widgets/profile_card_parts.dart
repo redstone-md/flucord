@@ -85,7 +85,7 @@ class _Badges extends StatelessWidget {
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: surfaces.quietFill,
-          borderRadius: FlucordRadius.small,
+          borderRadius: FlucordRadius.full,
         ),
         child: Center(widthFactor: 1, child: child),
       ),
@@ -313,7 +313,7 @@ class _Roles extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(6, 2, 8, 2),
                 decoration: BoxDecoration(
                   color: surfaces.quietFill,
-                  borderRadius: FlucordRadius.small,
+                  borderRadius: FlucordRadius.full,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -336,6 +336,7 @@ class _Roles extends StatelessWidget {
                   icon: FlucordIcons.add,
                   tooltip: 'Add role',
                   dimension: 20,
+                  borderRadius: FlucordRadius.full,
                   onPressed: () => _pick(context),
                 ),
               ),
