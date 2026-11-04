@@ -924,10 +924,13 @@ final class ChatController extends ChangeNotifier {
   /// Runs [send] as the one send of [channelId], with its composer busy until
   /// it ends. Returns false when the channel already has a send on its way, or
   /// when [send] throws, and then [error] holds why.
+  /// Runs [send] while [channelId] shows as sending. A failure is logged with
+  /// its cause, under [what] was being sent.
   Future<bool> _sendingIn(
     String channelId,
-    Future<void> Function() send,
-  ) async {
+    Future<void> Function() send, {
+    String what = 'message',
+  }) async {
     if (!_sendingChannels.add(channelId)) return false;
     notifyListeners();
     try {
@@ -935,6 +938,7 @@ final class ChatController extends ChangeNotifier {
       _error = null;
       return true;
     } catch (error) {
+      AppLog.warning('chat.send', 'Sending a $what failed', error: error);
       _error = error;
       return false;
     } finally {

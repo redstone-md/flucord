@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/app_log.dart';
 import 'package:flucord/src/application/chat_controller.dart';
+import 'package:flucord/src/data/disconnected_chat_repository.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 
@@ -30,6 +32,31 @@ void main() {
       expect(message.body, isEmpty);
       expect(message.attachments.single.durationSecs, 2.4);
       expect(message.attachments.single.waveform, 'AECA/w==');
+    },
+  );
+
+  test(
+    'a transport without voice messages logs why nothing was sent',
+    () async {
+      final log = <String>[];
+      AppLog.redirect = (level, scope, message, error) => log.add(message);
+      addTearDown(() => AppLog.redirect = null);
+      final controller = ChatController(const DisconnectedChatRepository());
+      addTearDown(controller.dispose);
+
+      final sent = await controller.sendVoiceMessage(
+        channelId: 'forge-general',
+        voiceMessage: PendingVoiceMessage(
+          name: 'voice.ogg',
+          path: r'C:\Temp\voice.ogg',
+          size: 2048,
+          durationSecs: 2.4,
+          waveform: 'AECA/w==',
+        ),
+      );
+
+      expect(sent, isFalse);
+      expect(log, [contains('cannot send voice messages')]);
     },
   );
 }

@@ -420,6 +420,7 @@ Map<String, Object?> _slowmodeReady({
       DiscordPermissions.viewChannel |
       DiscordPermissions.sendMessages |
       DiscordPermissions.readMessageHistory |
+      DiscordPermissions.sendVoiceMessages |
       (extraPermissions ?? BigInt.zero);
   return SessionHarness.defaultReady()
     ..['users'] = [

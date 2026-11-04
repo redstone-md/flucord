@@ -607,6 +607,10 @@ are excluded from the denominator and are never reported as implemented.
   attach time (the `SPOILER_` filename convention) and render covered on
   arrival, and a message can be sent to be read aloud or marked silent, both
   flags riding the payload in both directions.
+  A user account sends a voice message the way the official client does: it
+  asks `POST /channels/{id}/attachments` for an upload slot, puts the Ogg file
+  at the slot's URL, then posts the message with flag 8192, the duration and
+  the waveform. The microphone shows only where `SEND_VOICE_MESSAGES` is held.
 - **Tests**: 40+ files under `test/`, including
   `discord_chat_repository_messages_test.dart` and `discord_message_mapper_test.dart`.
 - **Live evidence**: live channel history and message dispatches on Windows

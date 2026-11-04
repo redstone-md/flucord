@@ -641,10 +641,14 @@ class ConversationPaneState extends State<ConversationPane> {
               stickerIds: stickerIds,
             ),
             voiceMessageRecorder: VoiceMessageRecorderScope.maybeOf(context),
-            onSendVoiceMessage: (voiceMessage) => chat.sendVoiceMessage(
-              channelId: channel.id,
-              voiceMessage: voiceMessage,
-            ),
+            onSendVoiceMessage:
+                chat.canSendVoiceMessages &&
+                    widget.capabilities.sendVoiceMessages
+                ? (voiceMessage) => chat.sendVoiceMessage(
+                    channelId: channel.id,
+                    voiceMessage: voiceMessage,
+                  )
+                : null,
             onSend:
                 (
                   body,

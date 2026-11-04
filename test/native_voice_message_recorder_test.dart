@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_voice_message_recorder.dart';
 import 'package:flucord/src/data/voice_message_pcm_capture.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
+import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 void main() {
   test('records PCM into owned Ogg/Opus voice-message metadata', () async {
@@ -48,6 +49,34 @@ void main() {
 
     await recorder.delete(pending);
     expect(await file.exists(), isFalse);
+  });
+
+  test('emits the level of every 20 ms frame as it is recorded', () async {
+    final capture = _FakeCapture();
+    final recorder = NativeVoiceMessageRecorder(
+      _FakeCodecFactory(),
+      capture: capture,
+    );
+    addTearDown(recorder.dispose);
+    final frames = <VoiceMessageRecordingProgress>[];
+    final subscription = recorder.progress.listen(frames.add);
+    addTearDown(subscription.cancel);
+
+    await recorder.start();
+    capture.add(
+      Uint8List.fromList([
+        ..._pcmFrames(1, amplitude: 2048),
+        ..._pcmFrames(1, amplitude: 8192),
+      ]),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await recorder.cancel();
+
+    expect(frames.map((frame) => frame.duration), const [
+      Duration(milliseconds: 20),
+      Duration(milliseconds: 40),
+    ]);
+    expect(frames.map((frame) => frame.level), [0.25, 0.5]);
   });
 
   test('cancel discards an active recording without creating a file', () async {
