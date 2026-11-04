@@ -39,7 +39,7 @@ Map<String, Object?> _ready({String? avatar}) =>
       ];
 
 const _strangerId = '777777777777777777';
-const _suggestedId = '777777777777777778';
+const _suggestedId = '100000000000000088';
 
 final _friendsRow = find.byKey(const ValueKey('toggle-friends'));
 final _page = find.byKey(const ValueKey('friends-panel'));

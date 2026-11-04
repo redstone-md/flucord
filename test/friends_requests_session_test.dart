@@ -239,7 +239,7 @@ void main() {
   );
 }
 
-const _suggestedId = '777777777777777778';
+const _suggestedId = '100000000000000088';
 
 const _suggestion = {
   'suggested_user': {
