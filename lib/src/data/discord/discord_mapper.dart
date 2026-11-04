@@ -25,14 +25,6 @@ part 'discord_channel_mapper.dart';
 
 final class DiscordMapper {
   static const directMessagesSpaceId = CommunitySpace.directMessagesId;
-  static const _colors = [
-    0xff456b5a,
-    0xff765341,
-    0xff5f5b76,
-    0xff59636a,
-    0xff486b70,
-    0xff6f5967,
-  ];
 
   ChatWorkspace workspace({
     required Map<String, Object?> currentUser,
@@ -327,7 +319,7 @@ final class DiscordMapper {
       initials: monogramOf(username),
       role: role,
       presence: presence,
-      colorValue: colorValue ?? _colorFor(id),
+      colorValue: colorValue ?? monogramColorOf(id),
       spaceIds: spaceIds,
       avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
       tags: tags(payload),
@@ -429,7 +421,7 @@ final class DiscordMapper {
       initials: monogramOf(username),
       role: 'Member',
       presence: Presence.offline,
-      colorValue: _colorFor(id),
+      colorValue: monogramColorOf(id),
       spaceIds: {guildId},
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
@@ -525,7 +517,7 @@ final class DiscordMapper {
       id: id,
       name: name,
       monogram: monogramOf(name),
-      colorValue: _colorFor(id),
+      colorValue: monogramColorOf(id),
       iconUrl: DiscordCdn.guildIcon(id, icon),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
@@ -543,12 +535,4 @@ final class DiscordMapper {
   /// joined server exactly like one the session was opened with.
   CommunitySpace spaceFromGuildPayload(Map<String, Object?> payload) =>
       _space(payload);
-
-  static int _colorFor(String id) {
-    var hash = 0;
-    for (final unit in id.codeUnits) {
-      hash = (hash * 31 + unit) & 0x7fffffff;
-    }
-    return _colors[hash % _colors.length];
-  }
 }

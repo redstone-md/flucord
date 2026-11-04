@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/monogram.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -139,6 +140,25 @@ void main() {
       await session.settle();
       expect(card, findsNothing);
     }
+  }, ready: _ready());
+
+  testSession('a friend outside the workspace takes the colour of their id', (
+    tester,
+    session,
+  ) async {
+    await _openDirectMessages(tester, session);
+    await tester.tap(_friendsRow);
+    await session.settle();
+    await tester.tap(find.byKey(const ValueKey('friends-tab-all')));
+    await session.settle();
+
+    await tester.tap(find.byKey(const ValueKey('friend-profile-$_strangerId')));
+    await session.settle();
+
+    final banner = tester.widget<ColoredBox>(
+      find.byKey(const ValueKey('profile-card-banner')),
+    );
+    expect(banner.color, Color(monogramColorOf(_strangerId)));
   }, ready: _ready());
 
   testSession(
