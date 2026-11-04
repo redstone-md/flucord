@@ -3,6 +3,7 @@ import 'package:flucord/src/presentation/widgets/leave_server_dialog.dart';
 import 'package:flucord/src/presentation/widgets/rail_tile.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -110,6 +111,40 @@ void main() {
     expect(
       FlucordRadius.framed.topLeft.x,
       (tile.borderRadius as BorderRadius).topLeft.x + gap,
+    );
+  });
+
+  testWidgets('the name and caption sit in the middle of the tile by eye', (
+    tester,
+  ) async {
+    final card = await openFor(
+      tester,
+      CommunitySpace(
+        id: 'forge',
+        name: 'The Forge',
+        monogram: 'TF',
+        colorValue: 0xff456b5a,
+        memberCount: 3,
+        joinedAt: DateTime(2024, 3, 3, 12),
+      ),
+    );
+
+    final tile = tester.getRect(
+      find.descendant(of: card, matching: find.byType(ClipRRect)).first,
+    );
+    final name = tester.getRect(
+      find.descendant(of: card, matching: find.text('The Forge')),
+    );
+    final caption = tester.getRect(
+      find.descendant(of: card, matching: find.textContaining('members')),
+    );
+    final lift = FlucordType.opticalLift(
+      FlucordTextRole.heading,
+      FlucordTextRole.caption,
+    );
+    expect(
+      (name.top + caption.bottom) / 2,
+      closeTo(tile.center.dy - lift, 0.01),
     );
   });
 }

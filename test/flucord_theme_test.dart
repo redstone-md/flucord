@@ -405,6 +405,32 @@ void main() {
     });
   });
 
+  group('optical lift', () {
+    test('a heading over a caption rises about a pixel beside a picture', () {
+      // Heading 14/20 and caption 12/16 in Golos Text: 5.5 px of room above
+      // the capitals, 3.4 px below the caption's baseline.
+      expect(
+        FlucordType.opticalLift(
+          FlucordTextRole.heading,
+          FlucordTextRole.caption,
+        ),
+        closeTo(1.04, 0.01),
+      );
+    });
+
+    test('bigger text over the same caption rises more', () {
+      expect(
+        FlucordType.opticalLift(FlucordTextRole.title, FlucordTextRole.caption),
+        greaterThan(
+          FlucordType.opticalLift(
+            FlucordTextRole.heading,
+            FlucordTextRole.caption,
+          ),
+        ),
+      );
+    });
+  });
+
   group('the radius scale', () {
     test(
       'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16 and full',

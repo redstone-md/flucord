@@ -80,27 +80,36 @@ class _LeftServerCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  space.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.heading.style.copyWith(
-                    color: surfaces.text,
-                  ),
+            child: Transform.translate(
+              offset: Offset(
+                0,
+                -FlucordType.opticalLift(
+                  FlucordTextRole.heading,
+                  FlucordTextRole.caption,
                 ),
-                if (caption != null)
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    caption,
+                    space.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: FlucordTextRole.caption.style.copyWith(
-                      color: surfaces.captionText,
+                    style: FlucordTextRole.heading.style.copyWith(
+                      color: surfaces.text,
                     ),
                   ),
-              ],
+                  if (caption != null)
+                    Text(
+                      caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        color: surfaces.captionText,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
