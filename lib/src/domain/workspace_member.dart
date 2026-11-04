@@ -309,6 +309,7 @@ final class Member {
 
   Member copyWith({
     String? displayName,
+    String? initials,
     String? role,
     Presence? presence,
     int? colorValue,
@@ -323,7 +324,7 @@ final class Member {
     id: id,
     displayName: displayName ?? this.displayName,
     username: username ?? this.username,
-    initials: initials,
+    initials: initials ?? this.initials,
     role: role ?? this.role,
     presence: presence ?? this.presence,
     colorValue: colorValue ?? this.colorValue,

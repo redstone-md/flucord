@@ -295,9 +295,13 @@ final class DiscordMapper {
     Map<String, Object?> guildMember,
     String guildId,
   ) {
-    final nickname = guildMember['nick'];
+    final nickname = switch (guildMember['nick']) {
+      final String nick when nick.isNotEmpty => nick,
+      _ => null,
+    };
     return mapped.copyWith(
-      displayName: nickname is String && nickname.isNotEmpty ? nickname : null,
+      displayName: nickname,
+      initials: nickname == null ? null : monogramOf(nickname),
       membershipsBySpace: {guildId: membership(guildMember)},
     );
   }
