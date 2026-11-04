@@ -108,6 +108,23 @@ final class CommunityRole {
 
   /// True for the `@everyone` role, which Discord keys by the guild's own id.
   bool get isEveryone => id == spaceId;
+
+  /// Equal when every field matches, so a gateway diff can skip a role that
+  /// did not change.
+  @override
+  bool operator ==(Object other) =>
+      other is CommunityRole &&
+      other.id == id &&
+      other.spaceId == spaceId &&
+      other.name == name &&
+      other.position == position &&
+      other.colorValue == colorValue &&
+      other.hoist == hoist &&
+      other.permissions == permissions;
+
+  @override
+  int get hashCode =>
+      Object.hash(id, spaceId, name, position, colorValue, hoist, permissions);
 }
 
 /// The roles a member holds in one server, highest first.
