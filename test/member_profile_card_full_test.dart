@@ -1,142 +1,85 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/member_profile_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
-import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
-import 'package:flucord/src/theme/flucord_type.dart';
 
 void main() {
-  testWidgets('the popover renders the fetched profile', (tester) async {
-    final profile = _FakeProfileRepository(profile: _fullProfile);
-    final notes = _FakeNotesRepository()..held = {'222': 'met at the offsite'};
+  testWidgets('the card lays the fetched profile over the member', (
+    tester,
+  ) async {
     final controller = MemberProfileController(
-      profileProvider: () => profile,
-      notesProvider: () => notes,
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => _FakeNotesRepository(),
     );
     addTearDown(controller.dispose);
 
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
 
-    // The identity block the roster knows, unchanged.
     expect(find.text('Mira Chen'), findsOneWidget);
-    // The fetched sections.
-    expect(find.byKey(const ValueKey('full-profile-sections')), findsOne);
+    expect(find.text('mira · she/her'), findsOneWidget);
     expect(find.text('ships the parser'), findsOne);
-    expect(find.text('she/her'), findsOne);
-    expect(find.byKey(const ValueKey('profile-badges')), findsOne);
-    expect(find.byKey(const ValueKey('profile-connections')), findsOne);
-    expect(find.byKey(const ValueKey('profile-mutual-servers')), findsOne);
-    expect(find.byKey(const ValueKey('profile-mutual-friends')), findsOne);
-    // The note the account already holds is prefilled.
+    expect(find.byKey(const ValueKey('profile-card-badges')), findsOne);
+    expect(find.text('1 mutual friend · 1 mutual server'), findsOne);
+    expect(find.byKey(const ValueKey('profile-card-banner-image')), findsOne);
+    expect(find.byKey(const ValueKey('profile-card-decoration')), findsOne);
+  });
+
+  testWidgets('opening the card fetches the profile', (tester) async {
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => _FakeNotesRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpCard(tester, controller);
+
+    expect(controller.openUserId, _member.id);
+  });
+
+  testWidgets('a note can be edited and saved from the card', (tester) async {
+    final notes = _FakeNotesRepository()..held = {_member.id: 'offsite'};
+    final controller = MemberProfileController(
+      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
+      notesProvider: () => notes,
+    );
+    addTearDown(controller.dispose);
+    await _pumpCard(tester, controller);
+    await _openNote(tester);
+
     expect(
       tester
           .widget<TextField>(find.byKey(const ValueKey('profile-note-field')))
           .controller
           ?.text,
-      'met at the offsite',
+      'offsite',
     );
-  });
-
-  testWidgets('a mutual server is listed by its name, not its id', (
-    tester,
-  ) async {
-    final controller = MemberProfileController(
-      profileProvider: () => _FakeProfileRepository(
-        profile: const OtherUserProfile(
-          userId: '222222222222222222',
-          mutualServers: [
-            MutualServer(id: '666666666666666666', nickname: 'mira-dev'),
-            MutualServer(id: '777777777777777777'),
-          ],
-        ),
-      ),
-      notesProvider: () => _FakeNotesRepository(),
-      serverNameOf: (id) => id == '666666666666666666' ? 'Flucord Dev' : null,
-    );
-    addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
-
-    final servers = find.byKey(const ValueKey('profile-mutual-servers'));
-    expect(
-      find.descendant(of: servers, matching: find.text('Flucord Dev')),
-      findsOne,
-    );
-    // A server the workspace has not loaded still reads as words.
-    expect(
-      find.descendant(of: servers, matching: find.text('Unknown server')),
-      findsOne,
-    );
-    expect(find.textContaining('666666666666666666'), findsNothing);
-    expect(find.textContaining('777777777777777777'), findsNothing);
-  });
-
-  testWidgets('headings are captions in the caption tier, values labels', (
-    tester,
-  ) async {
-    final controller = MemberProfileController(
-      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
-      notesProvider: () => _FakeNotesRepository(),
-      serverNameOf: (_) => 'Flucord Dev',
-    );
-    addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
-    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
-    TextStyle styleOf(String text) =>
-        tester.renderObject<RenderParagraph>(find.text(text)).text.style!;
-
-    for (final heading in ['ROLE', 'MUTUAL SERVERS', 'NOTE', 'USER ID']) {
-      expect(styleOf(heading).fontSize, FlucordTextRole.caption.size);
-      expect(styleOf(heading).color, surfaces.captionText);
-    }
-    for (final value in ['Product design', 'Flucord Dev', 'Roman Vale']) {
-      expect(styleOf(value).fontSize, FlucordTextRole.label.size);
-    }
-  });
-
-  testWidgets('a note can be edited and saved from the popover', (
-    tester,
-  ) async {
-    final notes = _FakeNotesRepository()..held = {'222': 'met at the offsite'};
-    final controller = MemberProfileController(
-      profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
-      notesProvider: () => notes,
-    );
-    addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
-
     await tester.enterText(
       find.byKey(const ValueKey('profile-note-field')),
       'sends the Thursday digest',
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('profile-note-save')), findsOne);
-
     await tester.tap(find.byKey(const ValueKey('profile-note-save')));
     await tester.pumpAndSettle();
 
-    expect(notes.written.single, ('222', 'sends the Thursday digest'));
+    expect(notes.written.single, (_member.id, 'sends the Thursday digest'));
     expect(find.byKey(const ValueKey('profile-note-save')), findsNothing);
   });
 
   testWidgets('a blank save removes the note', (tester) async {
-    final notes = _FakeNotesRepository()..held = {'222': 'stale context'};
+    final notes = _FakeNotesRepository()..held = {_member.id: 'stale'};
     final controller = MemberProfileController(
       profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
       notesProvider: () => notes,
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
+    await _openNote(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('profile-note-field')),
@@ -146,21 +89,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('profile-note-save')));
     await tester.pumpAndSettle();
 
-    expect(notes.written.single, ('222', null));
+    expect(notes.written.single, (_member.id, null));
     expect(notes.held, isEmpty);
   });
 
   testWidgets('a refused save says so and keeps the text', (tester) async {
-    final notes = _FakeNotesRepository()
-      ..held = {}
-      ..refuse = true;
+    final notes = _FakeNotesRepository()..refuse = true;
     final controller = MemberProfileController(
       profileProvider: () => _FakeProfileRepository(profile: _fullProfile),
       notesProvider: () => notes,
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
+    await _openNote(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('profile-note-field')),
@@ -174,9 +115,7 @@ void main() {
     expect(find.text('the account holds too many notes'), findsOne);
   });
 
-  testWidgets('a bare profile shows the identity block and the note only', (
-    tester,
-  ) async {
+  testWidgets('a bare profile hides what it did not fill', (tester) async {
     final controller = MemberProfileController(
       profileProvider: () => _FakeProfileRepository(
         profile: const OtherUserProfile(userId: '222222222222222222'),
@@ -184,71 +123,51 @@ void main() {
       notesProvider: () => _FakeNotesRepository(),
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
 
     expect(find.text('Mira Chen'), findsOneWidget);
-    // No bio, no badges, no mutuals: nothing but the note section, which the
-    // account always owns.
-    expect(find.byKey(const ValueKey('profile-badges')), findsNothing);
-    expect(find.byKey(const ValueKey('profile-connections')), findsNothing);
-    expect(find.byKey(const ValueKey('profile-mutual-servers')), findsNothing);
-    expect(find.byKey(const ValueKey('profile-mutual-friends')), findsNothing);
-    expect(find.byKey(const ValueKey('profile-note-section')), findsOne);
+    expect(find.byKey(const ValueKey('profile-card-badges')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card-mutual')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card-bio')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('profile-card-banner-image')),
+      findsNothing,
+    );
   });
 
-  testWidgets('a refused fetch keeps the popover useful', (tester) async {
+  testWidgets('a refused fetch keeps the card useful', (tester) async {
     final controller = MemberProfileController(
       profileProvider: () => _FakeProfileRepository(profile: null),
       notesProvider: () => _FakeNotesRepository(),
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
 
-    // The roster facts still render; the fetched sections are simply absent.
     expect(find.text('Mira Chen'), findsOneWidget);
-    expect(find.byKey(const ValueKey('full-profile-sections')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('no profile controller draws the identity block alone', (
-    tester,
-  ) async {
-    await _pumpPopover(tester, null);
-
-    expect(find.text('Mira Chen'), findsOneWidget);
-    expect(find.byKey(const ValueKey('profile-note-section')), findsNothing);
-  });
-
-  testWidgets('the note field is disabled with no account behind it', (
-    tester,
-  ) async {
+  testWidgets('with no account behind it there is no note', (tester) async {
     final controller = MemberProfileController(
       profileProvider: () => null,
       notesProvider: () => null,
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
 
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const ValueKey('profile-note-field')))
-          .enabled,
-      isFalse,
-    );
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('copy-member-id')), findsOne);
+    expect(find.byKey(const ValueKey('profile-card-note')), findsNothing);
   });
 
-  testWidgets('a profile carrying many badges wraps them, not overflows', (
+  testWidgets('many badges show three and a count, without overflow', (
     tester,
   ) async {
     final controller = MemberProfileController(
       profileProvider: () => _FakeProfileRepository(
         profile: OtherUserProfile(
           userId: '222222222222222222',
-          username: 'mira',
-          displayName: 'Mira Chen',
           badges: [
             for (var index = 0; index < 20; index++)
               ProfileBadge(
@@ -262,21 +181,25 @@ void main() {
       notesProvider: () => _FakeNotesRepository(),
     );
     addTearDown(controller.dispose);
-    await controller.open('222');
-    await _pumpPopover(tester, controller);
+    await _pumpCard(tester, controller);
 
-    expect(find.byKey(const ValueKey('profile-badges')), findsOne);
+    expect(find.text('+17'), findsOne);
     expect(tester.takeException(), isNull);
   });
 }
 
-Future<void> _pumpPopover(
+Future<void> _openNote(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('profile-card-note')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpCard(
   WidgetTester tester,
-  MemberProfileController? controller,
+  MemberProfileController controller,
 ) async {
-  // Tall enough that the whole popover, note section included, is on
-  // screen: a control scrolled out of the viewport cannot be tapped.
-  tester.view.physicalSize = const Size(1200, 2600);
+  tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
@@ -284,18 +207,16 @@ Future<void> _pumpPopover(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: Center(
-          child: MemberProfilePopover(
+          child: MemberProfileCard(
             member: _member,
             spaceId: 'guild-1',
-            canMessage: true,
-            onMessage: () {},
             profile: controller,
           ),
         ),
       ),
     ),
   );
-  await tester.pump();
+  await tester.pumpAndSettle();
 }
 
 const _member = Member(

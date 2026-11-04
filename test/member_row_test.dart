@@ -63,8 +63,6 @@ Future<void> _pump(
           MemberSidebar(
             members: [member],
             spaceId: _guild,
-            currentMemberId: 'me',
-            onMessage: (_) {},
             seatedByChannel: seats,
             nameColorOf: nameColorOf,
           ),

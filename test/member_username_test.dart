@@ -182,35 +182,34 @@ void main() {
     expect(updated.single.username, 'freezz5126');
   });
 
-  testSession(
-    'a presence with a whole user brings the username',
-    (tester, session) async {
-      await session.openChannel(
-        SessionHarness.dmChannelId,
-        space: 'direct-messages',
-      );
-      final panel = find.byKey(const ValueKey('dm-profile-panel'));
-      Finder inPanel(String text) =>
-          find.descendant(of: panel, matching: find.text(text));
-      expect(inPanel('friend'), findsOneWidget);
+  testSession('a presence with a whole user brings the username', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(
+      SessionHarness.dmChannelId,
+      space: 'direct-messages',
+    );
+    final panel = find.byKey(const ValueKey('dm-profile-panel'));
+    Finder inPanel(String text) =>
+        find.descendant(of: panel, matching: find.text(text));
+    expect(inPanel('friend'), findsOneWidget);
 
-      await session.dispatch('PRESENCE_UPDATE', {
-        'status': 'online',
-        'activities': <Object?>[],
-        'user': {'id': SessionHarness.friendId, 'username': 'renamed'},
-      });
-      expect(inPanel('renamed'), findsOneWidget);
+    await session.dispatch('PRESENCE_UPDATE', {
+      'status': 'online',
+      'activities': <Object?>[],
+      'user': {'id': SessionHarness.friendId, 'username': 'renamed'},
+    });
+    expect(inPanel('renamed'), findsOneWidget);
 
-      // A presence that names the user by id alone keeps it.
-      await session.dispatch('PRESENCE_UPDATE', {
-        'status': 'idle',
-        'activities': <Object?>[],
-        'user': {'id': SessionHarness.friendId},
-      });
-      expect(inPanel('renamed'), findsOneWidget);
-    },
-    size: const Size(1280, 720),
-  );
+    // A presence that names the user by id alone keeps it.
+    await session.dispatch('PRESENCE_UPDATE', {
+      'status': 'idle',
+      'activities': <Object?>[],
+      'user': {'id': SessionHarness.friendId},
+    });
+    expect(inPanel('renamed'), findsOneWidget);
+  }, size: const Size(1280, 720));
 }
 
 const _v25Members = '''

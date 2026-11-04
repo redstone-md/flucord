@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../domain/user_profile.dart';
+import 'discord_cdn.dart';
 
 /// The REST surface a profile edit needs.
 abstract interface class DiscordUserProfileTransport {
@@ -177,6 +178,11 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
                   ? _text(friend['global_name'])
                   : _text(friend['username']),
               username: _nullableText(friend['username']),
+              avatarUrl: DiscordCdn.userAvatar(
+                _text(friend['id']),
+                _nullableText(friend['avatar']),
+                size: 32,
+              ),
             ),
       ],
     );

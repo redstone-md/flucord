@@ -4,7 +4,7 @@ import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
-import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/guild_settings_fixtures.dart';
@@ -35,18 +35,22 @@ void main() {
     expect(find.byKey(const ValueKey('new-direct-message')), findsOneWidget);
   });
 
-  testWidgets('the profile popover offers report and block when it can', (
+  testWidgets('the profile card offers report and block when it can', (
     tester,
   ) async {
     var reported = 0;
     var blocked = 0;
-    await _pumpPopover(
+    await _pumpCard(
       tester,
       onReport: () => reported++,
       onBlock: () => blocked++,
     );
-    await tester.tap(find.byKey(const ValueKey('report-member')));
-    await tester.tap(find.byKey(const ValueKey('block-member')));
+    for (final action in ['report-member', 'block-member']) {
+      await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey(action)));
+      await tester.pumpAndSettle();
+    }
     expect(reported, 1);
     expect(blocked, 1);
   });
@@ -54,19 +58,21 @@ void main() {
   testWidgets('a transport with no safety plane offers neither', (
     tester,
   ) async {
-    await _pumpPopover(tester);
+    await _pumpCard(tester);
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('report-member')), findsNothing);
     expect(find.byKey(const ValueKey('block-member')), findsNothing);
-    expect(find.byKey(const ValueKey('message-member')), findsOneWidget);
+    expect(find.byKey(const ValueKey('copy-member-id')), findsOneWidget);
   });
 
-  testWidgets('the popover keeps its actions in a narrow window', (
-    tester,
-  ) async {
+  testWidgets('the card keeps its actions in a narrow window', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 620));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await _pumpPopover(tester, onReport: () {}, onBlock: () {});
+    await _pumpCard(tester, onReport: () {}, onBlock: () {});
     expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('report-member')), findsOneWidget);
   });
 }
@@ -102,7 +108,7 @@ Future<void> _pumpSidebar(
   );
 }
 
-Future<void> _pumpPopover(
+Future<void> _pumpCard(
   WidgetTester tester, {
   VoidCallback? onReport,
   VoidCallback? onBlock,
@@ -113,11 +119,9 @@ Future<void> _pumpPopover(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: Center(
-          child: MemberProfilePopover(
+          child: MemberProfileCard(
             member: workspace.memberById(lowMemberId),
             spaceId: guildId,
-            canMessage: true,
-            onMessage: () {},
             onReport: onReport,
             onBlock: onBlock,
           ),

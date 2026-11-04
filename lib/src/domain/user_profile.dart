@@ -282,13 +282,14 @@ final class MutualServer {
 
 /// A friend both this account and the profile's user share.
 ///
-/// Only enough of the user object to draw a row: the id, and whichever name
-/// Discord's response carries.
+/// Only enough of the user object to draw a face: the id, the avatar, and
+/// whichever name Discord's response carries.
 final class MutualFriend {
   const MutualFriend({
     required this.id,
     required this.displayName,
     this.username,
+    this.avatarUrl,
   });
 
   final String id;
@@ -296,16 +297,18 @@ final class MutualFriend {
 
   /// The handle, or null when the response carried none.
   final String? username;
+  final String? avatarUrl;
 
   @override
   bool operator ==(Object other) =>
       other is MutualFriend &&
       other.id == id &&
       other.displayName == displayName &&
-      other.username == username;
+      other.username == username &&
+      other.avatarUrl == avatarUrl;
 
   @override
-  int get hashCode => Object.hash(id, displayName, username);
+  int get hashCode => Object.hash(id, displayName, username, avatarUrl);
 }
 
 /// Somebody else's profile, as the other-user profile route reports it.

@@ -97,7 +97,7 @@ void main() {
               collapsedCategoryIds: controller.collapsedCategoryIds,
               onToggleCategory: controller.toggleCategory,
               onNewDirectMessage: () {},
-              onOpenMemberProfile: opened.add,
+              onOpenMemberProfile: (userId, _) => opened.add(userId),
               seatedByChannel: const {
                 'the-lodge': [
                   VoiceParticipantStateEvent(
