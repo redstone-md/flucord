@@ -797,6 +797,8 @@ final class SqliteChatCache
       member.avatarUrlsBySpace,
     ),
     'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
+    'is_bot': member.isBot ? 1 : 0,
+    'clan_tag_json': ChatModelJson.clanTag(member.clanTag),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -817,6 +819,8 @@ final class SqliteChatCache
     membershipsBySpace: ChatModelJson.membershipsFrom(
       row['memberships_json'] as String?,
     ),
+    isBot: row['is_bot'] == 1,
+    clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
   );
 
   /// Every table is found by name, so a table added later cannot be missed.

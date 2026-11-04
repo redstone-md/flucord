@@ -71,6 +71,32 @@ final class DirectConversation {
   final Member recipient;
 }
 
+/// A server's tag that a user shows beside their name, such as "CODE".
+///
+/// Discord calls it the user's primary guild. Only a tag the user shows is
+/// kept: a tag they turned off reads as no tag at all.
+final class ClanTag {
+  const ClanTag({required this.tag, required this.guildId, this.badgeUrl});
+
+  final String tag;
+
+  /// The server the tag belongs to.
+  final String guildId;
+
+  /// The server's small badge picture, or null when it has none.
+  final String? badgeUrl;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ClanTag &&
+      other.tag == tag &&
+      other.guildId == guildId &&
+      other.badgeUrl == badgeUrl;
+
+  @override
+  int get hashCode => Object.hash(tag, guildId, badgeUrl);
+}
+
 final class Member {
   const Member({
     required this.id,
@@ -85,6 +111,8 @@ final class Member {
     this.avatarUrlsBySpace = const {},
     this.membershipsBySpace = const {},
     this.presenceDetail,
+    this.isBot = false,
+    this.clanTag,
   });
 
   final String id;
@@ -111,6 +139,12 @@ final class Member {
   /// Discord reported the user as offline. Only the second may be cached.
   final UserPresence? presenceDetail;
 
+  /// Whether this user is an application, which Discord marks with APP.
+  final bool isBot;
+
+  /// The server tag shown beside the name, or null for none.
+  final ClanTag? clanTag;
+
   /// The presence a row should render, falling back to the coarse status the
   /// member cache persists.
   UserPresence get presenceOrCoarse =>
@@ -132,6 +166,8 @@ final class Member {
     Map<String, String>? avatarUrlsBySpace,
     Map<String, GuildMembership>? membershipsBySpace,
     UserPresence? presenceDetail,
+    bool? isBot,
+    ClanTag? clanTag,
   }) => Member(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -145,6 +181,8 @@ final class Member {
     avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
     membershipsBySpace: membershipsBySpace ?? this.membershipsBySpace,
     presenceDetail: presenceDetail ?? this.presenceDetail,
+    isBot: isBot ?? this.isBot,
+    clanTag: clanTag ?? this.clanTag,
   );
 
   /// This member with [spaceId] gone, or null when nothing of them is left.
@@ -184,6 +222,8 @@ final class Member {
     avatarUrlsBySpace: avatarUrlsBySpace,
     membershipsBySpace: membershipsBySpace,
     presenceDetail: presence,
+    isBot: isBot,
+    clanTag: clanTag,
   );
 
   /// Whether [withPresence] would change nothing.
@@ -201,6 +241,8 @@ final class Member {
       other.colorValue == colorValue &&
       other.avatarUrl == avatarUrl &&
       other.presenceDetail == presenceDetail &&
+      other.isBot == isBot &&
+      other.clanTag == clanTag &&
       const SetEquality<String>().equals(other.spaceIds, spaceIds) &&
       const MapEquality<String, String>().equals(
         other.rolesBySpace,
