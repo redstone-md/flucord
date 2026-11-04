@@ -140,7 +140,9 @@ void main() {
       );
 
       final merged = known.upsertMember(
-        mapper.member(_user({'collectibles': null, 'display_name_styles': null})),
+        mapper.member(
+          _user({'collectibles': null, 'display_name_styles': null}),
+        ),
       );
       final tags = merged.memberOrNull(_userId)!.tags;
 
@@ -150,7 +152,11 @@ void main() {
 
     test('collectibles without a nameplate clear the nameplate', () {
       final known = _workspaceWith(
-        mapper.member(_user({'collectibles': {'nameplate': _twilight}})),
+        mapper.member(
+          _user({
+            'collectibles': {'nameplate': _twilight},
+          }),
+        ),
       );
 
       final merged = known.upsertMember(
@@ -162,7 +168,9 @@ void main() {
 
     test('a presence user with a username carries them as identity', () {
       final identity = mapper.identity(
-        _user({'collectibles': {'nameplate': _twilight}}),
+        _user({
+          'collectibles': {'nameplate': _twilight},
+        }),
       )!;
 
       final updated = _freez(MemberTags.none).withIdentity(identity);

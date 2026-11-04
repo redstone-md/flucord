@@ -22,12 +22,7 @@ enum DisplayNameFont {
     letterSpacing: 0.01,
   ),
   eightBit(8, family: 'Pixelify Sans', letterSpacing: 0.02),
-  tempo(
-    12,
-    family: 'Zilla Slab',
-    weight: FontWeight.w600,
-    letterSpacing: 0.03,
-  ),
+  tempo(12, family: 'Zilla Slab', weight: FontWeight.w600, letterSpacing: 0.03),
   monkeyBars(13, family: 'Playpen Sans', weight: FontWeight.w700),
   mainframe(
     14,
