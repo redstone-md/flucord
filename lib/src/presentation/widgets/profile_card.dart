@@ -32,6 +32,7 @@ import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'profile_card_route.dart';
+import 'profile_theme.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 import 'service_logo.dart';
@@ -163,7 +164,12 @@ class ProfileCard extends StatelessWidget {
   final bool _preview;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ProfileTheme(
+    colors: data.themeColors,
+    child: Builder(builder: _buildCard),
+  );
+
+  Widget _buildCard(BuildContext context) {
     final surfaces = context.surfaces;
     final roles = data.roles;
     final showsRoles =
@@ -179,8 +185,9 @@ class ProfileCard extends StatelessWidget {
         namesRoute: opensAsRoute,
         explicitChildNodes: true,
         label: '${data.displayName} profile',
-        child: Material(
+        child: _CardSurface(
           key: const ValueKey('profile-card'),
+          theme: data.themeColors,
           color: surfaces.raised,
           elevation: _preview ? 0 : 12,
           shadowColor: FlucordFixedColors.shadow,
@@ -262,6 +269,44 @@ class ProfileCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The card's frame: a [Material] that paints the profile's gradient, where
+/// it has one, under [child].
+class _CardSurface extends StatelessWidget {
+  const _CardSurface({
+    required this.theme,
+    required this.color,
+    required this.elevation,
+    required this.shadowColor,
+    required this.clipBehavior,
+    required this.shape,
+    required this.child,
+    super.key,
+  });
+
+  final ProfileThemeColors? theme;
+  final Color color;
+  final double elevation;
+  final Color shadowColor;
+  final Clip clipBehavior;
+  final ShapeBorder shape;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: color,
+    elevation: elevation,
+    shadowColor: shadowColor,
+    clipBehavior: clipBehavior,
+    shape: shape,
+    child: ProfileBackdrop(
+      key: const ValueKey('profile-card-theme'),
+      color: null,
+      colors: theme,
+      child: child,
+    ),
+  );
 }
 
 /// What differs between the card and the window: the sizes of the banner

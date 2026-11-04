@@ -79,10 +79,13 @@ class FullProfile extends StatelessWidget {
                 ),
                 child: SizedBox(
                   width: _cardWidth,
-                  child: _FullProfileCard(
-                    data: data,
-                    actions: actions,
-                    note: note,
+                  child: ProfileTheme(
+                    colors: data.themeColors,
+                    child: _FullProfileCard(
+                      data: data,
+                      actions: actions,
+                      note: note,
+                    ),
                   ),
                 ),
               ),
@@ -130,8 +133,10 @@ class _FullProfileCard extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(
         top: FlucordRadius.overlayCorner,
       ),
-      child: ColoredBox(
+      child: ProfileBackdrop(
+        key: const ValueKey('full-profile-theme'),
         color: surfaces.inset,
+        colors: data.themeColors,
         child: SingleChildScrollView(
           key: const ValueKey('full-profile-card-scroll'),
           child: SelectionArea(

@@ -38,6 +38,7 @@ final class ProfileCardData {
     this.presence,
     this.bannerUrl,
     this.accentColorValue,
+    this.themeColors,
     this.pronouns = '',
     this.clanTag,
     this.nameStyle,
@@ -98,6 +99,7 @@ final class ProfileCardData {
         final rgb? => DiscordRgb(rgb).opaque,
         null => member.colorValue,
       },
+      themeColors: profile?.effectiveThemeColors,
       pronouns: profile?.effectivePronouns ?? '',
       clanTag: tags.clanTag,
       nameStyle: tags.nameStyle,
@@ -163,6 +165,7 @@ final class ProfileCardData {
     required String pronouns,
     required String bio,
     required int? accentColor,
+    required ProfileThemeColors? themeColors,
     required String? avatarUrl,
     required String? bannerUrl,
     UserPresence? presence,
@@ -181,6 +184,7 @@ final class ProfileCardData {
       accentColorValue: accentColor == null
           ? null
           : DiscordRgb(accentColor).opaque,
+      themeColors: themeColors,
       pronouns: pronouns,
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),
@@ -205,6 +209,10 @@ final class ProfileCardData {
 
   /// The banner's colour where there is no banner image.
   final int? accentColorValue;
+
+  /// The person's Nitro theme, which paints the card. Null keeps the app's
+  /// own colours.
+  final ProfileThemeColors? themeColors;
   final String pronouns;
   final ClanTag? clanTag;
 

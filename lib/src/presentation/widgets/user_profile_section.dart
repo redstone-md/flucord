@@ -138,6 +138,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
       pronouns: controller.pronouns,
       bio: controller.bio,
       accentColor: controller.accentColor,
+      themeColors: controller.themeColors,
       avatarUrl: avatarUrl,
       bannerUrl: _image(
         controller.pendingBanner,
@@ -235,10 +236,14 @@ class _UserProfileSectionState extends State<UserProfileSection> {
           onChanged: controller.editBio,
         ),
         const SizedBox(height: 4),
-        ProfileAccentPicker(
+        ProfileColourPicker(
+          label: 'Accent colour',
+          keyPrefix: 'profile-accent',
           value: controller.accentColor,
           onChanged: controller.editAccentColor,
         ),
+        const SizedBox(height: 12),
+        ..._themePickers(),
         const SizedBox(height: 8),
         ProfileIdentityFacts(profile: profile),
         if (controller.error != null)
@@ -267,6 +272,36 @@ class _UserProfileSectionState extends State<UserProfileSection> {
           ),
       ],
     );
+  }
+
+  /// The theme's primary and accent. Discord takes both or neither, so the
+  /// first pick fills both and "none" on either removes the theme.
+  List<Widget> _themePickers() {
+    final controller = widget.controller;
+    final theme = controller.themeColors;
+    void edit(int? colour, ProfileThemeColors Function(int) withColour) =>
+        controller.editThemeColors(colour == null ? null : withColour(colour));
+    return [
+      ProfileColourPicker(
+        label: 'Theme primary colour',
+        keyPrefix: 'profile-theme-primary',
+        value: theme?.primary,
+        onChanged: (colour) => edit(
+          colour,
+          (primary) => ProfileThemeColors(primary, theme?.accent ?? primary),
+        ),
+      ),
+      const SizedBox(height: 12),
+      ProfileColourPicker(
+        label: 'Theme accent colour',
+        keyPrefix: 'profile-theme-accent',
+        value: theme?.accent,
+        onChanged: (colour) => edit(
+          colour,
+          (accent) => ProfileThemeColors(theme?.primary ?? accent, accent),
+        ),
+      ),
+    ];
   }
 
   Future<void> _pick(void Function(String dataUri) stage) async {

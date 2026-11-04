@@ -504,6 +504,11 @@ final class _FakeTransport implements DiscordUserProfileTransport {
     return _user();
   }
 
+  @override
+  Future<Map<String, Object?>> patchCurrentProfile(
+    Map<String, Object?> body,
+  ) async => body;
+
   Map<String, Object?> _user() => {
     'id': '123456789012345678',
     'username': 'rxflex',

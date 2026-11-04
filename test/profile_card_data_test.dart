@@ -24,6 +24,7 @@ void main() {
       pronouns: '',
       bio: '',
       accentColor: null,
+      themeColors: null,
       avatarUrl: null,
       bannerUrl: null,
     );
