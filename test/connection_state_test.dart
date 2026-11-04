@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/session_harness.dart';
 
 const _reconnecting = 'Connection lost. Reconnecting...';
@@ -71,6 +73,13 @@ void main() {
       await session.settle();
 
       expect(find.text(_offline), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('connection-banner')),
+          matching: findFlucordIcon(FlucordIcons.offline),
+        ),
+        findsOneWidget,
+      );
       expect(find.byTooltip('Not connected to Discord'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('connection-banner-retry')));
