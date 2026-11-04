@@ -14,6 +14,8 @@ import 'presentation/widgets/attachment_download_scope.dart';
 import 'presentation/widgets/chat_scope.dart';
 import 'presentation/widgets/guild_access_scope.dart';
 import 'presentation/widgets/join_server_dialog.dart';
+import 'presentation/widgets/media_kit_nameplate_videos.dart';
+import 'presentation/widgets/name_style_scope.dart';
 import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_desktop_login_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
@@ -120,7 +122,11 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _composition.accessibility,
           child: AccessibilityDials(
             controller: _composition.accessibility,
-            child: child!,
+            child: NameStyleScope(
+              videos: const MediaKitNameplateVideos(),
+              fonts: _composition.nameFonts,
+              child: child!,
+            ),
           ),
         ),
         home: SpellCheckScope(

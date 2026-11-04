@@ -167,6 +167,14 @@ void main() {
     expect(DiscordCdn.nameplate(''), isNull);
   });
 
+  test('the moving nameplate sits next to the still one', () {
+    expect(
+      DiscordCdn.movingNameplate('nameplates/nameplates/twilight'),
+      'https://cdn.discordapp.com/assets/collectibles/nameplates/nameplates/twilight/asset.webm',
+    );
+    expect(DiscordCdn.movingNameplate(''), isNull);
+  });
+
   group('the cache', () {
     test('keeps the nameplate and the name style', () async {
       final cache = await SqliteChatCache.openAt(

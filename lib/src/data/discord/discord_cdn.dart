@@ -61,14 +61,20 @@ final class DiscordCdn {
   /// docs (discord-userdoccers, reference.mdx "CDN Formatting": valid names
   /// are `img.png`, `static.png` and `asset.webm`, and `size` is ignored) and
   /// in two maintained libraries: Pycord's `Asset._from_collectible` and
-  /// Kord's `DiscordCdn.staticNameplate`. `asset.webm` is the moving one,
-  /// which this client does not play.
-  static String? nameplate(String asset) => asset.isEmpty
+  /// Kord's `DiscordCdn.staticNameplate`.
+  static String? nameplate(String asset) => _collectible(asset, 'static.png');
+
+  /// The moving nameplate, `asset.webm` beside the still picture (the same
+  /// sources as [nameplate]).
+  static String? movingNameplate(String asset) =>
+      _collectible(asset, 'asset.webm');
+
+  static String? _collectible(String asset, String file) => asset.isEmpty
       ? null
       : Uri.https(
           'cdn.discordapp.com',
           '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}'
-              'static.png',
+              '$file',
         ).toString();
 
   static String? guildMemberAvatar(

@@ -50,6 +50,7 @@ import 'application/oauth_guild_membership_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/room_focus.dart';
 import 'application/game_detection_controller.dart';
+import 'data/discord/display_name_fonts.dart';
 import 'data/discord_rpc/discord_rpc_server.dart';
 import 'application/self_presence_controller.dart';
 import 'application/self_video_controller.dart';
@@ -160,6 +161,9 @@ final class AppComposition {
   /// its own to find a messenger through.
   final GlobalKey<ScaffoldMessengerState> messengerKey =
       GlobalKey<ScaffoldMessengerState>();
+
+  /// Discord's name fonts, loaded once per run however often names rebuild.
+  final DisplayNameFonts nameFonts = DisplayNameFonts();
 
   /// Teardown for every constructed part, in construction order;
   /// [dispose] walks it backwards.

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_radius.dart';
+import 'name_style_scope.dart';
+import 'nameplate_motion.dart';
 
 /// The list a nameplate stands in.
 enum NameplatePlacement { memberList, directMessages }
@@ -102,8 +104,10 @@ extension on NameplatePalette {
 /// over the 50 px after it (the web client's mask in chunk 351952), so the
 /// text stays readable.
 ///
-/// Only the still picture is drawn. Discord's moving one is a webm, and
-/// playing a video per row costs far more than a picture.
+/// Under the pointer the moving nameplate plays over the still picture,
+/// through the [NameplateMotion] of the [NameStyleScope] above, which plays
+/// one at a time. It does not play under reduced motion, or before the still
+/// picture has shown, so a picture that failed stays a blank.
 class NameplateBackdrop extends StatefulWidget {
   const NameplateBackdrop({
     required this.nameplate,
@@ -129,9 +133,59 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
   final _textKey = GlobalKey(debugLabel: 'nameplate text');
   bool _hovered = false;
 
+  /// Whether the still picture has drawn. Set while building it.
+  bool _stillShown = false;
+  NameplateMotion? _motion;
+
+  bool get _stillOnly => MediaQuery.disableAnimationsOf(context);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final motion = NameStyleScope.motionOf(context);
+    if (motion != _motion) {
+      _motion?.removeListener(_redraw);
+      _motion?.stop(this);
+      _motion = motion?..addListener(_redraw);
+    }
+    if (_stillOnly) _motion?.stop(this);
+  }
+
+  @override
+  void didUpdateWidget(NameplateBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nameplate.asset != widget.nameplate.asset) {
+      _stillShown = false;
+      _motion?.stop(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    _motion?.removeListener(_redraw);
+    _motion?.stop(this);
+    super.dispose();
+  }
+
+  void _redraw() => setState(() {});
+
+  void _enter() {
+    final moving = DiscordCdn.movingNameplate(widget.nameplate.asset);
+    if (_stillShown && !_stillOnly && moving != null) {
+      _motion?.play(this, moving);
+    }
+    setState(() => _hovered = true);
+  }
+
+  void _exit() {
+    _motion?.stop(this);
+    setState(() => _hovered = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = DiscordCdn.nameplate(widget.nameplate.asset);
+    final video = _stillOnly ? null : _motion?.videoFor(this);
     final palette = widget.nameplate.palette;
     final wash = palette == null
         ? null
@@ -142,10 +196,9 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
             hovered: _hovered,
             selected: widget.selected,
           );
-    final washesOnHover = widget.placement == NameplatePlacement.memberList;
     return MouseRegion(
-      onEnter: washesOnHover ? (_) => setState(() => _hovered = true) : null,
-      onExit: washesOnHover ? (_) => setState(() => _hovered = false) : null,
+      onEnter: (_) => _enter(),
+      onExit: (_) => _exit(),
       child: Stack(
         children: [
           Positioned.fill(
@@ -170,12 +223,25 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
                           width:
                               constraints.maxHeight *
                               NameplateBackdrop._aspectRatio,
-                          child: Image.network(
-                            url,
-                            fit: BoxFit.cover,
-                            filterQuality: FilterQuality.medium,
-                            excludeFromSemantics: true,
-                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                filterQuality: FilterQuality.medium,
+                                excludeFromSemantics: true,
+                                frameBuilder: (_, child, frame, synchronous) {
+                                  _stillShown = frame != null || synchronous;
+                                  return child;
+                                },
+                                errorBuilder: (_, _, _) {
+                                  _stillShown = false;
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                              ?video?.view(),
+                            ],
                           ),
                         ),
                     ],
