@@ -1,5 +1,6 @@
 import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_discord_wire.dart';
@@ -182,6 +183,67 @@ void main() {
       userEffect: {'id': _sakuraId},
       serverEffect: {'id': _lanternId, 'expires_at': _later},
     ),
+  );
+
+  testSession(
+    'reads the catalogue once for the session',
+    (tester, session) async {
+      await _openCard(tester, session);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await session.settle();
+
+      await session.openChannel(
+        SessionHarness.dmChannelId,
+        space: 'direct-messages',
+      );
+      await session.dispatch(
+        'MESSAGE_CREATE',
+        rawMessage(
+          id: '900000000000000072',
+          channelId: SessionHarness.dmChannelId,
+          authorId: SessionHarness.friendId,
+          content: 'hi',
+        ),
+      );
+      await tester.tap(
+        find.descendant(
+          of: session.messageRow('900000000000000072'),
+          matching: find.byKey(const ValueKey('message-author-name')),
+        ),
+      );
+      await session.settle();
+
+      expect(_layers(tester, _card), [_sakuraIntro]);
+      expect(
+        session.transport.requests.where(
+          (request) => request.uri.path == _profilePath,
+        ),
+        hasLength(2),
+      );
+      expect(
+        session.transport.requests.where(
+          (request) => request.uri.path == _cataloguePath,
+        ),
+        hasLength(1),
+      );
+    },
+    routes: _routes(userEffect: {'id': _sakuraId}),
+  );
+
+  testSession(
+    'a profile without an effect draws none and never reads the catalogue',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      expect(find.byKey(const ValueKey('profile-effect')), findsNothing);
+      expect(
+        session.transport.requests.where(
+          (request) => request.uri.path == _cataloguePath,
+        ),
+        isEmpty,
+      );
+    },
+    routes: _routes(),
   );
 
   testSession(
