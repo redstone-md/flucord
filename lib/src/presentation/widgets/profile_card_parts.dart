@@ -331,23 +331,12 @@ class _Roles extends StatelessWidget {
               ),
             if (add != null)
               Builder(
-                builder: (context) => Tooltip(
-                  message: 'Add role',
-                  child: InkWell(
-                    key: const ValueKey('profile-card-add-role'),
-                    onTap: () => _pick(context),
-                    borderRadius: FlucordRadius.small,
-                    child: SizedBox.square(
-                      dimension: 20,
-                      child: Center(
-                        child: FlucordIcon(
-                          FlucordIcons.add,
-                          size: 14,
-                          color: surfaces.muted,
-                        ),
-                      ),
-                    ),
-                  ),
+                builder: (context) => FlucordIconButton(
+                  key: const ValueKey('profile-card-add-role'),
+                  icon: FlucordIcons.add,
+                  tooltip: 'Add role',
+                  dimension: 20,
+                  onPressed: () => _pick(context),
                 ),
               ),
           ],

@@ -203,7 +203,9 @@ class ActivityCard extends StatelessWidget {
 
   static const _artSize = 56.0;
   static const _padding = 8.0;
-  static final _radius = BorderRadius.all(
+
+  /// The card's corners: the art's plus the padding.
+  static final radius = BorderRadius.all(
     ArtTile.radius + const Radius.circular(_padding),
   );
 
@@ -233,7 +235,7 @@ class ActivityCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(_padding, _padding, 12, _padding),
       decoration: BoxDecoration(
         color: surfaces.inset,
-        borderRadius: _radius,
+        borderRadius: radius,
         border: Border.all(color: surfaces.border),
       ),
       child: Row(

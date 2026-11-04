@@ -7,11 +7,13 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
+import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'name_tags.dart';
 import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
+import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 
 part 'profile_card_parts.dart';
@@ -119,7 +121,7 @@ class ProfileCard extends StatelessWidget {
         key: const ValueKey('profile-card'),
         color: surfaces.raised,
         elevation: _preview ? 0 : 12,
-        shadowColor: Colors.black,
+        shadowColor: FlucordFixedColors.shadow,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: FlucordRadius.overlay,
@@ -458,31 +460,27 @@ class _MessageFieldState extends State<_MessageField> {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final border = OutlineInputBorder(
-      borderRadius: FlucordRadius.medium,
-      borderSide: BorderSide(color: surfaces.border),
-    );
     return TextField(
       key: const ValueKey('profile-card-message'),
       controller: _text,
       textInputAction: TextInputAction.send,
       onSubmitted: (text) => widget.onSubmit(text.trim()),
       style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: surfaces.inset,
-        hintText: 'Message @${widget.name}',
-        hintStyle: FlucordTextRole.label.style.copyWith(
-          color: surfaces.captionText,
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        border: border,
-        enabledBorder: border,
-        focusedBorder: border.copyWith(
-          borderSide: BorderSide(color: surfaces.focusRing),
-        ),
-      ),
+      // The activity card's radius: siblings in one column share a corner.
+      decoration:
+          recessedFieldDecoration(
+            context,
+            borderRadius: ActivityCard.radius,
+          ).copyWith(
+            hintText: 'Message @${widget.name}',
+            hintStyle: FlucordTextRole.label.style.copyWith(
+              color: surfaces.captionText,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 9,
+            ),
+          ),
     );
   }
 }
