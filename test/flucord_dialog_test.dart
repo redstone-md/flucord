@@ -1,5 +1,6 @@
 import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +62,39 @@ void main() {
       tester.getCenter(find.text('Cancel')).dx,
       lessThan(tester.getCenter(find.text('Ban')).dx),
     );
+  });
+
+  testWidgets("the last button's corner is concentric with the dialog's", (
+    tester,
+  ) async {
+    await open(
+      tester,
+      Builder(
+        builder: (context) => FlucordDialog(
+          title: const Text('Ban Jack?'),
+          confirm: FlucordDialogConfirm(
+            label: 'Ban',
+            kind: FlucordButtonKind.danger,
+            onPressed: () => Navigator.of(context).pop('ban'),
+          ),
+        ),
+      ),
+    );
+
+    final footer = tester.getRect(find.byType(FlucordDialogFooter));
+    final button = tester.getRect(
+      find.ancestor(
+        of: find.text('Ban'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      ),
+    );
+    // The same gap below and beside it, and that gap is the dialog's
+    // corner less the button's, so both corners share one centre.
+    final gap =
+        FlucordRadius.overlay.bottomRight.x -
+        FlucordRadius.control.bottomRight.x;
+    expect(footer.right - button.right, gap);
+    expect(footer.bottom - button.bottom, gap);
   });
 
   testWidgets('Enter presses the confirming action, Cancel answers nothing', (

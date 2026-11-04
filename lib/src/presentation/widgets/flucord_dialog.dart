@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'flucord_button.dart';
 
@@ -267,7 +268,12 @@ class FlucordDialogFooter extends StatelessWidget {
         border: Border(top: BorderSide(color: surfaces.border)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        // The same gap on every side, the dialog's corner less a button's,
+        // so the last button's corner shares the dialog's centre.
+        padding: EdgeInsets.all(
+          FlucordRadius.overlay.bottomRight.x -
+              FlucordRadius.control.bottomRight.x,
+        ),
         child: TextButtonTheme(
           data: TextButtonThemeData(style: secondary),
           child: Wrap(
