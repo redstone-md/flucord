@@ -4,7 +4,6 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/activity_views.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
-import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
@@ -69,7 +68,9 @@ void main() {
     await tester.tap(row);
     await tester.pump();
 
-    expect(find.byType(FriendsPanel), findsOneWidget);
+    expect(friends.isPanelOpen, isTrue);
+    // The page opens in the canvas; the DMs stay listed here.
+    expect(_row('dm-bo'), findsOneWidget);
     final fill = tester
         .widget<Material>(
           find.descendant(of: row, matching: find.byType(Material)).first,

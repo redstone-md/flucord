@@ -8,7 +8,11 @@ import 'package:flucord/src/domain/friend_suggestion.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/focus_traversal.dart';
 
 DiscordRelationship _entry(String id, DiscordRelationshipKind kind) =>
     DiscordRelationship(
@@ -200,35 +204,188 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.isPanelOpen, isFalse);
-      controller.togglePanel();
+      controller.openPanel();
+      // Pressing Friends again keeps the page, as Discord's row does.
+      controller.openPanel();
       expect(controller.isPanelOpen, isTrue);
-      controller.togglePanel();
+      controller.closePanel();
       expect(controller.isPanelOpen, isFalse);
     });
   });
 
-  group('the panel', () {
-    testWidgets('groups the graph and names what each entry is', (
+  group('the page header', () {
+    testWidgets('names the page and offers the four lists and Add friend', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _FakeGraph(_graph),
+        inbox: const SizedBox(key: ValueKey('inbox-slot')),
+      );
+
+      final header = find.byKey(const ValueKey('friends-header'));
+      expect(tester.getSize(header).height, 48);
+      expect(
+        find.descendant(of: header, matching: find.text('Friends')),
+        findsOneWidget,
+      );
+      for (final label in ['Online', 'All', 'Pending', 'Blocked']) {
+        expect(
+          find.descendant(of: header, matching: find.text(label)),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.descendant(of: header, matching: find.text('Add friend')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: header,
+          matching: find.byKey(const ValueKey('inbox-slot')),
+        ),
+        findsOneWidget,
+      );
+      // Online is where the page opens.
+      expect(_tabSemantics(tester, 'online'), isSemantics(isSelected: true));
+      expect(_tabSemantics(tester, 'pending'), isSemantics(isSelected: false));
+    });
+
+    testWidgets('the tabs are reached and switched with the keyboard', (
       tester,
     ) async {
       await _pump(tester, _FakeGraph(_graph));
 
-      expect(find.text('Requests 2'), findsOneWidget);
-      expect(find.text('Friends 1'), findsOneWidget);
-      expect(find.text('Blocked 1'), findsOneWidget);
+      await tabTo(tester, _tab('pending'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('Pending 2'), findsOneWidget);
+
+      await tabTo(tester, _tab('add'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('friends-add-username')), findsOne);
+    });
+  });
+
+  group('the Online list', () {
+    testWidgets('holds the friends who are not offline', (tester) async {
+      await _pump(
+        tester,
+        _FakeGraph([
+          ..._graph,
+          _entry('away', DiscordRelationshipKind.friend),
+          _entry('gone', DiscordRelationshipKind.friend),
+        ]),
+        presenceOf: (id) => switch (id) {
+          'friend' => Presence.online,
+          'away' => Presence.idle,
+          'gone' => Presence.offline,
+          _ => null,
+        },
+      );
+
+      expect(find.text('Online 2'), findsOneWidget);
+      expect(_row('friend'), findsOneWidget);
+      expect(_row('away'), findsOneWidget);
+      expect(_row('gone'), findsNothing);
+      // Requests and blocks have their own tabs.
+      expect(_row('incoming'), findsNothing);
+      expect(_row('blocked'), findsNothing);
+    });
+
+    testWidgets('says so when nobody is online', (tester) async {
+      await _pump(tester, _FakeGraph(_graph));
+
+      expect(find.byKey(const ValueKey('friends-empty')), findsOneWidget);
+      expect(find.text('No friends are online right now.'), findsOneWidget);
+    });
+
+    testWidgets('a friend row opens the DM', (tester) async {
+      final messaged = <String>[];
+      await _pump(
+        tester,
+        _FakeGraph(_graph),
+        presenceOf: (id) => Presence.online,
+        onMessage: messaged.add,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('friend-message-friend')));
+      expect(messaged, ['friend']);
+    });
+  });
+
+  group('the All list', () {
+    testWidgets('holds every friend, with presence where it is known', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _FakeGraph([..._graph, _entry('gone', DiscordRelationshipKind.friend)]),
+        presenceOf: (id) => id == 'friend' ? Presence.online : null,
+      );
+      await _open(tester, 'all');
+
+      expect(find.text('All friends 2'), findsOneWidget);
+      expect(_row('friend'), findsOneWidget);
+      expect(_row('gone'), findsOneWidget);
+      expect(_row('incoming'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('friend-presence-friend')),
+        findsOneWidget,
+      );
+      // Somebody the session has no presence for gets no indicator rather
+      // than a grey one that claims they are offline.
+      expect(find.byKey(const ValueKey('friend-presence-gone')), findsNothing);
+    });
+
+    testWidgets('removing a friend reaches the session', (tester) async {
+      final graph = _FakeGraph(_graph);
+      await _pump(tester, graph);
+      await _open(tester, 'all');
+
+      await tester.tap(find.byKey(const ValueKey('friend-remove-friend')));
+      await tester.pumpAndSettle();
+
+      expect(graph.removed, ['friend']);
+    });
+
+    testWidgets('a relationship nobody asked for still reads as something', (
+      tester,
+    ) async {
+      // An implicit relationship is somebody the account plays with, and one
+      // newer than this build is a kind it has never heard of. Neither is a
+      // blank row.
+      await _pump(
+        tester,
+        _FakeGraph([
+          _entry('plays', DiscordRelationshipKind.implicit),
+          _entry('mystery', DiscordRelationshipKind.unknown),
+        ]),
+      );
+      await _open(tester, 'all');
+
+      expect(find.text('Other 2'), findsOneWidget);
+      expect(find.text('You play together'), findsOneWidget);
+      expect(find.text('Unknown'), findsOneWidget);
+    });
+  });
+
+  group('the Pending list', () {
+    testWidgets('holds requests both ways, each with its own answer', (
+      tester,
+    ) async {
+      final graph = _FakeGraph(_graph);
+      await _pump(tester, graph);
+      await _open(tester, 'pending');
+
+      expect(find.text('Pending 2'), findsOneWidget);
       expect(find.text('Wants to be friends'), findsOneWidget);
       expect(find.text('Request sent'), findsOneWidget);
+      expect(_row('friend'), findsNothing);
       // The action says what it does to this particular entry.
       expect(find.text('Ignore'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
-      expect(find.text('Unblock'), findsOneWidget);
-    });
-
-    testWidgets('only an incoming request can be accepted', (tester) async {
-      final graph = _FakeGraph(_graph);
-      await _pump(tester, graph);
-
-      expect(find.byKey(const ValueKey('friend-accept-incoming')), findsOne);
       expect(
         find.byKey(const ValueKey('friend-accept-outgoing')),
         findsNothing,
@@ -236,15 +393,55 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('friend-accept-incoming')));
       await tester.pumpAndSettle();
-
       expect(graph.added, ['incoming']);
+
+      await tester.tap(find.byKey(const ValueKey('friend-remove-outgoing')));
+      await tester.pumpAndSettle();
+      expect(graph.removed, ['outgoing']);
     });
 
+    testWidgets('says so when nothing is waiting', (tester) async {
+      await _pump(
+        tester,
+        _FakeGraph([_entry('friend', DiscordRelationshipKind.friend)]),
+      );
+      await _open(tester, 'pending');
+
+      expect(find.text('No pending requests.'), findsOneWidget);
+    });
+  });
+
+  group('the Blocked list', () {
+    testWidgets('holds blocked people, and unblocks one', (tester) async {
+      final graph = _FakeGraph(_graph);
+      await _pump(tester, graph);
+      await _open(tester, 'blocked');
+
+      expect(find.text('Blocked 1'), findsOneWidget);
+      expect(find.text('Unblock'), findsOneWidget);
+      expect(_row('friend'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('friend-remove-blocked')));
+      await tester.pumpAndSettle();
+
+      expect(graph.removed, ['blocked']);
+    });
+
+    testWidgets('says so when nobody is blocked', (tester) async {
+      await _pump(tester, _FakeGraph(const []));
+      await _open(tester, 'blocked');
+
+      expect(find.text('You have not blocked anyone.'), findsOneWidget);
+    });
+  });
+
+  group('the Add friend view', () {
     testWidgets('somebody is added by name, and the field clears', (
       tester,
     ) async {
       final graph = _FakeGraph(_graph);
       await _pump(tester, graph);
+      await _open(tester, 'add');
 
       await tester.enterText(
         find.byKey(const ValueKey('friends-add-username')),
@@ -270,6 +467,7 @@ void main() {
       tester,
     ) async {
       await _pump(tester, _FakeGraph(_graph)..accept = false);
+      await _open(tester, 'add');
 
       await tester.enterText(
         find.byKey(const ValueKey('friends-add-username')),
@@ -280,55 +478,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('friends-refused')), findsOneWidget);
-    });
-
-    testWidgets('removing an entry reaches the session', (tester) async {
-      final graph = _FakeGraph(_graph);
-      await _pump(tester, graph);
-
-      await tester.tap(find.byKey(const ValueKey('friend-remove-friend')));
-      await tester.pumpAndSettle();
-
-      expect(graph.removed, ['friend']);
-    });
-
-    testWidgets('a relationship nobody asked for still reads as something', (
-      tester,
-    ) async {
-      // An implicit relationship is somebody the account plays with, and one
-      // newer than this build is a kind it has never heard of. Neither is a
-      // blank row.
-      await _pump(
-        tester,
-        _FakeGraph([
-          _entry('plays', DiscordRelationshipKind.implicit),
-          _entry('mystery', DiscordRelationshipKind.unknown),
-        ]),
-      );
-
-      expect(find.text('You play together'), findsOneWidget);
-      expect(find.text('Unknown'), findsOneWidget);
-    });
-
-    testWidgets('presence is shown beside a name the session knows', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        _FakeGraph(_graph),
-        presenceOf: (id) => id == 'friend' ? Presence.online : null,
-      );
-
-      expect(
-        find.byKey(const ValueKey('friend-presence-friend')),
-        findsOneWidget,
-      );
-      // Somebody the session has no presence for gets no indicator rather
-      // than a grey one that claims they are offline.
-      expect(
-        find.byKey(const ValueKey('friend-presence-incoming')),
-        findsNothing,
-      );
     });
 
     testWidgets('suggestions are offered, and can be answered either way', (
@@ -343,6 +492,7 @@ void main() {
           ),
         ];
       await _pump(tester, graph);
+      await _open(tester, 'add');
 
       expect(find.text('You may know 1'), findsOneWidget);
       expect(find.text('2 mutual friends'), findsOneWidget);
@@ -357,13 +507,6 @@ void main() {
       expect(find.byKey(const ValueKey('suggestion-maybe')), findsNothing);
     });
 
-    testWidgets('the panel asks for suggestions when it opens', (tester) async {
-      final graph = _FakeGraph(_graph);
-      await _pump(tester, graph);
-
-      expect(graph.suggestionLoads, 1);
-    });
-
     testWidgets('somebody already in the graph is not suggested', (
       tester,
     ) async {
@@ -376,24 +519,40 @@ void main() {
             FriendSuggestion(userId: 'friend', displayName: 'Friend'),
           ],
       );
+      await _open(tester, 'add');
 
       expect(find.byKey(const ValueKey('suggestion-friend')), findsNothing);
     });
-
-    testWidgets('an account with nobody says so', (tester) async {
-      await _pump(tester, _FakeGraph(const []));
-
-      expect(find.byKey(const ValueKey('friends-empty')), findsOneWidget);
-    });
   });
+
+  testWidgets('the panel asks for suggestions when it opens', (tester) async {
+    final graph = _FakeGraph(_graph);
+    await _pump(tester, graph);
+
+    expect(graph.suggestionLoads, 1);
+  });
+}
+
+Finder _tab(String name) => find.byKey(ValueKey('friends-tab-$name'));
+
+Finder _row(String userId) => find.byKey(ValueKey('friend-$userId'));
+
+SemanticsNode _tabSemantics(WidgetTester tester, String name) =>
+    tester.getSemantics(_tab(name));
+
+Future<void> _open(WidgetTester tester, String tab) async {
+  await tester.tap(_tab(tab));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pump(
   WidgetTester tester,
   _FakeGraph graph, {
   Presence? Function(String userId)? presenceOf,
+  ValueChanged<String>? onMessage,
+  Widget? inbox,
 }) async {
-  await tester.binding.setSurfaceSize(const Size(500, 800));
+  await tester.binding.setSurfaceSize(const Size(900, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final controller = FriendsController(() => graph);
   addTearDown(controller.dispose);
@@ -401,7 +560,12 @@ Future<void> _pump(
     MaterialApp(
       theme: FlucordTheme.dark,
       home: Scaffold(
-        body: FriendsPanel(controller: controller, presenceOf: presenceOf),
+        body: FriendsPanel(
+          controller: controller,
+          presenceOf: presenceOf,
+          onMessage: onMessage,
+          inbox: inbox,
+        ),
       ),
     ),
   );

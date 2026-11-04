@@ -25,15 +25,22 @@ final class FriendsController extends ChangeNotifier {
 
   bool _panelOpen = false;
 
-  /// Whether the friends surface is showing instead of the conversations.
+  /// Whether the Friends page is showing instead of a conversation.
   ///
   /// Kept here rather than in the sidebar because the sidebar is rebuilt
   /// whenever anything about the workspace changes, and a flag that resets on
   /// every incoming message is a flag nobody can keep switched on.
   bool get isPanelOpen => _panelOpen;
 
-  void togglePanel() {
-    _panelOpen = !_panelOpen;
+  /// Shows the Friends page. Pressing Friends while it shows keeps it.
+  void openPanel() => _setPanelOpen(true);
+
+  /// Leaves the Friends page, as opening a conversation does.
+  void closePanel() => _setPanelOpen(false);
+
+  void _setPanelOpen(bool open) {
+    if (_panelOpen == open) return;
+    _panelOpen = open;
     _notify();
   }
 

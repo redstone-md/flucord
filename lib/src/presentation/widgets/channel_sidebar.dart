@@ -15,7 +15,6 @@ import 'server_menu.dart';
 import 'account_panel.dart';
 import 'activity_label.dart';
 import 'activity_views.dart';
-import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'count_badge.dart';
@@ -152,8 +151,8 @@ class ChannelSidebar extends StatelessWidget {
   /// flow and in the direct-messages space, which is nobody's server.
   final VoidCallback? onReportServer;
 
-  /// The friend graph, shown in place of the conversation list in direct
-  /// messages. Null on a transport that is never told one.
+  /// The friend graph. In direct messages it adds the Friends row, which
+  /// opens the Friends page. Null on a transport that is never told one.
   final FriendsController? friends;
 
   @override
@@ -206,30 +205,19 @@ class ChannelSidebar extends StatelessWidget {
                 icon: FlucordIcons.friends,
                 label: 'Friends',
                 selected: friends.isPanelOpen,
-                onPressed: friends.togglePanel,
+                onPressed: friends.openPanel,
               ),
             ),
           Expanded(
-            child: isDirect && (friends?.isPanelOpen ?? false)
-                // The friend graph takes the whole pane rather than sitting
-                // above the conversations: both are long lists, and stacking
-                // them means neither can be read.
-                ? FriendsPanel(
-                    controller: friends!,
-                    // From the workspace, which the presence service already
-                    // keeps current; a second copy would be a second thing to
-                    // go stale.
-                    presenceOf: (userId) => memberOf(userId)?.presence,
-                  )
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      _SidebarMetrics.listInset,
-                      0,
-                      _SidebarMetrics.listInset,
-                      _SidebarMetrics.listInset,
-                    ),
-                    children: _navigationEntries(context, order),
-                  ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                _SidebarMetrics.listInset,
+                0,
+                _SidebarMetrics.listInset,
+                _SidebarMetrics.listInset,
+              ),
+              children: _navigationEntries(context, order),
+            ),
           ),
           // On a short window a tall bar scrolls, so the channels and the
           // account panel keep their place.
