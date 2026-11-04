@@ -14,8 +14,7 @@ import 'package:flucord/src/theme/flucord_type.dart';
 import 'support/flucord_icon_finder.dart';
 
 /// The chat header is one clean 48 px line: the channel, a muted one-line
-/// topic, 28 px buttons and a recessed search field that teaches its
-/// shortcut.
+/// topic, 28 px buttons and a recessed search field.
 void main() {
   const topic =
       'Everything about the build, the release and the tools we use every '
@@ -113,31 +112,29 @@ void main() {
     );
   });
 
-  testWidgets('the search field is 200 by 28 and shows Ctrl K until typed in', (
-    tester,
-  ) async {
-    await _pump(tester, channel: channel);
-
-    expect(tester.getSize(search), const Size(200, 28));
-    expect(styleOf(tester, 'Ctrl K').color, surfaces.captionText);
-
-    await tester.enterText(search, 'release');
-    await tester.pump();
-
-    expect(find.text('Ctrl K'), findsNothing);
-    expect(find.byTooltip('Clear search'), findsOneWidget);
-  });
-
   testWidgets(
-    'the search field names the shortcut with the Command key on a Mac',
+    'the search field is 200 by 28 and offers a clear once typed in',
     (tester) async {
       await _pump(tester, channel: channel);
 
-      expect(find.text('⌘K'), findsOneWidget);
-      expect(find.text('Ctrl K'), findsNothing);
+      expect(tester.getSize(search), const Size(200, 28));
+      expect(find.byTooltip('Clear search'), findsNothing);
+
+      await tester.enterText(search, 'release');
+      await tester.pump();
+
+      expect(find.byTooltip('Clear search'), findsOneWidget);
     },
-    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
   );
+
+  // No key focuses search, and Ctrl K opens the quick switcher, so the field
+  // names no shortcut.
+  testWidgets('the search field names no shortcut', (tester) async {
+    await _pump(tester, channel: channel);
+
+    expect(find.text('Ctrl K'), findsNothing);
+    expect(find.text('⌘K'), findsNothing);
+  }, variant: TargetPlatformVariant.desktop());
 
   testWidgets('a DM header puts the person before the name, not an icon', (
     tester,

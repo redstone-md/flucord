@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../application/inbox_catalog.dart';
@@ -379,11 +378,6 @@ class _SearchFieldState extends State<_SearchField> {
     super.dispose();
   }
 
-  /// The app-wide find shortcut, which opens the quick switcher. The field
-  /// names it so people learn it without looking it up.
-  static String get _shortcut =>
-      defaultTargetPlatform == TargetPlatform.macOS ? '⌘K' : 'Ctrl K';
-
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -396,7 +390,7 @@ class _SearchFieldState extends State<_SearchField> {
       controller: _controller,
       onChanged: (value) {
         widget.onChanged(value);
-        // The trailing slot swaps between the shortcut and the clear button.
+        // The clear button shows only while there is text.
         setState(() {});
       },
       onSubmitted: widget.onSubmitted,
@@ -422,20 +416,9 @@ class _SearchFieldState extends State<_SearchField> {
               color: surfaces.muted,
             ),
             prefixIconConstraints: iconBox,
-            suffixIconConstraints: iconBox.copyWith(
-              minWidth: 0,
-              maxWidth: double.infinity,
-            ),
+            suffixIconConstraints: iconBox,
             suffixIcon: _controller.text.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      _shortcut,
-                      style: FlucordTextRole.caption.style.copyWith(
-                        color: surfaces.captionText,
-                      ),
-                    ),
-                  )
+                ? null
                 : FlucordIconButton(
                     onPressed: () {
                       _controller.clear();
