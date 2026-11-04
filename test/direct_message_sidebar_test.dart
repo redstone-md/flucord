@@ -198,6 +198,27 @@ void main() {
       );
     }
   });
+
+  testWidgets('the conversations come back when the last request goes', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+    await tester.tap(find.byKey(const ValueKey('message-requests-folder')));
+    await tester.pump();
+    expect(_row('dm-jack'), findsNothing);
+
+    await _pumpSidebar(
+      tester,
+      workspace: _workspace.copyWith(
+        channels: [
+          for (final channel in _workspace.channels)
+            if (!channel.isMessageRequest) channel,
+        ],
+      ),
+    );
+
+    expect(_row('dm-jack'), findsOneWidget);
+  });
 }
 
 Finder _row(String channelId) => find.byKey(ValueKey('channel-$channelId'));
@@ -215,20 +236,22 @@ Color? _fillOf(WidgetTester tester, String channelId) =>
 
 Future<void> _pumpSidebar(
   WidgetTester tester, {
+  ChatWorkspace? workspace,
   FriendsController? friends,
   VoidCallback? onNewDirectMessage,
 }) async {
+  final shown = workspace ?? _workspace;
   Widget sidebar() => ChannelSidebar(
-    space: _workspace.spaceById(CommunitySpace.directMessagesId),
-    channels: _workspace.channelsFor(CommunitySpace.directMessagesId),
+    space: shown.spaceById(CommunitySpace.directMessagesId),
+    channels: shown.channelsFor(CommunitySpace.directMessagesId),
     selectedChannelId: 'dm-jack',
     onSelectChannel: (_) {},
     sessionMode: SessionMode.discord,
     connectionStatus: RepositoryConnectionStatus.connected,
     categories: const [],
-    currentMember: _workspace.memberById(_workspace.currentMemberId),
-    memberOf: _workspace.memberOrNull,
-    channelOf: _workspace.channelOrNull,
+    currentMember: shown.memberById(shown.currentMemberId),
+    memberOf: shown.memberOrNull,
+    channelOf: shown.channelOrNull,
     collapsedCategoryIds: const {},
     onToggleCategory: (_) {},
     onNewDirectMessage: onNewDirectMessage ?? () {},
