@@ -1,5 +1,6 @@
 import 'account_connections.dart';
 import 'chat_models.dart';
+import 'profile_effect.dart';
 
 /// The account's own profile, as it appears to everyone else.
 ///
@@ -286,12 +287,14 @@ final class ServerProfile {
     this.bio,
     this.pronouns,
     this.bannerHash,
+    this.profileEffect,
   });
 
   final String guildId;
   final String? bio;
   final String? pronouns;
   final String? bannerHash;
+  final ProfileEffect? profileEffect;
 
   @override
   bool operator ==(Object other) =>
@@ -299,10 +302,12 @@ final class ServerProfile {
       other.guildId == guildId &&
       other.bio == bio &&
       other.pronouns == pronouns &&
-      other.bannerHash == bannerHash;
+      other.bannerHash == bannerHash &&
+      other.profileEffect == profileEffect;
 
   @override
-  int get hashCode => Object.hash(guildId, bio, pronouns, bannerHash);
+  int get hashCode =>
+      Object.hash(guildId, bio, pronouns, bannerHash, profileEffect);
 }
 
 /// A server both this account and the profile's user belong to.
@@ -377,6 +382,8 @@ final class OtherUserProfile {
     this.mutualServers = const [],
     this.mutualFriends = const [],
     this.serverProfile,
+    this.profileEffect,
+    this.profileEffectConfig,
   });
 
   final String userId;
@@ -409,6 +416,18 @@ final class OtherUserProfile {
   /// The profile set for the server it was read in, or null outside a
   /// server or where the person set none.
   final ServerProfile? serverProfile;
+
+  /// The effect on the user profile. Read the one to draw with
+  /// [effectiveProfileEffect].
+  final ProfileEffect? profileEffect;
+
+  /// How [effectiveProfileEffect] looks, or null where the catalogue does
+  /// not have it.
+  final ProfileEffectConfig? profileEffectConfig;
+
+  /// The server profile's effect where it sets one, else the user profile's.
+  ProfileEffect? get effectiveProfileEffect =>
+      serverProfile?.profileEffect ?? profileEffect;
 
   String get effectiveName => displayName.isEmpty ? username : displayName;
 

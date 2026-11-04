@@ -7,6 +7,7 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/monogram.dart';
+import '../../domain/profile_effect.dart';
 import '../../domain/user_profile.dart';
 
 /// A friend both people share, with their status where the workspace knows
@@ -52,6 +53,7 @@ final class ProfileCardData {
     this.serverSince,
     this.friendsSince,
     this.connections = const [],
+    this.effect,
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
@@ -125,6 +127,7 @@ final class ProfileCardData {
           : (serverName: space.name, since: joined),
       friendsSince: friendsSince,
       connections: profile?.connections ?? const [],
+      effect: _wornEffect(profile),
     );
   }
 
@@ -239,11 +242,22 @@ final class ProfileCardData {
   /// Their linked accounts on other services.
   final List<ProfileConnection> connections;
 
+  /// The profile effect drawn over the card. Null for none.
+  final ProfileEffectConfig? effect;
+
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {
     final String text when text.isNotEmpty => text,
     _ => null,
   };
+
+  /// How [profile]'s effect looks, unless it has expired.
+  static ProfileEffectConfig? _wornEffect(OtherUserProfile? profile) =>
+      switch (profile?.effectiveProfileEffect) {
+        final worn? when worn.isWornAt(DateTime.now()) =>
+          profile?.profileEffectConfig,
+        _ => null,
+      };
 
   static String? _nonEmpty(String? value) =>
       value == null || value.isEmpty ? null : value;

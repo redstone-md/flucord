@@ -130,7 +130,8 @@ class _FullProfileCard extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(
         top: FlucordRadius.overlayCorner,
       ),
-      child: ColoredBox(
+      child: _EffectBox(
+        data: data,
         color: surfaces.inset,
         child: SingleChildScrollView(
           key: const ValueKey('full-profile-card-scroll'),

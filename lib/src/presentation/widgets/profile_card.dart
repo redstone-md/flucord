@@ -32,6 +32,7 @@ import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'profile_card_route.dart';
+import 'profile_effect_overlay.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 import 'service_logo.dart';
@@ -189,7 +190,8 @@ class ProfileCard extends StatelessWidget {
             borderRadius: FlucordRadius.overlay,
             side: BorderSide(color: surfaces.border),
           ),
-          child: ConstrainedBox(
+          child: _EffectBox(
+            data: data,
             constraints: BoxConstraints(
               maxWidth: width.clamp(0.0, screen.width - 16),
               maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
@@ -260,6 +262,42 @@ class ProfileCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The box that holds a card's content: [child] in [constraints] on
+/// [color], with the profile effect of [data] over it.
+class _EffectBox extends StatelessWidget {
+  const _EffectBox({
+    required this.data,
+    required this.child,
+    this.constraints = const BoxConstraints(),
+    this.color,
+  });
+
+  final ProfileCardData data;
+  final BoxConstraints constraints;
+  final Color? color;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = switch (data.effect) {
+      final effect? => Stack(
+        children: [
+          child,
+          Positioned.fill(child: ProfileEffectOverlay(effect: effect)),
+        ],
+      ),
+      null => child,
+    };
+    return ConstrainedBox(
+      constraints: constraints,
+      child: switch (color) {
+        final color? => ColoredBox(color: color, child: content),
+        null => content,
+      },
     );
   }
 }
