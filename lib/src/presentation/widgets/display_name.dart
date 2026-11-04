@@ -66,14 +66,17 @@ class DisplayName extends StatelessWidget {
   }
 
   /// [style] in the person's font, once the [NameStyleScope] above has it.
+  /// Until then the name keeps the app font and its spacing, so it does not
+  /// change width before the font lands.
   TextStyle _inFont(BuildContext context) {
     final font = DisplayNameFont.byId(nameStyle?.fontId);
     final fonts = NameStyleScope.fontsOf(context);
     if (font == null || fonts == null) return style;
     fonts.request(font);
+    if (!fonts.isReady(font)) return style;
     return style.copyWith(
       fontFamily: font.family,
-      // Until the font is registered, the engine draws the app font.
+      // Letters the font lacks are drawn in the app font.
       fontFamilyFallback: const [FlucordType.family],
       letterSpacing: font.letterSpacing * _fontSize,
     );

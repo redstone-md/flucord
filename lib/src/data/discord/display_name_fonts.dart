@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -94,9 +95,9 @@ enum DisplayNameFont {
 /// Loads [DisplayNameFont]s the first time a name needs one.
 ///
 /// A font is fetched once, kept on disk, and registered with the engine.
-/// Registering one makes every paragraph lay out again, so a name already on
-/// screen in the app font changes to its own font by itself.
-final class DisplayNameFonts {
+/// Listeners hear when one is ready, so a name on screen in the app font can
+/// change to its own.
+final class DisplayNameFonts extends ChangeNotifier {
   DisplayNameFonts({
     Future<Uint8List> Function(Uri url)? fetch,
     Future<void> Function(String family, Uint8List bytes)? register,
@@ -106,11 +107,15 @@ final class DisplayNameFonts {
   final Future<Uint8List> Function(Uri url) _fetch;
   final Future<void> Function(String family, Uint8List bytes) _register;
   final Map<DisplayNameFont, Future<void>> _loads = {};
+  final Set<DisplayNameFont> _ready = {};
 
   /// Starts loading [font] unless it has been asked for already. A font that
   /// failed is not asked for again in this run; the name keeps the app font.
   void request(DisplayNameFont font) =>
       _loads.putIfAbsent(font, () => _load(font));
+
+  /// Whether [font] is registered and can be drawn.
+  bool isReady(DisplayNameFont font) => _ready.contains(font);
 
   /// Completes once [font] is registered, or failed and was logged.
   Future<void> loaded(DisplayNameFont font) {
@@ -121,6 +126,8 @@ final class DisplayNameFonts {
   Future<void> _load(DisplayNameFont font) async {
     try {
       await _register(font.family, await _fetch(font.url));
+      _ready.add(font);
+      notifyListeners();
     } on Object catch (error) {
       AppLog.warning(
         'name-fonts',

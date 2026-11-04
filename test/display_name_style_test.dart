@@ -129,6 +129,8 @@ void main() {
       );
 
       expect(fetched, [DisplayNameFont.mainframe.url]);
+      await tester.runAsync(() => fonts.loaded(DisplayNameFont.mainframe));
+      await tester.pump();
       final style = _drawnStyle(tester);
       expect(style.fontFamily, 'Orbitron');
       expect(style.fontFamilyFallback, [FlucordType.family]);
@@ -177,6 +179,22 @@ void main() {
       expect(arrived.height, plain.height);
     });
 
+    testWidgets('the name keeps its width until its font arrives', (
+      tester,
+    ) async {
+      final (fonts, _) = _recordingFonts();
+      await _pumpName(tester, null);
+      final plain = tester.getSize(find.text('Freez'));
+
+      await _pumpName(
+        tester,
+        const NameStyle(colors: [], fontId: 3),
+        fonts: fonts,
+      );
+
+      expect(tester.getSize(find.text('Freez')).width, plain.width);
+    });
+
     testWidgets('a name in a server keeps its font beside the role colour', (
       tester,
     ) async {
@@ -189,6 +207,8 @@ void main() {
         inServer: true,
         roleColor: _blue,
       );
+      await tester.runAsync(() => fonts.loaded(DisplayNameFont.mainframe));
+      await tester.pump();
 
       expect(_drawnStyle(tester).fontFamily, 'Orbitron');
       expect(_drawnStyle(tester).color, const Color(_blue));
