@@ -109,6 +109,13 @@ final class CommunityRole {
   /// True for the `@everyone` role, which Discord keys by the guild's own id.
   bool get isEveryone => id == spaceId;
 
+  /// Discord's order of roles, highest first. Two roles at the same position
+  /// go by id.
+  static int highestFirst(CommunityRole left, CommunityRole right) =>
+      left.position != right.position
+      ? right.position.compareTo(left.position)
+      : DiscordSnowflake.compare(left.id, right.id);
+
   /// Equal when every field matches, so a gateway diff can skip a role that
   /// did not change.
   @override
@@ -134,8 +141,8 @@ final class CommunityRole {
 final class HeldRoles {
   const HeldRoles(this.highestFirst);
 
-  /// The roles [member] holds in [spaceId] that [roleOf] knows. Two roles at
-  /// the same position are ordered as Discord orders them: by id.
+  /// The roles [member] holds in [spaceId] that [roleOf] knows, in
+  /// [CommunityRole.highestFirst] order.
   factory HeldRoles.of(
     Member member,
     String spaceId,
@@ -152,11 +159,8 @@ final class HeldRoles {
   ) {
     if (roleIds.isEmpty) return none;
     return HeldRoles(
-      [for (final roleId in roleIds) ?roleOf(roleId)]..sort(
-        (left, right) => left.position != right.position
-            ? right.position.compareTo(left.position)
-            : DiscordSnowflake.compare(left.id, right.id),
-      ),
+      [for (final roleId in roleIds) ?roleOf(roleId)]
+        ..sort(CommunityRole.highestFirst),
     );
   }
 

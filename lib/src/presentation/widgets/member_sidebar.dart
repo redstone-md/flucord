@@ -303,7 +303,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
       }
     }
     final groups = roleGroups.entries.toList(growable: false)
-      ..sort((left, right) => right.key.position.compareTo(left.key.position));
+      ..sort((left, right) => CommunityRole.highestFirst(left.key, right.key));
     return ListView(
       padding: MemberSidebar._listPadding,
       children: [
