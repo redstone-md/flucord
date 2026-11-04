@@ -687,13 +687,10 @@ class FlucordShell extends StatelessWidget {
                                         const SizedBox.shrink()
                                     else if (showMembers)
                                       // A member's "In voice" line follows the
-                                      // seats. Only the seats: the controller
-                                      // also fires on every speaking change.
-                                      ListenableBuilder(
-                                        listenable: voiceController.seats,
-                                        builder: (_, _) => MemberSidebar(
-                                          seatedByChannel:
-                                              voiceController.seatedByChannel,
+                                      // seats.
+                                      _onSeats(
+                                        (seated) => MemberSidebar(
+                                          seatedByChannel: seated,
                                           heldRolesOf: (member) => workspace
                                               .heldRolesOf(member, spaceId),
                                           members: workspace.members,
