@@ -151,12 +151,10 @@ class _AddServerButton extends StatelessWidget {
     label: 'Add a server',
     onPressed: onPressed,
     activeColor: context.surfaces.control,
-    builder: (context, active) => Center(
-      child: FlucordIcon(
-        FlucordIcons.add,
-        size: RailMetrics.glyph,
-        color: active ? context.surfaces.text : context.surfaces.muted,
-      ),
+    builder: (context, active) => FlucordIcon(
+      FlucordIcons.add,
+      size: RailMetrics.glyph,
+      color: active ? context.surfaces.text : context.surfaces.muted,
     ),
   );
 }
@@ -182,14 +180,12 @@ class _HomeButton extends StatelessWidget {
     onPressed: onPressed,
     color: context.surfaces.raised,
     activeColor: context.surfaces.brand,
-    builder: (context, active) => Center(
-      child: FlucordIcon(
-        FlucordIcons.directMessages,
-        size: RailMetrics.glyph,
-        color: active
-            ? Theme.of(context).colorScheme.onPrimary
-            : context.surfaces.muted,
-      ),
+    builder: (context, active) => FlucordIcon(
+      FlucordIcons.directMessages,
+      size: RailMetrics.glyph,
+      color: active
+          ? Theme.of(context).colorScheme.onPrimary
+          : context.surfaces.muted,
     ),
   );
 }

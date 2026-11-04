@@ -48,11 +48,9 @@ class OAuthGuildRail extends StatelessWidget {
             color: context.surfaces.raised,
             builder: (_, _) => RemoteIdentityImage(
               url: account.avatarUrl,
-              fallback: const Center(
-                child: FlucordIcon(
-                  FlucordIcons.person,
-                  size: RailMetrics.glyph,
-                ),
+              fallback: const FlucordIcon(
+                FlucordIcons.person,
+                size: RailMetrics.glyph,
               ),
             ),
           ),

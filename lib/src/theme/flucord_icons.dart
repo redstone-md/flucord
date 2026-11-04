@@ -330,7 +330,8 @@ abstract final class FlucordIcons {
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
 ///
 /// Size and colour come from the ambient [IconTheme] unless given here, so it
-/// drops in where an [Icon] was.
+/// drops in where an [Icon] was. Like [Icon], it keeps its size and centres
+/// when a parent forces a larger box on it.
 class FlucordIcon extends StatelessWidget {
   const FlucordIcon(this.icon, {super.key, this.size, this.color});
 
@@ -342,15 +343,21 @@ class FlucordIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = this.size ?? IconTheme.of(context).size;
     final drawing = HugeIcon(
       icon: icon.data,
-      size: size ?? IconTheme.of(context).size,
+      size: size,
       color: color,
       strokeWidth: _strokeWidth,
     );
     final mirror =
         icon.matchTextDirection &&
         Directionality.of(context) == TextDirection.rtl;
-    return mirror ? Transform.flip(flipX: true, child: drawing) : drawing;
+    return SizedBox.square(
+      dimension: size,
+      child: Center(
+        child: mirror ? Transform.flip(flipX: true, child: drawing) : drawing,
+      ),
+    );
   }
 }

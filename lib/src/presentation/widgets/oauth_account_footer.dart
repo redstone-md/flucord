@@ -48,9 +48,7 @@ class OAuthAccountFooter extends StatelessWidget {
                       url: account.avatarUrl,
                       fallback: ColoredBox(
                         color: context.surfaces.raised,
-                        child: const Center(
-                          child: FlucordIcon(FlucordIcons.person, size: 18),
-                        ),
+                        child: const FlucordIcon(FlucordIcons.person, size: 18),
                       ),
                     ),
                   ),
