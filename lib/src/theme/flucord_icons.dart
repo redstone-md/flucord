@@ -220,6 +220,38 @@ abstract final class FlucordIcons {
   static const listening = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
   static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
   static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
+
+  // Accounts, connection and status (FLUCORD-84).
+  static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);
+  static const credential = FlucordIconData(HugeIcons.strokeRoundedKey01);
+  static const desktop = FlucordIconData(HugeIcons.strokeRoundedComputer);
+  static const packageMissing = FlucordIconData(
+    HugeIcons.strokeRoundedPackageRemove,
+  );
+  static const visible = FlucordIconData(HugeIcons.strokeRoundedView);
+  static const hidden = FlucordIconData(HugeIcons.strokeRoundedViewOff);
+  static const code = FlucordIconData(HugeIcons.strokeRoundedSourceCode);
+  static const payment = FlucordIconData(HugeIcons.strokeRoundedCreditCard);
+  static const website = FlucordIconData(HugeIcons.strokeRoundedGlobe02);
+  static const openExternal = FlucordIconData(
+    HugeIcons.strokeRoundedLinkSquare02,
+    matchTextDirection: true,
+  );
+  static const authorized = FlucordIconData(
+    HugeIcons.strokeRoundedSecurityCheck,
+  );
+  static const chevronUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp01);
+  static const server = FlucordIconData(HugeIcons.strokeRoundedServerStack01);
+  static const qrCode = FlucordIconData(HugeIcons.strokeRoundedQrCode);
+  static const phone = FlucordIconData(HugeIcons.strokeRoundedSmartPhone01);
+  static const bot = FlucordIconData(HugeIcons.strokeRoundedRobot01);
+  static const warning = FlucordIconData(HugeIcons.strokeRoundedAlert02);
+  static const back = FlucordIconData(
+    HugeIcons.strokeRoundedArrowLeft02,
+    matchTextDirection: true,
+  );
+  static const caughtUp = FlucordIconData(HugeIcons.strokeRoundedMailOpen01);
+  static const summary = FlucordIconData(HugeIcons.strokeRoundedSparkles);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_desktop_login_section.dart';
@@ -103,7 +104,7 @@ final class _DisconnectedWorkspaceViewState
                     child: TextButton.icon(
                       key: const ValueKey('open-disconnected-connections'),
                       onPressed: widget.onOpenConnections,
-                      icon: const Icon(Icons.link, size: 16),
+                      icon: const FlucordIcon(FlucordIcons.link, size: 16),
                       label: const Text('Connections'),
                     ),
                   ),
@@ -134,7 +135,11 @@ final class _ConnectionFailure extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Column(
         children: [
-          Icon(Icons.cloud_off, size: 28, color: context.surfaces.warning),
+          FlucordIcon(
+            FlucordIcons.offline,
+            size: 28,
+            color: context.surfaces.warning,
+          ),
           const SizedBox(height: 10),
           Text(
             reason,
@@ -157,7 +162,7 @@ final class _ConnectionFailure extends StatelessWidget {
             FilledButton.icon(
               key: const ValueKey('disconnected-retry'),
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 17),
+              icon: const FlucordIcon(FlucordIcons.refresh, size: 17),
               label: const Text('Retry'),
             ),
           ],

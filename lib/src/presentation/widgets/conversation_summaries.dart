@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/conversation_summary.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -92,8 +93,8 @@ class _SummaryCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.auto_awesome,
+                    FlucordIcon(
+                      FlucordIcons.summary,
                       size: 13,
                       color: context.surfaces.accentIcon,
                     ),
@@ -111,8 +112,8 @@ class _SummaryCard extends StatelessWidget {
                     ),
                     if (canJump) ...[
                       const SizedBox(width: 6),
-                      Icon(
-                        Icons.chevron_right,
+                      FlucordIcon(
+                        FlucordIcons.chevronRight,
                         size: 14,
                         color: context.surfaces.muted,
                       ),

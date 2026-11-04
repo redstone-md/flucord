@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/connection_controller.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -84,10 +85,8 @@ final class _DeveloperBotTransportSectionState
             labelText: 'Application bot token',
             suffixIcon: IconButton(
               onPressed: () => setState(() => _obscureToken = !_obscureToken),
-              icon: Icon(
-                _obscureToken
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
+              icon: FlucordIcon(
+                _obscureToken ? FlucordIcons.visible : FlucordIcons.hidden,
               ),
               tooltip: _obscureToken ? 'Show token' : 'Hide token',
             ),
@@ -112,8 +111,8 @@ final class _DeveloperBotTransportSectionState
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.error_outline,
+              FlucordIcon(
+                FlucordIcons.error,
                 size: 16,
                 color: context.surfaces.errorText,
               ),
@@ -136,7 +135,7 @@ final class _DeveloperBotTransportSectionState
             if (widget.controller.hasSavedCredential) ...[
               TextButton.icon(
                 onPressed: widget.controller.isBusy ? null : _connectSaved,
-                icon: const Icon(Icons.key, size: 16),
+                icon: const FlucordIcon(FlucordIcons.credential, size: 16),
                 label: const Text('Use saved token'),
               ),
               const SizedBox(width: 4),
@@ -157,7 +156,7 @@ final class _DeveloperBotTransportSectionState
                       dimension: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.developer_mode_outlined, size: 16),
+                  : const FlucordIcon(FlucordIcons.bot, size: 16),
               label: Text(
                 widget.controller.isBusy ? 'Connecting' : 'Connect bot',
               ),

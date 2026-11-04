@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_account_connection_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -104,7 +105,7 @@ class _OAuthIdentityTile extends StatelessWidget {
                 onPressed: controller.canDisconnect
                     ? controller.disconnect
                     : null,
-                icon: const Icon(Icons.link_off_outlined, size: 17),
+                icon: const FlucordIcon(FlucordIcons.unlink, size: 17),
                 tooltip: 'Disconnect Discord',
               ),
             FilledButton.icon(
@@ -115,7 +116,7 @@ class _OAuthIdentityTile extends StatelessWidget {
                       dimension: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.open_in_new, size: 16),
+                  : const FlucordIcon(FlucordIcons.openExternal, size: 16),
               label: Text(
                 controller.isConnected ? 'Complete setup' : 'Connect Discord',
               ),
@@ -166,12 +167,12 @@ class _OAuthAvatar extends StatelessWidget {
           url: account?.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: Icon(
-              account == null
-                  ? Icons.person_outline
-                  : Icons.verified_user_outlined,
-              size: 18,
-              color: color,
+            child: Center(
+              child: FlucordIcon(
+                account == null ? FlucordIcons.person : FlucordIcons.authorized,
+                size: 18,
+                color: color,
+              ),
             ),
           ),
         ),
@@ -302,8 +303,8 @@ class _OAuthGuildRow extends StatelessWidget {
             const SizedBox(width: 8),
             Tooltip(
               message: 'Messages from this server are not available here',
-              child: Icon(
-                Icons.lock_outline,
+              child: FlucordIcon(
+                FlucordIcons.lock,
                 size: 15,
                 color: context.surfaces.muted,
               ),
