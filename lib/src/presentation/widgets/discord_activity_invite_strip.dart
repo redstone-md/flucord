@@ -83,10 +83,7 @@ class _IncomingInvite extends StatelessWidget {
                   '${sender.displayName} invited you to a Flucord activity',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -164,10 +161,7 @@ class _JoinedSession extends StatelessWidget {
                   _title(call),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(

@@ -76,13 +76,10 @@ class SoundboardSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Soundboard',
-                    style: TextStyle(
-                      fontSize: FlucordType.body,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: FlucordTextRole.heading.style,
                   ),
                 ),
                 if (controller.isSending)

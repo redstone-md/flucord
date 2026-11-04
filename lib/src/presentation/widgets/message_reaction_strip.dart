@@ -81,7 +81,7 @@ class ReactionGlyph extends StatelessWidget {
                 emoji.name.substring(0, 1).toUpperCase(),
                 style: TextStyle(
                   fontSize: FlucordType.fitting(size / 2),
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),

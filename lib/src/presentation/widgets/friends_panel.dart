@@ -144,9 +144,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
                     padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
                     child: Text(
                       'You may know ${suggestions.length}',
-                      style: TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w700,
+                      style: FlucordTextRole.caption.strong.copyWith(
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -206,9 +204,7 @@ class _Group extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
         child: Text(
           '$title ${entries.length}',
-          style: TextStyle(
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
+          style: FlucordTextRole.caption.strong.copyWith(
             color: context.surfaces.muted,
           ),
         ),
@@ -262,7 +258,7 @@ class _RelationshipRow extends StatelessWidget {
               Text(
                 entry.user.displayName,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: FlucordTextRole.label.strong,
               ),
               Text(
                 _describe(entry.kind),
@@ -342,7 +338,7 @@ class _SuggestionRow extends StatelessWidget {
                 Text(
                   suggestion.label,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: FlucordTextRole.label.strong,
                 ),
                 if (reason.isNotEmpty)
                   Text(

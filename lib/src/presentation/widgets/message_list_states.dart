@@ -76,10 +76,7 @@ class _ChannelStart extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '${channel.isThread ? '' : '# '}${channel.name}',
-            style: const TextStyle(
-              fontSize: FlucordType.display,
-              fontWeight: FontWeight.w700,
-            ),
+            style: FlucordTextRole.display.style,
           ),
           const SizedBox(height: 5),
           Text(
@@ -117,7 +114,7 @@ class _MessageEmptyState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               hasQuery ? 'No matching messages' : 'No messages yet',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: FlucordTextRole.label.strong,
             ),
             const SizedBox(height: 4),
             Text(

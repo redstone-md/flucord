@@ -237,10 +237,7 @@ class ActivityCard extends StatelessWidget {
                   activity.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 for (final line in lines) ...[
                   const SizedBox(height: 2),

@@ -72,10 +72,7 @@ class OAuthAccountFooter extends StatelessWidget {
                   account.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 Text(
                   hasNativePresence
@@ -154,10 +151,7 @@ class _StatusMenuItem extends StatelessWidget {
         Expanded(
           child: Text(
             _statusLabel(status),
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
-            ),
+            style: FlucordTextRole.caption.strong,
           ),
         ),
         if (selected)

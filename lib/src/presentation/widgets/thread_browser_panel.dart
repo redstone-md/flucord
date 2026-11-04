@@ -172,13 +172,7 @@ class _ThreadPanelHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Threads',
-                style: TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Threads', style: FlucordTextRole.label.strong),
               Text(
                 '#$channelName',
                 overflow: TextOverflow.ellipsis,
@@ -218,10 +212,8 @@ class _ThreadSectionLabel extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
     child: Text(
       label.toUpperCase(),
-      style: TextStyle(
+      style: FlucordTextRole.caption.strong.copyWith(
         color: context.surfaces.muted,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w700,
       ),
     ),
   );

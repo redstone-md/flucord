@@ -51,10 +51,7 @@ class FailedWorkspaceView extends StatelessWidget {
               size: 30,
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Workspace did not open',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
+            Text('Workspace did not open', style: FlucordTextRole.label.strong),
             const SizedBox(height: 4),
             Text(
               'Your servers and messages could not be loaded.',
@@ -107,9 +104,9 @@ class ChannelFailureView extends StatelessWidget {
             size: 28,
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Message history unavailable',
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: FlucordTextRole.label.strong,
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -141,10 +138,7 @@ class EmptyWorkspaceView extends StatelessWidget {
               color: context.surfaces.muted,
             ),
             const SizedBox(height: 12),
-            const Text(
-              'No accessible servers',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
+            Text('No accessible servers', style: FlucordTextRole.label.strong),
             const SizedBox(height: 5),
             Text(
               'Install the bot in a server with channel access.',

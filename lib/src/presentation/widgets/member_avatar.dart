@@ -41,7 +41,7 @@ class MemberAvatar extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: FlucordType.fitting(size * 0.32),
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),

@@ -44,13 +44,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  presentation.title,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text(presentation.title, style: FlucordTextRole.caption.strong),
                 const SizedBox(height: 3),
                 Text(
                   presentation.detail,

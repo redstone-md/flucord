@@ -99,10 +99,7 @@ final class _Bar extends StatelessWidget {
                     minimumSize: const Size(0, 24),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    textStyle: FlucordTextRole.caption.strong,
                   ),
                   child: const Text('Retry'),
                 ),

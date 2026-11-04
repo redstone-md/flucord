@@ -368,10 +368,8 @@ class _CategoryTile extends StatelessWidget {
               child: Text(
                 category.name,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: FlucordTextRole.caption.strong.copyWith(
                   color: Colors.white,
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

@@ -209,13 +209,7 @@ class _VoiceChannelPreview extends StatelessWidget {
             color: context.surfaces.muted,
           ),
           const SizedBox(height: 10),
-          Text(
-            channelName,
-            style: const TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(channelName, style: FlucordTextRole.heading.style),
           const SizedBox(height: 6),
           Text(
             seated.isEmpty
@@ -369,10 +363,7 @@ class _VoiceStage extends StatelessWidget {
                   channelName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.body,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.heading.style,
                 ),
               ),
               ?soundboard,

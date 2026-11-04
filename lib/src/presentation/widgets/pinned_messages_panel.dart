@@ -54,13 +54,10 @@ class PinnedMessagesPanel extends StatelessWidget {
             child: Row(
               children: [
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Pinned messages',
-                    style: TextStyle(
-                      fontSize: FlucordType.label,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.label.strong,
                   ),
                 ),
                 IconButton(
@@ -165,10 +162,7 @@ class _PinnedMessageRow extends StatelessWidget {
               children: [
                 Text(
                   member?.displayName ?? 'Unknown user',
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 if (message.body.isNotEmpty) ...[
                   const SizedBox(height: 4),

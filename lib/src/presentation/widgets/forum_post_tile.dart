@@ -237,10 +237,7 @@ class _ForumPostDetails extends StatelessWidget {
               post.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: FlucordType.label,
-                fontWeight: FontWeight.w600,
-              ),
+              style: FlucordTextRole.label.strong,
             ),
           ),
           if (post.isLocked)
@@ -309,10 +306,7 @@ class _PostTag extends StatelessWidget {
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w600,
-      ),
+      style: FlucordTextRole.caption.strong,
     ),
   );
 }

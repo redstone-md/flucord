@@ -32,14 +32,7 @@ class MessagePollView extends StatelessWidget {
               const FlucordIcon(FlucordIcons.poll, size: 17),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(
-                  poll.question,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
+                child: Text(poll.question, style: FlucordTextRole.label.strong),
               ),
             ],
           ),
@@ -153,19 +146,14 @@ class _PollAnswerRow extends StatelessWidget {
                       answer.text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: FlucordTextRole.caption.strong,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     '$percent%',
-                    style: TextStyle(
+                    style: FlucordTextRole.caption.strong.copyWith(
                       color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

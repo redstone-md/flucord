@@ -277,10 +277,8 @@ class _GroupLabel extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(8, 10, 8, 5),
     child: Text(
       _groupName(kind).toUpperCase(),
-      style: TextStyle(
+      style: FlucordTextRole.caption.strong.copyWith(
         color: context.surfaces.muted,
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w700,
         letterSpacing: 0.55,
       ),
     ),

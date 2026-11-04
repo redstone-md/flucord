@@ -116,13 +116,7 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Activity voice',
-                style: TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              Text('Activity voice', style: FlucordTextRole.label.strong),
               const SizedBox(height: 2),
               Text(
                 '$count participant${count == 1 ? '' : 's'}',
@@ -192,10 +186,7 @@ class _ParticipantRow extends StatelessWidget {
                   currentUser ? 'You' : user.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(

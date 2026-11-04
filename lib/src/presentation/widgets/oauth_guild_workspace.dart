@@ -127,10 +127,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
               guild?.name ?? 'Discord servers',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: FlucordType.body,
-                fontWeight: FontWeight.w600,
-              ),
+              style: FlucordTextRole.heading.style,
             ),
           ),
           Expanded(
@@ -139,10 +136,8 @@ class _OAuthGuildSidebar extends StatelessWidget {
               children: [
                 Text(
                   'CHANNELS',
-                  style: TextStyle(
+                  style: FlucordTextRole.caption.strong.copyWith(
                     color: context.surfaces.muted,
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -173,10 +168,8 @@ class _OAuthGuildSidebar extends StatelessWidget {
                   const SizedBox(height: 24),
                   Text(
                     'YOUR SERVER PROFILE',
-                    style: TextStyle(
+                    style: FlucordTextRole.caption.strong.copyWith(
                       color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -229,10 +222,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                   guild?.name ?? 'Authorized servers',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
               ),
               Text(
@@ -263,7 +253,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                         ? 'No authorized servers'
                         : 'Messages unavailable for this server',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: FlucordTextRole.label.strong,
                   ),
                   const SizedBox(height: 6),
                   Text(

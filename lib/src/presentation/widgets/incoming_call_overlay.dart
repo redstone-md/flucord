@@ -115,10 +115,7 @@ class IncomingCallCard extends StatelessWidget {
                       callerName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.label,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: FlucordTextRole.label.strong,
                     ),
                     Text(
                       subtitle,

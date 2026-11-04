@@ -140,13 +140,7 @@ class _CommandRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          Text(
-            '/${command.name}',
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text('/${command.name}', style: FlucordTextRole.label.strong),
           if (command.description.isNotEmpty) ...[
             const SizedBox(width: 10),
             Expanded(

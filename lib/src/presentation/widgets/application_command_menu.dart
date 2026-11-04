@@ -82,13 +82,7 @@ class ApplicationCommandSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Apps',
-            style: TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text('Apps', style: FlucordTextRole.heading.style),
           const SizedBox(height: 8),
           if (commands.isEmpty)
             Padding(

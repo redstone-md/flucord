@@ -36,10 +36,7 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   connected ? 'Discord chat' : 'Sign in to Discord',
-                  style: const TextStyle(
-                    fontSize: FlucordType.body,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.heading.style,
                 ),
               ),
               if (connected)
@@ -193,7 +190,7 @@ final class _PendingIdentity extends StatelessWidget {
             child: Text(
               displayName,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: FlucordTextRole.label.strong,
             ),
           ),
         ],

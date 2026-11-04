@@ -277,10 +277,8 @@ class _FieldLabel extends StatelessWidget {
     children: [
       Text(
         label,
-        style: TextStyle(
+        style: FlucordTextRole.caption.strong.copyWith(
           color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
         ),
       ),
       if (detail != null) ...[

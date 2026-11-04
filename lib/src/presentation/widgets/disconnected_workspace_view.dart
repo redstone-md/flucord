@@ -144,7 +144,7 @@ final class _ConnectionFailure extends StatelessWidget {
           Text(
             reason,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: FlucordTextRole.label.strong,
           ),
           if (detail case final detail?) ...[
             const SizedBox(height: 4),

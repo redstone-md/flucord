@@ -118,12 +118,8 @@ class _SurfaceSegment extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         label,
-                        style: TextStyle(
+                        style: FlucordTextRole.caption.strong.copyWith(
                           color: foreground,
-                          fontSize: FlucordType.caption,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
                         ),
                       ),
                     ],

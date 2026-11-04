@@ -272,10 +272,8 @@ class _StickerPickerPanel extends StatelessWidget {
                             spaceName.toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: FlucordTextRole.caption.strong.copyWith(
                               color: context.surfaces.muted,
-                              fontSize: FlucordType.caption,
-                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),

@@ -38,6 +38,19 @@ abstract final class FlucordType {
   /// A clan tag beside a member's name.
   static const clanTag = 11.0;
 
+  /// The digits in a count badge: a caption in SemiBold, each digit one width
+  /// so a changing count does not shift. Interface text stops at Medium
+  /// (500); a badge is a mark to spot at a glance, so it is heavier.
+  static final badgeDigits = FlucordTextRole.caption.style.copyWith(
+    fontWeight: FontWeight.w600,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+
+  /// Bold that a person wrote in a message (`**bold**`). It is their
+  /// emphasis, not the interface's hierarchy, so it keeps SemiBold: Medium
+  /// is too close to Regular to read as bold in running text.
+  static const writtenBold = TextStyle(fontWeight: FontWeight.w600);
+
   /// Every size on the scale, smallest first.
   static const sizes = [appTag, clanTag, caption, label, body, title, display];
 
@@ -84,7 +97,8 @@ abstract final class FlucordType {
 /// A role on the type scale: a size, a line height and a weight.
 ///
 /// Emphasis inside a role is one weight step, 400 to 500, never a size
-/// change. SemiBold (600) is kept for badge digits.
+/// change. SemiBold (600) is kept for [FlucordType.badgeDigits] and
+/// [FlucordType.writtenBold].
 enum FlucordTextRole {
   caption(FlucordType.caption, 16),
   label(FlucordType.label, 18),

@@ -24,10 +24,8 @@ class OAuthConnectedAccountDirectory extends StatelessWidget {
         if (showHeader) ...[
           Text(
             'CONNECTED ACCOUNTS · ${connections.length}',
-            style: TextStyle(
+            style: FlucordTextRole.caption.strong.copyWith(
               color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
           ),
@@ -109,13 +107,7 @@ class _ConnectedAccountRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    service,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  Text(service, style: FlucordTextRole.caption.strong),
                   const SizedBox(height: 1),
                   Text(
                     connection.name,

@@ -65,10 +65,8 @@ class _DestinationRow extends StatelessWidget {
                           destination.path,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: FlucordTextRole.label.strong.copyWith(
                             color: foreground,
-                            fontSize: FlucordType.label,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
