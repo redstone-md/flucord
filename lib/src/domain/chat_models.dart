@@ -534,6 +534,19 @@ final class ChatWorkspace {
     return identical(next, members) ? this : _copy(members: next);
   }
 
+  /// Sets a known member's tags. Answers this same workspace when the member
+  /// is unknown or the tags are unchanged.
+  ChatWorkspace withMemberTags(
+    String memberId, {
+    required bool isBot,
+    required ClanTag? clanTag,
+  }) {
+    final member = memberOrNull(memberId);
+    if (member == null) return this;
+    final next = member.withTags(isBot: isBot, clanTag: clanTag);
+    return identical(next, member) ? this : upsertMember(next);
+  }
+
   /// Folds a batch of members in with one pass over the member table.
   ///
   /// A member-list page carries up to a hundred members at once; upserting

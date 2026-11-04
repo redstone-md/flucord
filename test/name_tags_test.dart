@@ -85,6 +85,48 @@ void main() {
     expect(_in(reply, find.byType(ClanTagChip)), findsNothing);
   });
 
+  testSession('a clan tag that arrives on a presence update shows', (
+    tester,
+    session,
+  ) async {
+    const messageId = '900000000000000023';
+    await session.openChannel(SessionHarness.channelId);
+    await session.dispatch(
+      'MESSAGE_CREATE',
+      rawMessage(
+        id: messageId,
+        channelId: SessionHarness.channelId,
+        guildId: SessionHarness.guildId,
+        authorId: SessionHarness.friendId,
+        content: 'hello',
+      ),
+    );
+    final row = session.messageRow(messageId);
+    expect(_in(row, find.byType(ClanTagChip)), findsNothing);
+
+    await session.dispatch('PRESENCE_UPDATE', {
+      'guild_id': SessionHarness.guildId,
+      'status': 'online',
+      'activities': <Object?>[],
+      'user': {
+        'id': SessionHarness.friendId,
+        'username': 'user-${SessionHarness.friendId}',
+        'primary_guild': _clan,
+      },
+    });
+    expect(_in(row, find.text('CODE')), findsOneWidget);
+
+    // Most presence updates name the user by id alone. That says nothing
+    // about the tag, so it stays.
+    await session.dispatch('PRESENCE_UPDATE', {
+      'guild_id': SessionHarness.guildId,
+      'status': 'idle',
+      'activities': <Object?>[],
+      'user': {'id': SessionHarness.friendId},
+    });
+    expect(_in(row, find.text('CODE')), findsOneWidget);
+  });
+
   testWidgets('a bot in the member list shows the clan chip and APP', (
     tester,
   ) async {

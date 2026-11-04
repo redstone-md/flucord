@@ -226,6 +226,28 @@ final class Member {
     clanTag: clanTag,
   );
 
+  /// This member with the tags Discord last sent. Separate from [copyWith]
+  /// because a clan tag can go away, and a null there means "keep".
+  Member withTags({required bool isBot, required ClanTag? clanTag}) =>
+      isBot == this.isBot && clanTag == this.clanTag
+      ? this
+      : Member(
+          id: id,
+          displayName: displayName,
+          initials: initials,
+          role: role,
+          presence: presence,
+          colorValue: colorValue,
+          spaceIds: spaceIds,
+          rolesBySpace: rolesBySpace,
+          avatarUrl: avatarUrl,
+          avatarUrlsBySpace: avatarUrlsBySpace,
+          membershipsBySpace: membershipsBySpace,
+          presenceDetail: presenceDetail,
+          isBot: isBot,
+          clanTag: clanTag,
+        );
+
   /// Whether [withPresence] would change nothing.
   bool hasPresence(UserPresence presence) =>
       this.presence == presence.status && presenceDetail == presence;
