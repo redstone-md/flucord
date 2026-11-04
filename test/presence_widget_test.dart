@@ -265,6 +265,7 @@ void main() {
     });
 
     test('a timing line counts up from the start or down to the end', () {
+      // Elapsed time reads bare, "1 h 20 min"; only a countdown says "left".
       expect(ActivityElapsed.line(null, _now), isNull);
       expect(ActivityElapsed.line(const ActivityTimestamps(), _now), isNull);
       expect(
@@ -272,7 +273,7 @@ void main() {
           ActivityTimestamps(startMs: _now.millisecondsSinceEpoch - 61000),
           _now,
         ),
-        '1 min elapsed',
+        '1 min',
       );
       expect(
         ActivityElapsed.line(
@@ -351,8 +352,51 @@ void main() {
         ),
       );
 
-      expect(find.text('5 min elapsed'), findsOneWidget);
+      expect(find.text('5 min'), findsOneWidget);
       expect(find.byKey(const ValueKey('activity-large-image')), findsNothing);
+    });
+
+    testWidgets('the details and the time share one line beside a monogram', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivityCard(
+              activity: UserActivity(
+                name: 'Dota 2',
+                details: 'Ranked match',
+                timestamps: ActivityTimestamps(
+                  startMs: _now.millisecondsSinceEpoch - 80 * 60000,
+                ),
+              ),
+              now: _now,
+            ),
+          ),
+        ),
+      );
+
+      final card = find.byKey(const ValueKey('activity-card'));
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.text('Ranked match · 1 h 20 min'),
+        ),
+        findsOneWidget,
+      );
+      // No artwork, so the game's monogram stands in for it.
+      expect(find.descendant(of: card, matching: find.text('D2')), findsOne);
+      // The kind is a caption above the name, beside the art, not a header.
+      final art = tester.getRect(
+        find
+            .ancestor(of: find.text('D2'), matching: find.byType(ClipRRect))
+            .first,
+      );
+      final kind = tester.getRect(
+        find.descendant(of: card, matching: find.text('Playing')),
+      );
+      expect(kind.left, greaterThan(art.right));
+      expect(kind.top, greaterThanOrEqualTo(art.top));
     });
 
     testWidgets('a unicode emoji renders beside the status text', (

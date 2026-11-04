@@ -9,9 +9,8 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
+import 'art_tile.dart';
 import 'member_avatar.dart';
-import 'rail_tile.dart';
-import 'remote_identity_image.dart';
 
 /// The Friends page's right column: one card per friend who is playing,
 /// listening, watching or sitting in voice.
@@ -171,7 +170,7 @@ class _ActiveFriendCard extends StatelessWidget {
           if (rich != null) ...[
             const _CardDivider(),
             _Block(
-              art: _ArtTile(
+              art: ArtTile(
                 url: rich.assets?.largeImageUrl,
                 monogram: monogramOf(rich.name),
                 color: surfaces.inset,
@@ -183,7 +182,7 @@ class _ActiveFriendCard extends StatelessWidget {
           if (room != null) ...[
             const _CardDivider(),
             _Block(
-              art: _ArtTile(
+              art: ArtTile(
                 url: room.space.iconUrl,
                 monogram: room.space.monogram,
                 color: Color(room.space.colorValue),
@@ -278,31 +277,6 @@ class _Block extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Artwork on a 40 px tile, or [monogram] on [color] when there is none.
-class _ArtTile extends StatelessWidget {
-  const _ArtTile({
-    required this.url,
-    required this.monogram,
-    required this.color,
-  });
-
-  final String? url;
-  final String monogram;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: FlucordRadius.medium,
-    child: SizedBox.square(
-      dimension: 40,
-      child: ColoredBox(
-        color: color,
-        child: RemoteIdentityImage(url: url, fallback: RailMonogram(monogram)),
-      ),
-    ),
-  );
 }
 
 /// Up to three faces from a voice channel, overlapping a little.
