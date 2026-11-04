@@ -108,6 +108,14 @@ final class DiscordDirectMessages {
     }, currentUserId);
   }
 
+  /// Forgets a DM the account closed or a group it left, so that a late
+  /// recipient event cannot rebuild it and its next message or
+  /// `CHANNEL_CREATE` adds it again.
+  void forget(String channelId) {
+    _knownChannelIds.remove(channelId);
+    _payloads.remove(channelId);
+  }
+
   /// Adopts the channel of a message when the channel is new here.
   ///
   /// `MESSAGE_CREATE` is sometimes the first the client hears of a one-to-one
