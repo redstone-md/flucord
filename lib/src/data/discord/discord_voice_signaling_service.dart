@@ -295,11 +295,24 @@ final class DiscordVoiceSignalingService
     );
   }
 
+  /// Both rosters' seats in one map, kept while neither roster changes:
+  /// the sidebars key their caches on its identity.
   @override
-  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => {
-    ..._roster.seatedByChannel,
-    ..._callRoster.seatedByChannel,
-  };
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel {
+    final guilds = _roster.seatedByChannel;
+    final calls = _callRoster.seatedByChannel;
+    if (!identical(guilds, _mergedGuildSeats) ||
+        !identical(calls, _mergedCallSeats)) {
+      _mergedGuildSeats = guilds;
+      _mergedCallSeats = calls;
+      _seatedByChannel = {...guilds, ...calls};
+    }
+    return _seatedByChannel;
+  }
+
+  Map<String, List<VoiceParticipantStateEvent>>? _mergedGuildSeats;
+  Map<String, List<VoiceParticipantStateEvent>>? _mergedCallSeats;
+  Map<String, List<VoiceParticipantStateEvent>> _seatedByChannel = const {};
 
   @override
   Stream<void> get seatedChanges => _seatedChanges.stream;

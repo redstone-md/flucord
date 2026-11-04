@@ -82,6 +82,9 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
           enabled: !_isCreating,
           maxLength: 100,
           textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
           onSubmitted: (_) {
             if (!_isCreating) _submit();
           },

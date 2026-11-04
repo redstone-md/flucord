@@ -302,6 +302,38 @@ void main() {
     expect(repository.saved!.pushToTalkReleaseDelayMs, 100);
   });
 
+  testWidgets('a saved delay between the steps shows as it is', (tester) async {
+    final controller = VoiceController(
+      _FakeMedia(),
+      audioCodecFactory: FakeVoiceOpusCodecFactory(),
+      processingRepository: MemoryVoiceProcessingRepository(
+        const VoiceProcessingSettings(pushToTalkReleaseDelayMs: 120),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadProcessingSettings();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    bool selected(int ms) => tester
+        .widget<FlucordTab>(
+          find.byKey(ValueKey('voice-settings-release-delay-$ms')),
+        )
+        .selected;
+    expect(controller.pushToTalkReleaseDelayMs, 120);
+    expect(selected(120), isTrue);
+    expect(selected(100), isFalse);
+  });
+
   testWidgets('echo and gain are offered only with the machine stages', (
     tester,
   ) async {

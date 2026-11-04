@@ -42,18 +42,26 @@ extension ChatControllerGuildAccess on ChatController {
   ///
   /// An invalid or expired invite is an answer and stays cached. Any other
   /// failure, in transit or on Discord's side, is dropped, so the next card
-  /// that asks tries again.
-  Future<InvitePreview> cachedInvitePreview(String code) =>
-      _invitePreviews.putIfAbsent(code, () async {
-        try {
-          return await previewInvite(code);
-        } on Object catch (error) {
-          if (error is! GuildAccessException || !error.isAboutTheInvite) {
+  /// that asks tries again. Only this lookup is dropped: after a session
+  /// change the code may already hold a newer one.
+  Future<InvitePreview> cachedInvitePreview(String code) {
+    if (_invitePreviews[code] case final held?) return held;
+    final asked = previewInvite(code);
+    _invitePreviews[code] = asked;
+    unawaited(
+      asked.then<void>(
+        (_) {},
+        onError: (Object error) {
+          final answered =
+              error is GuildAccessException && error.isAboutTheInvite;
+          if (!answered && identical(_invitePreviews[code], asked)) {
             _invitePreviews.remove(code);
           }
-          rethrow;
-        }
-      });
+        },
+      ),
+    );
+    return asked;
+  }
 
   /// Joins the server an invite names. Answers the joined space's id, or
   /// null when the join was refused.

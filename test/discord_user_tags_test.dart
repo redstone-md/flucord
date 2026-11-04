@@ -1,4 +1,5 @@
 import 'package:flucord/src/data/discord/discord_mapper.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _guild = '200000000000000001';
@@ -78,5 +79,27 @@ void main() {
 
     expect(member.clanTag?.tag, 'CODE');
     expect(member.clanTag?.badgeUrl, isNull);
+  });
+
+  // A partial user object, as in a presence or a message mention, may leave
+  // `bot` out. An account never stops being a bot, so that is not news.
+  test('a user object without the bot flag keeps the APP tag', () {
+    final bot = mapper.member(_user(bot: true));
+    final workspace = ChatWorkspace(
+      spaces: const [],
+      channels: const [],
+      members: [bot],
+      messages: const [],
+      currentMemberId: 'me',
+    );
+
+    final remapped = workspace.upsertMember(mapper.member(_user()));
+    final retagged = workspace.withMemberIdentity(
+      bot.id,
+      MemberIdentity(username: 'helper', tags: DiscordMapper.tags(_user())),
+    );
+
+    expect(remapped.memberById(bot.id).isBot, isTrue);
+    expect(retagged.memberById(bot.id).isBot, isTrue);
   });
 }

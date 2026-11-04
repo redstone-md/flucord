@@ -137,6 +137,14 @@ class _DirectMessagesFolder extends StatefulWidget {
 class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
   bool _showingRequests = false;
 
+  // With the last request answered the toggle goes, so the folder closes:
+  // otherwise nothing would lead back to the conversations.
+  @override
+  void didUpdateWidget(_DirectMessagesFolder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.requests.isEmpty) _showingRequests = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final requests = widget.requests;

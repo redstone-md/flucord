@@ -36,6 +36,42 @@ void main() {
     );
   });
 
+  // The member list and the channel sidebar key their caches on this map's
+  // identity, so a read with nothing new must answer the same map.
+  test('the seat map is the same map until a seat changes', () async {
+    final gateway = _FakeMainGateway();
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      socketFactory: _UnusedSocketFactory(),
+    );
+    addTearDown(service.close);
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'member-1',
+    });
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'channel_id': 'dm-1',
+      'user_id': 'member-2',
+    });
+    await _flushEvents();
+
+    final first = service.seatedByChannel;
+    gateway.dispatch('MESSAGE_CREATE', {'id': 'message-1'});
+    await _flushEvents();
+    expect(service.seatedByChannel, same(first));
+
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'channel_id': 'dm-1',
+      'user_id': 'member-3',
+    });
+    await _flushEvents();
+    final next = service.seatedByChannel;
+    expect(next, isNot(same(first)));
+    expect(next['dm-1']!.map((seat) => seat.userId), ['member-2', 'member-3']);
+    expect(next['voice-1']!.single.userId, 'member-1');
+  });
+
   test('assembles credentials and starts one DAVE voice client', () async {
     final gateway = _FakeMainGateway();
     final clients = <_FakeVoiceClient>[];

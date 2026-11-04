@@ -255,6 +255,28 @@ void main() {
         );
 
         test(
+          'a field placeholder reaches 4.5:1',
+          () =>
+              expectContrast(theme.inputDecorationTheme.hintStyle!.color!, 4.5),
+        );
+
+        test(
+          'a label on a danger fill reaches 4.5:1',
+          () => expect(
+            contrast(theme.colorScheme.onError, surfaces.danger),
+            greaterThanOrEqualTo(4.5),
+          ),
+        );
+
+        test(
+          'an icon on the accent fill reaches 3:1',
+          () => expect(
+            contrast(theme.colorScheme.onPrimary, theme.colorScheme.primary),
+            greaterThanOrEqualTo(3),
+          ),
+        );
+
+        test(
           'link text reaches 4.5:1',
           () => expectContrast(surfaces.link, 4.5),
         );
@@ -306,6 +328,18 @@ void main() {
       expect(surfaces.errorText, const Color(danger));
       expect(surfaces.accentIcon, const Color(brand));
       expect(surfaces.focusRing, const Color(brand));
+    });
+
+    test('a pale accent takes a dark label, a strong one keeps white', () {
+      final pale = FlucordTheme.fromPalette(
+        FlucordPalette.dark.copyWith(brand: 0xffffc0cb),
+      ).colorScheme;
+
+      expect(pale.onPrimary, FlucordFixedColors.onLightFill);
+      expect(
+        FlucordTheme.dark.colorScheme.onPrimary,
+        FlucordFixedColors.onFill,
+      );
     });
 
     // Frame B draws links in #A497F8, a lighter tint of the #8B7CF6 accent.

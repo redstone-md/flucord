@@ -100,6 +100,20 @@ void main() {
       expect(palette.success, FlucordPalette.dark.success);
     });
 
+    test('message text and captions follow the theme text colours', () {
+      const source = ''':root {
+  --text-normal: #e8e8f0;
+  --text-muted: rgb(140, 140, 160);
+}''';
+
+      final palette = BetterDiscordThemeReader.readPalette(source);
+
+      // Discord draws message text in --text-normal and timestamps and
+      // placeholders in --text-muted.
+      expect(palette.bodyText, 0xffe8e8f0);
+      expect(palette.captionText, 0xff8c8ca0);
+    });
+
     test('a pale background makes it a light theme', () {
       const source = ':root { --background-primary: #fdfdfd; }';
 

@@ -89,9 +89,13 @@ void main() {
       await tester.pumpAndSettle();
       final label = labels[index];
       if (index == 0) {
-        // The leading view gathers favourites, frequent and servers; with
-        // none stored the search field and the catalogue still stand.
+        // The leading tab is the frequent view itself.
         expect(find.byKey(const ValueKey('emoji-search')), findsOneWidget);
+        await tester.dragUntilVisible(
+          find.text('FREQUENT'),
+          _gridScrollable(),
+          const Offset(0, 120),
+        );
       } else if (label == 'FLAGS') {
         expect(find.text(flag), findsWidgets);
       } else {

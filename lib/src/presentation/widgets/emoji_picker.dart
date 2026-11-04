@@ -327,7 +327,8 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
     final favourites = _query.isEmpty
         ? _favoriteChoices
         : const <_EmojiChoice>[];
-    final frequent = _category < 0 && _query.isEmpty
+    // The leading view and its own tab, "Frequently used", both show it.
+    final frequent = _category < 1 && _query.isEmpty
         ? _frequentChoices
         : const <_EmojiChoice>[];
     final customSections = _customSections;

@@ -6,6 +6,7 @@ import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/presentation/widgets/go_live_button.dart';
+import 'package:flucord/src/presentation/widgets/voice_control.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +55,40 @@ void main() {
       find.byKey(const ValueKey('go-live-toggle')),
     );
     expect(button.onPressed, isNull);
+  });
+
+  testWidgets(
+    'the header button says why it rests in a build with no encoder',
+    (tester) async {
+      final repository = _FakeRepository();
+      final controller = GoLiveController(
+        repositoryProvider: () => repository,
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+      )..reconcile();
+      addTearDown(controller.dispose);
+      addTearDown(repository.close);
+
+      await pump(tester, controller);
+
+      final button = tester.widget<IconButton>(
+        find.byKey(const ValueKey('go-live-toggle')),
+      );
+      expect(button.onPressed, isNull);
+      expect(button.tooltip, 'Screen sharing is not available in this build');
+    },
+  );
+
+  test('a build without the encoder says why the share button rests', () {
+    final controller = GoLiveController(
+      repositoryProvider: _FakeRepository.new,
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+    )..reconcile();
+    addTearDown(controller.dispose);
+
+    final share = VoiceControl.screenShare(controller, toggle: (_) {});
+
+    expect(share.onPressed, isNull);
+    expect(share.tooltip, 'Screen sharing is not available in this build');
   });
 
   testWidgets('the menu next to the button picks frame rate and size', (

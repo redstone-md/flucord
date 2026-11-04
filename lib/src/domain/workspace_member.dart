@@ -210,15 +210,20 @@ final class MemberTags {
 
   /// These tags laid over [known]: a part the payload left out keeps the one
   /// in [known].
-  MemberTags over(MemberTags known) => unsaid.isEmpty
-      ? this
-      : MemberTags(
-          isBot: isBot,
-          clanTag: knows(TagPart.clanTag) ? clanTag : known.clanTag,
-          nameplate: knows(TagPart.nameplate) ? nameplate : known.nameplate,
-          nameStyle: knows(TagPart.nameStyle) ? nameStyle : known.nameStyle,
-          unsaid: unsaid.intersection(known.unsaid),
-        );
+  ///
+  /// A bot stays a bot. An account never stops being one, and a partial user
+  /// object may leave `bot` out, which reads as false.
+  MemberTags over(MemberTags known) {
+    final bot = isBot || known.isBot;
+    if (unsaid.isEmpty && bot == isBot) return this;
+    return MemberTags(
+      isBot: bot,
+      clanTag: knows(TagPart.clanTag) ? clanTag : known.clanTag,
+      nameplate: knows(TagPart.nameplate) ? nameplate : known.nameplate,
+      nameStyle: knows(TagPart.nameStyle) ? nameStyle : known.nameStyle,
+      unsaid: unsaid.intersection(known.unsaid),
+    );
+  }
 
   @override
   bool operator ==(Object other) =>

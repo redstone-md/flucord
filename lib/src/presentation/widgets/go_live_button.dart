@@ -69,9 +69,13 @@ class GoLiveButton extends StatelessWidget {
           ),
         IconButton(
           key: const ValueKey('go-live-toggle'),
-          tooltip: streaming ? 'Stop streaming' : 'Share your screen',
           // A build without the native encoder can still watch, so the control
           // says why rather than vanishing.
+          tooltip: streaming
+              ? 'Stop streaming'
+              : controller.canEncode
+              ? 'Share your screen'
+              : 'Screen sharing is not available in this build',
           onPressed: !controller.canEncode && !streaming
               ? null
               : () => unawaited(

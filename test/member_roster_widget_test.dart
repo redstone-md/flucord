@@ -46,6 +46,7 @@ void main() {
     String? channelId = 'channel-1',
     ValueChanged<Member>? onMessage,
     HeldRoles Function(Member member)? heldRolesOf,
+    double textScale = 1,
   }) async {
     final controller = GuildMemberListController(
       () => repository,
@@ -55,6 +56,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: Scaffold(
           body: Row(
             children: [
@@ -317,6 +324,32 @@ void main() {
     expect(find.byType(MemberRosterView), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // 1.5 is the largest font scale the accessibility settings allow.
+  testWidgets('rows grow with the largest font scale', (tester) async {
+    final repository = _FakeMemberListRepository()..cached = sample;
+
+    await pumpSidebar(
+      tester,
+      repository: repository,
+      members: const [_jackPlaying],
+      textScale: 1.5,
+    );
+    await tester.pump();
+
+    final row = tester.getRect(
+      find.byKey(const ValueKey('member-row-111111111111111111')),
+    );
+    for (final line in [
+      find.text('Jack'),
+      find.byKey(const ValueKey('member-activity-111111111111111111')),
+    ]) {
+      final shown = tester.getRect(line);
+      expect(row.top, lessThanOrEqualTo(shown.top));
+      expect(row.bottom, greaterThanOrEqualTo(shown.bottom));
+    }
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final class _FakeMemberListRepository implements GuildMemberListRepository {
@@ -383,6 +416,20 @@ const _jack = Member(
   presence: Presence.online,
   colorValue: 0xff48745f,
   spaceIds: {'guild-1'},
+);
+
+const _jackPlaying = Member(
+  id: '111111111111111111',
+  displayName: 'Jack',
+  initials: 'JK',
+  role: 'Architect',
+  presence: Presence.online,
+  colorValue: 0xff48745f,
+  spaceIds: {'guild-1'},
+  presenceDetail: UserPresence(
+    status: Presence.online,
+    activities: [UserActivity(name: 'Dota 2')],
+  ),
 );
 
 const _mira = Member(

@@ -494,7 +494,7 @@ class _MemberRow extends StatelessWidget {
             onSecondaryTap: () => onPressed(context),
             borderRadius: FlucordRadius.control,
             child: SizedBox(
-              height: MemberRosterView.rowHeight,
+              height: MemberRosterView.rowExtentOf(context),
               child: WithNameplate(
                 nameplate: member.tags.nameplate,
                 placement: NameplatePlacement.memberList,

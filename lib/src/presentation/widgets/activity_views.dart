@@ -117,16 +117,19 @@ final class ActivitySummary {
         : inVoice
         ? FlucordIcons.voiceChannel
         : null;
+    // The activities past the main one, whose icon the line shows.
+    final more = main == null ? 0 : doing.length - 1;
     final status = custom?.state ?? '';
     if (custom != null && (status.isNotEmpty || custom.emoji != null)) {
-      return ActivitySummary._(kind: kind, emoji: custom.emoji, text: status);
-    }
-    if (main != null) {
       return ActivitySummary._(
         kind: kind,
-        text: main.subject,
-        more: doing.length - 1,
+        emoji: custom.emoji,
+        text: status,
+        more: more,
       );
+    }
+    if (main != null) {
+      return ActivitySummary._(kind: kind, text: main.subject, more: more);
     }
     if (inVoice) return ActivitySummary._(kind: kind, text: 'In voice');
     return null;
