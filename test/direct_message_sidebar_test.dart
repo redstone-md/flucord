@@ -2,6 +2,7 @@ import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/application/friends_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/presentation/widgets/activity_views.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
@@ -94,6 +95,32 @@ void main() {
         matching: find.byKey(const ValueKey('member-presence-bo')),
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('a DM row says what the person is doing under the name', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final line = find.descendant(
+      of: _row('dm-jack'),
+      matching: find.byType(ActivitySummaryLine),
+    );
+    expect(
+      find.descendant(of: line, matching: find.text('Dota 2')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(line).top,
+      greaterThanOrEqualTo(tester.getRect(find.text('Jack')).bottom),
+    );
+    expect(
+      find.descendant(
+        of: _row('dm-bo'),
+        matching: find.byType(ActivitySummaryLine),
+      ),
+      findsNothing,
     );
   });
 
@@ -246,7 +273,11 @@ ConversationChannel _dm(
   isMessageRequest: request,
 );
 
-Member _person(String id, Presence presence) => Member(
+Member _person(
+  String id,
+  Presence presence, {
+  List<UserActivity> activities = const [],
+}) => Member(
   id: id,
   displayName: '${id[0].toUpperCase()}${id.substring(1)}',
   initials: id[0].toUpperCase(),
@@ -254,6 +285,7 @@ Member _person(String id, Presence presence) => Member(
   presence: presence,
   colorValue: 0xff59636a,
   spaceIds: const {CommunitySpace.directMessagesId},
+  presenceDetail: UserPresence(status: presence, activities: activities),
 );
 
 final _workspace = ChatWorkspace(
@@ -273,7 +305,11 @@ final _workspace = ChatWorkspace(
       presence: Presence.online,
       colorValue: 0xff456b5a,
     ),
-    _person('jack', Presence.online),
+    _person(
+      'jack',
+      Presence.online,
+      activities: const [UserActivity(name: 'Dota 2')],
+    ),
     _person('ann', Presence.idle),
     _person('bo', Presence.offline),
     _person('cy', Presence.online),

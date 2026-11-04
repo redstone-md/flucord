@@ -15,6 +15,7 @@ import '../../theme/flucord_type.dart';
 import 'server_menu.dart';
 import 'account_panel.dart';
 import 'activity_label.dart';
+import 'activity_views.dart';
 import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';

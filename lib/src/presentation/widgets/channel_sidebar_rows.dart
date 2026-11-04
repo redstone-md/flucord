@@ -601,13 +601,26 @@ class _ChannelRow extends StatelessWidget {
                     ),
                   const SizedBox(width: _SidebarMetrics.iconGap),
                   Expanded(
-                    child: Text(
-                      channel.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: FlucordTextRole.label.style.copyWith(
-                        color: foreground,
-                        fontWeight: strong ? FontWeight.w500 : FontWeight.w400,
-                      ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          channel.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: FlucordTextRole.label.style.copyWith(
+                            color: foreground,
+                            fontWeight: strong
+                                ? FontWeight.w500
+                                : FontWeight.w400,
+                          ),
+                        ),
+                        // What the person is doing, the way the member list
+                        // says it. With nothing to say the name sits centred.
+                        if (_activityOf(person) case final summary?)
+                          ActivitySummaryLine(summary: summary),
+                      ],
                     ),
                   ),
                   if (muted)
@@ -653,6 +666,15 @@ class _ChannelRow extends StatelessWidget {
       ),
     );
   }
+
+  /// The activity line for a DM's person, or null for a channel or somebody
+  /// doing nothing.
+  static ActivitySummary? _activityOf(Member? person) => switch (person) {
+    final person? => ActivitySummary.of(
+      person.presenceDetail?.activities ?? const [],
+    ),
+    null => null,
+  };
 
   static FlucordIconData _iconFor(ConversationChannel channel) {
     if (channel.isDirectMessage) return FlucordIcons.person;
