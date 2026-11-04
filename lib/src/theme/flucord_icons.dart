@@ -304,6 +304,12 @@ abstract final class FlucordIcons {
   static const audio = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
   static const superReaction = FlucordIconData(HugeIcons.strokeRoundedSparkles);
   static const favourite = FlucordIconData(HugeIcons.strokeRoundedStar);
+
+  /// [favourite], filled in: an item that is starred. The free set has no
+  /// solid star, so the shape tells the two apart, not only the colour.
+  static final favourited = FlucordIconData(
+    _filled(HugeIcons.strokeRoundedStar),
+  );
   // System messages.
   static const boost = FlucordIconData(HugeIcons.strokeRoundedFlash);
   static const stage = FlucordIconData(HugeIcons.strokeRoundedPodcast);
@@ -324,6 +330,15 @@ abstract final class FlucordIcons {
   static const emojiObjects = FlucordIconData(HugeIcons.strokeRoundedBulb);
   static const emojiSymbols = FlucordIconData(HugeIcons.strokeRoundedFavourite);
   static const emojiFlags = FlucordIconData(HugeIcons.strokeRoundedFlag02);
+
+  /// [drawing] with every shape filled in its own stroke colour.
+  static List<List<dynamic>> _filled(List<List<dynamic>> drawing) => [
+    for (final [tag, attributes] in drawing)
+      [
+        tag,
+        {...attributes as Map<String, dynamic>, 'fill': 'currentColor'},
+      ],
+  ];
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
