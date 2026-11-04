@@ -28,6 +28,7 @@ import 'gif_picker.dart';
 import 'slash_command_list.dart';
 import 'spell_check_scope.dart';
 import 'native_voice_message_player.dart';
+import 'voice_recording_waveform.dart';
 import 'pending_attachment_strip.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
@@ -270,6 +271,7 @@ class MessageComposerState extends State<MessageComposer>
     _slowmodeTicker?.cancel();
     _voiceGeneration++;
     unawaited(_voiceProgressSubscription?.cancel());
+    _voiceLevels.dispose();
     final recorder = widget.voiceMessageRecorder;
     final pending = _pendingVoiceMessage;
     if ((recorder?.isRecording ?? false) && !_isUploadingVoice) {
@@ -685,7 +687,7 @@ class MessageComposerState extends State<MessageComposer>
           ],
           if (_hasVoiceSession)
             _VoiceMessageComposerBar(
-              progress: _voiceProgress,
+              levels: _voiceLevels,
               isRecording: _isRecordingVoice,
               isUploading: _isUploadingVoice,
               hasPendingMessage: _pendingVoiceMessage != null,

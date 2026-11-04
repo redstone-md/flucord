@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/build_counter.dart';
 import 'support/fake_voice_message_recorder.dart';
 
 void main() {
@@ -33,9 +34,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('record-voice-message')));
     await tester.pump();
     recorder.emit(
-      VoiceMessageRecordingProgress(
-        duration: const Duration(milliseconds: 1234),
-        samples: const [0.2, 0.8, 0.4],
+      const VoiceMessageRecordingProgress(
+        duration: Duration(milliseconds: 1240),
+        level: 0.8,
       ),
     );
     await tester.pump();
@@ -60,6 +61,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a recording does not rebuild the composer on each level', (
+    tester,
+  ) async {
+    final recorder = FakeVoiceMessageRecorder();
+    addTearDown(recorder.dispose);
+    await tester.pumpWidget(
+      _composerApp(recorder: recorder, onSendVoiceMessage: (_) async => true),
+    );
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+
+    final builds = await countBuilds(() async {
+      for (var frame = 1; frame <= 60; frame++) {
+        recorder.emit(
+          VoiceMessageRecordingProgress(
+            duration: Duration(milliseconds: frame * 20),
+            level: frame.isEven ? 0.9 : 0.2,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    });
+
+    expect(builds.of<MessageComposer>(), 0);
+    expect(find.text('00:01'), findsOneWidget);
+  });
+
   testWidgets('retains a failed upload for retry at compact width', (
     tester,
   ) async {
@@ -79,9 +107,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('record-voice-message')));
     await tester.pump();
     recorder.emit(
-      VoiceMessageRecordingProgress(
-        duration: const Duration(seconds: 2),
-        samples: const [0.3, 0.7],
+      const VoiceMessageRecordingProgress(
+        duration: Duration(seconds: 2),
+        level: 0.7,
       ),
     );
     await tester.pump();

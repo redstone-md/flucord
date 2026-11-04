@@ -1,11 +1,15 @@
+/// One 20 ms frame of a recording in progress.
 final class VoiceMessageRecordingProgress {
-  VoiceMessageRecordingProgress({
+  const VoiceMessageRecordingProgress({
     required this.duration,
-    required List<double> samples,
-  }) : samples = List.unmodifiable(samples);
+    required this.level,
+  });
 
+  /// How much has been recorded, up to the end of this frame.
   final Duration duration;
-  final List<double> samples;
+
+  /// The frame's peak, from 0 (silence) to 1, on the waveform's scale.
+  final double level;
 }
 
 final class PendingVoiceMessage {
@@ -32,6 +36,7 @@ final class PendingVoiceMessage {
 }
 
 abstract interface class VoiceMessageRecorder {
+  /// One event per recorded frame. A capture failure arrives as an error.
   Stream<VoiceMessageRecordingProgress> get progress;
   bool get isRecording;
 
