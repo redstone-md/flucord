@@ -705,6 +705,7 @@ final class SqliteChatCache
     'default_sort_order': channel.defaultSortOrder?.index,
     'default_forum_layout': channel.defaultForumLayout?.index,
     'recipient_ids_json': ChatModelJson.strings(channel.recipientIds),
+    'is_group_dm': channel.isGroupDirectMessage ? 1 : 0,
     'icon_url': channel.iconUrl,
     'is_message_request': channel.isMessageRequest ? 1 : 0,
     'message_requested_at': channel.messageRequestedAt?.toIso8601String(),
@@ -756,6 +757,7 @@ final class SqliteChatCache
         recipientIds: ChatModelJson.stringListFrom(
           row['recipient_ids_json']! as String,
         ),
+        isGroupDirectMessage: row['is_group_dm'] == 1,
         iconUrl: row['icon_url'] as String?,
         isMessageRequest: row['is_message_request'] == 1,
         messageRequestedAt: switch (row['message_requested_at']) {

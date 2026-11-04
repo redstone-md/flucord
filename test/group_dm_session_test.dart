@@ -203,4 +203,59 @@ void main() {
     ready: _readyWithGroup(),
     onDisk: true,
   );
+
+  testSession(
+    'a group with one other person stays a group, even when they leave',
+    (tester, session) async {
+      for (final id in [_duoId, _namedDuoId]) {
+        expect(_groupAvatarIn(id), findsOneWidget);
+        expect(
+          find.descendant(of: _row(id), matching: find.byType(MemberAvatar)),
+          findsNothing,
+        );
+      }
+      expect(_inRow(_duoId, 'Stranger'), findsOneWidget);
+      expect(_inRow(_namedDuoId, 'Duo'), findsOneWidget);
+
+      await session.dispatch('CHANNEL_RECIPIENT_REMOVE', {
+        'channel_id': _duoId,
+        'user': _stranger,
+      });
+
+      expect(_groupAvatarIn(_duoId), findsOneWidget);
+      expect(_inRow(_duoId, 'Unnamed group'), findsOneWidget);
+    },
+    ready: _readyWithDuos(),
+  );
+}
+
+const _duoId = '400000000000000041';
+const _namedDuoId = '400000000000000042';
+
+Finder _groupAvatarIn(String id) => find.descendant(
+  of: _row(id),
+  matching: find.byKey(ValueKey('group-dm-avatar-$id')),
+);
+
+/// The default READY, plus two group DMs that each hold one other person.
+Map<String, Object?> _readyWithDuos() {
+  final ready = SessionHarness.defaultReady();
+  ready['users'] = [...ready['users']! as List, _stranger];
+  ready['private_channels'] = [
+    ...ready['private_channels']! as List,
+    {
+      'id': _duoId,
+      'type': 3,
+      'name': null,
+      'recipient_ids': [_strangerId],
+    },
+    {
+      'id': _namedDuoId,
+      'type': 3,
+      'name': 'Duo',
+      'icon': 'a1b2c3',
+      'recipient_ids': [_strangerId],
+    },
+  ];
+  return ready;
 }

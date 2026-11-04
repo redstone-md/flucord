@@ -56,6 +56,7 @@ abstract final class SqliteChatSchema {
         default_sort_order INTEGER,
         default_forum_layout INTEGER,
         recipient_ids_json TEXT NOT NULL DEFAULT '[]',
+        is_group_dm INTEGER NOT NULL DEFAULT 0,
         icon_url TEXT,
         is_message_request INTEGER NOT NULL DEFAULT 0,
         message_requested_at TEXT,
@@ -405,11 +406,17 @@ abstract final class SqliteChatSchema {
     if (oldVersion < 27) {
       // A DM keeps every recipient, so a group DM fits. The old single
       // recipient moves into the list and its column is left unused: dropping
-      // a column needs a newer SQLite than every install has.
+      // a column needs a newer SQLite than every install has. Every row
+      // written before this version is a one-to-one DM, which zero says.
       await _addColumn(
         database,
         'channels',
         "recipient_ids_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await _addColumn(
+        database,
+        'channels',
+        'is_group_dm INTEGER NOT NULL DEFAULT 0',
       );
       await _addColumn(database, 'channels', 'icon_url TEXT');
       if (await _hasTable(database, 'channels')) {

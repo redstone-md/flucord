@@ -69,7 +69,7 @@ The sound of what is being shared, travelling with the stream rather than with t
 _Avoid_: system audio, loopback audio, desktop audio
 
 **Direct message (DM)**:
-A conversation outside any server, listed under Direct Messages. It has a list of recipients: one makes a one-to-one DM, any other number a group DM.
+A conversation outside any server, listed under Direct Messages. It has a list of recipients. A one-to-one DM has exactly one; a group DM has any number.
 _Avoid_: private channel (Discord's API name)
 
 **Recipient**:
@@ -77,5 +77,5 @@ Somebody a DM is with. Never this account.
 _Avoid_: participant, peer, member
 
 **Group DM**:
-A DM that is not one-to-one. It may have its own name and picture; with no name, it goes by its recipients' names.
+A DM Discord made as a group. It stays a group when only one other person, or nobody, is left in it. It may have its own name and picture; with no name, it goes by its recipients' names.
 _Avoid_: group chat, group channel

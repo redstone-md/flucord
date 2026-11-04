@@ -29,7 +29,17 @@ void main() {
             topic: '',
             kind: ChannelKind.text,
             recipientIds: ['user-1', 'user-2'],
+            isGroupDirectMessage: true,
             iconUrl: _iconUrl,
+          ),
+          ConversationChannel(
+            id: 'duo',
+            spaceId: CommunitySpace.directMessagesId,
+            name: 'Duo',
+            topic: '',
+            kind: ChannelKind.text,
+            recipientIds: ['user-1'],
+            isGroupDirectMessage: true,
           ),
         ],
         members: const [],
@@ -37,11 +47,15 @@ void main() {
         currentMemberId: 'me',
       ),
     );
-    final group = (await cache.readWorkspace())!.channelById(_groupId);
+    final restored = (await cache.readWorkspace())!;
+    final group = restored.channelById(_groupId);
 
     expect(group.recipientIds, ['user-1', 'user-2']);
     expect(group.iconUrl, _iconUrl);
     expect(group.isGroupDirectMessage, isTrue);
+    final duo = restored.channelById('duo');
+    expect(duo.isGroupDirectMessage, isTrue);
+    expect(duo.soleRecipientId, isNull);
   });
 
   test('a DM cached before v27 keeps its one recipient', () async {
@@ -58,6 +72,7 @@ void main() {
     final channel = (await cache.readWorkspaceShell())!.channelById('dm-1');
 
     expect(channel.soleRecipientId, 'user-1');
+    expect(channel.isGroupDirectMessage, isFalse);
     expect(channel.iconUrl, isNull);
   });
 }

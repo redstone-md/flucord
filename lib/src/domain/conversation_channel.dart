@@ -26,6 +26,7 @@ final class ConversationChannel {
     this.defaultSortOrder,
     this.defaultForumLayout,
     this.recipientIds = const [],
+    this.isGroupDirectMessage = false,
     this.iconUrl,
     this.isMessageRequest = false,
     this.messageRequestedAt,
@@ -67,9 +68,14 @@ final class ConversationChannel {
 
   /// Who this DM is with, never this account. Empty outside the DM list.
   ///
-  /// One recipient makes a one-to-one DM; any other count is a group DM,
-  /// including a group everybody else has left.
+  /// A one-to-one DM has exactly one. A group DM may have any number, even
+  /// one or none once the others have left.
   final List<String> recipientIds;
+
+  /// A group DM (Discord's type 3), whatever its recipient count. A group
+  /// keeps its name, picture and membership when only one other person is
+  /// left in it, so the count cannot decide this.
+  final bool isGroupDirectMessage;
 
   /// A group DM's own picture, or null for the group avatar.
   final String? iconUrl;
@@ -124,11 +130,11 @@ final class ConversationChannel {
   /// Whether this is a DM, one-to-one or group: a channel in the DM list.
   bool get isDirectMessage => spaceId == CommunitySpace.directMessagesId;
 
-  bool get isGroupDirectMessage => isDirectMessage && recipientIds.length != 1;
-
   /// The one person a one-to-one DM is with, or null for anything else.
   String? get soleRecipientId =>
-      isDirectMessage && recipientIds.length == 1 ? recipientIds.single : null;
+      isDirectMessage && !isGroupDirectMessage && recipientIds.length == 1
+      ? recipientIds.single
+      : null;
 
   /// The guild this channel belongs to, or null outside a server.
   ///
@@ -245,6 +251,7 @@ final class ConversationChannel {
     defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
     defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
     recipientIds: recipientIds,
+    isGroupDirectMessage: isGroupDirectMessage,
     iconUrl: iconUrl,
     isMessageRequest: isMessageRequest ?? this.isMessageRequest,
     messageRequestedAt:
