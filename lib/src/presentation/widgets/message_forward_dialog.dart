@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_forward_destination_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -107,7 +108,7 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
           onChanged: _search,
           decoration: const InputDecoration(
             hintText: 'Search channels and conversations',
-            prefixIcon: Icon(Icons.search, size: 19),
+            prefixIcon: FlucordIcon(FlucordIcons.search, size: 19),
             isDense: true,
           ),
         ),
@@ -251,7 +252,7 @@ class _DestinationRow extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 10),
-            Icon(_icon, size: 18, color: context.surfaces.muted),
+            FlucordIcon(_icon, size: 18, color: context.surfaces.muted),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -281,7 +282,11 @@ class _DestinationRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
+              FlucordIcon(
+                FlucordIcons.check,
+                size: 17,
+                color: context.surfaces.accentIcon,
+              ),
             const SizedBox(width: 10),
           ],
         ),
@@ -289,10 +294,10 @@ class _DestinationRow extends StatelessWidget {
     ),
   );
 
-  IconData get _icon => switch (destination.kind) {
-    MessageForwardDestinationKind.directMessage => Icons.alternate_email,
-    MessageForwardDestinationKind.textChannel => Icons.tag,
-    MessageForwardDestinationKind.voiceChannel => Icons.volume_up_outlined,
-    MessageForwardDestinationKind.thread => Icons.forum_outlined,
+  FlucordIconData get _icon => switch (destination.kind) {
+    MessageForwardDestinationKind.directMessage => FlucordIcons.mention,
+    MessageForwardDestinationKind.textChannel => FlucordIcons.textChannel,
+    MessageForwardDestinationKind.voiceChannel => FlucordIcons.voiceChannel,
+    MessageForwardDestinationKind.thread => FlucordIcons.threads,
   };
 }

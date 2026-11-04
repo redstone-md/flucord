@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -128,7 +129,11 @@ class _SourceLine extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.forward, size: 13, color: context.surfaces.muted),
+          FlucordIcon(
+            FlucordIcons.forward,
+            size: 13,
+            color: context.surfaces.muted,
+          ),
           const SizedBox(width: 5),
           Flexible(
             child: Text(

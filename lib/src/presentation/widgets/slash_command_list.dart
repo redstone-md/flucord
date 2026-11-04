@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -162,7 +163,11 @@ class _CommandRow extends StatelessWidget {
           ] else
             const Spacer(),
           if (command.hasRequiredInputs)
-            Icon(Icons.edit_outlined, size: 13, color: context.surfaces.muted),
+            FlucordIcon(
+              FlucordIcons.edit,
+              size: 13,
+              color: context.surfaces.muted,
+            ),
         ],
       ),
     ),

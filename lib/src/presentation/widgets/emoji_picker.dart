@@ -358,7 +358,7 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
               style: const TextStyle(fontSize: FlucordType.caption),
               decoration: const InputDecoration(
                 hintText: 'Find emoji',
-                prefixIcon: Icon(Icons.search, size: 16),
+                prefixIcon: FlucordIcon(FlucordIcons.search, size: 16),
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(vertical: 9),
               ),
@@ -367,16 +367,16 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
           Divider(height: 1, color: context.surfaces.border),
           _CategoryBar(
             categories: const [
-              (Icons.history, 'Frequently used'),
-              (Icons.emoji_emotions, 'Smileys & Emotion'),
-              (Icons.emoji_people, 'People & Body'),
-              (Icons.pets, 'Animals & Nature'),
-              (Icons.restaurant, 'Food & Drink'),
-              (Icons.flight_takeoff, 'Travel & Places'),
-              (Icons.celebration, 'Activities'),
-              (Icons.emoji_objects, 'Objects'),
-              (Icons.favorite, 'Symbols'),
-              (Icons.flag, 'Flags'),
+              (FlucordIcons.recent, 'Frequently used'),
+              (FlucordIcons.emoji, 'Smileys & Emotion'),
+              (FlucordIcons.person, 'People & Body'),
+              (FlucordIcons.emojiAnimals, 'Animals & Nature'),
+              (FlucordIcons.emojiFood, 'Food & Drink'),
+              (FlucordIcons.emojiTravel, 'Travel & Places'),
+              (FlucordIcons.emojiActivities, 'Activities'),
+              (FlucordIcons.emojiObjects, 'Objects'),
+              (FlucordIcons.emojiSymbols, 'Symbols'),
+              (FlucordIcons.emojiFlags, 'Flags'),
             ],
             selected: _category,
             onSelect: (index) => setState(() => _category = index),
@@ -448,7 +448,7 @@ class _CategoryBar extends StatelessWidget {
     required this.onSelect,
   });
 
-  final List<(IconData, String)> categories;
+  final List<(FlucordIconData, String)> categories;
   final int selected;
   final ValueChanged<int> onSelect;
 
@@ -467,7 +467,7 @@ class _CategoryBar extends StatelessWidget {
                 onTap: () => onSelect(index == selected ? -1 : index),
                 child: SizedBox.square(
                   dimension: 34,
-                  child: Icon(
+                  child: FlucordIcon(
                     categories[index].$1,
                     size: 15,
                     color: index == selected
@@ -624,8 +624,8 @@ class _EmojiTile extends StatelessWidget {
                   Positioned(
                     right: 0,
                     bottom: 0,
-                    child: Icon(
-                      Icons.star,
+                    child: FlucordIcon(
+                      FlucordIcons.favourite,
                       key: ValueKey('emoji-starred-${choice.key}'),
                       size: 9,
                       color: Colors.amber,
@@ -687,7 +687,11 @@ class _EmojiEmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.search_off, size: 26, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.noResults,
+          size: 26,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(height: 8),
         const Text(
           'No emoji found',

@@ -244,7 +244,7 @@ class _StickerPickerPanel extends StatelessWidget {
             onChanged: onQueryChanged,
             decoration: const InputDecoration(
               hintText: 'Search stickers',
-              prefixIcon: Icon(Icons.search, size: 18),
+              prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
             ),
           ),
         ),
@@ -325,7 +325,7 @@ class _StickerPickerPanel extends StatelessWidget {
                         dimension: 13,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.send, size: 15),
+                    : const FlucordIcon(FlucordIcons.send, size: 15),
                 label: const Text('Send'),
               ),
               const SizedBox(width: 10),

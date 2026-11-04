@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -44,7 +45,7 @@ class SystemMessageItem extends StatelessWidget {
                 border: Border.all(color: context.surfaces.border),
                 borderRadius: FlucordRadius.full,
               ),
-              child: Icon(descriptor.icon, size: 16),
+              child: FlucordIcon(descriptor.icon, size: 16),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -123,46 +124,45 @@ final class _SystemMessageAction {
 final class _SystemMessageDescriptor {
   const _SystemMessageDescriptor({required this.icon, required this.text});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String text;
 
   factory _SystemMessageDescriptor.from(ChatMessage message, Member member) {
     final icon = switch (message.type) {
-      DiscordMessageType.recipientAdd => Icons.person_add_alt_1_outlined,
-      DiscordMessageType.recipientRemove => Icons.person_remove_alt_1_outlined,
-      DiscordMessageType.call => Icons.call_outlined,
-      DiscordMessageType.channelNameChange => Icons.edit_outlined,
-      DiscordMessageType.channelIconChange => Icons.image_outlined,
-      DiscordMessageType.channelPinnedMessage => Icons.push_pin_outlined,
-      DiscordMessageType.userJoin => Icons.login,
-      DiscordMessageType.guildBoost => Icons.bolt_outlined,
+      DiscordMessageType.recipientAdd => FlucordIcons.invite,
+      DiscordMessageType.recipientRemove => FlucordIcons.removeFriend,
+      DiscordMessageType.call => FlucordIcons.call,
+      DiscordMessageType.channelNameChange => FlucordIcons.edit,
+      DiscordMessageType.channelIconChange => FlucordIcons.image,
+      DiscordMessageType.channelPinnedMessage => FlucordIcons.pin,
+      DiscordMessageType.userJoin => FlucordIcons.joined,
+      DiscordMessageType.guildBoost ||
       DiscordMessageType.guildBoostTier1 ||
       DiscordMessageType.guildBoostTier2 ||
-      DiscordMessageType.guildBoostTier3 => Icons.bolt,
-      DiscordMessageType.channelFollowAdd =>
-        Icons.notifications_active_outlined,
-      DiscordMessageType.guildDiscoveryDisqualified =>
-        Icons.explore_off_outlined,
-      DiscordMessageType.guildDiscoveryRequalified => Icons.explore_outlined,
+      DiscordMessageType.guildBoostTier3 => FlucordIcons.boost,
+      DiscordMessageType.channelFollowAdd => FlucordIcons.notify,
+      DiscordMessageType.guildDiscoveryRequalified => FlucordIcons.explore,
+      DiscordMessageType.guildDiscoveryDisqualified ||
       DiscordMessageType.guildDiscoveryGracePeriodInitialWarning ||
       DiscordMessageType.guildDiscoveryGracePeriodFinalWarning =>
-        Icons.warning_amber,
-      DiscordMessageType.threadCreated => Icons.forum_outlined,
-      DiscordMessageType.guildInviteReminder => Icons.person_add_alt_outlined,
+        FlucordIcons.warning,
+      DiscordMessageType.threadCreated => FlucordIcons.threads,
+      DiscordMessageType.guildInviteReminder => FlucordIcons.invite,
       DiscordMessageType.roleSubscriptionPurchase ||
       DiscordMessageType.guildApplicationPremiumSubscription =>
-        Icons.workspace_premium_outlined,
-      DiscordMessageType.stageStart => Icons.podcasts_outlined,
-      DiscordMessageType.stageEnd => Icons.stop_circle_outlined,
-      DiscordMessageType.stageSpeaker => Icons.mic_outlined,
-      DiscordMessageType.stageTopic => Icons.topic_outlined,
-      DiscordMessageType.guildIncidentAlertModeEnabled => Icons.shield_outlined,
+        FlucordIcons.entitlements,
+      DiscordMessageType.stageStart => FlucordIcons.stage,
+      DiscordMessageType.stageEnd => FlucordIcons.stop,
+      DiscordMessageType.stageSpeaker => FlucordIcons.mic,
+      DiscordMessageType.stageTopic => FlucordIcons.edit,
+      DiscordMessageType.guildIncidentAlertModeEnabled =>
+        FlucordIcons.alertMode,
       DiscordMessageType.guildIncidentAlertModeDisabled =>
-        Icons.shield_moon_outlined,
-      DiscordMessageType.guildIncidentReportRaid => Icons.report_outlined,
+        FlucordIcons.alertModeOff,
+      DiscordMessageType.guildIncidentReportRaid => FlucordIcons.report,
       DiscordMessageType.guildIncidentReportFalseAlarm =>
-        Icons.report_off_outlined,
-      _ => Icons.info_outline,
+        FlucordIcons.reportOff,
+      _ => FlucordIcons.info,
     };
     return _SystemMessageDescriptor(
       icon: icon,
