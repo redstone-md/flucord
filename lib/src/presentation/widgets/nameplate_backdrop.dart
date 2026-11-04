@@ -11,14 +11,9 @@ import 'nameplate_motion.dart';
 /// The list a nameplate stands in.
 enum NameplatePlacement { memberList, directMessages }
 
-/// The palette wash under a nameplate.
-///
-/// Discord's web client paints it in the member list and the DM list as
-/// `linear-gradient(90deg, transparent 0%, c 8% at 20% and 50%, c at 100%)`.
-/// The end is 20 % strong at rest, 30 % under the pointer in the member list,
-/// and 50 % on the selected row. `c` is the palette's dark colour in a dark
-/// theme and its light colour in a light one. Source: chunk 351952 of the web
-/// client dump in Wumpus-Central/discrapper-canary.
+/// The palette wash under a nameplate, in the palette's dark colour in a dark
+/// theme and its light one in a light theme. Stops and strengths from chunk
+/// 351952 of Discord's web client (Wumpus-Central/discrapper-canary).
 final class NameplateWash {
   NameplateWash(
     NameplatePalette palette, {
@@ -86,13 +81,10 @@ extension on NameplatePalette {
 
 /// Draws a nameplate behind a row of the member list or the DM list.
 ///
-/// As Discord's clients draw it: the still picture as tall as the row and
-/// 16:3 wide, against the row's end and cut to the row's shape (the mobile
-/// client's Nameplate.tsx in Wumpus-Central/discord-mobile-datamining), over
-/// the palette wash. The plate is clear under the text marked with
-/// [NameplateText] and comes to full strength
-/// over the 50 px after it (the web client's mask in chunk 351952), so the
-/// text stays readable.
+/// The still picture sits against the row's end over the palette wash, clear
+/// under the text marked with [NameplateText]. Layout from the mobile
+/// client's Nameplate.tsx (Wumpus-Central/discord-mobile-datamining), the
+/// fade from the web client's mask in chunk 351952.
 ///
 /// Under the pointer the moving nameplate plays over the still picture,
 /// through the [NameplateMotion] of the [NameStyleScope] above, which plays

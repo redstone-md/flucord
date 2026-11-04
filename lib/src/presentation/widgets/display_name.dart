@@ -11,20 +11,12 @@ import 'name_style_scope.dart';
 /// member list, the DM list, message authors and the profile all draw names
 /// with it.
 ///
-/// Inside a server the role colour wins: the name takes the colour of the
-/// member's role, or the plain colour of [style], and the style's colours and
-/// effect are not drawn at all. Outside a server they are. The font is drawn
-/// in both. This is Discord's own rule: its web client draws the styled name
-/// only when there is no guild (the member list item in chunk 110574,
-/// `null == guildId && null != styles`) or the channel is private (the
-/// message author in chunk 799162, `channel.isPrivate() && null != styles`);
-/// elsewhere it passes only the style's font next to the role colour.
-/// Source: the web client dump in Wumpus-Central/discrapper-canary.
+/// Inside a server the role colour wins over the style's colours and effect;
+/// the font is drawn in both. Discord's web client has the same rule (chunks
+/// 110574 and 799162 of Wumpus-Central/discrapper-canary).
 ///
-/// A font is fetched the first time a name needs it ([DisplayNameFonts]).
-/// Until it arrives the name is in the app font, at the same line height, so
-/// nothing moves when it does. Fonts and effects this client does not know
-/// ([DisplayNameFont], [NameEffect]) draw the plain name.
+/// Until its font is ready ([DisplayNameFonts]) the name is in the app font.
+/// Fonts and effects this client does not know draw the plain name.
 class DisplayName extends StatelessWidget {
   const DisplayName(
     this.text, {
