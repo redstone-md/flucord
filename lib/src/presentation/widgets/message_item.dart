@@ -38,6 +38,7 @@ import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
 import 'message_row_metrics.dart';
 import 'message_sticker_view.dart';
+import 'popup_anchor.dart';
 import 'profile_card_route.dart';
 import 'message_timestamp.dart';
 import 'name_tags.dart';
@@ -700,7 +701,7 @@ class _MessageItemState extends State<MessageItem> {
         label: '${widget.member.displayName} profile',
         onTap: open == null
             ? null
-            : () => open(widget.message.authorId, profileCardAnchorOf(context)),
+            : () => open(widget.message.authorId, popupAnchorOf(context)),
         child: child,
       ),
     );

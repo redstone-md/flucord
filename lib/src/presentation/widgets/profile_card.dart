@@ -9,6 +9,7 @@ import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'flucord_menu.dart';
 import 'name_tags.dart';
+import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'remote_identity_image.dart';
@@ -408,7 +409,7 @@ class _MoreButton extends StatelessWidget {
   Future<void> _open(BuildContext context) async {
     final chosen = await showMenu<ProfileCardMenuEntry>(
       context: context,
-      position: _menuBelow(context),
+      position: menuBelow(context),
       items: [
         for (final entry in entries)
           FlucordMenuItem(
@@ -431,18 +432,6 @@ class _MoreButton extends StatelessWidget {
       tooltip: 'More',
       onPressed: () => _open(context),
     ),
-  );
-}
-
-/// Where a menu opened from the control at [context] goes: just under it.
-RelativeRect _menuBelow(BuildContext context) {
-  final control = context.findRenderObject()! as RenderBox;
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
-  final rect =
-      control.localToGlobal(Offset.zero, ancestor: overlay) & control.size;
-  return RelativeRect.fromRect(
-    Rect.fromLTWH(rect.left, rect.bottom + 4, rect.width, 0),
-    Offset.zero & overlay.size,
   );
 }
 

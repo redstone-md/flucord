@@ -273,7 +273,7 @@ class _Roles extends StatelessWidget {
   Future<void> _pick(BuildContext context) async {
     final role = await showMenu<CommunityRole>(
       context: context,
-      position: _menuBelow(context),
+      position: menuBelow(context),
       items: [
         if (addable.isEmpty)
           const FlucordMenuItem(label: 'No roles to add', enabled: false),

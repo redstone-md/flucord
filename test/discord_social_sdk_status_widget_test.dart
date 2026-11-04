@@ -120,7 +120,7 @@ void main() {
     expect(name.style?.fontWeight, FontWeight.w500);
   });
 
-  testWidgets('under zoom a row above the middle opens its profile downward', (
+  testWidgets('under zoom the profile opens level with its row', (
     tester,
   ) async {
     final harness = await _harnessFor(
@@ -129,13 +129,13 @@ void main() {
     );
     addTearDown(harness.dispose);
 
-    // 450 high at zoom 1.4 lays out 321 high, so the middle is at 160. The row
-    // is at 137 laid out and at 192 drawn, so it is above the middle unless the
-    // two are mixed up.
+    // 700 high at zoom 1.4 lays out 500 high, room for the card below the
+    // row. Laid-out and drawn positions differ by the zoom, so a card placed
+    // with the two mixed up lands away from the row.
     await _pumpAccountHome(
       tester,
       harness,
-      size: const Size(700, 450),
+      size: const Size(700, 700),
       builder: await zoomedAppBuilder(1.4),
     );
     final row = find.byKey(const ValueKey('discord-friend-online-1'));
@@ -144,7 +144,36 @@ void main() {
     await tester.pumpAndSettle();
 
     final profile = find.byKey(const ValueKey('profile-card'));
-    expect(tester.getTopLeft(profile).dy, greaterThanOrEqualTo(rowTop - 1));
+    expect(tester.getTopLeft(profile).dy, moreOrLessEquals(rowTop, epsilon: 1));
+  });
+
+  testWidgets('an open profile follows the relationship as it changes', (
+    tester,
+  ) async {
+    final request = _relationship(
+      id: 'request-1',
+      name: 'Ada',
+      kind: DiscordRelationshipKind.incomingRequest,
+    );
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [request],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+
+    await tester.tap(find.text('Ada'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('profile-card-message')), findsNothing);
+
+    await harness.friends.updateRelationship(
+      request,
+      DiscordRelationshipAction.acceptRequest,
+    );
+    await tester.pumpAndSettle();
+
+    // A friend now, so the card offers the message field.
+    expect(find.byKey(const ValueKey('profile-card-message')), findsOneWidget);
   });
 
   testWidgets('keeps linked-package authorization distinct from loading', (

@@ -21,6 +21,7 @@ import 'count_badge.dart';
 import 'direct_message_views.dart';
 import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
+import 'popup_anchor.dart';
 import 'profile_card_route.dart';
 import 'sidebar_row_metrics.dart';
 

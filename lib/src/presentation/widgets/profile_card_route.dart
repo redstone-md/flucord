@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Opens somebody's profile card beside the thing that was clicked: the
-/// person's id, and that thing's rectangle from [profileCardAnchorOf].
-typedef OpenProfileCard = void Function(String userId, Rect anchor);
+import 'popup_anchor.dart';
 
-/// The rectangle of the widget at [context], in the coordinates of the
-/// navigator a card opens in.
-Rect profileCardAnchorOf(BuildContext context) {
-  final box = context.findRenderObject()! as RenderBox;
-  final overlay =
-      Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
-  return box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
-}
+/// Opens somebody's profile card beside the thing that was clicked: the
+/// person's id, and that thing's rectangle from [popupAnchorOf].
+typedef OpenProfileCard = void Function(String userId, Rect anchor);
 
 /// Shows the card [builder] makes beside [anchor], and completes when it
 /// closes. A click outside or Escape closes it; [builder] gets a callback
@@ -41,6 +34,10 @@ final class _ProfileCardRoute extends PopupRoute<void> {
 
   @override
   Duration get transitionDuration => const Duration(milliseconds: 100);
+
+  // Closing is instant, as Discord's popout is.
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
 
   @override
   Widget buildPage(
