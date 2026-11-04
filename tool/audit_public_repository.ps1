@@ -82,7 +82,18 @@ class RepositoryPrivacyAudit {
       # Legacy: the first and last of 5000 generated channel ids that reached
       # the history of test/session_reconnect_diff_test.dart.
       '310000000000000000',
-      '310000000000004999'
+      '310000000000004999',
+      # Legacy: made-up group DM and message ids that reached the history of
+      # test/group_dm_session_test.dart and
+      # test/discord_direct_messages_test.dart.
+      '410000000000000031',
+      '450000000000000031',
+      # Legacy: Discord's public catalogue SKU of the Twilight nameplate, in
+      # the history of the nameplate tests. It names a shop item, not a person.
+      '1349849614353829990',
+      # Legacy: a round Steam id, not a Discord one, in the history of
+      # test/user_profile_test.dart.
+      '76561198000000000'
     )) {
       [void] $this.AllowedSnowflakes.Add($value)
     }
