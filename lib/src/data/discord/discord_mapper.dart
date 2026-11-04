@@ -4,6 +4,7 @@ import 'discord_message_component_service.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';
+import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/guild_membership.dart';
 import '../../domain/message_search.dart';
@@ -375,7 +376,7 @@ final class DiscordMapper {
     return NameStyle(
       colors: [
         for (final color in styles['colors'] as List? ?? const [])
-          if (color is int) 0xff000000 | color,
+          if (color is int) DiscordRgb(color).opaque,
       ],
       fontId: styles['font_id'] as int?,
       effectId: styles['effect_id'] as int?,

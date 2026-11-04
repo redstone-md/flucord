@@ -87,6 +87,18 @@ void main() {
       );
     });
 
+    test('a name colour keeps only its 24 colour bits', () {
+      final member = mapper.member(
+        _user({
+          'display_name_styles': {
+            'colors': [0x1005865f2],
+          },
+        }),
+      );
+
+      expect(member.tags.nameStyle?.colors, [0xff5865f2]);
+    });
+
     test('a palette this client does not know draws no wash', () {
       final member = mapper.member(
         _user({
