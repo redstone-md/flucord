@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/direct_message_candidate.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
@@ -222,6 +223,42 @@ class DirectMessageStart extends StatelessWidget {
   }
 }
 
+/// [DirectMessageProfilePanel] for a person the workspace knows.
+///
+/// The servers in common are the ones the workspace has seen them in, so the
+/// count can be low until their memberships load. With none seen, the
+/// section stays out rather than claiming there are none.
+class MemberProfilePanel extends StatelessWidget {
+  const MemberProfilePanel({
+    required this.person,
+    required this.spaces,
+    super.key,
+  });
+
+  final Member person;
+  final List<CommunitySpace> spaces;
+
+  @override
+  Widget build(BuildContext context) {
+    final mutual = [
+      for (final space in spaces)
+        if (!space.isDirectMessages && person.spaceIds.contains(space.id))
+          space,
+    ];
+    return DirectMessageProfilePanel(
+      avatar: MemberAvatar(
+        member: person,
+        size: DirectMessageProfilePanel.avatarSize,
+        presenceBorderColor: context.surfaces.surface,
+      ),
+      name: person.displayName,
+      status: person.presence,
+      memberSince: DiscordSnowflake.createdAt(person.id),
+      mutualServers: mutual.isEmpty ? null : mutual,
+    );
+  }
+}
+
 /// Who a DM is with, in a column on the conversation's right: the person,
 /// how long they have been on Discord, and the servers you share.
 class DirectMessageProfilePanel extends StatelessWidget {
@@ -297,7 +334,7 @@ class DirectMessageProfilePanel extends StatelessWidget {
               Text(
                 MaterialLocalizations.of(
                   context,
-                ).formatMediumDate(since.toLocal()),
+                ).formatFullDate(since.toLocal()),
                 style: FlucordTextRole.label.style.copyWith(
                   color: surfaces.text,
                 ),
