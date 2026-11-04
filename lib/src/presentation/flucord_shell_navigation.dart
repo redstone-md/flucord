@@ -627,7 +627,7 @@ extension _FlucordShellNavigation on FlucordShell {
     required Map<String, List<VoiceParticipantStateEvent>> seats,
   }) => [
     for (final channel in channels)
-      if (channel.recipientId case final recipientId?)
+      if (channel.soleRecipientId case final recipientId?)
         workspace.memberOrNull(recipientId),
     for (final channel in channels)
       for (final seat in seats[channel.id] ?? const [])

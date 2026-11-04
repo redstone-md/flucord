@@ -164,7 +164,7 @@ final _workspace = ChatWorkspace(
       name: 'Jack',
       topic: 'Direct message with Jack',
       kind: ChannelKind.text,
-      recipientId: 'user-1',
+      recipientIds: ['user-1'],
     ),
   ],
   members: const [

@@ -15,7 +15,7 @@ void _messageRequestCases() {
           name: 'mira',
           topic: '',
           kind: ChannelKind.text,
-          recipientId: _authorId,
+          recipientIds: [_authorId],
           lastMessageId: channelLastMessageId,
           isMessageRequest: true,
           messageRequestedAt: DateTime.utc(2026, 7, 1),
@@ -69,7 +69,7 @@ void _messageRequestCases() {
       expect(channel.messageRequestedAt, isNull);
       // The conversation is still present and still carries its history: the
       // answer moved it out of the request folder, not out of the account.
-      expect(channel.recipientId, _authorId);
+      expect(channel.recipientIds, [_authorId]);
       expect(
         controller.workspace!.messagesFor(_requestId).single.body,
         'is this thing on',

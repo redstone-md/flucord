@@ -118,6 +118,10 @@ final class DiscordSharedDispatches {
         unawaited(_upsertChannel(event.data));
       case 'CHANNEL_DELETE' || 'THREAD_DELETE':
         unawaited(_channels.delete(event.data));
+      case 'CHANNEL_RECIPIENT_ADD':
+        unawaited(_recipientChanged(event.data, added: true));
+      case 'CHANNEL_RECIPIENT_REMOVE':
+        unawaited(_recipientChanged(event.data, added: false));
       case 'CHANNEL_PINS_UPDATE':
         _pinsChanged(event.data);
       case 'GUILD_MEMBER_ADD' || 'GUILD_MEMBER_UPDATE':
@@ -178,6 +182,19 @@ final class DiscordSharedDispatches {
     if (currentUserId != null) {
       await _directMessages.acceptChannel(data, currentUserId);
     }
+  }
+
+  Future<void> _recipientChanged(
+    Map<String, Object?> data, {
+    required bool added,
+  }) async {
+    final currentUserId = _currentMemberId();
+    if (currentUserId == null) return;
+    await _directMessages.acceptRecipientChange(
+      data,
+      currentUserId,
+      added: added,
+    );
   }
 
   void _pinsChanged(Map<String, Object?> data) {

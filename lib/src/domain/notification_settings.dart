@@ -194,8 +194,8 @@ final class GuildNotificationSettings {
   /// here. A mention raises the badge and passes an "only mentions" setting.
   ///
   /// [namesAccount] means the message names the account or a role it holds.
-  /// As in Discord, every message in a one-to-one DM counts, and `@everyone`
-  /// or `@here` counts unless this space suppresses it.
+  /// As in Discord, every message in a DM counts, one-to-one or group, and
+  /// `@everyone` or `@here` counts unless this space suppresses it.
   bool countsAsMention({
     required bool namesAccount,
     required bool mentionsEveryone,

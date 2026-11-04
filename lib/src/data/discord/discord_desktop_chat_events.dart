@@ -194,7 +194,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
-    _adoptPrivateChannels(fresh);
+    _adoptPrivateChannels(fresh, payloads: snapshot.directChannels);
   }
 
   /// What changed from [cached] to [fresh].
@@ -232,16 +232,16 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
             when existing == null || _channelChanged(channel, existing))
           channel,
     ],
-    // A direct message the account has never seen here needs its recipient
-    // row. A recipient who only changed their name keeps the cached row until
+    // A DM the account has never seen here needs its recipients' rows. A
+    // recipient who only changed their name keeps the cached row until
     // the next full load: the shell carries no members to diff against, and
     // decoding the whole cache per dispatch would cost more than the staleness
     // does.
     members: [
       for (final channel in fresh.channels)
-        if (channel.recipientId case final recipientId?
-            when cached.channelOrNull(channel.id) == null)
-          ?fresh.memberOrNull(recipientId),
+        if (cached.channelOrNull(channel.id) == null)
+          for (final recipientId in channel.recipientIds)
+            ?fresh.memberOrNull(recipientId),
     ],
   );
 
@@ -307,7 +307,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     channel.isArchived,
     channel.isLocked,
     ?channel.lastMessageId,
-    ?channel.recipientId,
+    ...channel.recipientIds,
+    channel.isGroupDirectMessage,
+    ?channel.iconUrl,
+    channel.isMessageRequest,
     _overwriteSignature(channel.permissionOverwrites),
   ].join('|');
 

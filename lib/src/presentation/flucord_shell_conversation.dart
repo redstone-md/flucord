@@ -27,9 +27,11 @@ extension _FlucordShellConversation on FlucordShell {
     channel: channel,
     channels: channels,
     compact: !showChannels,
-    // A DM with one person has their profile there instead.
+    // A DM with one person has their profile there instead. A group DM has
+    // neither yet.
     allowMemberPanel:
-        membersFit && (!space.isDirectMessages || channel.isDirectMessage),
+        membersFit &&
+        (!space.isDirectMessages || channel.soleRecipientId != null),
     allowThreadPanel: allowThreadPanel,
     showMembers: showMembers,
     showPins: showPins,
@@ -96,7 +98,7 @@ extension _FlucordShellConversation on FlucordShell {
 
   /// The person a one-to-one DM is with, when the workspace knows them.
   Member? _recipientOf(ChatWorkspace workspace, ConversationChannel? channel) =>
-      switch (channel?.recipientId) {
+      switch (channel?.soleRecipientId) {
         final id? => workspace.memberOrNull(id),
         null => null,
       };

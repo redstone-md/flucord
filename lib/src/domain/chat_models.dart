@@ -361,7 +361,7 @@ final class ChatWorkspace {
         .toSet();
     final directMemberIds = <String>{
       currentMemberId,
-      for (final channel in directChannels) ?channel.recipientId,
+      for (final channel in directChannels) ...channel.recipientIds,
       for (final channelId in directChannelIds)
         for (final message in cached.messagesFor(channelId)) message.authorId,
     };

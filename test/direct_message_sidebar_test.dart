@@ -268,7 +268,7 @@ ConversationChannel _dm(
   name: '${person[0].toUpperCase()}${person.substring(1)}',
   topic: '',
   kind: ChannelKind.text,
-  recipientId: person,
+  recipientIds: [person],
   unread: unread,
   isMessageRequest: request,
 );

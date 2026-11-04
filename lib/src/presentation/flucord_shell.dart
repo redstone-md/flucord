@@ -280,7 +280,7 @@ class FlucordShell extends StatelessWidget {
                       final showMembers =
                           membersFit &&
                           (!space.isDirectMessages ||
-                              (channel?.isDirectMessage ?? false)) &&
+                              channel?.soleRecipientId != null) &&
                           workspaceController.showMembers &&
                           !showPins &&
                           !showThreads &&

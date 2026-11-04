@@ -735,7 +735,7 @@ class MessageListState extends State<MessageList>
 
   /// A DM starts on the person it is with; anything else on its name.
   Widget _conversationStart() {
-    final recipientId = widget.channel.recipientId;
+    final recipientId = widget.channel.soleRecipientId;
     final person = recipientId == null
         ? null
         : widget.workspace.memberOrNull(recipientId);

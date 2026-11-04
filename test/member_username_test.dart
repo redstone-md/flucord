@@ -84,7 +84,7 @@ void main() {
         'recipients': [_user()],
       }, '100000000000000001')!;
 
-      expect(dm.recipient.username, 'freezz5126');
+      expect(dm.recipients.single.username, 'freezz5126');
     });
   });
 

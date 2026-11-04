@@ -83,7 +83,7 @@ void main() {
     expect(events[2], isA<ChannelUpsertedEvent>());
     expect(events[3], isA<MessageUpsertedEvent>());
     final restored = await cache.readWorkspace();
-    expect(restored?.channels.single.recipientId, '123456789012345678');
+    expect(restored?.channels.single.recipientIds, ['123456789012345678']);
     expect(restored?.messages.single.body, 'Native DM path');
     expect(restored?.memberById('123456789012345678').displayName, 'Jack');
 

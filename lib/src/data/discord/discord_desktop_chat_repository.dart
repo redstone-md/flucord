@@ -446,7 +446,7 @@ final class DiscordDesktopChatRepository
             .restoreChannelActivityFrom(cached),
       );
       _adoptCurrentMember(workspace.currentMemberId);
-      _adoptPrivateChannels(workspace);
+      _adoptPrivateChannels(workspace, payloads: snapshot.directChannels);
       await _bootstrapStage(
         'cache-write',
         () => _cache.writeWorkspace(workspace),

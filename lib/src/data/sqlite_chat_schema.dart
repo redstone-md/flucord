@@ -55,7 +55,11 @@ abstract final class SqliteChatSchema {
         default_auto_archive_duration INTEGER,
         default_sort_order INTEGER,
         default_forum_layout INTEGER,
-        recipient_id TEXT,
+        recipient_ids_json TEXT NOT NULL DEFAULT '[]',
+        is_group_dm INTEGER NOT NULL DEFAULT 0,
+        icon_url TEXT,
+        is_message_request INTEGER NOT NULL DEFAULT 0,
+        message_requested_at TEXT,
         permission_overwrites_json TEXT,
         rate_limit_per_user INTEGER NOT NULL DEFAULT 0,
         is_age_gated INTEGER NOT NULL DEFAULT 0,
@@ -389,6 +393,40 @@ abstract final class SqliteChatSchema {
       );
       await _addColumn(database, 'members', 'clan_tag_json TEXT');
     }
+    if (oldVersion < 26) {
+      // A row written before this version reads as an answered DM. The next
+      // READY says which ones are still requests, and the reconnect diff
+      // moves them to the folder.
+      await _addColumn(
+        database,
+        'channels',
+        'is_message_request INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'channels', 'message_requested_at TEXT');
+    }
+    if (oldVersion < 27) {
+      // A DM keeps every recipient, so a group DM fits. The old single
+      // recipient moves into the list and its column is left unused: dropping
+      // a column needs a newer SQLite than every install has. Every row
+      // written before this version is a one-to-one DM, which zero says.
+      await _addColumn(
+        database,
+        'channels',
+        "recipient_ids_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await _addColumn(
+        database,
+        'channels',
+        'is_group_dm INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'channels', 'icon_url TEXT');
+      if (await _hasTable(database, 'channels')) {
+        await database.execute(
+          "UPDATE channels SET recipient_ids_json = '[\"' || recipient_id || '\"]' "
+          'WHERE recipient_id IS NOT NULL',
+        );
+      }
+    }
     if (oldVersion < 28) {
       // A row written before this version has no username. It comes back the
       // next time Discord sends the user.
@@ -407,6 +445,11 @@ abstract final class SqliteChatSchema {
     String table,
     String definition,
   ) async {
+    if (!await _hasTable(database, table)) return;
+    await database.execute('ALTER TABLE $table ADD $definition');
+  }
+
+  static Future<bool> _hasTable(Database database, String table) async {
     final existing = await database.query(
       'sqlite_master',
       columns: ['name'],
@@ -414,8 +457,7 @@ abstract final class SqliteChatSchema {
       whereArgs: ['table', table],
       limit: 1,
     );
-    if (existing.isEmpty) return;
-    await database.execute('ALTER TABLE $table ADD $definition');
+    return existing.isNotEmpty;
   }
 
   static Future<void> _createGuildStickers(DatabaseExecutor database) async {

@@ -93,6 +93,43 @@ Map<String, Object?> _inDirectMessage(
   'channel_type': 1,
 };
 
+const _groupDmId = '400000000000000051';
+
+/// [_ready], plus a group DM with the friend that has a read state of its own.
+Map<String, Object?> _readyWithGroupDm() => _ready()
+  ..['read_state'] = {
+    'version': 1,
+    'partial': false,
+    'entries': [
+      {'id': _channelId, 'last_message_id': _cursor},
+      {'id': _otherChannelId, 'last_message_id': _cursor},
+      {'id': _groupDmId, 'last_message_id': _cursor},
+    ],
+  }
+  ..['private_channels'] = [
+    ...SessionHarness.defaultReady()['private_channels']! as List,
+    {
+      'id': _groupDmId,
+      'type': 3,
+      'name': 'Crew',
+      'recipient_ids': [SessionHarness.friendId],
+    },
+  ];
+
+/// A message in the group DM, as the gateway sends it.
+Map<String, Object?> _inGroupDm(
+  String id, {
+  String authorId = SessionHarness.friendId,
+}) => {
+  ...rawMessage(
+    id: id,
+    channelId: _groupDmId,
+    authorId: authorId,
+    content: 'hey',
+  ),
+  'channel_type': 3,
+};
+
 Map<String, Object?> _toEveryone(String id) => {
   ..._fromFriend(id),
   'content': '@everyone hey',
@@ -273,6 +310,38 @@ void main() {
         expect(_directMessagesBadge, findsNothing);
       },
       ready: _ready(),
+    );
+  });
+
+  group('a group DM', () {
+    testSession(
+      'raises the badge by one for a message from somebody else',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch('MESSAGE_CREATE', _inGroupDm(_firstMessage));
+        expect(_directMessagesBadgeShowing('1'), findsOneWidget);
+
+        // The read state, not only the row, holds the count.
+        await _anyOtherEvent(session);
+        expect(_directMessagesBadgeShowing('1'), findsOneWidget);
+      },
+      ready: _readyWithGroupDm(),
+    );
+
+    testSession(
+      'raises nothing for a message of the account',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _inGroupDm(_firstMessage, authorId: _accountId),
+        );
+
+        expect(_directMessagesBadge, findsNothing);
+      },
+      ready: _readyWithGroupDm(),
     );
   });
 

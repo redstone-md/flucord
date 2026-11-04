@@ -100,9 +100,9 @@ final class DiscordReadStateStore {
           ) ||
           mentionsAccountRole(payload),
       mentionsEveryone: payload['mention_everyone'] == true,
-      // A message with no guild is in a DM. Without a `channel_type` it is
-      // read as one-to-one, as the DM directory reads it.
-      directMessage: guildId == null && (payload['channel_type'] ?? 1) == 1,
+      // A message with no guild is in a DM, one-to-one or group, and Discord
+      // counts every message from somebody else in either.
+      directMessage: guildId == null,
     );
   }
 

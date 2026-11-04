@@ -525,7 +525,8 @@ class _ChannelRow extends StatelessWidget {
     final surfaces = context.surfaces;
     final strong = selected || showsUnread;
     final person = recipient;
-    final height = person == null
+    final group = channel.isGroupDirectMessage;
+    final height = person == null && !group
         ? _SidebarMetrics.rowHeight
         : _SidebarMetrics.personRowHeight;
     // A muted channel reads as quieter than a plain read one, which is how the
@@ -574,6 +575,11 @@ class _ChannelRow extends StatelessWidget {
                       size: _SidebarMetrics.personAvatarSize,
                       // The dot is cut out of the rail it sits on.
                       presenceBorderColor: surfaces.rail,
+                    )
+                  else if (group)
+                    GroupDirectMessageAvatar(
+                      channel: channel,
+                      size: _SidebarMetrics.personAvatarSize,
                     )
                   else
                     FlucordIcon(

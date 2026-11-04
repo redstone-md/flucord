@@ -68,7 +68,7 @@ final _workspace = ChatWorkspace(
       name: 'Jack',
       topic: '',
       kind: ChannelKind.text,
-      recipientId: 'user-1',
+      recipientIds: ['user-1'],
       mentionCount: 1,
     ),
     ConversationChannel(

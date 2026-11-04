@@ -27,7 +27,7 @@ ConversationChannel _channel(
   bool isLocked = false,
   String? parentId,
   String spaceId = _guild,
-  String? recipientId,
+  List<String> recipientIds = const [],
 }) => ConversationChannel(
   id: id,
   spaceId: spaceId,
@@ -37,7 +37,7 @@ ConversationChannel _channel(
   isThread: isThread,
   isLocked: isLocked,
   parentId: parentId,
-  recipientId: recipientId,
+  recipientIds: recipientIds,
   permissionOverwrites: overwrites,
 );
 
@@ -303,7 +303,7 @@ void main() {
           _channel(
             'dm-1',
             spaceId: CommunitySpace.directMessagesId,
-            recipientId: 'other',
+            recipientIds: ['other'],
           ),
         ],
       );

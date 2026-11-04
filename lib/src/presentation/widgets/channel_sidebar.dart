@@ -19,6 +19,7 @@ import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'count_badge.dart';
+import 'direct_message_views.dart';
 import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
 import 'profile_card_route.dart';
@@ -413,12 +414,17 @@ class ChannelSidebar extends StatelessWidget {
     ];
   }
 
+  /// The person a one-to-one DM row shows, or null for a group or a channel.
+  Member? _recipientOf(ConversationChannel channel) =>
+      switch (channel.soleRecipientId) {
+        final id? => memberOf(id),
+        null => null,
+      };
+
   _MessageRequestRow _requestRowFor(ConversationChannel channel) =>
       _MessageRequestRow(
         channel: channel,
-        recipient: channel.recipientId == null
-            ? null
-            : memberOf(channel.recipientId!),
+        recipient: _recipientOf(channel),
         onPressed: () => onSelectChannel(channel.id),
         onAccept: onAcceptMessageRequest == null
             ? null
@@ -493,9 +499,7 @@ class ChannelSidebar extends StatelessWidget {
       _ChannelRow(
         channel: channel,
         selected: channel.id == selectedChannelId,
-        recipient: channel.recipientId == null
-            ? null
-            : memberOf(channel.recipientId!),
+        recipient: _recipientOf(channel),
         indented: indented,
         muted: _isMuted(channel),
         showsUnread: _showsUnread(channel),
