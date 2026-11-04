@@ -101,9 +101,7 @@ class _Badges extends StatelessWidget {
             child: SizedBox.square(
               dimension: 16,
               child: RemoteIdentityImage(
-                url: badge.icon.isEmpty
-                    ? null
-                    : 'https://cdn.discordapp.com/badge-icons/${badge.icon}.png',
+                url: DiscordCdn.badgeIcon(badge.icon),
                 fallback: const SizedBox.shrink(),
               ),
             ),

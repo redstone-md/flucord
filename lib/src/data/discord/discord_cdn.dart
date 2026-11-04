@@ -37,6 +37,22 @@ final class DiscordCdn {
   static String? clanBadge(String guildId, String? hash, {int size = 32}) =>
       _asset(['clan-badges', guildId], hash, size: size);
 
+  /// A profile badge's icon, by the hash the profile route gives with it.
+  static String? badgeIcon(String icon) => icon.isEmpty
+      ? null
+      : Uri.https('cdn.discordapp.com', '/badge-icons/$icon.png').toString();
+
+  /// The avatar decoration somebody wears. `passthrough` keeps an animated
+  /// one moving.
+  static String? avatarDecoration(String asset, {int size = 96}) =>
+      asset.isEmpty
+      ? null
+      : Uri.https(
+          'cdn.discordapp.com',
+          '/avatar-decoration-decoration/$asset.png',
+          {'size': '$size', 'passthrough': 'true'},
+        ).toString();
+
   static String? guildMemberAvatar(
     String guildId,
     String userId,

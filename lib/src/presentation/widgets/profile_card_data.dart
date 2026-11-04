@@ -56,7 +56,10 @@ final class ProfileCardData {
       username: member.username ?? _nonEmpty(profile?.username),
       avatarUrl: member.avatarUrlFor(spaceId),
       avatarColorValue: member.colorValue,
-      decorationUrl: _decorationUrl(profile?.decoration),
+      decorationUrl: switch (profile?.decoration) {
+        final decoration? => DiscordCdn.avatarDecoration(decoration.asset),
+        null => null,
+      },
       presence: presence,
       bannerUrl: DiscordCdn.userBanner(member.id, profile?.bannerHash),
       accentColorValue: switch (profile?.accentColor) {
@@ -172,13 +175,6 @@ final class ProfileCardData {
     final String text when text.isNotEmpty => text,
     _ => null,
   };
-
-  static String? _decorationUrl(ProfileDecoration? decoration) {
-    final asset = decoration?.asset;
-    if (asset == null || asset.isEmpty) return null;
-    return 'https://cdn.discordapp.com/avatar-decoration-decoration/$asset.png'
-        '?size=96&passthrough=true';
-  }
 
   static String? _nonEmpty(String? value) =>
       value == null || value.isEmpty ? null : value;

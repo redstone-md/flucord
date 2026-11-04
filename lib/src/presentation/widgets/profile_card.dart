@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_icons.dart';
