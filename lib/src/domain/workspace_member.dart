@@ -266,6 +266,10 @@ final class Member {
   });
 
   final String id;
+
+  /// Their own name, the same everywhere: the global name, or the username.
+  /// A server's nickname for them is in [membershipsBySpace]; read the name a
+  /// place shows with [displayNameFor].
   final String displayName;
 
   /// The unique handle, such as "freezz5126". Null until a user object that
@@ -307,6 +311,11 @@ final class Member {
   /// member cache persists.
   UserPresence get presenceOrCoarse =>
       presenceDetail ?? UserPresence(status: presence);
+
+  /// The name [spaceId] knows this member by: the nickname there, or else
+  /// their own name. A DM, or null, is their own name.
+  String displayNameFor(String? spaceId) =>
+      membershipsBySpace[spaceId]?.nickname ?? displayName;
 
   String? avatarUrlFor(String? spaceId) =>
       spaceId == null ? avatarUrl : avatarUrlsBySpace[spaceId] ?? avatarUrl;
@@ -358,6 +367,26 @@ final class Member {
       membershipsBySpace: {...membershipsBySpace}..remove(spaceId),
     );
   }
+
+  /// This member, as a payload maps them, laid over what is [known] of them.
+  ///
+  /// A payload says only part of what is known: the spaces and memberships
+  /// it names, and no presence. So the spaces, avatars and memberships of
+  /// [known] stay unless the payload names the same space, a known presence
+  /// stays, and so do the tags and username the payload left out.
+  Member over(Member known) => copyWith(
+    spaceIds: {...known.spaceIds, ...spaceIds},
+    avatarUrl: avatarUrl ?? known.avatarUrl,
+    avatarUrlsBySpace: {...known.avatarUrlsBySpace, ...avatarUrlsBySpace},
+    membershipsBySpace: {...known.membershipsBySpace, ...membershipsBySpace},
+    // A member payload carries no presence, so the mapper defaults it to
+    // offline; letting that erase a presence the gateway already reported
+    // would blank out every activity the moment the member is re-mapped.
+    presence: presence == Presence.offline ? known.presence : presence,
+    presenceDetail: presenceDetail ?? known.presenceDetail,
+    tags: tags.over(known.tags),
+    username: username ?? known.username,
+  );
 
   /// Replaces the whole presence: the coarse status and the detail together.
   Member withPresence(UserPresence presence) =>

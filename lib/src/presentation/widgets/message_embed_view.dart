@@ -16,6 +16,7 @@ class MessageEmbedView extends StatelessWidget {
   const MessageEmbedView({
     required this.embed,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.inlineVideoBuilder = buildNativeInlineVideo,
@@ -24,6 +25,9 @@ class MessageEmbedView extends StatelessWidget {
 
   final MessageEmbed embed;
   final ChatWorkspace workspace;
+
+  /// Where the message was sent, whose names the mentions read in.
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
   final InlineVideoBuilder inlineVideoBuilder;
@@ -73,6 +77,7 @@ class MessageEmbedView extends StatelessWidget {
                   _EmbedTop(
                     embed: embed,
                     workspace: workspace,
+                    spaceId: spaceId,
                     linkLauncher: linkLauncher,
                     onSelectChannel: onSelectChannel,
                   ),
@@ -112,12 +117,16 @@ class _EmbedTop extends StatelessWidget {
   const _EmbedTop({
     required this.embed,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
   });
 
   final MessageEmbed embed;
   final ChatWorkspace workspace;
+
+  /// Where the message was sent, whose names the mentions read in.
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -137,6 +146,7 @@ class _EmbedTop extends StatelessWidget {
               _EmbedTextContent(
                 embed: embed,
                 workspace: workspace,
+                spaceId: spaceId,
                 linkLauncher: linkLauncher,
                 onSelectChannel: onSelectChannel,
               ),
@@ -152,6 +162,7 @@ class _EmbedTop extends StatelessWidget {
               child: _EmbedTextContent(
                 embed: embed,
                 workspace: workspace,
+                spaceId: spaceId,
                 linkLauncher: linkLauncher,
                 onSelectChannel: onSelectChannel,
               ),
@@ -171,12 +182,16 @@ class _EmbedTextContent extends StatelessWidget {
   const _EmbedTextContent({
     required this.embed,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
   });
 
   final MessageEmbed embed;
   final ChatWorkspace workspace;
+
+  /// Where the message was sent, whose names the mentions read in.
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -203,6 +218,7 @@ class _EmbedTextContent extends StatelessWidget {
           MessageContentView(
             body: description,
             workspace: workspace,
+            spaceId: spaceId,
             linkLauncher: linkLauncher,
             onSelectChannel: onSelectChannel,
             textStyle: _EmbedText.body(context),
@@ -212,6 +228,7 @@ class _EmbedTextContent extends StatelessWidget {
           _EmbedFields(
             fields: embed.fields,
             workspace: workspace,
+            spaceId: spaceId,
             linkLauncher: linkLauncher,
             onSelectChannel: onSelectChannel,
           ),
@@ -260,12 +277,14 @@ class _EmbedFields extends StatelessWidget {
   const _EmbedFields({
     required this.fields,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
   });
 
   final List<MessageEmbedField> fields;
   final ChatWorkspace workspace;
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -294,6 +313,7 @@ class _EmbedFields extends StatelessWidget {
                 child: _EmbedFieldView(
                   field: fields[index],
                   workspace: workspace,
+                  spaceId: spaceId,
                   linkLauncher: linkLauncher,
                   onSelectChannel: onSelectChannel,
                 ),
@@ -309,12 +329,14 @@ class _EmbedFieldView extends StatelessWidget {
   const _EmbedFieldView({
     required this.field,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
   });
 
   final MessageEmbedField field;
   final ChatWorkspace workspace;
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -329,6 +351,7 @@ class _EmbedFieldView extends StatelessWidget {
         MessageContentView(
           body: field.value,
           workspace: workspace,
+          spaceId: spaceId,
           linkLauncher: linkLauncher,
           onSelectChannel: onSelectChannel,
           textStyle: _EmbedText.body(context),

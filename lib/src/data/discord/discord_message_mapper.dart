@@ -25,6 +25,24 @@ extension DiscordMessageMapper on DiscordMapper {
     };
   }
 
+  /// The people [payload] mentions. In a guild, each mention may carry its
+  /// `member`, which says who that person is in the guild.
+  List<Member> mentionedMembers(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    return [
+      for (final raw in (payload['mentions'] as List? ?? const []))
+        if (raw case final Map user when user['id'] is String)
+          switch ((guildId, user['member'])) {
+            (final String guildId, final Map guildMember) => _withGuildStanding(
+              member(user.cast<String, Object?>(), spaceIds: {guildId}),
+              guildMember.cast<String, Object?>(),
+              guildId,
+            ),
+            _ => member(user.cast<String, Object?>()),
+          },
+    ];
+  }
+
   ChatMessage message(
     Map<String, Object?> payload, {
     ChatMessage? fallback,

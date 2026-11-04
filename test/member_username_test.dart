@@ -62,7 +62,7 @@ void main() {
         'roles': <Object?>[],
       }, '200000000000000001');
 
-      expect(member.displayName, 'Freezy');
+      expect(member.displayNameFor('200000000000000001'), 'Freezy');
       expect(member.username, 'freezz5126');
     });
 

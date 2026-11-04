@@ -72,7 +72,7 @@ class MessageReplyPreview extends StatelessWidget {
                 maxWidth: constraints.maxWidth * _nameShare,
               ),
               child: Text(
-                author?.displayName ?? 'Unknown user',
+                author?.displayNameFor(spaceId) ?? 'Unknown user',
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.ellipsis,
@@ -88,7 +88,12 @@ class MessageReplyPreview extends StatelessWidget {
               child: Text(
                 reply.body.isEmpty
                     ? 'Message unavailable'
-                    : messagePreviewText(context, reply.body, workspace),
+                    : messagePreviewText(
+                        context,
+                        reply.body,
+                        workspace,
+                        spaceId: spaceId,
+                      ),
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.ellipsis,

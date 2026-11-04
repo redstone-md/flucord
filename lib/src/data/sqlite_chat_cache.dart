@@ -188,10 +188,8 @@ final class SqliteChatCache
       for (final role in workspace.roles) {
         batch.insert('roles', _roleToRow(role));
       }
-      for (final member in workspace.members) {
-        _MemberUpsert(member).addTo(batch);
-      }
       await batch.commit(noResult: true);
+      await _layMembers(transaction, workspace.members);
     });
   });
 
@@ -217,15 +215,11 @@ final class SqliteChatCache
       orderBy: 'sent_at DESC',
       limit: limit,
     );
-    final messages = rows.reversed.toList(growable: false);
-    final authorIds = messages
-        .map((row) => row['author_id']! as String)
-        .toSet();
-    final members = await _readMembers(authorIds);
+    final messages = rows.reversed.map(_messageFromRow).toList();
     return ChannelHistory(
       channelId: channelId,
-      messages: messages.map(_messageFromRow).toList(),
-      members: members,
+      messages: messages,
+      members: await _readMembersNamedIn(messages),
     );
   });
 
@@ -264,13 +258,11 @@ final class SqliteChatCache
           whereArgs: [channelId],
           orderBy: 'sent_at DESC',
         );
-        final authorIds = messages
-            .map((row) => row['author_id']! as String)
-            .toSet();
+        final decoded = messages.map(_messageFromRow).toList();
         return ChannelHistory(
           channelId: channelId,
-          messages: messages.map(_messageFromRow).toList(),
-          members: await _readMembers(authorIds),
+          messages: decoded,
+          members: await _readMembersNamedIn(decoded),
         );
       });
 
@@ -287,10 +279,8 @@ final class SqliteChatCache
           whereArgs: [history.channelId],
         );
       }
+      await _layMembers(transaction, history.members);
       final batch = transaction.batch();
-      for (final member in history.members) {
-        _MemberUpsert(member).addTo(batch);
-      }
       for (final message in history.messages) {
         batch.insert(
           'messages',
@@ -337,7 +327,7 @@ final class SqliteChatCache
     ChatMessage message,
     Member? member,
   ) async {
-    if (member != null) await _MemberUpsert(member).run(transaction);
+    if (member != null) await _layMembers(transaction, [member]);
     await transaction.insert(
       'messages',
       _messageToRow(message),
@@ -439,10 +429,8 @@ final class SqliteChatCache
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
-      for (final member in guild.members) {
-        _MemberUpsert(member).addTo(batch);
-      }
       await batch.commit(noResult: true);
+      await _layMembers(transaction, guild.members);
     });
   });
 
@@ -690,16 +678,15 @@ final class SqliteChatCache
   Future<void> deleteCategory(String categoryId) =>
       _database.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
 
-  Future<List<Member>> _readMembers(Set<String> ids) async {
-    if (ids.isEmpty) return [];
-    final placeholders = List.filled(ids.length, '?').join(',');
-    final rows = await _database.query(
-      'members',
-      where: 'id IN ($placeholders)',
-      whereArgs: ids.toList(),
-    );
-    return rows.map(_memberFromRow).toList();
-  }
+  /// The members [messages] name: their authors, and the people their
+  /// bodies mention, so a mention reads right from the first frame.
+  Future<List<Member>> _readMembersNamedIn(List<ChatMessage> messages) =>
+      _readMembersIn(_database, {
+        for (final message in messages) ...[
+          message.authorId,
+          ...message.mentionedMemberIds,
+        ],
+      });
 
   static Map<String, Object?> _spaceToRow(CommunitySpace space, int index) => {
     'id': space.id,

@@ -78,11 +78,14 @@ final class DiscordSharedDispatches {
     if (payload['id'] is! String) return;
     final message = read(payload);
     final member = _mapper.messageAuthor(payload);
+    final mentioned = _mapper.mentionedMembers(payload);
     final currentUserId = _currentMemberId();
     // A new channel is announced and queued here, ahead of the message.
     final channelAdopted = currentUserId == null
         ? null
         : _directMessages.acceptMessage(payload, currentUserId);
+    // Ahead of the message, so its mentions read right when it is drawn.
+    if (mentioned.isNotEmpty) _events.publish(MembersUpsertedEvent(mentioned));
     beforeAnnounce?.call();
     _events.publish(
       MessageUpsertedEvent(
@@ -93,6 +96,7 @@ final class DiscordSharedDispatches {
       ),
     );
     await _cache.writeMessage(message, member: member);
+    await _cache.writeMembers(mentioned);
     await channelAdopted;
   });
 

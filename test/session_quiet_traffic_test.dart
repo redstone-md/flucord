@@ -246,12 +246,11 @@ void main() {
       session,
     ) async {
       await _openAndRest(tester, session, _channelId);
-      await _meetFarMembers(session);
       final mentioned = _farMembers.first;
       await _say(session, 'hello <@$mentioned>');
 
       await session.dispatch('GUILD_MEMBER_UPDATE', {
-        'guild_id': _farGuildId,
+        'guild_id': _guildId,
         'user': {'id': mentioned, 'username': 'far'},
         'nick': 'Renamed',
         'roles': <Object?>[],

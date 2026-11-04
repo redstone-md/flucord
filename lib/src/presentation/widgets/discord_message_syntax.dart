@@ -1,5 +1,7 @@
 import 'package:markdown/markdown.dart' as md;
 
+import '../../domain/chat_models.dart';
+
 /// Discord's markers in a message body. The markdown syntaxes below, the
 /// preview text and the ids a timeline row depends on all read these, so they
 /// cannot drift apart.
@@ -11,7 +13,7 @@ abstract final class DiscordMarkers {
   static final roleMention = RegExp(r'<@&(\d+)>');
 
   /// Group 1 is the user id.
-  static final userMention = RegExp(r'<@!?(\d+)>');
+  static final userMention = ChatMessage.memberMention;
 
   /// Group 1 is the channel id.
   static final channelMention = RegExp(r'<#(\d+)>');

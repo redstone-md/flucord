@@ -258,6 +258,7 @@ Widget _host(
         child: MessageContentView(
           body: body,
           workspace: _workspace,
+          spaceId: null,
           linkLauncher: launcher ?? _RecordingLinkLauncher(),
           onSelectChannel: onSelectChannel ?? (_) {},
           now: now,

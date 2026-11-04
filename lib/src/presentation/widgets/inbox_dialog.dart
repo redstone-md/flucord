@@ -386,9 +386,10 @@ class _MentionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = _messagePreview(entry.message, entry.author.displayName);
+    final author = entry.author.displayNameFor(entry.target.spaceId);
+    final preview = _messagePreview(entry.message, author);
     final label =
-        '${entry.author.displayName} in ${entry.path}, $preview, '
+        '$author in ${entry.path}, $preview, '
         '${_relativeTime(entry.message.sentAt)}';
     return Semantics(
       label: label,
@@ -422,7 +423,7 @@ class _MentionRow extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            entry.author.displayName,
+                            author,
                             overflow: TextOverflow.ellipsis,
                             style: FlucordTextRole.caption.strong,
                           ),

@@ -5,8 +5,12 @@ mixin _SqliteChatCacheEntities implements ChatCache {
   SqliteWriteQueue get _writes;
 
   @override
-  Future<void> writeMember(Member member) async {
-    _writes.add(_MemberUpsert(member).run);
+  Future<void> writeMember(Member member) => writeMembers([member]);
+
+  @override
+  Future<void> writeMembers(List<Member> members) async {
+    if (members.isEmpty) return;
+    _writes.add((transaction) => _layMembers(transaction, members));
   }
 
   @override
@@ -33,6 +37,51 @@ mixin _SqliteChatCacheEntities implements ChatCache {
     SqliteChatCache._categoryToRow(category),
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
+}
+
+/// Writes [members] laid over the rows held for them, as [Member.over] lays
+/// them. A payload names only part of what is known of somebody, so the
+/// spaces, memberships and server avatars it leaves out keep their values.
+Future<void> _layMembers(
+  DatabaseExecutor executor,
+  Iterable<Member> members,
+) async {
+  final incoming = <String, Member>{};
+  for (final member in members) {
+    final earlier = incoming[member.id];
+    incoming[member.id] = earlier == null ? member : member.over(earlier);
+  }
+  if (incoming.isEmpty) return;
+  final held = {
+    for (final member in await _readMembersIn(executor, incoming.keys))
+      member.id: member,
+  };
+  final batch = executor.batch();
+  for (final member in incoming.values) {
+    final known = held[member.id];
+    _MemberUpsert(known == null ? member : member.over(known)).addTo(batch);
+  }
+  await batch.commit(noResult: true);
+}
+
+/// The member rows held for [ids]. Read in slices, as SQLite caps how many
+/// values one statement may bind.
+Future<List<Member>> _readMembersIn(
+  DatabaseExecutor executor,
+  Iterable<String> ids,
+) async {
+  const slice = 500;
+  final all = ids.toList(growable: false);
+  return [
+    for (var start = 0; start < all.length; start += slice)
+      for (final row in await executor.query(
+        'members',
+        where:
+            'id IN (${List.filled(min(slice, all.length - start), '?').join(',')})',
+        whereArgs: all.sublist(start, min(start + slice, all.length)),
+      ))
+        SqliteChatCache._memberFromRow(row),
+  ];
 }
 
 /// Writes one member row: a new row whole, a held one with only the columns

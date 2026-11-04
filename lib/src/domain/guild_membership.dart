@@ -1,9 +1,9 @@
 /// A member's standing in one guild, reduced to what permissions depend on,
-/// and when they joined, which the full profile shows.
+/// with the nickname the guild knows them by and when they joined.
 ///
-/// Kept apart from the display-facing member record. Apart from [joinedAt],
-/// these fields are not drawn anywhere: they feed the clamps Discord applies
-/// after roles and overwrites have been resolved. A member with no record here
+/// Apart from [nickname] and [joinedAt], these fields are not drawn anywhere:
+/// they feed the clamps Discord applies after roles and overwrites have been
+/// resolved. A member with no record here
 /// is not "a member with no roles". It is a member we were never told about,
 /// which callers must decide about themselves.
 final class GuildMembership {
@@ -13,6 +13,7 @@ final class GuildMembership {
     this.isPending = false,
     this.timeoutUntil,
     this.joinedAt,
+    this.nickname,
   });
 
   /// Member flag `IS_GUEST`.
@@ -37,6 +38,9 @@ final class GuildMembership {
   /// `joined_at`, or null when the payload did not carry it.
   final DateTime? joinedAt;
 
+  /// `nick`, or null when they go by their own name in this guild.
+  final String? nickname;
+
   bool get isGuest => flags & guestFlag != 0;
 
   bool get isQuarantined => flags & quarantinedFlags != 0;
@@ -56,6 +60,7 @@ final class GuildMembership {
       isPending: isPending,
       timeoutUntil: timeoutUntil,
       joinedAt: joinedAt,
+      nickname: nickname,
     );
   }
 
@@ -66,6 +71,7 @@ final class GuildMembership {
       other.isPending == isPending &&
       other.timeoutUntil == timeoutUntil &&
       other.joinedAt == joinedAt &&
+      other.nickname == nickname &&
       _sameRoles(other.roleIds);
 
   bool _sameRoles(List<String> other) {
@@ -83,5 +89,6 @@ final class GuildMembership {
     isPending,
     timeoutUntil,
     joinedAt,
+    nickname,
   );
 }

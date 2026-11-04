@@ -133,7 +133,7 @@ class _SearchMessageRow extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        author?.displayName ?? 'Unknown user',
+                        author?.displayNameFor(spaceId) ?? 'Unknown user',
                         overflow: TextOverflow.ellipsis,
                         style: FlucordTextRole.caption.strong.copyWith(
                           color: isHit ? null : muted,
@@ -157,6 +157,7 @@ class _SearchMessageRow extends StatelessWidget {
                       child: MessageContentView(
                         body: message.body,
                         workspace: workspace,
+                        spaceId: spaceId,
                         linkLauncher: linkLauncher,
                         onSelectChannel: onSelectChannel,
                         textStyle: TextStyle(

@@ -192,7 +192,11 @@ class _MemberSidebarState extends State<MemberSidebar> {
     final query = _searchQuery.trim().toLowerCase();
     return [
       for (final member in _visibleMembers())
-        if (member.displayName.toLowerCase().startsWith(query)) member,
+        if (member
+            .displayNameFor(widget.spaceId)
+            .toLowerCase()
+            .startsWith(query))
+          member,
     ];
   }
 
@@ -464,7 +468,7 @@ class _MemberRow extends StatelessWidget {
                     children: [
                       Flexible(
                         child: DisplayName(
-                          member.displayName,
+                          member.displayNameFor(spaceId),
                           style: FlucordTextRole.label.style.copyWith(
                             color: surfaces.text,
                           ),
@@ -494,7 +498,7 @@ class _MemberRow extends StatelessWidget {
         borderRadius: FlucordRadius.control,
         child: Semantics(
           button: true,
-          label: 'Open profile for ${member.displayName}',
+          label: 'Open profile for ${member.displayNameFor(spaceId)}',
           child: InkWell(
             key: ValueKey('member-row-${member.id}'),
             onTap: () => onPressed(context),
