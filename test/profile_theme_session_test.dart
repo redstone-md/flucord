@@ -64,7 +64,13 @@ List<Color> _cardInk(WidgetTester tester) {
         .widget<Text>(find.descendant(of: chip, matching: find.byType(Text)))
         .style!
         .color!,
-    (tester.widget<Container>(chip).decoration! as BoxDecoration).color!,
+    (tester
+                .widget<Container>(
+                  find.descendant(of: chip, matching: find.byType(Container)),
+                )
+                .decoration!
+            as BoxDecoration)
+        .color!,
   ];
 }
 
