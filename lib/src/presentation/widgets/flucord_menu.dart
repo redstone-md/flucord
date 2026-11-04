@@ -92,7 +92,10 @@ class _FlucordMenuItemState<T>
               canRequestFocus: item.enabled,
               mouseCursor: item.mouseCursor,
               borderRadius: FlucordRadius.control,
-              child: Opacity(opacity: item.enabled ? 1 : 0.5, child: row),
+              child: Opacity(
+                opacity: item.enabled ? 1 : FlucordTheme.disabledAlpha,
+                child: row,
+              ),
             ),
           ),
         ),

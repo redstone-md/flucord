@@ -71,7 +71,7 @@ class FlucordButton extends StatelessWidget {
       FlucordButtonKind.danger => shared.copyWith(
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.disabled)
-              ? surfaces.danger.withValues(alpha: 0.38)
+              ? surfaces.danger.withValues(alpha: FlucordTheme.disabledAlpha)
               : surfaces.danger,
         ),
         foregroundColor: WidgetStatePropertyAll(
@@ -87,7 +87,7 @@ class FlucordButton extends StatelessWidget {
   static WidgetStateProperty<Color> _disabledAware(Color color) =>
       WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.disabled)
-            ? color.withValues(alpha: 0.38)
+            ? color.withValues(alpha: FlucordTheme.disabledAlpha)
             : color,
       );
 

@@ -218,7 +218,7 @@ class FlucordToggle extends StatelessWidget {
             return GestureDetector(
               onTap: enabled ? flip : null,
               child: Opacity(
-                opacity: enabled ? 1 : 0.5,
+                opacity: enabled ? 1 : FlucordTheme.disabledAlpha,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   width: _size.width,
@@ -312,7 +312,9 @@ class FlucordTab extends StatelessWidget {
             child: Center(
               widthFactor: 1,
               child: Opacity(
-                opacity: onPressed == null && !selected ? 0.5 : 1,
+                opacity: onPressed == null && !selected
+                    ? FlucordTheme.disabledAlpha
+                    : 1,
                 child: Text(
                   label,
                   maxLines: 1,

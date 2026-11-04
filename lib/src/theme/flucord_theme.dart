@@ -12,6 +12,10 @@ abstract final class FlucordTheme {
   static const _nonTextContrast = 3.0;
   static const _focusRingWidth = 2.0;
 
+  /// How strongly a disabled control shows: buttons, icon buttons and menu
+  /// rows all fade by this much.
+  static const disabledAlpha = 0.38;
+
   /// Buttons, tabs and selects are this tall; a field is [_controlFieldHeight].
   static const _controlHeight = 32.0;
   static const _controlFieldHeight = 36.0;
@@ -169,7 +173,7 @@ abstract final class FlucordTheme {
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
-              return muted.withValues(alpha: 0.38);
+              return muted.withValues(alpha: disabledAlpha);
             }
             if (states.contains(WidgetState.hovered) ||
                 states.contains(WidgetState.focused) ||
@@ -200,7 +204,7 @@ abstract final class FlucordTheme {
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
-                ? text.withValues(alpha: 0.38)
+                ? text.withValues(alpha: disabledAlpha)
                 : text,
           ),
           foregroundColor: WidgetStatePropertyAll(rail),

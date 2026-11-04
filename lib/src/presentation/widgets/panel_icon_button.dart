@@ -55,14 +55,11 @@ class PanelIconButton extends StatelessWidget {
   /// The icon on the 28 and 32 px buttons alike.
   static const _iconSize = 16.0;
 
-  /// The disabled shade matches the icon button theme's disabled colour.
-  static const _disabledAlpha = 0.38;
-
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final colour = onPressed == null
-        ? surfaces.muted.withValues(alpha: _disabledAlpha)
+        ? surfaces.muted.withValues(alpha: FlucordTheme.disabledAlpha)
         : danger
         ? surfaces.danger
         : active
