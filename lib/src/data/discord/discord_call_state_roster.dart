@@ -24,30 +24,39 @@ final class DiscordCallStateRoster {
   List<DiscordCallSeatChange> accept({
     required String eventName,
     required Map<String, Object?> data,
-  }) => switch (eventName) {
-    'VOICE_STATE_UPDATE' => _apply([data]),
-    'VOICE_STATE_UPDATE_BATCH' => _apply(
-      DiscordVoiceStateReader.objects(data['voice_states']),
-    ),
-    'CALL_CREATE' => _replaceCall(data),
-    'CALL_DELETE' => _endCall(data['channel_id']),
-    // A replayed READY starts a new session's view of the world, and the
-    // CALL_CREATE that follows each re-subscription is what repopulates it.
-    'READY' => _clearOnReady(),
-    _ => const [],
-  };
+  }) {
+    final changes = switch (eventName) {
+      'VOICE_STATE_UPDATE' => _apply([data]),
+      'VOICE_STATE_UPDATE_BATCH' => _apply(
+        DiscordVoiceStateReader.objects(data['voice_states']),
+      ),
+      'CALL_CREATE' => _replaceCall(data),
+      'CALL_DELETE' => _endCall(data['channel_id']),
+      // A replayed READY starts a new session's view of the world, and the
+      // CALL_CREATE that follows each re-subscription is what repopulates it.
+      'READY' => _clearOnReady(),
+      _ => const <DiscordCallSeatChange>[],
+    };
+    if (changes.isNotEmpty) _seatedByChannel = null;
+    return changes;
+  }
 
-  /// Everyone currently known to be in [channelId]'s call.
   /// Everyone seated, grouped by call channel — the same shape guild voice
   /// reports, so the sidebar reads one map rather than two.
+  ///
+  /// Kept until a seat changes, like the guild roster's: readers key their
+  /// caches on its identity.
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
-      Map<String, List<VoiceParticipantStateEvent>>.unmodifiable({
-        for (final entry in _byChannel.entries)
-          if (entry.value.isNotEmpty)
-            entry.key: List<VoiceParticipantStateEvent>.unmodifiable(
-              entry.value.values,
-            ),
-      });
+      _seatedByChannel ??=
+          Map<String, List<VoiceParticipantStateEvent>>.unmodifiable({
+            for (final entry in _byChannel.entries)
+              if (entry.value.isNotEmpty)
+                entry.key: List<VoiceParticipantStateEvent>.unmodifiable(
+                  entry.value.values,
+                ),
+          });
+
+  Map<String, List<VoiceParticipantStateEvent>>? _seatedByChannel;
 
   List<VoiceParticipantStateEvent> participantsIn(String channelId) =>
       (_byChannel[channelId]?.values ?? const <VoiceParticipantStateEvent>[])
@@ -56,6 +65,7 @@ final class DiscordCallStateRoster {
   void clearAll() {
     _byChannel.clear();
     _channelByUser.clear();
+    _seatedByChannel = null;
   }
 
   /// `CALL_CREATE` is a whole snapshot of the call, so it replaces rather than
