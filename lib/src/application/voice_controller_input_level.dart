@@ -20,6 +20,9 @@ extension VoiceControllerInputLevel on VoiceController {
     _queueMeterAction(() async {
       if (_meterSubscription == null || isConnected) return;
       await initialize();
+      // The devices take a while to open, and the controller can be gone by
+      // then. The first check on the queue does not cover that.
+      if (_disposed || _meterSubscription == null || isConnected) return;
       await _openMeterMicrophone();
     });
   }
