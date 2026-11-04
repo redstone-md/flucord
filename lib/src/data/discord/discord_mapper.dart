@@ -7,6 +7,7 @@ import '../../domain/discord_permissions.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/guild_membership.dart';
 import '../../domain/message_search.dart';
+import '../../domain/monogram.dart';
 import '../../domain/permission_overwrite.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
@@ -316,7 +317,7 @@ final class DiscordMapper {
     return Member(
       id: id,
       displayName: username,
-      initials: _monogram(username),
+      initials: monogramOf(username),
       role: role,
       presence: presence,
       colorValue: colorValue ?? _colorFor(id),
@@ -399,7 +400,7 @@ final class DiscordMapper {
     return Member(
       id: id,
       displayName: username,
-      initials: _monogram(username),
+      initials: monogramOf(username),
       role: roleName,
       presence: Presence.offline,
       colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
@@ -496,7 +497,7 @@ final class DiscordMapper {
     return CommunitySpace(
       id: id,
       name: name,
-      monogram: _monogram(name),
+      monogram: monogramOf(name),
       colorValue: _colorFor(id),
       iconUrl: DiscordCdn.guildIcon(id, icon),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
@@ -515,19 +516,6 @@ final class DiscordMapper {
   /// joined server exactly like one the session was opened with.
   CommunitySpace spaceFromGuildPayload(Map<String, Object?> payload) =>
       _space(payload);
-
-  static String _monogram(String name) {
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .take(2)
-        .toList();
-    if (words.isEmpty) return '?';
-    return words
-        .map((word) => String.fromCharCode(word.runes.first).toUpperCase())
-        .join();
-  }
 
   static int _colorFor(String id) {
     var hash = 0;
