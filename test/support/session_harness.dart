@@ -108,6 +108,12 @@ final class SessionHarness {
   /// The DM with [friendId].
   static const dmChannelId = '300000000000000003';
 
+  /// The key a captcha solved in a test hands back.
+  static const solvedCaptchaKey = 'harness-captcha-key';
+
+  /// The captcha the app shows. A tap solves it, as a person would.
+  static final captchaView = find.byKey(const ValueKey('harness-captcha'));
+
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final MemoryCredentialVault _vault = MemoryCredentialVault(
@@ -190,6 +196,7 @@ final class SessionHarness {
         clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
         discordRemoteAuthGatewayFactory: remoteAuth,
         navigationMemoryRepository: _navigationMemory,
+        captcha: _solvableCaptcha,
       ),
     ),
   );
@@ -578,6 +585,17 @@ void testSession(
     }
   });
 }
+
+/// Stands in for the hCaptcha view, which needs WebView2: one button that
+/// solves the captcha with [SessionHarness.solvedCaptchaKey].
+Widget _solvableCaptcha(
+  DiscordRemoteAuthCaptchaChallenge challenge,
+  Future<void> Function(String key) onSolved,
+) => TextButton(
+  key: const ValueKey('harness-captcha'),
+  onPressed: () => onSolved(SessionHarness.solvedCaptchaKey),
+  child: const Text('Solve the captcha'),
+);
 
 /// A test with no folder for the chat image cache has nothing in it to clear.
 Future<void> _noChatImagesToClear() async {}
