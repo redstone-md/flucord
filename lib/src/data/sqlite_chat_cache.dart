@@ -705,6 +705,8 @@ final class SqliteChatCache
     'default_sort_order': channel.defaultSortOrder?.index,
     'default_forum_layout': channel.defaultForumLayout?.index,
     'recipient_id': channel.recipientId,
+    'is_message_request': channel.isMessageRequest ? 1 : 0,
+    'message_requested_at': channel.messageRequestedAt?.toIso8601String(),
     'permission_overwrites_json': ChatModelJson.permissionOverwrites(
       channel.permissionOverwrites,
     ),
@@ -751,6 +753,11 @@ final class SqliteChatCache
             ? null
             : ForumLayout.values[row['default_forum_layout']! as int],
         recipientId: row['recipient_id'] as String?,
+        isMessageRequest: row['is_message_request'] == 1,
+        messageRequestedAt: switch (row['message_requested_at']) {
+          final String requestedAt => DateTime.parse(requestedAt),
+          _ => null,
+        },
         permissionOverwrites: ChatModelJson.permissionOverwritesFrom(
           row['permission_overwrites_json'] as String?,
         ),

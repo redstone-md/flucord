@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 25;
+  static const version = 26;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -56,6 +56,8 @@ abstract final class SqliteChatSchema {
         default_sort_order INTEGER,
         default_forum_layout INTEGER,
         recipient_id TEXT,
+        is_message_request INTEGER NOT NULL DEFAULT 0,
+        message_requested_at TEXT,
         permission_overwrites_json TEXT,
         rate_limit_per_user INTEGER NOT NULL DEFAULT 0,
         is_age_gated INTEGER NOT NULL DEFAULT 0,
@@ -387,6 +389,17 @@ abstract final class SqliteChatSchema {
         'is_bot INTEGER NOT NULL DEFAULT 0',
       );
       await _addColumn(database, 'members', 'clan_tag_json TEXT');
+    }
+    if (oldVersion < 26) {
+      // A row written before this version reads as an answered DM. The next
+      // READY says which ones are still requests, and the reconnect diff
+      // moves them to the folder.
+      await _addColumn(
+        database,
+        'channels',
+        'is_message_request INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'channels', 'message_requested_at TEXT');
     }
   }
 

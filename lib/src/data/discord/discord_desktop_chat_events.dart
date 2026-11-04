@@ -308,6 +308,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     channel.isLocked,
     ?channel.lastMessageId,
     ?channel.recipientId,
+    channel.isMessageRequest,
     _overwriteSignature(channel.permissionOverwrites),
   ].join('|');
 
