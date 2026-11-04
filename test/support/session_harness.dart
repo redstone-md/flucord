@@ -160,7 +160,7 @@ final class SessionHarness {
         ],
         // What an ordinary member can do, so the composer is fully open.
         everyonePermissions:
-            '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.addReactions | DiscordPermissions.attachFiles | DiscordPermissions.embedLinks}',
+            '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.addReactions | DiscordPermissions.attachFiles | DiscordPermissions.embedLinks | DiscordPermissions.sendVoiceMessages}',
       ),
     ],
     'private_channels': [

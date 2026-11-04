@@ -150,6 +150,7 @@ const _readOnly = ChannelCapabilities(
   createPublicThreads: true,
   addReactions: true,
   attachFiles: true,
+  sendVoiceMessages: true,
   embedLinks: true,
   moderateStage: false,
   bypassesSlowmode: false,

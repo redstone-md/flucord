@@ -16,6 +16,7 @@ final class ChannelCapabilities {
     required this.createPublicThreads,
     required this.addReactions,
     required this.attachFiles,
+    required this.sendVoiceMessages,
     required this.embedLinks,
     required this.moderateStage,
     required this.bypassesSlowmode,
@@ -33,6 +34,7 @@ final class ChannelCapabilities {
     createPublicThreads: true,
     addReactions: true,
     attachFiles: true,
+    sendVoiceMessages: true,
     embedLinks: true,
     moderateStage: true,
     bypassesSlowmode: true,
@@ -47,6 +49,7 @@ final class ChannelCapabilities {
     createPublicThreads: false,
     addReactions: false,
     attachFiles: false,
+    sendVoiceMessages: false,
     embedLinks: false,
     moderateStage: false,
     bypassesSlowmode: false,
@@ -83,6 +86,10 @@ final class ChannelCapabilities {
           permissions,
           DiscordPermissions.attachFiles,
         ),
+        sendVoiceMessages: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.sendVoiceMessages,
+        ),
         embedLinks: DiscordPermissions.hasAll(
           permissions,
           DiscordPermissions.embedLinks,
@@ -116,6 +123,7 @@ final class ChannelCapabilities {
   final bool createPublicThreads;
   final bool addReactions;
   final bool attachFiles;
+  final bool sendVoiceMessages;
   final bool embedLinks;
 
   /// Whether this account may run a stage in this channel.
@@ -140,6 +148,7 @@ final class ChannelCapabilities {
       other.createPublicThreads == createPublicThreads &&
       other.addReactions == addReactions &&
       other.attachFiles == attachFiles &&
+      other.sendVoiceMessages == sendVoiceMessages &&
       other.embedLinks == embedLinks &&
       other.bypassesSlowmode == bypassesSlowmode;
 
@@ -152,6 +161,7 @@ final class ChannelCapabilities {
     createPublicThreads,
     addReactions,
     attachFiles,
+    sendVoiceMessages,
     embedLinks,
     bypassesSlowmode,
   );

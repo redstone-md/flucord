@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/app_log.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 import 'support/fake_discord_wire.dart';
@@ -95,6 +97,73 @@ void main() {
       voiceMessageRecorder: FakeVoiceMessageRecorder(pending: recording()),
     );
   }
+
+  final failing = FakeVoiceMessageRecorder(pending: recording());
+  testSession(
+    'a failed voice message is logged with its cause and can be retried',
+    (tester, session) async {
+      final log = <String>[];
+      AppLog.redirect = (level, scope, message, error) =>
+          log.add('$scope $message :: $error');
+      addTearDown(() => AppLog.redirect = null);
+      _routeUpload(session, SessionHarness.channelId);
+      session.transport.on(
+        'POST',
+        '/api/v9/channels/${SessionHarness.channelId}/attachments',
+        (_) =>
+            jsonResponse({'message': 'Upload slots are down'}, statusCode: 500),
+      );
+      await session.openChannel(SessionHarness.channelId);
+
+      await _recordAndSend(tester, session);
+
+      expect(
+        log,
+        contains(
+          allOf(contains('voice message'), contains('Upload slots are down')),
+        ),
+      );
+      expect(failing.deleted, isEmpty);
+      expect(find.byKey(const ValueKey('retry-voice-message')), findsOneWidget);
+
+      _routeUpload(session, SessionHarness.channelId);
+      await tester.tap(find.byKey(const ValueKey('retry-voice-message')));
+      await session.settle();
+
+      expect(session.messageRow('900000000000000001'), findsOneWidget);
+      expect(failing.deleted, [same(failing.pending)]);
+    },
+    voiceMessageRecorder: failing,
+  );
+
+  testSession(
+    'a channel without the voice message permission offers no microphone',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
+      expect(find.byKey(const ValueKey('record-voice-message')), findsNothing);
+    },
+    ready: _readyWithoutVoiceMessages(),
+    voiceMessageRecorder: FakeVoiceMessageRecorder(),
+  );
+}
+
+/// The default READY, with an `@everyone` that may send messages and files
+/// but not voice messages. The account's member record makes the role count.
+Map<String, Object?> _readyWithoutVoiceMessages() {
+  final ready = SessionHarness.defaultReady()
+    ..['merged_members'] = [
+      [
+        {'user_id': SessionHarness.currentUserId, 'roles': <String>[]},
+      ],
+    ];
+  final guild = (ready['guilds']! as List).single as Map<String, Object?>;
+  final everyone = (guild['roles']! as List).single as Map<String, Object?>;
+  final permissions = BigInt.parse(everyone['permissions']! as String);
+  everyone['permissions'] =
+      '${permissions & ~DiscordPermissions.sendVoiceMessages}';
+  return ready;
 }
 
 /// Discord's three answers: the upload slot, the storage bucket's empty 200,
@@ -136,7 +205,8 @@ Map<String, Object?> _voiceMessage(String channelId) => {
       'filename': 'voice-message.ogg',
       'size': 8,
       'url': 'https://cdn.discordapp.com/attachments/1/2/voice-message.ogg',
-      'proxy_url': 'https://media.discordapp.net/attachments/1/2/voice-message.ogg',
+      'proxy_url':
+          'https://media.discordapp.net/attachments/1/2/voice-message.ogg',
       'content_type': 'audio/ogg',
       'duration_secs': 2.5,
       'waveform': 'AQID',
