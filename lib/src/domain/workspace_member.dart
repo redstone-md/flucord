@@ -158,6 +158,35 @@ final class Nameplate {
   int get hashCode => Object.hash(asset, palette);
 }
 
+/// The frame somebody wears around their avatar: `avatar_decoration_data`.
+final class AvatarDecoration {
+  const AvatarDecoration({required this.asset, this.skuId});
+
+  /// An `avatar_decoration_data` object, which the cache stores as it is.
+  /// Null for anything without an asset.
+  static AvatarDecoration? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final asset = json['asset'];
+    if (asset is! String || asset.isEmpty) return null;
+    final sku = json['sku_id'];
+    return AvatarDecoration(asset: asset, skuId: sku is String ? sku : null);
+  }
+
+  Map<String, Object?> toJson() => {'asset': asset, 'sku_id': skuId};
+
+  /// A file under the CDN's `avatar-decoration-presets`. An `a_` prefix
+  /// marks an animated one.
+  final String asset;
+  final String? skuId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AvatarDecoration && other.asset == asset && other.skuId == skuId;
+
+  @override
+  int get hashCode => Object.hash(asset, skuId);
+}
+
 /// How somebody styled their display name, as `display_name_styles` says.
 /// The ids are Discord's; what this client can draw of them is decided where
 /// the name is drawn.
@@ -182,16 +211,18 @@ final class NameStyle {
 }
 
 /// The parts of [MemberTags] a user object can leave out.
-enum TagPart { clanTag, nameplate, nameStyle }
+enum TagPart { clanTag, nameplate, nameStyle, decoration }
 
 /// What Discord draws with a user's name: APP for an application, the server
-/// tag the user shows, the style of the name and the nameplate behind it.
+/// tag the user shows, the style of the name and the nameplate behind it,
+/// and the decoration around their avatar.
 final class MemberTags {
   const MemberTags({
     this.isBot = false,
     this.clanTag,
     this.nameplate,
     this.nameStyle,
+    this.decoration,
     this.unsaid = const {},
   });
 
@@ -201,6 +232,7 @@ final class MemberTags {
   final ClanTag? clanTag;
   final Nameplate? nameplate;
   final NameStyle? nameStyle;
+  final AvatarDecoration? decoration;
 
   /// The parts the payload left out. Such a payload says nothing about them,
   /// so the ones already known stay. A part sent as null says there is none.
@@ -221,6 +253,7 @@ final class MemberTags {
       clanTag: knows(TagPart.clanTag) ? clanTag : known.clanTag,
       nameplate: knows(TagPart.nameplate) ? nameplate : known.nameplate,
       nameStyle: knows(TagPart.nameStyle) ? nameStyle : known.nameStyle,
+      decoration: knows(TagPart.decoration) ? decoration : known.decoration,
       unsaid: unsaid.intersection(known.unsaid),
     );
   }
@@ -232,10 +265,12 @@ final class MemberTags {
       other.clanTag == clanTag &&
       other.nameplate == nameplate &&
       other.nameStyle == nameStyle &&
+      other.decoration == decoration &&
       const SetEquality<TagPart>().equals(other.unsaid, unsaid);
 
   @override
-  int get hashCode => Object.hash(isBot, clanTag, nameplate, nameStyle);
+  int get hashCode =>
+      Object.hash(isBot, clanTag, nameplate, nameStyle, decoration);
 }
 
 /// What a whole user object says about somebody, apart from presence: the

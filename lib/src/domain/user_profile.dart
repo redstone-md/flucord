@@ -1,5 +1,6 @@
 import 'account_connections.dart';
 import 'chat_models.dart';
+import 'profile_effect.dart';
 
 /// The account's own profile, as it appears to everyone else.
 ///
@@ -254,26 +255,6 @@ final class ProfileBadge {
   int get hashCode => Object.hash(id, description, icon, link);
 }
 
-/// The avatar decoration somebody wears, as the profile route reports it.
-///
-/// `asset` names a file under the CDN's `avatar-decoration-presets`, as
-/// Discord's image reference gives it.
-final class ProfileDecoration {
-  const ProfileDecoration({required this.asset, this.skuId});
-
-  final String asset;
-  final String? skuId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ProfileDecoration &&
-      other.asset == asset &&
-      other.skuId == skuId;
-
-  @override
-  int get hashCode => Object.hash(asset, skuId);
-}
-
 /// A third-party account shown on somebody's profile.
 ///
 /// Only what the profile route hands back: the connection's type, the
@@ -340,6 +321,7 @@ final class ServerProfile {
     this.pronouns,
     this.bannerHash,
     this.themeColors,
+    this.profileEffect,
   });
 
   final String guildId;
@@ -347,6 +329,7 @@ final class ServerProfile {
   final String? pronouns;
   final String? bannerHash;
   final ProfileThemeColors? themeColors;
+  final ProfileEffect? profileEffect;
 
   @override
   bool operator ==(Object other) =>
@@ -355,11 +338,18 @@ final class ServerProfile {
       other.bio == bio &&
       other.pronouns == pronouns &&
       other.bannerHash == bannerHash &&
-      other.themeColors == themeColors;
+      other.themeColors == themeColors &&
+      other.profileEffect == profileEffect;
 
   @override
-  int get hashCode =>
-      Object.hash(guildId, bio, pronouns, bannerHash, themeColors);
+  int get hashCode => Object.hash(
+    guildId,
+    bio,
+    pronouns,
+    bannerHash,
+    themeColors,
+    profileEffect,
+  );
 }
 
 /// A server both this account and the profile's user belong to.
@@ -428,13 +418,14 @@ final class OtherUserProfile {
     this.bannerHash,
     this.accentColor,
     this.themeColors,
-    this.decoration,
     this.tags,
     this.badges = const [],
     this.connections = const [],
     this.mutualServers = const [],
     this.mutualFriends = const [],
     this.serverProfile,
+    this.profileEffect,
+    this.profileEffectConfig,
   });
 
   final String userId;
@@ -452,8 +443,6 @@ final class OtherUserProfile {
   /// The Nitro theme, or null when the account set none.
   final ProfileThemeColors? themeColors;
 
-  final ProfileDecoration? decoration;
-
   /// The tags the profile's user object carries, or null when it was not
   /// read from one.
   final MemberTags? tags;
@@ -470,6 +459,18 @@ final class OtherUserProfile {
   /// The profile set for the server it was read in, or null outside a
   /// server or where the person set none.
   final ServerProfile? serverProfile;
+
+  /// The effect on the user profile. Read the one to draw with
+  /// [effectiveProfileEffect].
+  final ProfileEffect? profileEffect;
+
+  /// How [effectiveProfileEffect] looks, or null where the catalogue does
+  /// not have it.
+  final ProfileEffectConfig? profileEffectConfig;
+
+  /// The server profile's effect where it sets one, else the user profile's.
+  ProfileEffect? get effectiveProfileEffect =>
+      serverProfile?.profileEffect ?? profileEffect;
 
   String get effectiveName => displayName.isEmpty ? username : displayName;
 

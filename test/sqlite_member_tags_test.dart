@@ -95,6 +95,48 @@ void main() {
     },
   );
 
+  test(
+    'a cached member keeps the avatar decoration until one says it is gone',
+    () async {
+      final cache = await SqliteChatCache.openAt(
+        inMemoryDatabasePath,
+        factory: databaseFactoryFfi,
+      );
+      addTearDown(cache.close);
+      Member helper(MemberTags tags) => Member(
+        id: _authorId,
+        displayName: 'Helper',
+        initials: 'H',
+        role: 'Member',
+        presence: Presence.offline,
+        colorValue: 0xff456b5a,
+        tags: tags,
+      );
+
+      await cache.writeMessage(
+        _message(),
+        member: helper(
+          const MemberTags(
+            decoration: AvatarDecoration(asset: 'a_deco', skuId: '7'),
+          ),
+        ),
+      );
+      await cache.writeMember(
+        helper(const MemberTags(unsaid: {TagPart.decoration})),
+      );
+      final kept = (await cache.readChannelHistory('channel-1')).members.single;
+
+      await cache.writeMember(helper(const MemberTags()));
+      final cleared = (await cache.readChannelHistory('channel-1')).members;
+
+      expect(
+        kept.tags.decoration,
+        const AvatarDecoration(asset: 'a_deco', skuId: '7'),
+      );
+      expect(cleared.single.tags.decoration, isNull);
+    },
+  );
+
   test('a later write without the bot flag keeps it', () async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,

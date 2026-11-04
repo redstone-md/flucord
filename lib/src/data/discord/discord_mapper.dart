@@ -351,17 +351,19 @@ final class DiscordMapper {
       };
 
   /// The tags on [user]. A user object without `primary_guild`,
-  /// `collectibles` or `display_name_styles` says nothing about that part;
-  /// one where it is null says there is none.
+  /// `collectibles`, `display_name_styles` or `avatar_decoration_data` says
+  /// nothing about that part; one where it is null says there is none.
   static MemberTags tags(Map<String, Object?> user) => MemberTags(
     isBot: user['bot'] == true,
     clanTag: _clanTag(user),
     nameplate: _nameplate(user['collectibles']),
     nameStyle: _nameStyle(user['display_name_styles']),
+    decoration: AvatarDecoration.fromJson(user['avatar_decoration_data']),
     unsaid: {
       if (!user.containsKey('primary_guild')) TagPart.clanTag,
       if (!user.containsKey('collectibles')) TagPart.nameplate,
       if (!user.containsKey('display_name_styles')) TagPart.nameStyle,
+      if (!user.containsKey('avatar_decoration_data')) TagPart.decoration,
     },
   );
 

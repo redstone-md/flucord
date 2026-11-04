@@ -32,6 +32,7 @@ import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'profile_card_route.dart';
+import 'profile_effect_overlay.dart';
 import 'profile_theme.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
@@ -196,7 +197,8 @@ class ProfileCard extends StatelessWidget {
             borderRadius: FlucordRadius.overlay,
             side: BorderSide(color: surfaces.border),
           ),
-          child: ConstrainedBox(
+          child: _EffectBox(
+            data: data,
             constraints: BoxConstraints(
               maxWidth: width.clamp(0.0, screen.width - 16),
               maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
@@ -307,6 +309,34 @@ class _CardSurface extends StatelessWidget {
       child: child,
     ),
   );
+}
+
+/// The box that holds a card's content: [child] in [constraints], with the
+/// profile effect of [data] over it.
+class _EffectBox extends StatelessWidget {
+  const _EffectBox({
+    required this.data,
+    required this.child,
+    this.constraints = const BoxConstraints(),
+  });
+
+  final ProfileCardData data;
+  final BoxConstraints constraints;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = switch (data.effect) {
+      final effect? => Stack(
+        children: [
+          child,
+          Positioned.fill(child: ProfileEffectOverlay(effect: effect)),
+        ],
+      ),
+      null => child,
+    };
+    return ConstrainedBox(constraints: constraints, child: content);
+  }
 }
 
 /// What differs between the card and the window: the sizes of the banner

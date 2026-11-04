@@ -824,6 +824,10 @@ final class DiscordDesktopApiClient
     }
   }
 
+  @override
+  Future<Map<String, Object?>> readProfileEffects() =>
+      _rest.getObject('/user-profile-effects');
+
   /// `GET /users/@me/notes`, every note the account holds.
   ///
   /// A request that fails to return a map is an account with no notes rather

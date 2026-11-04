@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../domain/profile_effect.dart';
 import '../../domain/user_profile.dart';
 import 'discord_cdn.dart';
 import 'discord_mapper.dart';
@@ -31,6 +32,10 @@ abstract interface class DiscordUserProfileTransport {
     String userId, {
     String? guildId,
   });
+
+  /// `GET /user-profile-effects`: the catalogue of profile effects, as
+  /// `{profile_effect_configs: [...]}`.
+  Future<Map<String, Object?>> readProfileEffects();
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -46,6 +51,10 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   final StreamController<UserProfile> _updates = StreamController.broadcast();
 
   UserProfile? _current;
+
+  /// The effect catalogue, read once per session by the first profile that
+  /// wears an effect.
+  Future<Map<String, ProfileEffectConfig>>? _effects;
 
   @override
   UserProfile? get current => _current;
@@ -95,7 +104,40 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     if (userId.trim().isEmpty) return null;
     final payload = await _transport.readUserProfile(userId, guildId: serverId);
     if (payload == null) return null;
-    return readOtherProfile(payload, serverId: serverId);
+    final profile = readOtherProfile(payload, serverId: serverId);
+    final effect = profile?.effectiveProfileEffect;
+    if (effect == null) return profile;
+    return readOtherProfile(
+      payload,
+      serverId: serverId,
+      profileEffectConfig: await _effectConfig(effect.id),
+    );
+  }
+
+  /// How the effect [id] looks, or null where the catalogue lacks it or
+  /// could not be read. A failed read is tried again by the next profile.
+  Future<ProfileEffectConfig?> _effectConfig(String id) async {
+    final effects = _effects ??= _readEffects();
+    try {
+      return (await effects)[id];
+    } on Object {
+      if (identical(_effects, effects)) _effects = null;
+      return null;
+    }
+  }
+
+  /// The catalogue by effect id and by SKU id: a profile names an effect by
+  /// one or the other, depending on when it was bought.
+  Future<Map<String, ProfileEffectConfig>> _readEffects() async {
+    final payload = await _transport.readProfileEffects();
+    final configs = [
+      for (final entry in _objects(payload['profile_effect_configs']))
+        ?ProfileEffectConfig.fromJson(entry),
+    ];
+    return {
+      for (final config in configs) ?config.skuId: config,
+      for (final config in configs) config.id: config,
+    };
   }
 
   /// Applies a `USER_UPDATE` dispatch, which is how a change made on another
@@ -159,13 +201,13 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   static OtherUserProfile? readOtherProfile(
     Map<String, Object?> payload, {
     String? serverId,
+    ProfileEffectConfig? profileEffectConfig,
   }) {
     final user = _object(payload['user']);
     if (user == null) return null;
     final id = user['id'];
     if (id is! String || id.isEmpty) return null;
     final metadata = _object(payload['user_profile']) ?? const {};
-    final decorationData = _object(user['avatar_decoration_data']);
     return OtherUserProfile(
       userId: id,
       username: _text(user['username']),
@@ -180,12 +222,6 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
           ? metadata['accent_color']! as int
           : null,
       themeColors: _themeColors(metadata['theme_colors']),
-      decoration: decorationData == null
-          ? null
-          : ProfileDecoration(
-              asset: _text(decorationData['asset']),
-              skuId: _nullableText(decorationData['sku_id']),
-            ),
       tags: DiscordMapper.tags(user),
       badges: [
         for (final badge in _objects(payload['badges']))
@@ -235,6 +271,8 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       serverProfile: serverId == null
           ? null
           : _readServerProfile(payload, serverId),
+      profileEffect: ProfileEffect.fromJson(metadata['profile_effect']),
+      profileEffectConfig: profileEffectConfig,
     );
   }
 
@@ -252,6 +290,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       bannerHash:
           _metadataText(profile['banner']) ?? _metadataText(member['banner']),
       themeColors: _themeColors(profile['theme_colors']),
+      profileEffect: ProfileEffect.fromJson(profile['profile_effect']),
     );
   }
 

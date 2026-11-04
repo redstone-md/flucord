@@ -399,6 +399,7 @@ class _MessageItemState extends State<MessageItem> {
                 child: MemberAvatar(
                   member: widget.member,
                   size: MessageRowMetrics.avatarSize,
+                  decorated: true,
                   spaceId: widget.workspace
                       .channelById(widget.message.channelId)
                       .spaceId,
