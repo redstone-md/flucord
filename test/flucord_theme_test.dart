@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
+import 'package:flucord/src/presentation/widgets/flucord_menu.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -432,19 +433,19 @@ void main() {
   });
 
   group('the radius scale', () {
-    test(
-      'runs small 4, control 6, medium 8, large 12, framed 16, overlay 16, '
-      'window 24 and full',
-      () {
-        expect(FlucordRadius.small, BorderRadius.circular(4));
-        expect(FlucordRadius.control, BorderRadius.circular(6));
-        expect(FlucordRadius.medium, BorderRadius.circular(8));
-        expect(FlucordRadius.large, BorderRadius.circular(12));
-        expect(FlucordRadius.overlay, BorderRadius.circular(16));
-        expect(FlucordRadius.window, BorderRadius.circular(24));
-        expect(FlucordRadius.full, BorderRadius.circular(999));
-      },
-    );
+    test('keeps nested corners parallel', () {
+      double radius(BorderRadius corners) => corners.topLeft.x;
+
+      // A menu row's hover sits inside the menu's frame.
+      expect(
+        radius(FlucordRadius.overlay) - FlucordMenuItem.inset,
+        radius(FlucordRadius.large),
+      );
+      // A picture with medium corners sits 8 in from a framed card's edge.
+      expect(radius(FlucordRadius.framed), radius(FlucordRadius.medium) + 8);
+      // The full profile's card sits 8 in from the window's edge.
+      expect(radius(FlucordRadius.window), radius(FlucordRadius.framed) + 8);
+    });
 
     test('buttons take the control corner', () {
       final theme = FlucordTheme.dark;

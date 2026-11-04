@@ -54,35 +54,34 @@ enum NameEffect {
   /// every surface. A name reads where it meets the surface: by its fill, or
   /// by its outline when it has one, as a white neon name does in a light
   /// theme.
-  NameLook look(List<int> colors, FlucordSurfaceTheme surfaces) {
-    Color readable(int color) => FlucordTheme.towardText(
-      Color(color),
-      text: surfaces.text,
-      backgrounds: surfaces.backgrounds,
-      reads: (shown, background) => _lookOf(shown).readsOn(background),
-    );
-    return switch (this) {
-      solid || neon || toon || pop => _lookOf(readable(colors.first)),
-      gradient || prism => NameLook(
-        fill: [for (final color in colors) readable(color)],
-        fillFrom: this == gradient ? Alignment.topLeft : Alignment.centerLeft,
-        fillTo: this == gradient
-            ? Alignment.bottomRight
-            : Alignment.centerRight,
-        repeatsFirst: this == prism,
+  NameLook look(List<int> colors, FlucordSurfaceTheme surfaces) => _lookIn([
+    for (final color in colors)
+      FlucordTheme.towardText(
+        Color(color),
+        text: surfaces.text,
+        backgrounds: surfaces.backgrounds,
+        reads: (shown, background) => _lookIn([shown]).readsOn(background),
       ),
-    };
-  }
+  ]);
 
-  /// The look of the effect in one colour, [main].
-  NameLook _lookOf(Color main) {
+  /// The look of the effect in [colors]. The effects in one colour take the
+  /// first.
+  NameLook _lookIn(List<Color> colors) {
+    final main = colors.first;
     final hsl = HSLColor.fromColor(main);
     Color lightness(double value) =>
         hsl.withLightness(value.clamp(0, 1)).toColor();
     final l = hsl.lightness;
     return switch (this) {
+      solid => NameLook(fill: [main]),
+      gradient => NameLook(
+        fill: colors,
+        fillFrom: Alignment.topLeft,
+        fillTo: Alignment.bottomRight,
+      ),
+      prism => NameLook(fill: colors, repeatsFirst: true),
       neon => NameLook(
-        fill: const [_white],
+        fill: const [FlucordFixedColors.onFill],
         outline: hsl
             .withSaturation((hsl.saturation * 1.2).clamp(0, 1))
             .withLightness((l + 0.1).clamp(0, 0.6))
@@ -91,23 +90,25 @@ enum NameEffect {
         glow: main,
       ),
       toon => NameLook(
-        fill: [_white, lightness(l * 1.6), lightness(l * 1.2), main],
+        fill: [
+          FlucordFixedColors.onFill,
+          lightness(l * 1.6),
+          lightness(l * 1.2),
+          main,
+        ],
         fillFrom: Alignment.topCenter,
         fillTo: Alignment.bottomCenter,
         outline: lightness((l * 0.4).clamp(0.12, 1)),
         outlinePixels: 1.6,
       ),
       pop => NameLook(
-        fill: const [_white],
+        fill: const [FlucordFixedColors.onFill],
         outline: lightness(l * 0.2),
         outlinePixels: 1.2,
         drop: main,
       ),
-      solid || gradient || prism => NameLook(fill: [main]),
     };
   }
-
-  static const _white = Color(0xFFFFFFFF);
 }
 
 /// What a name is drawn with: its fill, and what an effect adds around it.

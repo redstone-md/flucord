@@ -126,6 +126,23 @@ enum NameplatePalette {
 final class Nameplate {
   const Nameplate({required this.asset, this.palette});
 
+  /// A `collectibles.nameplate` object, which the cache stores as it is.
+  /// Null for anything without an asset.
+  static Nameplate? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final asset = json['asset'];
+    if (asset is! String || asset.isEmpty) return null;
+    return Nameplate(
+      asset: asset,
+      palette: NameplatePalette.fromWire(json['palette']),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'asset': asset,
+    'palette': palette?.wireValue,
+  };
+
   /// The path under Discord's collectibles CDN, such as
   /// `nameplates/nameplates/twilight/`.
   final String asset;

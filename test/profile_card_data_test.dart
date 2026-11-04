@@ -1,3 +1,4 @@
+import 'package:flucord/src/data/discord/discord_user_profile_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/user_profile.dart';
@@ -55,4 +56,38 @@ void main() {
 
     expect(data.activity?.name, 'Dota 2');
   });
+
+  test(
+    "a friend outside the workspace shows the name style from their profile",
+    () {
+      final profile = DiscordUserProfileRepository.readOtherProfile(const {
+        'user': {
+          'id': 'u1',
+          'username': 'mira',
+          'display_name_styles': {
+            'colors': [0x5865f2],
+            'font_id': 3,
+            'effect_id': 2,
+          },
+        },
+      });
+
+      final data = ProfileCardData.member(
+        const Member(
+          id: 'u1',
+          displayName: 'Mira',
+          initials: 'M',
+          role: 'Discord user',
+          presence: Presence.unknown,
+          colorValue: 0xff000000,
+        ),
+        profile: profile,
+      );
+
+      expect(
+        data.nameStyle,
+        const NameStyle(colors: [0xff5865f2], fontId: 3, effectId: 2),
+      );
+    },
+  );
 }

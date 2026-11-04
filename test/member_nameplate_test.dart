@@ -87,6 +87,18 @@ void main() {
       );
     });
 
+    test('a name colour keeps only its 24 colour bits', () {
+      final member = mapper.member(
+        _user({
+          'display_name_styles': {
+            'colors': [0x1005865f2],
+          },
+        }),
+      );
+
+      expect(member.tags.nameStyle?.colors, [0xff5865f2]);
+    });
+
     test('a palette this client does not know draws no wash', () {
       final member = mapper.member(
         _user({
@@ -128,7 +140,9 @@ void main() {
       );
 
       final merged = known.upsertMember(
-        mapper.member(_user({'collectibles': null, 'display_name_styles': null})),
+        mapper.member(
+          _user({'collectibles': null, 'display_name_styles': null}),
+        ),
       );
       final tags = merged.memberOrNull(_userId)!.tags;
 
@@ -138,7 +152,11 @@ void main() {
 
     test('collectibles without a nameplate clear the nameplate', () {
       final known = _workspaceWith(
-        mapper.member(_user({'collectibles': {'nameplate': _twilight}})),
+        mapper.member(
+          _user({
+            'collectibles': {'nameplate': _twilight},
+          }),
+        ),
       );
 
       final merged = known.upsertMember(
@@ -150,7 +168,9 @@ void main() {
 
     test('a presence user with a username carries them as identity', () {
       final identity = mapper.identity(
-        _user({'collectibles': {'nameplate': _twilight}}),
+        _user({
+          'collectibles': {'nameplate': _twilight},
+        }),
       )!;
 
       final updated = _freez(MemberTags.none).withIdentity(identity);

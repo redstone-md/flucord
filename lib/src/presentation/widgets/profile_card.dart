@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/discord/discord_cdn.dart';
-import '../../domain/account_connections.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
@@ -20,6 +19,7 @@ import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
+import 'member_avatar.dart';
 import 'name_tags.dart';
 import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
@@ -181,10 +181,9 @@ class ProfileCard extends StatelessWidget {
               children: [
                 _Header(
                   data: data,
-                  metrics: _HeaderMetrics.card,
+                  metrics: _ProfileMetrics.card,
                   backdrop: surfaces.raised,
                   actions: actions,
-                  onOpenFullProfile: actions.onOpenFullProfile,
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -195,9 +194,11 @@ class ProfileCard extends StatelessWidget {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _spaced([
+                    spacing: 12,
+                    children: [
                       _Names(
                         data: data,
+                        metrics: _ProfileMetrics.card,
                         backdrop: surfaces.raised,
                         onOpenFullProfile: actions.onOpenFullProfile,
                       ),
@@ -221,7 +222,7 @@ class ProfileCard extends StatelessWidget {
                         ),
                       if (actions.onMessage case final send?)
                         _MessageField(name: data.displayName, onSubmit: send),
-                    ]),
+                    ],
                   ),
                 ),
               ],
@@ -231,44 +232,48 @@ class ProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  static List<Widget> _spaced(List<Widget> children) => [
-    for (var index = 0; index < children.length; index++) ...[
-      if (index > 0) const SizedBox(height: 12),
-      children[index],
-    ],
-  ];
 }
 
-/// The sizes of the banner and the avatar, in the card and in the window.
+/// What differs between the card and the window: the sizes of the banner
+/// and the avatar, the name's size, and whether the mutual line shows (the
+/// window has tabs for the mutuals instead).
 @immutable
-final class _HeaderMetrics {
-  const _HeaderMetrics({
+final class _ProfileMetrics {
+  const _ProfileMetrics({
     required this.bannerHeight,
     required this.avatarSize,
     required this.ring,
     required this.avatarTop,
     required this.padding,
     required this.dot,
+    required this.name,
+    required this.showsMutualLine,
   });
 
-  static const card = _HeaderMetrics(
+  static const card = _ProfileMetrics(
     bannerHeight: 72,
     avatarSize: 80,
     ring: 4,
     avatarTop: 32,
     padding: ProfileCard._padding,
     dot: 16,
+    name: FlucordTextRole.title,
+    showsMutualLine: true,
   );
 
-  static const window = _HeaderMetrics(
+  static const window = _ProfileMetrics(
     bannerHeight: 120,
     avatarSize: 96,
     ring: 6,
     avatarTop: 72,
     padding: 20,
     dot: 18,
+    name: FlucordTextRole.display,
+    showsMutualLine: false,
   );
+
+  final FlucordTextRole name;
+  final bool showsMutualLine;
 
   final double bannerHeight;
   final double avatarSize;
@@ -286,26 +291,23 @@ final class _HeaderMetrics {
 }
 
 /// The banner, the avatar over its bottom edge and the custom status beside
-/// the avatar. [actions] put add friend and "more" on the banner, as the
-/// card has them; the window leaves them out and has its own row.
+/// the avatar. [actions] put add friend and "more" on the banner and make
+/// the avatar open the full profile, as the card has them; the window leaves
+/// them out and has its own row.
 class _Header extends StatelessWidget {
   const _Header({
     required this.data,
     required this.metrics,
     required this.backdrop,
     this.actions = const ProfileCardActions(),
-    this.onOpenFullProfile,
   });
 
   final ProfileCardData data;
-  final _HeaderMetrics metrics;
+  final _ProfileMetrics metrics;
 
   /// The colour the header sits on, which rings the avatar.
   final Color backdrop;
   final ProfileCardActions actions;
-
-  /// A click on the avatar calls it.
-  final VoidCallback? onOpenFullProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -355,15 +357,12 @@ class _Header extends StatelessWidget {
           Positioned(
             left: metrics.padding - metrics.ring,
             top: metrics.avatarTop - metrics.ring,
-            child: switch (onOpenFullProfile) {
-              final open? => _FullProfileLink(
-                key: const ValueKey('profile-card-avatar'),
-                label: 'View ${data.displayName} full profile',
-                onOpen: open,
-                child: avatar,
-              ),
-              null => avatar,
-            },
+            child: _FullProfileLink(
+              linkKey: const ValueKey('profile-card-avatar'),
+              name: data.displayName,
+              onOpen: actions.onOpenFullProfile,
+              child: avatar,
+            ),
           ),
           if (data.customStatus case final status?)
             Positioned(
@@ -391,7 +390,7 @@ class _Avatar extends StatelessWidget {
   });
 
   final ProfileCardData data;
-  final _HeaderMetrics metrics;
+  final _ProfileMetrics metrics;
   final Color backdrop;
 
   @override
@@ -547,29 +546,36 @@ class _MoreButton extends StatelessWidget {
   );
 }
 
-/// Makes [child] open the full profile: a pointer, a click and a button to
-/// assistive technology.
+/// Makes [child] open [name]'s full profile: a pointer, a click and a
+/// button to assistive technology. Without [onOpen] it is only [child].
 class _FullProfileLink extends StatelessWidget {
   const _FullProfileLink({
-    required this.label,
+    required this.linkKey,
+    required this.name,
     required this.onOpen,
     required this.child,
-    super.key,
   });
 
-  final String label;
-  final VoidCallback onOpen;
+  /// The link's key, on the link only, so a finder sees no link when there
+  /// is none.
+  final Key linkKey;
+  final String name;
+  final VoidCallback? onOpen;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: label,
-    child: MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onOpen, child: child),
+  Widget build(BuildContext context) => switch (onOpen) {
+    final open? => Semantics(
+      key: linkKey,
+      button: true,
+      label: 'View $name full profile',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(onTap: open, child: child),
+      ),
     ),
-  );
+    null => child,
+  };
 }
 
 /// The "Message @name" field. Enter opens the DM with the text.
@@ -611,6 +617,8 @@ class _MessageFieldState extends State<_MessageField> {
             hintStyle: FlucordTextRole.label.style.copyWith(
               color: surfaces.captionText,
             ),
+            // 9 + 18 + 9: the label line in the middle of a 36 px field,
+            // as the app's other fields have it.
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 9,

@@ -11,27 +11,18 @@ import 'name_style_scope.dart';
 /// member list, the DM list, message authors and the profile all draw names
 /// with it.
 ///
-/// Inside a server the role colour wins: the name takes the colour of the
-/// member's role, or the plain colour of [style], and the style's colours and
-/// effect are not drawn at all. Outside a server they are. The font is drawn
-/// in both. This is Discord's own rule: its web client draws the styled name
-/// only when there is no guild (the member list item in chunk 110574,
-/// `null == guildId && null != styles`) or the channel is private (the
-/// message author in chunk 799162, `channel.isPrivate() && null != styles`);
-/// elsewhere it passes only the style's font next to the role colour.
-/// Source: the web client dump in Wumpus-Central/discrapper-canary.
+/// Inside a server the role colour wins over the style's colours and effect;
+/// the font is drawn in both. Discord's web client has the same rule (chunks
+/// 110574 and 799162 of Wumpus-Central/discrapper-canary).
 ///
-/// A font is fetched the first time a name needs it ([DisplayNameFonts]).
-/// Until it arrives the name is in the app font, at the same line height, so
-/// nothing moves when it does. Fonts and effects this client does not know
-/// ([DisplayNameFont], [NameEffect]) draw the plain name.
+/// Until its font is ready ([DisplayNameFonts]) the name is in the app font.
+/// Fonts and effects this client does not know draw the plain name.
 class DisplayName extends StatelessWidget {
   const DisplayName(
     this.text, {
     required this.style,
     this.nameStyle,
-    this.roleColor,
-    this.inServer = false,
+    this.inServer,
     this.maxLines = 1,
     super.key,
   });
@@ -42,16 +33,15 @@ class DisplayName extends StatelessWidget {
   final TextStyle style;
   final NameStyle? nameStyle;
 
-  /// The colour of the member's role here, or null for none.
-  final int? roleColor;
-  final bool inServer;
+  /// The server the name is drawn in, or null outside any server.
+  final InServer? inServer;
   final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     final typed = _inFont(context);
-    if (inServer) {
-      return _line(switch (roleColor) {
+    if (inServer case final server?) {
+      return _line(switch (server.roleColor) {
         final color? => typed.copyWith(color: Color(color)),
         null => typed,
       });
@@ -66,14 +56,18 @@ class DisplayName extends StatelessWidget {
   }
 
   /// [style] in the person's font, once the [NameStyleScope] above has it.
+  /// Until then the name keeps the app font and its spacing, so it does not
+  /// change width before the font lands.
   TextStyle _inFont(BuildContext context) {
     final font = DisplayNameFont.byId(nameStyle?.fontId);
     final fonts = NameStyleScope.fontsOf(context);
     if (font == null || fonts == null) return style;
     fonts.request(font);
+    final family = fonts.familyOf(font);
+    if (family == null) return style;
     return style.copyWith(
-      fontFamily: font.family,
-      // Until the font is registered, the engine draws the app font.
+      fontFamily: family,
+      // Letters the font lacks are drawn in the app font.
       fontFamilyFallback: const [FlucordType.family],
       letterSpacing: font.letterSpacing * _fontSize,
     );
@@ -155,4 +149,14 @@ class DisplayName extends StatelessWidget {
     overflow: TextOverflow.ellipsis,
     style: style,
   );
+}
+
+/// A name drawn in a server, where the role colour wins over the name's
+/// style.
+@immutable
+final class InServer {
+  const InServer({this.roleColor});
+
+  /// The colour of the member's role here, or null for none.
+  final int? roleColor;
 }

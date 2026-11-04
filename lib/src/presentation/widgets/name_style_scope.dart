@@ -44,17 +44,19 @@ class _NameStyleScopeState extends State<NameStyleScope> {
       _NameStyles(motion: _motion, fonts: widget.fonts, child: widget.child);
 }
 
-class _NameStyles extends InheritedWidget {
+/// Rebuilds the names below it each time a font is ready.
+class _NameStyles extends InheritedNotifier<DisplayNameFonts> {
   const _NameStyles({
     required this.motion,
-    required this.fonts,
+    required DisplayNameFonts fonts,
     required super.child,
-  });
+  }) : super(notifier: fonts);
 
   final NameplateMotion motion;
-  final DisplayNameFonts fonts;
+
+  DisplayNameFonts get fonts => notifier!;
 
   @override
   bool updateShouldNotify(_NameStyles oldWidget) =>
-      motion != oldWidget.motion || fonts != oldWidget.fonts;
+      motion != oldWidget.motion || super.updateShouldNotify(oldWidget);
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/monogram.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'presence_indicator.dart';
@@ -33,7 +34,7 @@ class DiscordRelationshipAvatar extends StatelessWidget {
                 color: context.surfaces.raised,
                 child: Center(
                   child: Text(
-                    user.displayName.characters.first.toUpperCase(),
+                    monogramOf(user.displayName),
                     style: TextStyle(
                       color: context.surfaces.text,
                       fontSize: FlucordType.fitting(size * 0.38),

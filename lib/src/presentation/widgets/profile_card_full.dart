@@ -106,7 +106,7 @@ class _FullProfileCard extends StatelessWidget {
     required this.note,
   });
 
-  static const _metrics = _HeaderMetrics.window;
+  static const _metrics = _ProfileMetrics.window;
 
   final ProfileCardData data;
   final ProfileCardActions actions;
@@ -142,11 +142,12 @@ class _FullProfileCard extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _spaced([
+                  spacing: 16,
+                  children: [
                     _Names(
                       data: data,
+                      metrics: _metrics,
                       backdrop: surfaces.inset,
-                      inWindow: true,
                     ),
                     ?_FullProfileButtons.of(actions),
                     if (data.bio.isNotEmpty) _AboutText(data.bio),
@@ -189,7 +190,7 @@ class _FullProfileCard extends StatelessWidget {
                         heading: 'Note (only you see it)',
                         child: note,
                       ),
-                  ]),
+                  ],
                 ),
               ),
             ],
@@ -198,13 +199,6 @@ class _FullProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  static List<Widget> _spaced(List<Widget> children) => [
-    for (var index = 0; index < children.length; index++) ...[
-      if (index > 0) const SizedBox(height: 16),
-      children[index],
-    ],
-  ];
 }
 
 /// Message, add friend and "more", under the names. Null when the host
@@ -274,17 +268,15 @@ class _Connections extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
+    spacing: 8,
     children: [
       for (final connection in connections)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: _ConnectionRow(
-            connection: connection,
-            onOpen: switch ((connection.link, onOpen)) {
-              (final link?, final open?) => () => open(link),
-              _ => null,
-            },
-          ),
+        _ConnectionRow(
+          connection: connection,
+          onOpen: switch ((connection.link, onOpen)) {
+            (final link?, final open?) => () => open(link),
+            _ => null,
+          },
         ),
     ],
   );
@@ -299,7 +291,7 @@ class _ConnectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final service = connectionServiceName(connection.type);
+    final service = connection.serviceName;
     final open = onOpen;
     return Material(
       key: ValueKey('profile-connection-${connection.type}'),
@@ -312,7 +304,7 @@ class _ConnectionRow extends StatelessWidget {
       child: InkWell(
         onTap: open,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
               ArtTile(
@@ -321,7 +313,7 @@ class _ConnectionRow extends StatelessWidget {
                 color: surfaces.control,
                 size: 20,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   connection.name,
@@ -334,7 +326,7 @@ class _ConnectionRow extends StatelessWidget {
                 ),
               ),
               if (connection.verified) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 FlucordIcon(
                   FlucordIcons.verified,
                   size: 14,
@@ -342,7 +334,7 @@ class _ConnectionRow extends StatelessWidget {
                 ),
               ],
               if (open != null) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 FlucordIcon(
                   FlucordIcons.openExternal,
                   size: 14,

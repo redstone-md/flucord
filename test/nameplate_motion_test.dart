@@ -53,9 +53,7 @@ Member _person(String id) => Member(
   presence: Presence.online,
   colorValue: 0xff59636a,
   spaceIds: const {'guild-1'},
-  tags: MemberTags(
-    nameplate: Nameplate(asset: 'nameplates/nameplates/$id/'),
-  ),
+  tags: MemberTags(nameplate: Nameplate(asset: 'nameplates/nameplates/$id/')),
 );
 
 String _moving(String id) =>
@@ -91,7 +89,7 @@ Future<void> _pumpMembers(
       home: NameStyleScope(
         videos: videos,
         fonts: DisplayNameFonts(
-          fetch: (url) => throw StateError('no font is fetched here'),
+          load: (font) => throw StateError('no font is loaded here'),
         ),
         child: Scaffold(
           body: Row(
@@ -118,9 +116,7 @@ Future<TestGesture> _mouse(WidgetTester tester) async {
 }
 
 Future<void> _hover(TestGesture mouse, WidgetTester tester, String id) async {
-  await mouse.moveTo(
-    tester.getCenter(find.byKey(ValueKey('member-row-$id'))),
-  );
+  await mouse.moveTo(tester.getCenter(find.byKey(ValueKey('member-row-$id'))));
   await tester.pump();
 }
 
@@ -175,9 +171,7 @@ void main() {
     expect(find.byKey(ValueKey('moving ${_moving('mira')}')), findsNothing);
   });
 
-  testWidgets('leaving the row goes back to the still picture', (
-    tester,
-  ) async {
+  testWidgets('leaving the row goes back to the still picture', (tester) async {
     final videos = _FakeVideos();
     await _stillPicturesLoaded(tester, ['mira', 'jack']);
     await _pumpMembers(tester, videos);

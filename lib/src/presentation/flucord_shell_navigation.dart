@@ -855,8 +855,7 @@ extension _FlucordShellNavigation on FlucordShell {
       initials: monogramOf(user.displayName),
       role: 'Discord user',
       presence: Presence.unknown,
-      // Discord's neutral grey: there is no server colour to take.
-      colorValue: 0xff4a4e50,
+      colorValue: monogramColorOf(user.id),
       avatarUrl: user.avatarUrl,
     );
   }

@@ -1,23 +1,23 @@
 part of 'profile_card.dart';
 
-/// The name, then the username line, the badges and, in the card, the mutual
-/// line. The window has tabs for the mutuals and a larger name.
+/// The name, then the username line, the badges and, where [metrics] show
+/// it, the mutual line.
 class _Names extends StatelessWidget {
   const _Names({
     required this.data,
+    required this.metrics,
     required this.backdrop,
     this.onOpenFullProfile,
-    this.inWindow = false,
   });
 
   final ProfileCardData data;
+  final _ProfileMetrics metrics;
 
   /// The colour the names sit on, which rings the mutual friends' faces.
   final Color backdrop;
 
   /// A click on the name calls it.
   final VoidCallback? onOpenFullProfile;
-  final bool inWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -30,25 +30,21 @@ class _Names extends StatelessWidget {
     final name = DisplayName(
       data.displayName,
       maxLines: 2,
-      style: (inWindow ? FlucordTextRole.display : FlucordTextRole.title).style
-          .copyWith(color: surfaces.text),
+      style: metrics.name.style.copyWith(color: surfaces.text),
       nameStyle: data.nameStyle,
     );
     final showsMutual =
-        !inWindow &&
+        metrics.showsMutualLine &&
         (data.mutualFriends.isNotEmpty || data.mutualServers.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        switch (onOpenFullProfile) {
-          final open? => _FullProfileLink(
-            key: const ValueKey('profile-card-name'),
-            label: 'View ${data.displayName} full profile',
-            onOpen: open,
-            child: name,
-          ),
-          null => name,
-        },
+        _FullProfileLink(
+          linkKey: const ValueKey('profile-card-name'),
+          name: data.displayName,
+          onOpen: onOpenFullProfile,
+          child: name,
+        ),
         if (handle.isNotEmpty || clan != null) ...[
           const SizedBox(height: 2),
           Row(

@@ -460,8 +460,7 @@ class _MemberRow extends StatelessWidget {
                             color: surfaces.text,
                           ),
                           nameStyle: member.tags.nameStyle,
-                          roleColor: nameColor,
-                          inServer: true,
+                          inServer: InServer(roleColor: nameColor),
                         ),
                       ),
                       NameTags(member: member),
@@ -479,7 +478,6 @@ class _MemberRow extends StatelessWidget {
         ],
       ),
     );
-    final nameplate = member.tags.nameplate;
     return Opacity(
       opacity: offline ? 0.58 : 1,
       child: Material(
@@ -497,15 +495,12 @@ class _MemberRow extends StatelessWidget {
             borderRadius: FlucordRadius.control,
             child: SizedBox(
               height: MemberRosterView.rowHeight,
-              child: switch (nameplate) {
-                final nameplate? => NameplateBackdrop(
-                  nameplate: nameplate,
-                  placement: NameplatePlacement.memberList,
-                  selected: selected,
-                  child: content,
-                ),
-                null => content,
-              },
+              child: WithNameplate(
+                nameplate: member.tags.nameplate,
+                placement: NameplatePlacement.memberList,
+                selected: selected,
+                child: content,
+              ),
             ),
           ),
         ),

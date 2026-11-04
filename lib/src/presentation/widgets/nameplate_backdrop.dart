@@ -11,14 +11,9 @@ import 'nameplate_motion.dart';
 /// The list a nameplate stands in.
 enum NameplatePlacement { memberList, directMessages }
 
-/// The palette wash under a nameplate.
-///
-/// Discord's web client paints it in the member list and the DM list as
-/// `linear-gradient(90deg, transparent 0%, c 8% at 20% and 50%, c at 100%)`.
-/// The end is 20 % strong at rest, 30 % under the pointer in the member list,
-/// and 50 % on the selected row. `c` is the palette's dark colour in a dark
-/// theme and its light colour in a light one. Source: chunk 351952 of the web
-/// client dump in Wumpus-Central/discrapper-canary.
+/// The palette wash under a nameplate, in the palette's dark colour in a dark
+/// theme and its light one in a light theme. Stops and strengths from chunk
+/// 351952 of Discord's web client (Wumpus-Central/discrapper-canary).
 final class NameplateWash {
   NameplateWash(
     NameplatePalette palette, {
@@ -40,12 +35,6 @@ final class NameplateWash {
   /// The strength at the row's end, out of 255.
   final int _end;
 
-  /// The strength the plate keeps under the row's text. Discord keeps 30 %.
-  /// This theme's muted text sits close to 4.5:1 on its rows already (about
-  /// 4.6 on the open DM row in the light theme), so even a 3 % wash under it
-  /// falls short. The plate starts where the text ends.
-  static const underText = 0.0;
-
   LinearGradient get gradient => LinearGradient(
     colors: [
       color.withAlpha(0),
@@ -55,10 +44,6 @@ final class NameplateWash {
     ],
     stops: const [0, 0.2, 0.5, 1],
   );
-
-  /// The strongest the wash gets under the row's text.
-  Color get strongestUnderText =>
-      color.withValues(alpha: _end / 255 * underText);
 }
 
 /// Discord's palette colours, from the web client's palette table (chunk
@@ -96,13 +81,10 @@ extension on NameplatePalette {
 
 /// Draws a nameplate behind a row of the member list or the DM list.
 ///
-/// As Discord's clients draw it: the still picture as tall as the row and
-/// 16:3 wide, against the row's end and cut to the row's shape (the mobile
-/// client's Nameplate.tsx in Wumpus-Central/discord-mobile-datamining), over
-/// the palette wash. The plate is held back under the text marked with
-/// [NameplateText] ([NameplateWash.underText]) and comes to full strength
-/// over the 50 px after it (the web client's mask in chunk 351952), so the
-/// text stays readable.
+/// The still picture sits against the row's end over the palette wash, clear
+/// under the text marked with [NameplateText]. Layout from the mobile
+/// client's Nameplate.tsx (Wumpus-Central/discord-mobile-datamining), the
+/// fade from the web client's mask in chunk 351952.
 ///
 /// Under the pointer the moving nameplate plays over the still picture,
 /// through the [NameplateMotion] of the [NameStyleScope] above, which plays
@@ -256,18 +238,16 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     );
   }
 
-  /// The mask over the plate: faint up to the text's end, full 50 px later.
+  /// The mask over the plate: clear up to the text's end, full 50 px later.
+  /// Discord keeps 30 % under the text; this theme's muted text sits close to
+  /// 4.5:1 on its rows already, so even a faint plate under it falls short.
   Shader _fadeBehindText(Rect bounds) {
     final width = math.max(bounds.width, 1);
     final textEnd = _textEnd();
     final start = (textEnd / width).clamp(0.0, 1.0);
     final end = ((textEnd + NameplateBackdrop._fade) / width).clamp(start, 1.0);
     return LinearGradient(
-      colors: [
-        Colors.black.withValues(alpha: NameplateWash.underText),
-        Colors.black.withValues(alpha: NameplateWash.underText),
-        Colors.black,
-      ],
+      colors: [Colors.transparent, Colors.transparent, Colors.black],
       stops: [0, start, end],
     ).createShader(bounds);
   }
@@ -285,6 +265,34 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     );
     return text.localToGlobal(Offset(width, 0), ancestor: row).dx;
   }
+}
+
+/// [child] over [nameplate]'s backdrop, or [child] alone for somebody
+/// without one.
+class WithNameplate extends StatelessWidget {
+  const WithNameplate({
+    required this.nameplate,
+    required this.placement,
+    required this.child,
+    this.selected = false,
+    super.key,
+  });
+
+  final Nameplate? nameplate;
+  final NameplatePlacement placement;
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => switch (nameplate) {
+    final nameplate? => NameplateBackdrop(
+      nameplate: nameplate,
+      placement: placement,
+      selected: selected,
+      child: child,
+    ),
+    null => child,
+  };
 }
 
 class _NameplateScope extends InheritedWidget {

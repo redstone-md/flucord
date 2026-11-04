@@ -43,6 +43,7 @@ dependencies:
   hugeicons: ^4.4.0
   pointycastle: ^4.0.0
   qr_flutter: ^4.1.0
+  google_fonts: ^8.2.1
 
 dev_dependencies:
   flutter_test:

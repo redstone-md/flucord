@@ -28,6 +28,9 @@ class FlucordMenuItem<T> extends PopupMenuEntry<T> {
 
   static const double rowHeight = 32;
 
+  /// How far the row's hover sits in from the menu's edge.
+  static const double inset = 4;
+
   final String label;
 
   /// What the menu returns when this row is chosen.
@@ -103,9 +106,11 @@ class _FlucordMenuItemState<T> extends State<FlucordMenuItem<T>> {
         child: IconTheme.merge(
           data: IconThemeData(size: 16, color: surfaces.muted),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            // The menu is rounded by the overlay radius and the row sits 4 in
-            // from its edge, so the row takes the radius that stays parallel.
+            padding: const EdgeInsets.symmetric(
+              horizontal: FlucordMenuItem.inset,
+            ),
+            // The row takes the overlay radius less its inset, so the two
+            // corners stay parallel.
             child: InkWell(
               onTap: item.enabled ? _choose : null,
               canRequestFocus: item.enabled,

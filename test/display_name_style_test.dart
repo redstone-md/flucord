@@ -28,15 +28,13 @@ Future<void> _pumpName(
   WidgetTester tester,
   NameStyle? style, {
   DisplayNameFonts? fonts,
-  bool inServer = false,
-  int? roleColor,
+  InServer? inServer,
 }) {
   final name = DisplayName(
     'Freez',
     style: FlucordTextRole.label.style.copyWith(color: Colors.white),
     nameStyle: style,
     inServer: inServer,
-    roleColor: roleColor,
   );
   return tester.pumpWidget(
     MaterialApp(
@@ -99,28 +97,32 @@ Rect _letters(WidgetTester tester) {
 TextStyle _drawnStyle(WidgetTester tester) =>
     tester.widget<Text>(find.text('Freez').last).style!;
 
-/// A fonts loader that records what it is asked to fetch.
-(DisplayNameFonts, List<Uri>) _recordingFonts({
-  Future<void> Function(String family, Uint8List bytes)? register,
+/// A fonts loader that records what it is asked for. Each load reads a
+/// real file, so it is still running when the first frame is drawn; with
+/// [register] the file is registered under the font's family.
+(DisplayNameFonts, List<DisplayNameFont>) _recordingFonts({
+  bool register = false,
 }) {
-  final fetched = <Uri>[];
+  final requested = <DisplayNameFont>[];
   final fonts = DisplayNameFonts(
-    fetch: (url) async {
-      fetched.add(url);
-      final font = await rootBundle.load(
+    load: (font) async {
+      requested.add(font);
+      final bytes = await rootBundle.load(
         'assets/fonts/golos_text/GolosText-Regular.ttf',
       );
-      return font.buffer.asUint8List();
+      if (register) {
+        await (FontLoader(font.family)..addFont(Future.value(bytes))).load();
+      }
+      return font.family;
     },
-    register: register ?? (family, bytes) async {},
   );
-  return (fonts, fetched);
+  return (fonts, requested);
 }
 
 void main() {
   group('a name font', () {
     testWidgets('a known id is fetched and drawn in its font', (tester) async {
-      final (fonts, fetched) = _recordingFonts();
+      final (fonts, requested) = _recordingFonts();
 
       await _pumpName(
         tester,
@@ -128,7 +130,9 @@ void main() {
         fonts: fonts,
       );
 
-      expect(fetched, [DisplayNameFont.mainframe.url]);
+      expect(requested, [DisplayNameFont.mainframe]);
+      await tester.runAsync(() => fonts.loaded(DisplayNameFont.mainframe));
+      await tester.pump();
       final style = _drawnStyle(tester);
       expect(style.fontFamily, 'Orbitron');
       expect(style.fontFamilyFallback, [FlucordType.family]);
@@ -137,7 +141,7 @@ void main() {
     testWidgets('an unknown id fetches nothing and keeps the app font', (
       tester,
     ) async {
-      final (fonts, fetched) = _recordingFonts();
+      final (fonts, requested) = _recordingFonts();
 
       await _pumpName(
         tester,
@@ -145,20 +149,14 @@ void main() {
         fonts: fonts,
       );
 
-      expect(fetched, isEmpty);
+      expect(requested, isEmpty);
       expect(_drawnStyle(tester).fontFamily, FlucordType.family);
     });
 
     testWidgets('the line keeps its height when the font arrives', (
       tester,
     ) async {
-      final (fonts, _) = _recordingFonts(
-        register: (family, bytes) =>
-            (FontLoader(family)..addFont(
-                  Future.value(ByteData.sublistView(bytes)),
-                ))
-                .load(),
-      );
+      final (fonts, _) = _recordingFonts(register: true);
       await _pumpName(tester, null);
       final plain = tester.getSize(find.text('Freez'));
 
@@ -177,6 +175,22 @@ void main() {
       expect(arrived.height, plain.height);
     });
 
+    testWidgets('the name keeps its width until its font arrives', (
+      tester,
+    ) async {
+      final (fonts, _) = _recordingFonts();
+      await _pumpName(tester, null);
+      final plain = tester.getSize(find.text('Freez'));
+
+      await _pumpName(
+        tester,
+        const NameStyle(colors: [], fontId: 3),
+        fonts: fonts,
+      );
+
+      expect(tester.getSize(find.text('Freez')).width, plain.width);
+    });
+
     testWidgets('a name in a server keeps its font beside the role colour', (
       tester,
     ) async {
@@ -186,9 +200,10 @@ void main() {
         tester,
         const NameStyle(colors: [_red], fontId: 14, effectId: 3),
         fonts: fonts,
-        inServer: true,
-        roleColor: _blue,
+        inServer: const InServer(roleColor: _blue),
       );
+      await tester.runAsync(() => fonts.loaded(DisplayNameFont.mainframe));
+      await tester.pump();
 
       expect(_drawnStyle(tester).fontFamily, 'Orbitron');
       expect(_drawnStyle(tester).color, const Color(_blue));
@@ -308,7 +323,9 @@ void main() {
             for (final background in surfaces.backgrounds) {
               final outline = look.outline;
               final readable =
-                  look.fill.every((fill) => contrast(fill, background) >= 4.5) ||
+                  look.fill.every(
+                    (fill) => contrast(fill, background) >= 4.5,
+                  ) ||
                   (outline != null && contrast(outline, background) >= 4.5);
               expect(
                 readable,

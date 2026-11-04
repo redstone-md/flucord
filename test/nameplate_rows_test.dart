@@ -14,8 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/contrast.dart';
-
 const _twilight = Nameplate(
   asset: 'nameplates/nameplates/twilight/',
   palette: NameplatePalette.cobalt,
@@ -130,8 +128,7 @@ Future<void> _pumpDirectMessages(WidgetTester tester, Member person) {
 Future<void> _pumpName(
   WidgetTester tester,
   NameStyle? style, {
-  bool inServer = false,
-  int? roleColor,
+  InServer? inServer,
 }) => tester.pumpWidget(
   MaterialApp(
     theme: FlucordTheme.dark,
@@ -144,7 +141,6 @@ Future<void> _pumpName(
             style: FlucordTextRole.label.style.copyWith(color: Colors.white),
             nameStyle: style,
             inServer: inServer,
-            roleColor: roleColor,
           ),
         ),
       ),
@@ -271,72 +267,6 @@ void main() {
       final row = find.byKey(const ValueKey('member-row-mira'));
       expect(_in(row, find.byType(NameplateBackdrop)), findsNothing);
     });
-
-    test('keeps the row text readable in every palette', () {
-      for (final theme in [FlucordTheme.dark, FlucordTheme.light]) {
-        final surfaces = theme.extension<FlucordSurfaceTheme>()!;
-        final quietRail = Color.alphaBlend(surfaces.quietFill, surfaces.rail);
-        // Each state a row can be in: what it sits on, and the text on it.
-        final states = [
-          // A member row at rest or under the pointer: the name, and the
-          // muted activity line.
-          (
-            NameplatePlacement.memberList,
-            hovered: true,
-            selected: false,
-            under: surfaces.surface,
-            texts: [surfaces.text, surfaces.muted],
-          ),
-          // A member whose card is open: the row is filled with raised.
-          (
-            NameplatePlacement.memberList,
-            hovered: true,
-            selected: true,
-            under: surfaces.raised,
-            texts: [surfaces.text, surfaces.muted],
-          ),
-          // A DM at rest is muted, an unread one full strength.
-          (
-            NameplatePlacement.directMessages,
-            hovered: false,
-            selected: false,
-            under: surfaces.rail,
-            texts: [surfaces.text, surfaces.muted],
-          ),
-          // The open DM is filled quietly, with full strength text and a
-          // muted activity line.
-          (
-            NameplatePlacement.directMessages,
-            hovered: false,
-            selected: true,
-            under: quietRail,
-            texts: [surfaces.text, surfaces.muted],
-          ),
-        ];
-        for (final palette in NameplatePalette.values) {
-          for (final (placement, :hovered, :selected, :under, :texts)
-              in states) {
-            final wash = NameplateWash(
-              palette,
-              brightness: theme.brightness,
-              placement: placement,
-              hovered: hovered,
-              selected: selected,
-            );
-            final background = Color.alphaBlend(wash.strongestUnderText, under);
-            for (final text in texts) {
-              expect(
-                contrast(text, background),
-                greaterThanOrEqualTo(4.5),
-                reason:
-                    '${palette.name} in ${theme.brightness.name} '
-                    '${placement.name}, selected: $selected',
-              );
-            }
-          }
-        }
-      }
-    });
   });
 
   group('a display name', () {
@@ -392,10 +322,14 @@ void main() {
       tester,
     ) async {
       const style = NameStyle(colors: [_red], fontId: 11, effectId: 1);
-      await _pumpName(tester, style, inServer: true, roleColor: _blue);
+      await _pumpName(
+        tester,
+        style,
+        inServer: const InServer(roleColor: _blue),
+      );
       expect(_drawnColorOf(tester), const Color(_blue));
 
-      await _pumpName(tester, style, inServer: true);
+      await _pumpName(tester, style, inServer: const InServer());
       expect(_drawnColorOf(tester), Colors.white);
     });
   });

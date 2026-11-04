@@ -72,6 +72,8 @@ final class ProfileCardData {
     ActiveFriendRoom? voiceRoom,
   }) {
     final presence = member.presenceOrCoarse;
+    // A friend outside the workspace has no tags but the profile's.
+    final tags = profile?.tags?.over(member.tags) ?? member.tags;
     final space = spaceId == null ? null : workspace?.spaceOrNull(spaceId);
     final joined = spaceId == null
         ? null
@@ -94,8 +96,8 @@ final class ProfileCardData {
         null => member.colorValue,
       },
       pronouns: profile?.pronouns ?? '',
-      clanTag: member.clanTag,
-      nameStyle: member.tags.nameStyle,
+      clanTag: tags.clanTag,
+      nameStyle: tags.nameStyle,
       badges: profile?.badges ?? const [],
       mutualFriends: [
         for (final friend in profile?.mutualFriends ?? const <MutualFriend>[])

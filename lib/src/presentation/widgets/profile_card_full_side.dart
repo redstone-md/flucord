@@ -160,6 +160,20 @@ class _MutualFriendRows extends StatelessWidget {
   final List<ProfileMutualFriend> friends;
   final OpenProfileCard? onOpen;
 
+  /// A mutual friend as the avatar draws a member: their picture, or their
+  /// monogram on the colour of their id.
+  static Member _asMember(MutualFriend friend, UserPresence? presence) =>
+      Member(
+        id: friend.id,
+        displayName: friend.displayName,
+        initials: monogramOf(friend.displayName),
+        role: '',
+        presence: presence?.status ?? Presence.unknown,
+        colorValue: monogramColorOf(friend.id),
+        avatarUrl: friend.avatarUrl,
+        presenceDetail: presence,
+      );
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -174,41 +188,11 @@ class _MutualFriendRows extends StatelessWidget {
                 final open? => () => open(friend.id, popupAnchorOf(rowContext)),
                 null => null,
               },
-              leading: SizedBox.square(
-                dimension: _face,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: ClipOval(
-                        child: RemoteIdentityImage(
-                          url: friend.avatarUrl,
-                          fallback: ColoredBox(
-                            color: surfaces.control,
-                            child: Center(
-                              child: Text(
-                                monogramOf(friend.displayName),
-                                style: FlucordTextRole.caption.strong.copyWith(
-                                  color: FlucordFixedColors.onFill,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (presence != null)
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: PresenceIndicator(
-                          presence: presence,
-                          size: 14,
-                          borderColor: surfaces.raised,
-                        ),
-                      ),
-                  ],
-                ),
+              leading: MemberAvatar(
+                member: _asMember(friend, presence),
+                size: _face,
+                showPresence: presence != null,
+                presenceBorderColor: surfaces.raised,
               ),
               title: friend.displayName,
               subtitle: switch (presence) {
@@ -281,7 +265,7 @@ class _SideRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: FlucordRadius.medium,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.all(8),
         child: Row(
           children: [
             leading,

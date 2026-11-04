@@ -10,3 +10,22 @@ String monogramOf(String name) {
       .join();
   return letters.isEmpty ? '?' : letters;
 }
+
+/// The fill behind a monogram for something with no colour of its own, the
+/// same for [id] wherever it is drawn.
+int monogramColorOf(String id) {
+  var hash = 0;
+  for (final unit in id.codeUnits) {
+    hash = (hash * 31 + unit) & 0x7fffffff;
+  }
+  return _monogramColors[hash % _monogramColors.length];
+}
+
+const _monogramColors = [
+  0xff456b5a,
+  0xff765341,
+  0xff5f5b76,
+  0xff59636a,
+  0xff486b70,
+  0xff6f5967,
+];
