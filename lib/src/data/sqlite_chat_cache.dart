@@ -875,11 +875,16 @@ final class SqliteChatCache
     'username': ?member.username,
   };
 
-  /// A clan tag the payload left out is no column at all, so a write keeps
-  /// the stored one.
+  /// A part the payload left out is no column at all, so a write keeps the
+  /// stored one.
   static Map<String, Object?> _tagsToRow(MemberTags tags) => {
     'is_bot': tags.isBot ? 1 : 0,
-    if (tags.knowsClanTag) 'clan_tag_json': ChatModelJson.clanTag(tags.clanTag),
+    if (tags.knows(TagPart.clanTag))
+      'clan_tag_json': ChatModelJson.clanTag(tags.clanTag),
+    if (tags.knows(TagPart.nameplate))
+      'nameplate_json': ChatModelJson.nameplate(tags.nameplate),
+    if (tags.knows(TagPart.nameStyle))
+      'name_style_json': ChatModelJson.nameStyle(tags.nameStyle),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -900,6 +905,8 @@ final class SqliteChatCache
     tags: MemberTags(
       isBot: row['is_bot'] == 1,
       clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
+      nameplate: ChatModelJson.nameplateFrom(row['nameplate_json'] as String?),
+      nameStyle: ChatModelJson.nameStyleFrom(row['name_style_json'] as String?),
     ),
     username: row['username'] as String?,
   );

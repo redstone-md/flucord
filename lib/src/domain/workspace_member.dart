@@ -98,41 +98,122 @@ final class ClanTag {
   int get hashCode => Object.hash(tag, guildId, badgeUrl);
 }
 
-/// What Discord draws beside a user's name: APP for an application, and the
-/// server tag the user shows.
-final class MemberTags {
-  /// Tags from a payload that named the clan tag, even as null.
-  const MemberTags({this.isBot = false, this.clanTag}) : knowsClanTag = true;
+/// The colour Discord washes a nameplate's row with. The names are the
+/// wire values of `collectibles.nameplate.palette`.
+enum NameplatePalette {
+  crimson,
+  berry,
+  sky,
+  teal,
+  forest,
+  bubbleGum,
+  violet,
+  cobalt,
+  clover,
+  lemon,
+  white;
 
-  /// Tags from a user object that left `primary_guild` out. Such a payload
-  /// says nothing about the clan tag, so the tag already known stays.
-  const MemberTags.clanTagUnsaid({this.isBot = false})
-    : clanTag = null,
-      knowsClanTag = false;
+  String get wireValue => this == bubbleGum ? 'bubble_gum' : name;
+
+  /// The palette named [value], or null for `none` and for a palette this
+  /// client does not know.
+  static NameplatePalette? fromWire(Object? value) =>
+      values.where((palette) => palette.wireValue == value).firstOrNull;
+}
+
+/// A picture somebody bought to stand behind their row in the member list
+/// and the DM list.
+final class Nameplate {
+  const Nameplate({required this.asset, this.palette});
+
+  /// The path under Discord's collectibles CDN, such as
+  /// `nameplates/nameplates/twilight/`.
+  final String asset;
+
+  /// Null draws the picture with no wash under it.
+  final NameplatePalette? palette;
+
+  @override
+  bool operator ==(Object other) =>
+      other is Nameplate && other.asset == asset && other.palette == palette;
+
+  @override
+  int get hashCode => Object.hash(asset, palette);
+}
+
+/// How somebody styled their display name, as `display_name_styles` says.
+/// The ids are Discord's; what this client can draw of them is decided where
+/// the name is drawn.
+final class NameStyle {
+  const NameStyle({required this.colors, this.fontId, this.effectId});
+
+  /// Opaque colours, in Discord's order.
+  final List<int> colors;
+  final int? fontId;
+  final int? effectId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NameStyle &&
+      const ListEquality<int>().equals(other.colors, colors) &&
+      other.fontId == fontId &&
+      other.effectId == effectId;
+
+  @override
+  int get hashCode =>
+      Object.hash(const ListEquality<int>().hash(colors), fontId, effectId);
+}
+
+/// The parts of [MemberTags] a user object can leave out.
+enum TagPart { clanTag, nameplate, nameStyle }
+
+/// What Discord draws with a user's name: APP for an application, the server
+/// tag the user shows, the style of the name and the nameplate behind it.
+final class MemberTags {
+  const MemberTags({
+    this.isBot = false,
+    this.clanTag,
+    this.nameplate,
+    this.nameStyle,
+    this.unsaid = const {},
+  });
 
   static const none = MemberTags();
 
   final bool isBot;
   final ClanTag? clanTag;
+  final Nameplate? nameplate;
+  final NameStyle? nameStyle;
 
-  /// Whether [clanTag] is what the payload said, rather than a gap.
-  final bool knowsClanTag;
+  /// The parts the payload left out. Such a payload says nothing about them,
+  /// so the ones already known stay. A part sent as null says there is none.
+  final Set<TagPart> unsaid;
 
-  /// These tags laid over [known]: a clan tag the payload left out keeps the
-  /// one in [known].
-  MemberTags over(MemberTags known) => knowsClanTag || !known.knowsClanTag
+  bool knows(TagPart part) => !unsaid.contains(part);
+
+  /// These tags laid over [known]: a part the payload left out keeps the one
+  /// in [known].
+  MemberTags over(MemberTags known) => unsaid.isEmpty
       ? this
-      : MemberTags(isBot: isBot, clanTag: known.clanTag);
+      : MemberTags(
+          isBot: isBot,
+          clanTag: knows(TagPart.clanTag) ? clanTag : known.clanTag,
+          nameplate: knows(TagPart.nameplate) ? nameplate : known.nameplate,
+          nameStyle: knows(TagPart.nameStyle) ? nameStyle : known.nameStyle,
+          unsaid: unsaid.intersection(known.unsaid),
+        );
 
   @override
   bool operator ==(Object other) =>
       other is MemberTags &&
       other.isBot == isBot &&
       other.clanTag == clanTag &&
-      other.knowsClanTag == knowsClanTag;
+      other.nameplate == nameplate &&
+      other.nameStyle == nameStyle &&
+      const SetEquality<TagPart>().equals(other.unsaid, unsaid);
 
   @override
-  int get hashCode => Object.hash(isBot, clanTag, knowsClanTag);
+  int get hashCode => Object.hash(isBot, clanTag, nameplate, nameStyle);
 }
 
 /// What a whole user object says about somebody, apart from presence: the

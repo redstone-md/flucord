@@ -82,7 +82,9 @@ void main() {
           ),
         ),
       );
-      await cache.writeMember(helper(const MemberTags.clanTagUnsaid()));
+      await cache.writeMember(
+        helper(const MemberTags(unsaid: {TagPart.clanTag})),
+      );
       final kept = (await cache.readChannelHistory('channel-1')).members.single;
 
       await cache.writeMember(helper(const MemberTags()));

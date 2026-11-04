@@ -84,6 +84,41 @@ final class ChatModelJson {
     );
   }
 
+  static String? nameplate(Nameplate? value) => value == null
+      ? null
+      : jsonEncode({'asset': value.asset, 'palette': value.palette?.wireValue});
+
+  static Nameplate? nameplateFrom(String? source) {
+    if (source == null) return null;
+    final raw = jsonDecode(source);
+    if (raw is! Map) return null;
+    final asset = raw['asset'];
+    if (asset is! String) return null;
+    return Nameplate(
+      asset: asset,
+      palette: NameplatePalette.fromWire(raw['palette']),
+    );
+  }
+
+  static String? nameStyle(NameStyle? value) => value == null
+      ? null
+      : jsonEncode({
+          'colors': value.colors,
+          'font_id': value.fontId,
+          'effect_id': value.effectId,
+        });
+
+  static NameStyle? nameStyleFrom(String? source) {
+    if (source == null) return null;
+    final raw = jsonDecode(source);
+    if (raw is! Map) return null;
+    return NameStyle(
+      colors: (raw['colors'] as List? ?? const []).whereType<int>().toList(),
+      fontId: raw['font_id'] as int?,
+      effectId: raw['effect_id'] as int?,
+    );
+  }
+
   static String reactions(List<MessageReaction> values) => jsonEncode([
     for (final value in values)
       {
