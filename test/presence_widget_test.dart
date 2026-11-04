@@ -369,6 +369,27 @@ void main() {
       expect(find.text('Heads down'), findsOneWidget);
     });
 
+    testWidgets('a custom status still counts the other activities', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivitySummaryLine(
+              summary: ActivitySummary.of(const [
+                _custom,
+                _game,
+                UserActivity(name: 'Spotify', type: ActivityType.listening),
+              ])!,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Heads down'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
+    });
+
     testWidgets('a custom emoji with no text renders artwork alone', (
       tester,
     ) async {
