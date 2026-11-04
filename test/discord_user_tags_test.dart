@@ -79,4 +79,30 @@ void main() {
     expect(member.clanTag?.tag, 'CODE');
     expect(member.clanTag?.badgeUrl, isNull);
   });
+
+  test('a second guild that leaves the clan out keeps the known one', () {
+    const otherGuild = '200000000000000002';
+    Map<String, Object?> guild(String id) => {'id': id, 'name': 'Guild $id'};
+    List<Map<String, Object?>> channels(String guildId) => [
+      {'id': '3$guildId', 'type': 0, 'name': 'general'},
+    ];
+    final workspace = mapper.workspace(
+      currentUser: _user(id: '100000000000000001'),
+      guilds: [guild(_guild), guild(otherGuild)],
+      channelsByGuild: {
+        _guild: channels(_guild),
+        otherGuild: channels(otherGuild),
+      },
+      membersByGuild: {
+        _guild: [
+          {'user': _user(primaryGuild: _clan), 'roles': <Object?>[]},
+        ],
+        otherGuild: [
+          {'user': _user(), 'roles': <Object?>[]},
+        ],
+      },
+    );
+
+    expect(workspace.memberOrNull('100000000000000002')?.clanTag?.tag, 'CODE');
+  });
 }

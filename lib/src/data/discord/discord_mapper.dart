@@ -493,6 +493,7 @@ final class DiscordMapper {
           ? previous.presence
           : incoming.presence,
       username: incoming.username ?? previous.username,
+      tags: incoming.tags.over(previous.tags),
     );
   }
 
