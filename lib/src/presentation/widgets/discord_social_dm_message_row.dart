@@ -31,7 +31,7 @@ class DiscordSocialDmMessageRow extends StatefulWidget {
 }
 
 class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
-  // The server message row's sizes (FLUCORD-73).
+  // The server message row's sizes.
   static const _groupGap = 10.0;
   static const _inline = 16.0;
   static const _block = 4.0;

@@ -1,6 +1,6 @@
 part of 'channel_sidebar.dart';
 
-/// The channel list's sizes, from the FLUCORD-68 design.
+/// The channel list's sizes.
 abstract final class _SidebarMetrics {
   static const headerHeight = 48.0;
   static const rowHeight = 30.0;

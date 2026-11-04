@@ -98,13 +98,13 @@ enum FlucordTextRole {
 
   final double size;
 
-  /// The height of one line in pixels, as Figma gives it.
+  /// The height of one line in pixels, as a design tool gives it.
   final double lineHeight;
 
   final FontWeight weight;
 
   /// The role as a style. The extra line space is shared evenly above and
-  /// below the text, as Figma and CSS do, so a 14/21 line sits where the
+  /// below the text, as CSS does, so a 14/21 line sits where the
   /// design puts it.
   TextStyle get style => TextStyle(
     fontFamily: FlucordType.family,

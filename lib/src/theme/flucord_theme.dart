@@ -65,7 +65,7 @@ abstract final class FlucordTheme {
   }
 
   /// How far a link moves from the accent toward the text colour. On a dark
-  /// theme that is a lighter tint: frame B's #A497F8 next to its #8B7CF6.
+  /// theme that is a lighter tint: #A497F8 beside the accent #8B7CF6.
   static const _linkTint = 0.25;
 
   static ThemeData get dark => fromPalette(FlucordPalette.dark);

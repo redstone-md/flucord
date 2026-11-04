@@ -220,7 +220,7 @@ abstract final class FlucordIcons {
   static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
   static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
 
-  // Voice, threads, forums and events (FLUCORD-84).
+  // Voice, threads, forums and events.
   static const event = FlucordIconData(HugeIcons.strokeRoundedCalendar03);
   static const eventUnavailable = FlucordIconData(
     HugeIcons.strokeRoundedCalendarRemove01,
@@ -232,7 +232,7 @@ abstract final class FlucordIcons {
   static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
   static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
 
-  // Accounts, connection and status (FLUCORD-84).
+  // Accounts, connection and status.
   static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);
   static const credential = FlucordIconData(HugeIcons.strokeRoundedKey01);
   static const desktop = FlucordIconData(HugeIcons.strokeRoundedComputer);
@@ -264,7 +264,7 @@ abstract final class FlucordIcons {
   static const caughtUp = FlucordIconData(HugeIcons.strokeRoundedMailOpen01);
   static const summary = FlucordIconData(HugeIcons.strokeRoundedSparkles);
 
-  // Messages and pickers (FLUCORD-84).
+  // Messages and pickers.
   static const chevronLeft = FlucordIconData(
     HugeIcons.strokeRoundedArrowLeft01,
     matchTextDirection: true,

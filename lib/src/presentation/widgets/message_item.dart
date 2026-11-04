@@ -144,7 +144,7 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
-  // The row's measurements, from the Figma frame the owner signed off.
+  // The row's measurements.
 
   /// Space above a new author's message, outside the highlight. Compact
   /// density shrinks it, as Discord's group spacing setting does.
