@@ -746,6 +746,7 @@ class MessageListState extends State<MessageList>
         showPresence: false,
       ),
       name: person.displayName,
+      username: person.username,
     );
   }
 

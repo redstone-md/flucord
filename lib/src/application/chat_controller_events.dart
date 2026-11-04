@@ -70,8 +70,8 @@ extension _ChatControllerEvents on ChatController {
         _workspace = _workspace?.upsertMember(event.member);
       case MembersUpsertedEvent():
         _workspace = _workspace?.upsertMembers(event.members);
-      case MemberTagsChangedEvent(:final memberId, :final tags):
-        _workspace = _workspace?.withMemberTags(memberId, tags);
+      case MemberIdentityChangedEvent(:final memberId, :final identity):
+        _workspace = _workspace?.withMemberIdentity(memberId, identity);
       case MemberRemovedEvent():
         _workspace = _workspace?.removeMemberFromSpace(
           event.memberId,

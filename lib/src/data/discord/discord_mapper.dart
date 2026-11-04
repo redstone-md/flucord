@@ -324,8 +324,23 @@ final class DiscordMapper {
       rolesBySpace: rolesBySpace,
       avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
       tags: tags(payload),
+      username: _username(payload),
     );
   }
+
+  /// The username and tags of a whole user, or null for a partial one that
+  /// names the user by id alone.
+  MemberIdentity? identity(Map<String, Object?> user) =>
+      switch (_username(user)) {
+        final username? => MemberIdentity(username: username, tags: tags(user)),
+        null => null,
+      };
+
+  static String? _username(Map<String, Object?> user) =>
+      switch (user['username']) {
+        final String username when username.isNotEmpty => username,
+        _ => null,
+      };
 
   /// The tags on [user]. A user object without `primary_guild` says nothing
   /// about the clan tag; one where it is null says there is none.
@@ -394,6 +409,7 @@ final class DiscordMapper {
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
       membershipsBySpace: {guildId: membership(payload)},
       tags: tags(user),
+      username: _username(user),
     );
   }
 
@@ -459,6 +475,7 @@ final class DiscordMapper {
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
+      username: incoming.username ?? previous.username,
     );
   }
 
