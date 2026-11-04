@@ -84,8 +84,8 @@ final class ProfileCardMenuEntry {
 /// The profile card: one person, drawn the way Discord's popout draws them.
 ///
 /// Every host opens this same card: member list rows, message authors,
-/// voice seats and friend rows. It is 300 wide and scrolls when the window
-/// is shorter than it.
+/// voice seats and friend rows. It scrolls when the window is shorter than
+/// it.
 class ProfileCard extends StatelessWidget {
   const ProfileCard({
     required this.data,
@@ -278,8 +278,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// An 80 px avatar in a ring of the card's colour, with its decoration and
-/// the status dot.
+/// The avatar in a ring of the card's colour, with its decoration and the
+/// status dot.
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.data});
 

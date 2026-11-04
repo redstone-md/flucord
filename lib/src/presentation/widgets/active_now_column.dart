@@ -232,7 +232,7 @@ class _CardDivider extends StatelessWidget {
   );
 }
 
-/// A card's second block: a 40 px tile, a title, a caption, and maybe
+/// A card's second block: a tile, a title, a caption, and maybe
 /// something on the right.
 class _Block extends StatelessWidget {
   const _Block({

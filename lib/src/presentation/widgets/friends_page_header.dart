@@ -26,7 +26,7 @@ enum FriendsTab {
   static const lists = [online, all, pending, blocked];
 }
 
-/// The Friends page's top bar, 48 high: the page name, the four list tabs,
+/// The Friends page's top bar: the page name, the four list tabs,
 /// the Add friend button and, at the right end, [inbox].
 ///
 /// Each tab is a button in the focus order, so Tab reaches it and Enter or
