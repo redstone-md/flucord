@@ -115,6 +115,8 @@ void main() {
     );
 
     expect(find.text('No direct messages'), findsOneWidget);
+    expect(find.byType(Icon), findsNothing);
+    expect(findFlucordIcon(FlucordIcons.edit), findsOneWidget);
     await tester.tap(find.text('New message'));
     expect(opened, isTrue);
   });

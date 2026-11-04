@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/direct_message_candidate.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -50,7 +51,7 @@ class _DirectMessageDialogState extends State<DirectMessageDialog> {
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 hintText: 'Search friends and members',
-                prefixIcon: Icon(Icons.search, size: 18),
+                prefixIcon: FlucordIcon(FlucordIcons.search, size: 16),
               ),
               onChanged: (value) => setState(() => _query = value),
               onSubmitted: (_) {
@@ -105,7 +106,9 @@ class _PersonRow extends StatelessWidget {
           url: person.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Icon(Icons.person_outline, size: 16),
+            child: const Center(
+              child: FlucordIcon(FlucordIcons.person, size: 16),
+            ),
           ),
         ),
       ),
@@ -119,6 +122,8 @@ class _PersonRow extends StatelessWidget {
 class DirectMessagesEmptyView extends StatelessWidget {
   const DirectMessagesEmptyView({required this.onNewMessage, super.key});
 
+  static const _iconSize = 32.0;
+
   final VoidCallback onNewMessage;
 
   @override
@@ -126,23 +131,22 @@ class DirectMessagesEmptyView extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.forum_outlined,
-          size: 34,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        FlucordIcon(
+          FlucordIcons.directMessages,
+          size: _iconSize,
+          color: context.surfaces.muted,
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'No direct messages',
-          style: TextStyle(
-            fontSize: FlucordType.label,
-            fontWeight: FontWeight.w600,
+          style: FlucordTextRole.heading.style.copyWith(
+            color: context.surfaces.text,
           ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: onNewMessage,
-          icon: const Icon(Icons.edit_square, size: 16),
+          icon: const FlucordIcon(FlucordIcons.edit, size: 16),
           label: const Text('New message'),
         ),
       ],
