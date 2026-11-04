@@ -9,7 +9,7 @@ import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/presentation/widgets/account_panel.dart';
 import 'package:flucord/src/presentation/widgets/activity_views.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
-import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/self_presence_scope.dart';

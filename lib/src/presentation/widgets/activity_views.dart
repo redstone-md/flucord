@@ -184,8 +184,9 @@ class ActivitySummaryLine extends StatelessWidget {
   }
 }
 
-/// The rich presence block Discord draws on a profile: artwork, the three text
-/// lines and the timing line.
+/// What somebody is doing, as the profile card draws it: an inset card with
+/// the kind ("Playing"), the artwork, the name, the detail lines and the
+/// timing line.
 class ActivityCard extends StatelessWidget {
   const ActivityCard({required this.activity, required this.now, super.key});
 
@@ -209,50 +210,65 @@ class ActivityCard extends StatelessWidget {
             : state,
       ?timing,
     ];
+    final surfaces = context.surfaces;
+    final verb = activity.type.verb;
     return Container(
       key: const ValueKey('activity-card'),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: context.surfaces.inset,
+        color: surfaces.inset,
         borderRadius: FlucordRadius.medium,
+        border: Border.all(color: surfaces.border),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (assets?.largeImageUrl case final url?) ...[
-            _ActivityArtwork(
-              largeUrl: url,
-              smallUrl: assets?.smallImageUrl,
-              largeText: assets?.largeText,
-              smallText: assets?.smallText,
+          Text(
+            verb.isEmpty ? 'Activity' : verb,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: surfaces.muted,
             ),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  activity.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.caption.strong,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (assets?.largeImageUrl case final url?) ...[
+                _ActivityArtwork(
+                  largeUrl: url,
+                  smallUrl: assets?.smallImageUrl,
+                  largeText: assets?.largeText,
+                  smallText: assets?.smallText,
                 ),
-                for (final line in lines) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    line,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                    ),
-                  ),
-                ],
+                const SizedBox(width: 12),
               ],
-            ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      activity.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.label.strong.copyWith(
+                        color: surfaces.text,
+                      ),
+                    ),
+                    for (final line in lines) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        line,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: FlucordTextRole.caption.style.copyWith(
+                          color: surfaces.muted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -676,48 +676,94 @@ extension _FlucordShellNavigation on FlucordShell {
     await _openDirectConversation(context, recipientId);
   }
 
-  /// Shows whoever [userId] is, from a surface with no room for a popover.
-  ///
-  /// A dialog rather than the card the member list anchors to its row: the
-  /// voice rows sit in a narrow, scrolling column, and a card anchored to one
-  /// would be clipped by the sidebar it lives in.
+  /// Opens [userId]'s profile card beside [anchor]: a message author's name
+  /// or avatar, or a voice seat.
   Future<void> _openMemberCard(
     BuildContext context,
     String spaceId,
     String userId,
+    Rect anchor,
   ) async {
-    final workspace = chatController.workspace;
-    final member = workspace?.memberOrNull(userId);
-    if (member == null || !context.mounted) return;
-    // The fetch starts with the dialog rather than after it.
-    final profile = memberProfileController;
-    if (profile != null) unawaited(profile.open(userId));
-    await showDialog<void>(
+    final member = chatController.workspace?.memberOrNull(userId);
+    if (member == null) return;
+    await showProfileCard(
       context: context,
-      builder: (dialogContext) => Dialog(
-        key: const ValueKey('voice-member-card'),
-        backgroundColor: Colors.transparent,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 340),
-          child: MemberProfilePopover(
-            member: member,
-            spaceId: spaceId,
-            profile: profile,
-            canMessage: member.id != workspace!.currentMemberId,
-            onMessage: () {
-              Navigator.of(dialogContext).pop();
-              unawaited(_openDirectConversation(context, member.id));
-            },
-          ),
-        ),
-      ),
+      anchor: anchor,
+      builder: (close) =>
+          _memberCard(context, member: member, spaceId: spaceId, close: close),
     );
   }
 
+  /// The one profile card every surface opens for a member of [spaceId].
+  /// [close] closes it, before any action that leaves it.
+  Widget _memberCard(
+    BuildContext context, {
+    required Member member,
+    required String spaceId,
+    required VoidCallback close,
+  }) {
+    final workspace = chatController.workspace!;
+    final friends = friendsController;
+    final isSelf = member.id == workspace.currentMemberId;
+    final inServer = spaceId != CommunitySpace.directMessagesId;
+    // Discord has no "report yourself", and blocking yourself is refused.
+    final canReport = chatController.moderation != null && !isSelf;
+    VoidCallback closing(Future<void> Function() action) => () {
+      close();
+      unawaited(action());
+    };
+    Widget card() => MemberProfileCard(
+      key: ValueKey(member.id),
+      member: member,
+      spaceId: inServer ? spaceId : null,
+      roles: workspace.roles,
+      profile: memberProfileController,
+      moderationBuilder: inServer
+          ? () => _memberAdminController(spaceId, member.id)
+          : null,
+      onMessage: isSelf
+          ? null
+          : (text) {
+              close();
+              unawaited(
+                _openDirectConversation(context, member.id, text: text),
+              );
+            },
+      onAddFriend: friends != null && !isSelf && _canBefriend(friends, member)
+          ? () => unawaited(friends.addFriend(member.id))
+          : null,
+      onReport: canReport
+          ? closing(() => _reportMember(context, member))
+          : null,
+      onBlock: canReport ? closing(() => _blockMember(context, member)) : null,
+    );
+    return friends == null
+        ? card()
+        : ListenableBuilder(listenable: friends, builder: (_, _) => card());
+  }
+
+  /// Whether a friend request to [member] makes sense: not somebody already
+  /// a friend, already asked, or blocked.
+  bool _canBefriend(FriendsController friends, Member member) {
+    if (!friends.isAvailable) return false;
+    final kind = friends.all
+        .where((entry) => entry.user.id == member.id)
+        .firstOrNull
+        ?.kind;
+    return switch (kind) {
+      DiscordRelationshipKind.friend ||
+      DiscordRelationshipKind.outgoingRequest ||
+      DiscordRelationshipKind.blocked => false,
+      _ => true,
+    };
+  }
+
+  /// Opens the DM with [recipientId] and sends [text] there, when given.
   Future<void> _openDirectConversation(
     BuildContext context,
-    String recipientId,
-  ) async {
+    String recipientId, {
+    String text = '',
+  }) async {
     final channelId = await chatController.openDirectConversation(recipientId);
     if (!context.mounted) return;
     if (channelId == null) {
@@ -729,5 +775,8 @@ extension _FlucordShellNavigation on FlucordShell {
     final workspace = chatController.workspace!;
     final channel = workspace.channelById(channelId);
     _openDestination(spaceId: channel.spaceId, channelId: channel.id);
+    if (text.isNotEmpty) {
+      await chatController.sendMessage(channelId: channelId, body: text);
+    }
   }
 }

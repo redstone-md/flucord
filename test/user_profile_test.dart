@@ -86,6 +86,7 @@ void main() {
             'id': '333333333333333333',
             'username': 'roman',
             'global_name': 'Roman Vale',
+            'avatar': 'rhash',
           },
         ],
       })!;
@@ -109,6 +110,11 @@ void main() {
       expect(profile.mutualServers[1].id, '999');
       expect(profile.mutualFriends.single.displayName, 'Roman Vale');
       expect(profile.mutualFriends.single.username, 'roman');
+      expect(
+        profile.mutualFriends.single.avatarUrl,
+        'https://cdn.discordapp.com/avatars/333333333333333333/rhash.webp'
+        '?size=32',
+      );
     });
 
     test('a redacted or bare profile falls back per field', () {

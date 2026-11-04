@@ -22,6 +22,7 @@ import 'count_badge.dart';
 import 'direct_message_views.dart';
 import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
+import 'profile_card_route.dart';
 import 'sidebar_row_metrics.dart';
 
 part 'channel_sidebar_rows.dart';
@@ -94,7 +95,7 @@ class ChannelSidebar extends StatelessWidget {
 
   /// Opens somebody sitting in a voice channel. Absent on a surface with
   /// nowhere to show a profile.
-  final void Function(String userId)? onOpenMemberProfile;
+  final OpenProfileCard? onOpenMemberProfile;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
 

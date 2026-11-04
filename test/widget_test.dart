@@ -266,17 +266,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('member-row-mira')));
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('profile-card-message')),
     );
-    await tester.tap(find.byKey(const ValueKey('message-member')));
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
     expect(find.text('Direct messages'), findsOneWidget);
     expect(find.text('User mira'), findsWidgets);
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
   });
 
   testWidgets('opens native voice controls without media plugins', (

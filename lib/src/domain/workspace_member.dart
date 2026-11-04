@@ -135,6 +135,16 @@ final class MemberTags {
   int get hashCode => Object.hash(isBot, clanTag, knowsClanTag);
 }
 
+/// What a whole user object says about somebody, apart from presence: the
+/// username and the tags. A presence carries one only when it names the
+/// whole user.
+final class MemberIdentity {
+  const MemberIdentity({required this.username, required this.tags});
+
+  final String username;
+  final MemberTags tags;
+}
+
 final class Member {
   const Member({
     required this.id,
@@ -150,10 +160,15 @@ final class Member {
     this.membershipsBySpace = const {},
     this.presenceDetail,
     this.tags = MemberTags.none,
+    this.username,
   });
 
   final String id;
   final String displayName;
+
+  /// The unique handle, such as "freezz5126". Null until a user object that
+  /// carries it arrives, and for a member cached before it was kept.
+  final String? username;
   final String initials;
   final String role;
   final Presence presence;
@@ -206,9 +221,11 @@ final class Member {
     Map<String, GuildMembership>? membershipsBySpace,
     UserPresence? presenceDetail,
     MemberTags? tags,
+    String? username,
   }) => Member(
     id: id,
     displayName: displayName ?? this.displayName,
+    username: username ?? this.username,
     initials: initials,
     role: role ?? this.role,
     presence: presence ?? this.presence,
@@ -245,10 +262,13 @@ final class Member {
   Member withPresence(UserPresence presence) =>
       copyWith(presence: presence.status, presenceDetail: presence);
 
-  /// This member with the tags Discord last sent, laid over the ones known.
-  Member withTags(MemberTags tags) {
-    final next = tags.over(this.tags);
-    return next == this.tags ? this : copyWith(tags: next);
+  /// This member with what a whole user object says about them: the
+  /// username, and the tags laid over the ones known.
+  Member withIdentity(MemberIdentity identity) {
+    final next = identity.tags.over(tags);
+    return next == tags && identity.username == username
+        ? this
+        : copyWith(tags: next, username: identity.username);
   }
 
   /// Whether [withPresence] would change nothing.
@@ -260,6 +280,7 @@ final class Member {
       other is Member &&
       other.id == id &&
       other.displayName == displayName &&
+      other.username == username &&
       other.initials == initials &&
       other.role == role &&
       other.presence == presence &&

@@ -214,6 +214,9 @@ class _FlucordAppState extends State<FlucordApp> {
                                                                 memberListController:
                                                                     _composition
                                                                         .memberList,
+                                                                friendsController:
+                                                                    _composition
+                                                                        .friends,
                                                                 memberProfileController:
                                                                     _composition
                                                                         .memberProfile,

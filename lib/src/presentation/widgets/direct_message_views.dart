@@ -216,7 +216,7 @@ class DirectMessageStart extends StatelessWidget {
   final Widget avatar;
   final String name;
 
-  /// The person's username, or null where the transport does not carry it.
+  /// The person's username, or null while it is not known.
   final String? username;
 
   @override
@@ -280,6 +280,7 @@ class MemberProfilePanel extends StatelessWidget {
         presenceBorderColor: context.surfaces.surface,
       ),
       name: person.displayName,
+      username: person.username,
       status: person.presence,
       memberSince: DiscordSnowflake.createdAt(person.id),
       mutualServers: mutual.isEmpty ? null : mutual,

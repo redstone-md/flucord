@@ -174,6 +174,9 @@ abstract final class FlucordIcons {
   static const friends = FlucordIconData(HugeIcons.strokeRoundedUserMultiple);
   static const plugin = FlucordIconData(HugeIcons.strokeRoundedPlug01);
 
+  // Profile card (FLUCORD-87).
+  static const addFriend = FlucordIconData(HugeIcons.strokeRoundedUserAdd01);
+
   // Settings lists and forms.
   static const moveUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp01);
   static const moveDown = FlucordIconData(HugeIcons.strokeRoundedArrowDown01);

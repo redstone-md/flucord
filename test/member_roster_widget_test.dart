@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/guild_member_list.dart';
 import 'package:flucord/src/domain/guild_member_list_repository.dart';
 import 'package:flucord/src/presentation/widgets/member_roster_view.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -76,8 +77,14 @@ void main() {
                     position: 5,
                   ),
                 ],
-                currentMemberId: _jack.id,
-                onMessage: onMessage ?? (_) {},
+                cardFor: (member, close) => MemberProfileCard(
+                  member: member,
+                  spaceId: 'guild-1',
+                  onMessage: (_) {
+                    close();
+                    onMessage?.call(member);
+                  },
+                ),
               ),
             ],
           ),
@@ -163,11 +170,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-card-message')),
+      'hi',
     );
-    await tester.tap(find.byKey(const ValueKey('message-member')));
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
     expect(messaged?.id, '222222222222222222');
   });
@@ -255,8 +263,8 @@ void main() {
                     spaceId: 'guild-1',
                     channelId: 'channel-1',
                     memberList: controller,
-                    currentMemberId: _jack.id,
-                    onMessage: (_) {},
+                    cardFor: (member, _) =>
+                        MemberProfileCard(member: member, spaceId: 'guild-1'),
                   ),
                 ],
               ),
@@ -269,16 +277,13 @@ void main() {
       find.byKey(const ValueKey('member-row-222222222222222222')),
     );
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('member-profile-popover')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
 
     updateHost(() => members = const [_jack]);
     await tester.pump();
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

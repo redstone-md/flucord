@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../application/guild_member_admin_controller.dart';
 import '../../application/guild_member_list_controller.dart';
-import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/voice_connection.dart';
@@ -15,7 +13,6 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
-import 'member_profile_popover.dart';
 import 'member_roster_view.dart';
 import 'name_tags.dart';
 
@@ -30,15 +27,10 @@ class MemberSidebar extends StatefulWidget {
   const MemberSidebar({
     required this.members,
     required this.spaceId,
-    required this.currentMemberId,
-    required this.onMessage,
+    this.cardFor,
     this.channelId,
     this.memberList,
     this.roles = const <CommunityRole>[],
-    this.profile,
-    this.onReport,
-    this.onBlock,
-    this.moderationBuilder,
     this.seatedByChannel = const {},
     this.nameColorOf,
     super.key,
@@ -57,25 +49,10 @@ class MemberSidebar extends StatefulWidget {
 
   final List<Member> members;
   final String spaceId;
-  final String currentMemberId;
-  final ValueChanged<Member> onMessage;
 
-  /// Drives the full profile the anchored popover fetches. Null on a host
-  /// with no account behind it, which draws the identity block only.
-  final MemberProfileController? profile;
-
-  /// Opens the report flow for a member. Absent on transports with no
-  /// `/reporting` access, which is what keeps the button off the popover
-  /// instead of putting one there that fails.
-  final ValueChanged<Member>? onReport;
-
-  /// Blocks a member. Same reasoning as [onReport].
-  final ValueChanged<Member>? onBlock;
-
-  /// Builds the moderation controller for one member's popover, or null
-  /// where this host offers no moderation: no guild-administration plane, or
-  /// a surface outside a guild.
-  final GuildMemberAdminController? Function(Member member)? moderationBuilder;
+  /// Builds the profile card a row opens beside itself; `close` closes it.
+  /// Null opens nothing.
+  final Widget Function(Member member, VoidCallback close)? cardFor;
 
   /// Channel whose roster is shown. Member lists are subscribed per channel
   /// because visibility, not membership, decides who appears.
@@ -98,10 +75,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
   Set<String> _seatedIds = const {};
   Member? _selectedMember;
   LayerLink? _selectedLink;
-
-  /// The moderation controller of the popover that is open, if the host
-  /// offered one. Owned here, disposed when the popover closes.
-  GuildMemberAdminController? _moderation;
   bool _openUp = false;
 
   /// The member search as typed. Blank restores the roster, which is what
@@ -115,7 +88,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
   void dispose() {
     _searchDebounce?.cancel();
     _search.dispose();
-    _moderation?.dispose();
     widget.memberList
       ?..removeListener(_onRosterChanged)
       ..clear();
@@ -155,8 +127,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
       }
       _selectedMember = null;
       _selectedLink = null;
-      _moderation?.dispose();
-      _moderation = null;
     }
   }
 
@@ -389,34 +359,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
               }
               return KeyEventResult.ignored;
             },
-            child: MemberProfilePopover(
-              member: member,
-              spaceId: widget.spaceId,
-              profile: widget.profile,
-              canMessage: member.id != widget.currentMemberId,
-              moderation: _moderation,
-              onMessage: () {
-                _dismiss();
-                widget.onMessage(member);
-              },
-              // Neither is offered for the account itself: Discord has no
-              // "report yourself", and blocking yourself is a request the
-              // server refuses.
-              onReport:
-                  widget.onReport == null || member.id == widget.currentMemberId
-                  ? null
-                  : () {
-                      _dismiss();
-                      widget.onReport!(member);
-                    },
-              onBlock:
-                  widget.onBlock == null || member.id == widget.currentMemberId
-                  ? null
-                  : () {
-                      _dismiss();
-                      widget.onBlock!(member);
-                    },
-            ),
+            child: widget.cardFor!(member, _dismiss),
           ),
         ),
       ],
@@ -424,6 +367,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
   }
 
   void _showMember(BuildContext context, Member member, LayerLink link) {
+    if (widget.cardFor == null) return;
     final box = context.findRenderObject() as RenderBox?;
     final centerY = box == null
         ? 0.0
@@ -436,14 +380,8 @@ class _MemberSidebarState extends State<MemberSidebar> {
     setState(() {
       _selectedMember = member;
       _selectedLink = link;
-      _moderation?.dispose();
-      _moderation = widget.moderationBuilder?.call(member);
       _openUp = centerY > MediaQuery.sizeOf(context).height / 2;
     });
-    // The fetch starts with the open rather than after it, so the sections
-    // arrive while the popover is already on screen.
-    final profile = widget.profile;
-    if (profile != null) unawaited(profile.open(member.id));
     _overlayController.show();
   }
 
@@ -453,8 +391,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
     setState(() {
       _selectedMember = null;
       _selectedLink = null;
-      _moderation?.dispose();
-      _moderation = null;
     });
   }
 }

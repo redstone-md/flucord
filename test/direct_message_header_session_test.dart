@@ -94,6 +94,10 @@ void main() {
         const Size.square(80),
       );
       expect(find.text('# $_name'), findsNothing);
+      expect(
+        find.descendant(of: avatar.first, matching: find.text('konstantin')),
+        findsOneWidget,
+      );
     },
     ready: _ready(),
     routes: _oneMessageInTheDm,
@@ -121,6 +125,7 @@ void main() {
         const Size.square(64),
       );
       expect(inPanel(find.text(_name)), findsOneWidget);
+      expect(inPanel(find.text('konstantin')), findsOneWidget);
       // The friend's id was minted in October 2015.
       expect(inPanel(find.text('Member since')), findsOneWidget);
       expect(inPanel(find.textContaining('2015')), findsOneWidget);

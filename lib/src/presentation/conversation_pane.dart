@@ -41,6 +41,7 @@ import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/profile_card_route.dart';
 import 'widgets/self_video_scope.dart';
 import 'widgets/slash_command_scope.dart';
 import 'widgets/soundboard_picker.dart';
@@ -133,8 +134,8 @@ class ConversationPane extends StatefulWidget {
   /// open channel.
   final VoidCallback onOpenInbox;
 
-  /// Opens the profile of a message's author, by user id.
-  final ValueChanged<String>? onOpenMemberProfile;
+  /// Opens the profile of a message's author beside their name.
+  final OpenProfileCard? onOpenMemberProfile;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();

@@ -23,8 +23,11 @@ void _memberPanelCases() {
               ),
             ],
             spaceId: 'guild-1',
-            currentMemberId: _me,
-            onMessage: (_) {},
+            cardFor: (member, _) => MemberProfileCard(
+              member: member,
+              spaceId: 'guild-1',
+              now: _now,
+            ),
           ),
         ],
       ),
@@ -57,7 +60,7 @@ void _memberPanelCases() {
       await tester.pump();
 
       expect(find.byKey(const ValueKey('activity-card')), findsOneWidget);
-      expect(find.text('PLAYING A GAME'), findsOneWidget);
+      expect(find.text('Playing'), findsOneWidget);
       expect(find.text('Limgrave'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -66,18 +69,18 @@ void _memberPanelCases() {
       tester,
     ) async {
       const labels = {
-        ActivityType.playing: 'PLAYING A GAME',
-        ActivityType.streaming: 'LIVE ON STREAM',
-        ActivityType.listening: 'LISTENING TO',
-        ActivityType.watching: 'WATCHING',
-        ActivityType.competing: 'COMPETING IN',
-        ActivityType.unrecognised: 'ACTIVITY',
+        ActivityType.playing: 'Playing',
+        ActivityType.streaming: 'Streaming',
+        ActivityType.listening: 'Listening to',
+        ActivityType.watching: 'Watching',
+        ActivityType.competing: 'Competing in',
+        ActivityType.unrecognised: 'Activity',
       };
       for (final entry in labels.entries) {
         await tester.pumpWidget(
           _host(
             Center(
-              child: MemberProfilePopover(
+              child: MemberProfileCard(
                 member: _member(
                   _mira,
                   'Mira Chen',
@@ -94,8 +97,6 @@ void _memberPanelCases() {
                   ),
                 ),
                 spaceId: 'guild-1',
-                canMessage: true,
-                onMessage: () {},
                 now: _now,
               ),
             ),
@@ -103,7 +104,7 @@ void _memberPanelCases() {
         );
 
         expect(find.text(entry.value), findsOneWidget);
-        // The custom status becomes the sentence under the name.
+        // The custom status sits in the bubble beside the avatar.
         expect(find.text('Heads down'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
@@ -122,10 +123,7 @@ void _memberPanelCases() {
       await tester.tap(find.byKey(const ValueKey('member-row-$_mira')));
       await tester.pump();
 
-      expect(
-        find.byKey(const ValueKey('member-profile-popover')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
