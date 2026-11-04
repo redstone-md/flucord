@@ -349,15 +349,12 @@ class _Header extends StatelessWidget {
           Positioned(
             left: metrics.padding - metrics.ring,
             top: metrics.avatarTop - metrics.ring,
-            child: switch (onOpenFullProfile) {
-              final open? => _FullProfileLink(
-                key: const ValueKey('profile-card-avatar'),
-                label: 'View ${data.displayName} full profile',
-                onOpen: open,
-                child: avatar,
-              ),
-              null => avatar,
-            },
+            child: _FullProfileLink(
+              linkKey: const ValueKey('profile-card-avatar'),
+              name: data.displayName,
+              onOpen: onOpenFullProfile,
+              child: avatar,
+            ),
           ),
           if (data.customStatus case final status?)
             Positioned(
@@ -541,29 +538,36 @@ class _MoreButton extends StatelessWidget {
   );
 }
 
-/// Makes [child] open the full profile: a pointer, a click and a button to
-/// assistive technology.
+/// Makes [child] open [name]'s full profile: a pointer, a click and a
+/// button to assistive technology. Without [onOpen] it is only [child].
 class _FullProfileLink extends StatelessWidget {
   const _FullProfileLink({
-    required this.label,
+    required this.linkKey,
+    required this.name,
     required this.onOpen,
     required this.child,
-    super.key,
   });
 
-  final String label;
-  final VoidCallback onOpen;
+  /// The link's key, on the link only, so a finder sees no link when there
+  /// is none.
+  final Key linkKey;
+  final String name;
+  final VoidCallback? onOpen;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: label,
-    child: MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onOpen, child: child),
+  Widget build(BuildContext context) => switch (onOpen) {
+    final open? => Semantics(
+      key: linkKey,
+      button: true,
+      label: 'View $name full profile',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(onTap: open, child: child),
+      ),
     ),
-  );
+    null => child,
+  };
 }
 
 /// The "Message @name" field. Enter opens the DM with the text.

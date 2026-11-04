@@ -40,15 +40,12 @@ class _Names extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        switch (onOpenFullProfile) {
-          final open? => _FullProfileLink(
-            key: const ValueKey('profile-card-name'),
-            label: 'View ${data.displayName} full profile',
-            onOpen: open,
-            child: name,
-          ),
-          null => name,
-        },
+        _FullProfileLink(
+          linkKey: const ValueKey('profile-card-name'),
+          name: data.displayName,
+          onOpen: onOpenFullProfile,
+          child: name,
+        ),
         if (handle.isNotEmpty || clan != null) ...[
           const SizedBox(height: 2),
           Row(
