@@ -8,6 +8,8 @@ import '../../application/guild_member_list_controller.dart';
 import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
+import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -36,8 +38,21 @@ class MemberSidebar extends StatefulWidget {
     this.onReport,
     this.onBlock,
     this.moderationBuilder,
+    this.seatedByChannel = const {},
+    this.nameColorOf,
     super.key,
   });
+
+  /// Who is seated in each voice channel, keyed by channel id. A member seated
+  /// in this space reads "In voice" when they are doing nothing else.
+  final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
+
+  /// The colour of a member's top coloured role here, or null for the plain
+  /// text colour.
+  final int? Function(Member member)? nameColorOf;
+
+  /// Each list starts with a group label, which carries its own space above.
+  static const _listPadding = EdgeInsets.fromLTRB(8, 0, 8, 16);
 
   final List<Member> members;
   final String spaceId;
@@ -77,6 +92,9 @@ class _MemberSidebarState extends State<MemberSidebar> {
   final Map<String, LayerLink> _memberLinks = {};
   List<Member>? _indexedMembers;
   Map<String, Member> _membersById = const {};
+  Map<String, List<VoiceParticipantStateEvent>>? _indexedSeats;
+  String? _seatedSpaceId;
+  Set<String> _seatedIds = const {};
   Member? _selectedMember;
   LayerLink? _selectedLink;
 
@@ -158,25 +176,16 @@ class _MemberSidebarState extends State<MemberSidebar> {
       controller: _overlayController,
       overlayChildBuilder: _buildOverlay,
       child: Container(
-        width: 224,
+        width: 240,
         decoration: BoxDecoration(
           color: context.surfaces.surface,
           border: Border(left: BorderSide(color: context.surfaces.border)),
         ),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: TextField(
-                key: const ValueKey('member-search'),
-                controller: _search,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  hintText: 'Search members',
-                ),
-                onChanged: _onSearchChanged,
-              ),
+            _MemberSearchHeader(
+              controller: _search,
+              onChanged: _onSearchChanged,
             ),
             Expanded(
               child: searching
@@ -223,21 +232,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
     final results = _matchingMembers();
     if (results.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
-        children: const [
-          MemberGroupLabel(label: 'Members', count: 0),
-          SizedBox(height: 14),
+        padding: MemberSidebar._listPadding,
+        children: [
+          const MemberGroupLabel(label: 'Members', count: 0),
+          const SizedBox(height: 12),
           Center(
             child: Text(
               'Nobody by that name yet.',
-              style: TextStyle(fontSize: FlucordType.caption),
+              style: FlucordTextRole.caption.style.copyWith(
+                color: context.surfaces.muted,
+              ),
             ),
           ),
         ],
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      padding: MemberSidebar._listPadding,
       children: [
         MemberGroupLabel(label: 'Members', count: results.length),
         for (final member in results) _rowFor(member),
@@ -265,6 +276,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
       _membersById = {for (final member in widget.members) member.id: member};
     }
     return _membersById;
+  }
+
+  /// The ids of members seated in a voice channel of this space. Rebuilt
+  /// only when the seats or the space change: the seat map is replaced, not
+  /// edited, on every change.
+  Set<String> get _seatedHere {
+    final seats = widget.seatedByChannel;
+    if (!identical(_indexedSeats, seats) || _seatedSpaceId != widget.spaceId) {
+      _indexedSeats = seats;
+      _seatedSpaceId = widget.spaceId;
+      _seatedIds = {
+        for (final channel in seats.values)
+          for (final seat in channel)
+            if (seat.guildId == widget.spaceId) seat.userId,
+      };
+    }
+    return _seatedIds;
   }
 
   Widget _buildRoster(GuildMemberList roster) {
@@ -305,12 +333,11 @@ class _MemberSidebarState extends State<MemberSidebar> {
           .add(member);
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
+      padding: MemberSidebar._listPadding,
       children: [
         for (final entry in roleGroups.entries) ...[
           MemberGroupLabel(label: entry.key, count: entry.value.length),
           for (final member in entry.value) _rowFor(member),
-          const SizedBox(height: 14),
         ],
         if (offline.isNotEmpty) ...[
           MemberGroupLabel(label: 'Offline', count: offline.length),
@@ -324,8 +351,9 @@ class _MemberSidebarState extends State<MemberSidebar> {
     final link = _memberLinks.putIfAbsent(member.id, LayerLink.new);
     return _MemberRow(
       member: member,
-      role: member.roleFor(widget.spaceId),
       spaceId: widget.spaceId,
+      inVoice: _seatedHere.contains(member.id),
+      nameColor: widget.nameColorOf?.call(member),
       link: link,
       selected: member.id == _selectedMember?.id,
       onPressed: (context) => _showMember(context, member, link),
@@ -430,37 +458,100 @@ class _MemberSidebarState extends State<MemberSidebar> {
   }
 }
 
+/// The 48 px header with the recessed "Search members" field.
+class _MemberSearchHeader extends StatelessWidget {
+  const _MemberSearchHeader({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+      borderRadius: FlucordRadius.control,
+      borderSide: BorderSide(color: color, width: width),
+    );
+    final rest = outline(surfaces.border, 1);
+    return Container(
+      key: const ValueKey('member-list-header'),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: surfaces.border)),
+      ),
+      child: TextField(
+        key: const ValueKey('member-search'),
+        controller: controller,
+        onChanged: onChanged,
+        style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: surfaces.inset,
+          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+          prefixIcon: FlucordIcon(
+            FlucordIcons.search,
+            size: 16,
+            color: surfaces.captionText,
+          ),
+          prefixIconConstraints: const BoxConstraints.tightFor(width: 32),
+          hintText: 'Search members',
+          hintStyle: FlucordTextRole.caption.style.copyWith(
+            color: surfaces.captionText,
+          ),
+          border: rest,
+          enabledBorder: rest,
+          focusedBorder: outline(surfaces.focusRing, 2),
+        ),
+      ),
+    );
+  }
+}
+
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
-    required this.role,
     required this.spaceId,
+    required this.inVoice,
+    required this.nameColor,
     required this.link,
     required this.selected,
     required this.onPressed,
   });
 
   final Member member;
-  final String role;
   final String spaceId;
+  final bool inVoice;
+
+  /// The member's role colour as a value, or null for the plain text colour.
+  final int? nameColor;
   final LayerLink link;
   final bool selected;
   final ValueChanged<BuildContext> onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final offline = !member.presence.isOnline;
-    // Discord replaces the role line with whatever the member is doing, so a
-    // row never carries both: the activity is the more current fact, and
-    // stacking the two would double every row's height.
-    final activity = member.presenceDetail?.primaryActivity;
+    // No role line when there is nothing to show: the group label above
+    // already names the role. The name then sits in the middle of the row.
+    final summary = ActivitySummary.of(
+      member.presenceDetail?.activities ?? const [],
+      inVoice: inVoice,
+    );
+    final color = nameColor;
     return CompositedTransformTarget(
       link: link,
       child: Opacity(
         opacity: offline ? 0.58 : 1,
         child: Material(
-          color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: FlucordRadius.small,
+          color: selected ? surfaces.raised : Colors.transparent,
+          borderRadius: FlucordRadius.control,
           child: Semantics(
             button: true,
             label: 'Open profile for ${member.displayName}',
@@ -470,41 +561,38 @@ class _MemberRow extends StatelessWidget {
               // Discord opens the same card from the right button. A row that
               // ignores it is a place where the mouse stops working.
               onSecondaryTap: () => onPressed(context),
-              borderRadius: FlucordRadius.small,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              borderRadius: FlucordRadius.control,
+              child: Container(
+                height: MemberRosterView.rowHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    MemberAvatar(member: member, size: 32, spaceId: spaceId),
-                    const SizedBox(width: 10),
+                    MemberAvatar(
+                      member: member,
+                      size: 28,
+                      spaceId: spaceId,
+                      presenceBorderColor: surfaces.surface,
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             member.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.caption,
-                              fontWeight: FontWeight.w600,
+                            style: FlucordTextRole.label.style.copyWith(
+                              color: color == null
+                                  ? surfaces.text
+                                  : Color(color),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          if (activity != null)
+                          if (summary != null)
                             ActivitySummaryLine(
                               key: ValueKey('member-activity-${member.id}'),
-                              activity: activity,
-                            )
-                          else
-                            Text(
-                              role,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: context.surfaces.muted,
-                                fontSize: FlucordType.caption,
-                              ),
+                              summary: summary,
                             ),
                         ],
                       ),

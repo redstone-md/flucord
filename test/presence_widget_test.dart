@@ -355,7 +355,13 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        _host(const Center(child: ActivitySummaryLine(activity: _custom))),
+        _host(
+          Center(
+            child: ActivitySummaryLine(
+              summary: ActivitySummary.of(const [_custom])!,
+            ),
+          ),
+        ),
       );
 
       expect(find.text('🛠'), findsOneWidget);
@@ -367,17 +373,19 @@ void main() {
     ) async {
       await tester.pumpWidget(
         _host(
-          const Center(
+          Center(
             child: ActivitySummaryLine(
-              activity: UserActivity(
-                name: 'Custom Status',
-                type: ActivityType.customStatus,
-                emoji: ActivityEmoji(
-                  name: 'shipit',
-                  id: '123456789012345678',
-                  imageUrl: 'https://cdn.example/emoji.webp',
+              summary: ActivitySummary.of(const [
+                UserActivity(
+                  name: 'Custom Status',
+                  type: ActivityType.customStatus,
+                  emoji: ActivityEmoji(
+                    name: 'shipit',
+                    id: '123456789012345678',
+                    imageUrl: 'https://cdn.example/emoji.webp',
+                  ),
                 ),
-              ),
+              ])!,
             ),
           ),
         ),

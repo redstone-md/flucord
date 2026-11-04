@@ -50,7 +50,7 @@ class AccountPanel extends StatelessWidget {
     final self = broadcasting
         ? presence!.userPresence
         : member.presenceOrCoarse;
-    final custom = self.customStatus;
+    final custom = ActivitySummary.of([?self.customStatus]);
     final identity = Row(
       children: [
         MemberAvatar(
@@ -86,7 +86,7 @@ class AccountPanel extends StatelessWidget {
                 child: custom != null
                     ? ActivitySummaryLine(
                         key: const ValueKey('account-custom-status'),
-                        activity: custom,
+                        summary: custom,
                         color: context.surfaces.captionText,
                       )
                     : Text(

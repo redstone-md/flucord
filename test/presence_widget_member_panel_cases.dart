@@ -39,9 +39,13 @@ void _memberPanelCases() {
         find.byKey(const ValueKey('member-activity-$_mira')),
         findsOneWidget,
       );
-      expect(find.text('Playing Elden Ring'), findsOneWidget);
-      // The offline member keeps its role line.
-      expect(find.text('Engineer'), findsOneWidget);
+      expect(find.text('Elden Ring'), findsOneWidget);
+      // Nothing to show is no second line: the role is never the fallback.
+      expect(
+        find.byKey(const ValueKey('member-activity-$_roman')),
+        findsNothing,
+      );
+      expect(find.text('Engineer'), findsNothing);
     });
 
     testWidgets('the profile popover carries the rich presence card', (
