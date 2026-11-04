@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import '../../domain/chat_models.dart';
+import '../../domain/voice_message_recorder.dart';
 import 'discord_call_api.dart';
 import 'discord_account_connections_repository.dart';
 import 'discord_account_data_package_repository.dart';
@@ -25,6 +28,7 @@ import 'discord_thread_membership_service.dart';
 import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_user_settings_transport.dart';
+import 'discord_voice_message_payload.dart';
 
 final class DiscordDesktopApiClient
     implements
@@ -569,6 +573,62 @@ final class DiscordDesktopApiClient
       );
     }
     return response.cast<String, Object?>();
+  }
+
+  /// Posts [voiceMessage] the way the official client does: it asks for an
+  /// upload slot, puts the file there, then posts the message that names the
+  /// uploaded file.
+  Future<Map<String, Object?>> createVoiceMessage({
+    required String channelId,
+    required PendingVoiceMessage voiceMessage,
+    required String nonce,
+  }) async {
+    final slot = await _uploadSlot(channelId, voiceMessage);
+    await _rest.uploadTo(
+      slot.url,
+      await File(voiceMessage.path).readAsBytes(),
+      contentType: 'audio/ogg',
+    );
+    return _rest.requestObject(
+      'POST',
+      '/channels/$channelId/messages',
+      body: discordVoiceMessageBody(
+        voiceMessage,
+        nonce: nonce,
+        enforceNonce: true,
+        uploadedFilename: slot.filename,
+      ),
+      guardedByNonce: true,
+    );
+  }
+
+  Future<({Uri url, String filename})> _uploadSlot(
+    String channelId,
+    PendingVoiceMessage voiceMessage,
+  ) async {
+    final payload = await _rest.requestObject(
+      'POST',
+      '/channels/$channelId/attachments',
+      body: {
+        'files': [
+          {
+            'id': '0',
+            'filename': voiceMessage.name,
+            'file_size': voiceMessage.size,
+          },
+        ],
+      },
+    );
+    if (payload['attachments'] case [
+      {'upload_url': final String url, 'upload_filename': final String name},
+      ...,
+    ]) {
+      return (url: Uri.parse(url), filename: name);
+    }
+    throw const DiscordApiException(
+      statusCode: 502,
+      message: 'Expected an upload slot',
+    );
   }
 
   Future<Map<String, Object?>> editMessage({

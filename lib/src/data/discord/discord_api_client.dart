@@ -3,6 +3,7 @@ import '../../domain/reaction_repository.dart';
 import '../../domain/voice_message_recorder.dart';
 import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
+import 'discord_voice_message_payload.dart';
 import 'discord_rest_client.dart';
 
 export 'discord_rest_client.dart';

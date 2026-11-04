@@ -46,6 +46,8 @@ import '../../domain/user_profile.dart';
 import '../../domain/user_notes.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
+import '../../domain/voice_message_recorder.dart';
+import '../../domain/voice_message_repository.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_detectable_game_service.dart';
@@ -90,7 +92,8 @@ final class DiscordDesktopChatRepository
     implements
         ChatRepository,
         GuildMemberListRepository,
-        ScheduledEventRepository {
+        ScheduledEventRepository,
+        VoiceMessageRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -597,6 +600,39 @@ final class DiscordDesktopChatRepository
         textToSpeech: textToSpeech,
       ),
     );
+    return _storeSentMessage(payload);
+  }
+
+  @override
+  Future<ChatMessage> sendVoiceMessage({
+    required String channelId,
+    required String authorId,
+    required PendingVoiceMessage voiceMessage,
+  }) async {
+    // As a draft with the file only, so a retry keeps its nonce.
+    final payload = await _nonceFactory.sendDraft(
+      channelId: channelId,
+      body: '',
+      attachments: [
+        PendingAttachment(
+          name: voiceMessage.name,
+          path: voiceMessage.path,
+          size: voiceMessage.size,
+        ),
+      ],
+      replyToMessageId: null,
+      suppressNotifications: false,
+      textToSpeech: false,
+      send: (nonce) => _api.createVoiceMessage(
+        channelId: channelId,
+        voiceMessage: voiceMessage,
+        nonce: nonce,
+      ),
+    );
+    return _storeSentMessage(payload);
+  }
+
+  Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);
     // The gateway's copy may come later, and the channel must read as read
     // from the moment the send returns.

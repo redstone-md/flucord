@@ -61,19 +61,11 @@ extension DiscordApiClientMessages on DiscordApiClient {
     _validateNonce(nonce, enforceNonce: enforceNonce);
     return _createMultipartObject(
       '/channels/$channelId/messages',
-      {
-        'flags': DiscordMessageFlag.voiceMessage.bit,
-        'nonce': ?nonce,
-        if (nonce != null) 'enforce_nonce': enforceNonce,
-        'attachments': [
-          {
-            'id': 0,
-            'filename': voiceMessage.name,
-            'duration_secs': voiceMessage.durationSecs,
-            'waveform': voiceMessage.waveform,
-          },
-        ],
-      },
+      discordVoiceMessageBody(
+        voiceMessage,
+        nonce: nonce,
+        enforceNonce: enforceNonce,
+      ),
       [
         PendingAttachment(
           name: voiceMessage.name,
