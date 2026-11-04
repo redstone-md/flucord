@@ -250,6 +250,63 @@ void main() {
     );
   });
 
+  testWidgets('the native DM header offers only what the SDK can do', (
+    tester,
+  ) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness, size: const Size(1280, 720));
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('social-dm-header'));
+    Finder inHeader(Finder matching) =>
+        find.descendant(of: header, matching: matching);
+    expect(inHeader(find.byType(FlucordIconButton)), findsOneWidget);
+    expect(inHeader(find.byTooltip('Hide user profile')), findsOneWidget);
+    expect(inHeader(find.byTooltip('Start call')), findsNothing);
+    expect(inHeader(find.byType(TextField)), findsNothing);
+  });
+
+  testWidgets('the profile panel shows who the DM is with', (tester) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness, size: const Size(1280, 720));
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final panel = find.byKey(const ValueKey('dm-profile-panel'));
+    Finder inPanel(Finder matching) =>
+        find.descendant(of: panel, matching: matching);
+    final view = tester.getRect(
+      find.byKey(const ValueKey('social-dm-view-friend-1')),
+    );
+    expect(tester.getRect(panel).width, 240);
+    expect(tester.getRect(panel).right, view.right);
+    expect(
+      tester.getSize(inPanel(find.byType(DiscordRelationshipAvatar))),
+      const Size.square(64),
+    );
+    final name = tester.widget<Text>(inPanel(find.text('Ada'))).style!;
+    expect(name.fontSize, FlucordTextRole.title.size);
+    expect(name.color, _surfaces.text);
+    final username = tester
+        .widget<Text>(inPanel(find.text('ada.lovelace')))
+        .style!;
+    expect(username.color, _surfaces.muted);
+    expect(inPanel(find.text('Online')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide user profile'));
+    await tester.pumpAndSettle();
+
+    expect(panel, findsNothing);
+    expect(find.byTooltip('Show user profile'), findsOneWidget);
+  });
+
   testWidgets('a native DM reads like a server channel', (tester) async {
     final harness = await _DmHarness.create();
     addTearDown(harness.dispose);
@@ -314,8 +371,12 @@ void main() {
 
 final _surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
 
-Future<void> _pumpWorkspace(WidgetTester tester, _DmHarness harness) async {
-  await tester.binding.setSurfaceSize(const Size(900, 720));
+Future<void> _pumpWorkspace(
+  WidgetTester tester,
+  _DmHarness harness, {
+  Size size = const Size(900, 720),
+}) async {
+  await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final account = DiscordOAuthAccount(
     id: 'current',
@@ -565,6 +626,7 @@ final class _SocialDmGateway
     user: DiscordRelationshipUser(
       id: 'friend-1',
       displayName: 'Ada',
+      username: 'ada.lovelace',
       status: DiscordPresenceStatus.online,
     ),
     kind: DiscordRelationshipKind.friend,

@@ -186,8 +186,6 @@ Future<void> _pump(
             showCompactPicker: false,
             showsMessages: true,
             voiceSurface: VoiceChannelSurface.chat,
-            allowMemberPanel: true,
-            allowThreadPanel: true,
             showMembers: showMembers,
             showPins: false,
             showThreads: false,

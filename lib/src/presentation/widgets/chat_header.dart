@@ -17,29 +17,31 @@ import 'voice_surface_switch.dart';
 /// buttons, search and the inbox.
 ///
 /// A DM passes the person's avatar as [leading], so the same header shows a
-/// person rather than a channel.
+/// person rather than a channel. Each action shows only when its callback is
+/// given, so a transport without it draws no dead button.
 class ChatHeader extends StatelessWidget {
   const ChatHeader({
     required this.channel,
-    required this.channels,
-    required this.query,
-    required this.showCompactPicker,
-    required this.showsMessages,
-    required this.voiceSurface,
-    required this.allowMemberPanel,
-    required this.allowThreadPanel,
-    required this.showMembers,
-    required this.showPins,
-    required this.showThreads,
-    required this.inboxSummary,
-    required this.onSelectChannel,
-    required this.onSelectVoiceSurface,
-    required this.onQueryChanged,
-    required this.onSubmitQuery,
-    required this.onToggleMembers,
-    required this.onTogglePins,
-    required this.onToggleThreads,
-    required this.onOpenInbox,
+    this.channels = const [],
+    this.query = '',
+    this.showCompactPicker = false,
+    this.showsMessages = true,
+    this.voiceSurface = VoiceChannelSurface.chat,
+    this.showMembers = false,
+    this.showPins = false,
+    this.showThreads = false,
+    this.inboxSummary = const InboxSummary(
+      unreadChannelCount: 0,
+      mentionCount: 0,
+    ),
+    this.onSelectChannel,
+    this.onSelectVoiceSurface,
+    this.onQueryChanged,
+    this.onSubmitQuery,
+    this.onToggleMembers,
+    this.onTogglePins,
+    this.onToggleThreads,
+    this.onOpenInbox,
     this.leading,
     this.threadMembership,
     this.showVoiceSurfaces = false,
@@ -90,8 +92,6 @@ class ChatHeader extends StatelessWidget {
   /// Null when the channel cannot be called: a guild channel, or a transport
   /// with no call plane.
   final VoidCallback? onToggleCall;
-  final bool allowMemberPanel;
-  final bool allowThreadPanel;
   final bool showMembers;
   final bool showPins;
   final bool showThreads;
@@ -100,19 +100,23 @@ class ChatHeader extends StatelessWidget {
   /// Join/leave for a thread, or null when the channel is not one.
   final Widget? threadMembership;
 
-  final ValueChanged<String> onSelectChannel;
-  final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
-  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<String>? onSelectChannel;
+  final ValueChanged<VoiceChannelSurface>? onSelectVoiceSurface;
+
+  /// Filters the messages on screen. Null leaves the search field out.
+  final ValueChanged<String>? onQueryChanged;
 
   /// Runs the query against the server. Typing filters the messages already on
   /// screen, which is instant but only ever sees the page that is loaded;
   /// pressing enter asks Discord about the whole conversation. Null when the
   /// signed-in transport has no search plane to ask.
   final ValueChanged<String>? onSubmitQuery;
-  final VoidCallback onToggleMembers;
-  final VoidCallback onTogglePins;
-  final VoidCallback onToggleThreads;
-  final VoidCallback onOpenInbox;
+
+  /// Opens and closes the member list, or a DM's profile.
+  final VoidCallback? onToggleMembers;
+  final VoidCallback? onTogglePins;
+  final VoidCallback? onToggleThreads;
+  final VoidCallback? onOpenInbox;
 
   @override
   Widget build(BuildContext context) {
@@ -236,12 +240,13 @@ class ChatHeader extends StatelessWidget {
           icon: isInCall ? FlucordIcons.hangUp : FlucordIcons.call,
         ),
       ],
-      if (showVoiceSurfaces) ...[
+      if (onSelectVoiceSurface case final onChanged?
+          when showVoiceSurfaces) ...[
         const SizedBox(width: 8),
         VoiceSurfaceSwitch(
           surface: voiceSurface,
           showLabels: showTopic,
-          onChanged: onSelectVoiceSurface,
+          onChanged: onChanged,
         ),
       ],
       // Everything past here scrolls rather than overflows. There are up to
@@ -256,7 +261,7 @@ class ChatHeader extends StatelessWidget {
           reverse: true,
           child: Row(
             children: [
-              if (allowThreadPanel) ...[
+              if (onToggleThreads != null) ...[
                 const SizedBox(width: _buttonGap),
                 FlucordIconButton(
                   key: const ValueKey('toggle-threads'),
@@ -268,7 +273,9 @@ class ChatHeader extends StatelessWidget {
               ],
               // Pinning is absent from the voice text-chat permission set, so
               // the panel and its toggle stay out of a voice channel's chat.
-              if (showsMessages && channel.kind != ChannelKind.voice) ...[
+              if (onTogglePins != null &&
+                  showsMessages &&
+                  channel.kind != ChannelKind.voice) ...[
                 const SizedBox(width: _buttonGap),
                 FlucordIconButton(
                   key: const ValueKey('toggle-pins'),
@@ -280,38 +287,50 @@ class ChatHeader extends StatelessWidget {
                       : 'Pinned messages',
                 ),
               ],
-              if (allowMemberPanel) ...[
+              if (onToggleMembers != null) ...[
                 const SizedBox(width: _buttonGap),
-                FlucordIconButton(
-                  key: const ValueKey('toggle-members'),
-                  onPressed: onToggleMembers,
-                  selected: showMembers,
-                  icon: FlucordIcons.members,
-                  tooltip: showMembers ? 'Hide members' : 'Show members',
-                ),
+                _membersToggle(),
               ],
-              if (showsMessages && showSearch) ...[
+              if (onQueryChanged case final onChanged?
+                  when showsMessages && showSearch) ...[
                 const SizedBox(width: 8),
                 SizedBox(
                   width: _searchWidth,
                   child: _SearchField(
                     query: query,
-                    onChanged: onQueryChanged,
+                    onChanged: onChanged,
                     onSubmitted: onSubmitQuery,
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
-              InboxActivityButton(
-                summary: inboxSummary,
-                onPressed: onOpenInbox,
-              ),
+              if (onOpenInbox case final onOpen?) ...[
+                const SizedBox(width: 8),
+                InboxActivityButton(summary: inboxSummary, onPressed: onOpen),
+              ],
             ],
           ),
         ),
       ),
     ],
   );
+
+  /// The member list's button. A DM has one person instead, so there it
+  /// opens their profile.
+  Widget _membersToggle() {
+    final person = channel.isDirectMessage;
+    return FlucordIconButton(
+      key: const ValueKey('toggle-members'),
+      onPressed: onToggleMembers,
+      selected: showMembers,
+      icon: person ? FlucordIcons.profile : FlucordIcons.members,
+      tooltip: switch ((person, showMembers)) {
+        (true, true) => 'Hide user profile',
+        (true, false) => 'Show user profile',
+        (false, true) => 'Hide members',
+        (false, false) => 'Show members',
+      },
+    );
+  }
 
   static String _channelLabel(ConversationChannel channel) {
     if (channel.isThread) return 'Post:';

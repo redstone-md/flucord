@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/discord_social_dm_controller.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../domain/discord_social_dm.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'accessibility_scope.dart';
+import 'chat_header.dart';
 import 'direct_message_views.dart';
 import 'discord_relationship_avatar.dart';
 import 'discord_social_dm_message_row.dart';
@@ -33,8 +36,13 @@ class DiscordSocialDmView extends StatefulWidget {
 }
 
 class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
+  /// The narrowest the conversation gets beside the profile panel. Below it
+  /// the panel and its button stay out.
+  static const _minChatWidth = 480.0;
+
   late final AppLifecycleListener _lifecycleListener;
   late bool _foreground;
+  bool _showProfile = true;
 
   @override
   void initState() {
@@ -88,95 +96,85 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) => Column(
-        key: ValueKey('social-dm-view-${widget.user.id}'),
-        children: [
-          _DmHeader(user: widget.user),
-          Expanded(
-            child: _DmTimeline(
-              controller: widget.controller,
-              user: widget.user,
-              messages: widget.controller.messagesFor(widget.user.id),
-              loading: widget.controller.isLoadingMessages(widget.user.id),
-              error: widget.controller.messageErrorFor(widget.user.id),
-              onRetry: () => unawaited(
-                widget.controller.loadMessages(widget.user.id, refresh: true),
+    final user = widget.user;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final profileFits =
+            constraints.maxWidth >=
+            _minChatWidth + DirectMessageProfilePanel.width;
+        final showProfile = profileFits && _showProfile;
+        return ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => Row(
+            key: ValueKey('social-dm-view-${user.id}'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    ChatHeader(
+                      key: const ValueKey('social-dm-header'),
+                      channel: _headerChannel(user),
+                      leading: DiscordRelationshipAvatar(
+                        user: user,
+                        size: DirectMessageHeaderAvatar.size,
+                        presenceBorderColor: context.surfaces.canvas,
+                      ),
+                      // The SDK has no calls, pins, search or inbox, so the
+                      // profile is the header's only action.
+                      showMembers: showProfile,
+                      onToggleMembers: profileFits
+                          ? () => setState(() => _showProfile = !_showProfile)
+                          : null,
+                    ),
+                    Expanded(
+                      child: _DmTimeline(
+                        controller: widget.controller,
+                        user: user,
+                        messages: widget.controller.messagesFor(user.id),
+                        loading: widget.controller.isLoadingMessages(user.id),
+                        error: widget.controller.messageErrorFor(user.id),
+                        onRetry: () => unawaited(
+                          widget.controller.loadMessages(
+                            user.id,
+                            refresh: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _DmComposer(controller: widget.controller, user: user),
+                  ],
+                ),
               ),
-            ),
+              if (showProfile)
+                DirectMessageProfilePanel(
+                  avatar: DiscordRelationshipAvatar(
+                    user: user,
+                    size: DirectMessageProfilePanel.avatarSize,
+                    presenceBorderColor: context.surfaces.surface,
+                  ),
+                  name: user.displayName,
+                  username: user.username,
+                  status: DiscordRelationshipAvatar.presenceOf(user.status),
+                  memberSince: DiscordSnowflake.createdAt(user.id),
+                ),
+            ],
           ),
-          _DmComposer(controller: widget.controller, user: widget.user),
-        ],
-      ),
+        );
+      },
     );
   }
-}
 
-/// The DM's header, built like the chat header: the person's avatar with a
-/// status dot, their name as a heading, and 28 px buttons on the right.
-///
-/// The native SDK has no calls or profile card here yet, so those buttons
-/// show where they will be and stay disabled.
-class _DmHeader extends StatelessWidget {
-  const _DmHeader({required this.user});
-
-  static const _height = 48.0;
-  static const _avatarSize = 24.0;
-  static const _gap = 8.0;
-  static const _buttonGap = 4.0;
-
-  final DiscordRelationshipUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    final surfaces = context.surfaces;
-    return Container(
-      key: const ValueKey('social-dm-header'),
-      height: _height,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: surfaces.border)),
-      ),
-      child: Row(
-        children: [
-          DiscordRelationshipAvatar(
-            user: user,
-            size: _avatarSize,
-            presenceBorderColor: surfaces.canvas,
-          ),
-          const SizedBox(width: _gap),
-          Expanded(
-            child: Text(
-              user.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlucordTextRole.heading.style.copyWith(
-                color: surfaces.text,
-              ),
-            ),
-          ),
-          const FlucordIconButton(
-            icon: FlucordIcons.call,
-            tooltip: 'Start call',
-            onPressed: null,
-          ),
-          const SizedBox(width: _buttonGap),
-          const FlucordIconButton(
-            icon: FlucordIcons.camera,
-            tooltip: 'Start video call',
-            onPressed: null,
-          ),
-          const SizedBox(width: _buttonGap),
-          const FlucordIconButton(
-            icon: FlucordIcons.profile,
-            tooltip: 'Profile',
-            onPressed: null,
-          ),
-        ],
-      ),
-    );
-  }
+  /// The DM as the chat header reads it: a channel named after the person.
+  static ConversationChannel _headerChannel(DiscordRelationshipUser user) =>
+      ConversationChannel(
+        id: 'social-dm-${user.id}',
+        spaceId: CommunitySpace.directMessagesId,
+        name: user.displayName,
+        topic: '',
+        kind: ChannelKind.text,
+        recipientId: user.id,
+      );
 }
 
 class _DmTimeline extends StatelessWidget {
@@ -228,6 +226,7 @@ class _DmTimeline extends StatelessWidget {
               size: DirectMessageStart.avatarSize,
             ),
             name: user.displayName,
+            username: user.username,
           ),
         ),
       );
