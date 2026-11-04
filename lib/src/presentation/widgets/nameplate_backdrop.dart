@@ -40,12 +40,6 @@ final class NameplateWash {
   /// The strength at the row's end, out of 255.
   final int _end;
 
-  /// The strength the plate keeps under the row's text. Discord keeps 30 %.
-  /// This theme's muted text sits close to 4.5:1 on its rows already (about
-  /// 4.6 on the open DM row in the light theme), so even a 3 % wash under it
-  /// falls short. The plate starts where the text ends.
-  static const underText = 0.0;
-
   LinearGradient get gradient => LinearGradient(
     colors: [
       color.withAlpha(0),
@@ -55,10 +49,6 @@ final class NameplateWash {
     ],
     stops: const [0, 0.2, 0.5, 1],
   );
-
-  /// The strongest the wash gets under the row's text.
-  Color get strongestUnderText =>
-      color.withValues(alpha: _end / 255 * underText);
 }
 
 /// Discord's palette colours, from the web client's palette table (chunk
@@ -99,8 +89,8 @@ extension on NameplatePalette {
 /// As Discord's clients draw it: the still picture as tall as the row and
 /// 16:3 wide, against the row's end and cut to the row's shape (the mobile
 /// client's Nameplate.tsx in Wumpus-Central/discord-mobile-datamining), over
-/// the palette wash. The plate is held back under the text marked with
-/// [NameplateText] ([NameplateWash.underText]) and comes to full strength
+/// the palette wash. The plate is clear under the text marked with
+/// [NameplateText] and comes to full strength
 /// over the 50 px after it (the web client's mask in chunk 351952), so the
 /// text stays readable.
 ///
@@ -256,7 +246,9 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     );
   }
 
-  /// The mask over the plate: faint up to the text's end, full 50 px later.
+  /// The mask over the plate: clear up to the text's end, full 50 px later.
+  /// Discord keeps 30 % under the text; this theme's muted text sits close to
+  /// 4.5:1 on its rows already, so even a faint plate under it falls short.
   Shader _fadeBehindText(Rect bounds) {
     final width = math.max(bounds.width, 1);
     final textEnd = _textEnd();
@@ -264,8 +256,8 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
     final end = ((textEnd + NameplateBackdrop._fade) / width).clamp(start, 1.0);
     return LinearGradient(
       colors: [
-        Colors.black.withValues(alpha: NameplateWash.underText),
-        Colors.black.withValues(alpha: NameplateWash.underText),
+        Colors.transparent,
+        Colors.transparent,
         Colors.black,
       ],
       stops: [0, start, end],
