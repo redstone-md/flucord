@@ -271,13 +271,13 @@ class FlucordDialogHeader extends StatelessWidget {
 
   final String title;
   final VoidCallback? onClose;
-  final IconData? icon;
+  final FlucordIconData? icon;
 
   @override
   Widget build(BuildContext context) => Row(
     children: [
       if (icon case final icon?) ...[
-        Icon(icon, size: 16),
+        FlucordIcon(icon, size: 16),
         const SizedBox(width: 8),
       ],
       Expanded(

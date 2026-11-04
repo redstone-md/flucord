@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/forum_post_tile.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets('uses the first image attachment as the gallery preview', (
@@ -35,7 +38,7 @@ void main() {
     );
 
     expect(find.text('report.pdf'), findsWidgets);
-    expect(find.byIcon(Icons.insert_drive_file_outlined), findsOneWidget);
+    expect(findFlucordIcon(FlucordIcons.file), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

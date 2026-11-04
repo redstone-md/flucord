@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/thread_membership_controller.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -36,8 +37,8 @@ class ThreadMembershipButton extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.group_outlined,
+                  FlucordIcon(
+                    FlucordIcons.members,
                     size: 14,
                     color: context.surfaces.muted,
                   ),
@@ -62,10 +63,10 @@ class ThreadMembershipButton extends StatelessWidget {
             tooltip: controller.isMuted
                 ? 'Notify me about this thread'
                 : 'Stop notifying me about this thread',
-            icon: Icon(
+            icon: FlucordIcon(
               controller.isMuted
-                  ? Icons.notifications_off
-                  : Icons.notifications_none,
+                  ? FlucordIcons.silent
+                  : FlucordIcons.notifications,
               size: 15,
             ),
             padding: EdgeInsets.zero,
@@ -82,8 +83,8 @@ class ThreadMembershipButton extends StatelessWidget {
           onPressed: controller.isBusy
               ? null
               : () => unawaited(controller.toggle()),
-          icon: Icon(
-            joined ? Icons.notifications_off_outlined : Icons.add,
+          icon: FlucordIcon(
+            joined ? FlucordIcons.silent : FlucordIcons.add,
             size: 15,
           ),
           label: Text(joined ? 'Leave' : 'Join'),
@@ -104,8 +105,8 @@ class ThreadMembershipButton extends StatelessWidget {
             padding: const EdgeInsets.only(left: 4),
             child: Tooltip(
               message: 'Discord did not accept that.',
-              child: Icon(
-                Icons.error_outline,
+              child: FlucordIcon(
+                FlucordIcons.error,
                 key: const ValueKey('thread-membership-error'),
                 size: 15,
                 color: Theme.of(context).colorScheme.error,

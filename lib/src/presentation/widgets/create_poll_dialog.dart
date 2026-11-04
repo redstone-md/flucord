@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -111,7 +112,7 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
         children: [
           FlucordDialogHeader(
             title: 'Create a poll',
-            icon: Icons.poll_outlined,
+            icon: FlucordIcons.poll,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -154,7 +155,7 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
                     _answerControllers.length == PendingPoll.maxAnswers
                 ? null
                 : _addAnswer,
-            icon: const Icon(Icons.add, size: 16),
+            icon: const FlucordIcon(FlucordIcons.add, size: 16),
             label: const Text('Add answer'),
           ),
           const SizedBox(height: 12),
@@ -225,7 +226,7 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.poll_outlined, size: 16),
+                    : const FlucordIcon(FlucordIcons.poll, size: 16),
                 label: const Text('Create poll'),
               ),
             ],
@@ -271,7 +272,7 @@ class _PollAnswerField extends StatelessWidget {
         dimension: 40,
         child: IconButton(
           onPressed: enabled && canRemove ? onRemove : null,
-          icon: const Icon(Icons.close, size: 17),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 17),
           tooltip: 'Remove answer',
         ),
       ),

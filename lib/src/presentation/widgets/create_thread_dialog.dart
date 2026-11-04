@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -72,7 +73,7 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
         children: [
           FlucordDialogHeader(
             title: 'Create thread',
-            icon: Icons.forum_outlined,
+            icon: FlucordIcons.threads,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -153,7 +154,7 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.forum_outlined, size: 16),
+                    : const FlucordIcon(FlucordIcons.threads, size: 16),
                 label: const Text('Create thread'),
               ),
             ],
@@ -172,8 +173,8 @@ class _DialogError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Icon(
-        Icons.error_outline,
+      FlucordIcon(
+        FlucordIcons.error,
         size: 15,
         color: Theme.of(context).colorScheme.error,
       ),

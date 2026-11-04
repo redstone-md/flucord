@@ -203,7 +203,11 @@ class _VoiceChannelPreview extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.podcasts, size: 30, color: context.surfaces.muted),
+          FlucordIcon(
+            FlucordIcons.voiceChannel,
+            size: 30,
+            color: context.surfaces.muted,
+          ),
           const SizedBox(height: 10),
           Text(
             channelName,
@@ -247,7 +251,7 @@ class _VoiceChannelPreview extends StatelessWidget {
           FilledButton.icon(
             key: const ValueKey('voice-channel-join'),
             onPressed: isBusy ? null : onJoin,
-            icon: const Icon(Icons.call, size: 16),
+            icon: const FlucordIcon(FlucordIcons.call, size: 16),
             label: const Text('Join voice channel'),
           ),
         ],
@@ -525,7 +529,7 @@ class _VoiceToolbar extends StatelessWidget {
               backgroundColor: context.surfaces.danger,
               foregroundColor: Colors.white,
             ),
-            icon: const Icon(Icons.call_end),
+            icon: const FlucordIcon(FlucordIcons.hangUp),
           ),
         ],
       ),

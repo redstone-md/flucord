@@ -220,6 +220,30 @@ abstract final class FlucordIcons {
   static const listening = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
   static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
   static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
+
+  // Voice, threads, forums and events (FLUCORD-84).
+  static const event = FlucordIconData(HugeIcons.strokeRoundedCalendar03);
+  static const eventUnavailable = FlucordIconData(
+    HugeIcons.strokeRoundedCalendarRemove01,
+  );
+  static const archive = FlucordIconData(HugeIcons.strokeRoundedArchive);
+  static const media = FlucordIconData(HugeIcons.strokeRoundedAlbum02);
+  static const imageError = FlucordIconData(
+    HugeIcons.strokeRoundedImageNotFound01,
+  );
+  static const video = FlucordIconData(HugeIcons.strokeRoundedPlayCircle);
+  static const file = FlucordIconData(HugeIcons.strokeRoundedFile01);
+  static const filterOff = FlucordIconData(HugeIcons.strokeRoundedFilterRemove);
+  static const newPost = FlucordIconData(HugeIcons.strokeRoundedCommentAdd01);
+  static const stage = FlucordIconData(HugeIcons.strokeRoundedMegaphone01);
+  static const raiseHand = FlucordIconData(HugeIcons.strokeRoundedHand);
+  static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
+  static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
+  static const volumeOff = FlucordIconData(HugeIcons.strokeRoundedVolumeOff);
+  static const display = FlucordIconData(HugeIcons.strokeRoundedComputer);
+  // Media controls keep their direction in right-to-left text.
+  static const play = FlucordIconData(HugeIcons.strokeRoundedPlay);
+  static const pause = FlucordIconData(HugeIcons.strokeRoundedPause);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

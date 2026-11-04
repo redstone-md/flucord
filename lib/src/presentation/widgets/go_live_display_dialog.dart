@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/go_live_controller.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import 'flucord_dialog.dart';
 
@@ -49,8 +50,8 @@ class GoLiveDisplayDialog extends StatelessWidget {
                 for (final display in displays)
                   ListTile(
                     key: ValueKey('go-live-display-${display.index}'),
-                    leading: Icon(
-                      Icons.monitor_outlined,
+                    leading: FlucordIcon(
+                      FlucordIcons.display,
                       color: context.surfaces.muted,
                     ),
                     title: Text(display.name),

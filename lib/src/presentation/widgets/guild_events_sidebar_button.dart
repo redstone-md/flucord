@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -31,8 +32,8 @@ class GuildEventsSidebarButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              Icon(
-                hasError ? Icons.event_busy_outlined : Icons.event_outlined,
+              FlucordIcon(
+                hasError ? FlucordIcons.eventUnavailable : FlucordIcons.event,
                 size: 19,
                 color: hasError ? context.surfaces.warning : null,
               ),

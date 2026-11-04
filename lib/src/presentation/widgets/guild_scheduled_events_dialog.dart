@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -158,20 +159,20 @@ class _EventsHeader extends StatelessWidget {
         IconButton(
           key: const ValueKey('refresh-guild-events'),
           onPressed: onRefresh,
-          icon: const Icon(Icons.refresh, size: 19),
+          icon: const FlucordIcon(FlucordIcons.refresh, size: 19),
           tooltip: 'Refresh events',
         ),
         if (onCreate != null)
           IconButton(
             key: const ValueKey('create-guild-event'),
             onPressed: onCreate,
-            icon: const Icon(Icons.add, size: 19),
+            icon: const FlucordIcon(FlucordIcons.add, size: 19),
             tooltip: 'Create event',
           ),
         IconButton(
           key: const ValueKey('close-guild-events'),
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, size: 19),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 19),
           tooltip: 'Close events',
         ),
         const SizedBox(width: 6),
@@ -345,7 +346,7 @@ class _ScheduledEventRow extends StatelessWidget {
                   IconButton(
                     key: ValueKey('guild-event-edit-${event.id}'),
                     tooltip: 'Edit event',
-                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.edit, size: 16),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints.tightFor(
@@ -358,7 +359,7 @@ class _ScheduledEventRow extends StatelessWidget {
                   IconButton(
                     key: ValueKey('guild-event-delete-${event.id}'),
                     tooltip: 'Delete event',
-                    icon: const Icon(Icons.delete_outline, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.delete, size: 16),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints.tightFor(
@@ -370,7 +371,7 @@ class _ScheduledEventRow extends StatelessWidget {
                 if (canOpen)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),
-                    child: Icon(Icons.chevron_right, size: 19),
+                    child: FlucordIcon(FlucordIcons.chevronRight, size: 19),
                   ),
               ],
             ),
@@ -483,38 +484,39 @@ class _EventsState extends StatelessWidget {
   const _EventsState.loading() : icon = null, title = null, onRetry = null;
 
   const _EventsState.empty()
-    : icon = Icons.event_available_outlined,
+    : icon = FlucordIcons.event,
       title = 'No upcoming events',
       onRetry = null;
 
   const _EventsState.error({required this.onRetry})
-    : icon = Icons.event_busy_outlined,
+    : icon = FlucordIcons.eventUnavailable,
       title = 'Events unavailable';
 
-  final IconData? icon;
+  final FlucordIconData? icon;
   final String? title;
   final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => Center(
-    child: icon == null
-        ? const CircularProgressIndicator(strokeWidth: 2)
-        : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 30, color: context.surfaces.muted),
-              const SizedBox(height: 10),
-              Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
-              if (onRetry != null) ...[
-                const SizedBox(height: 10),
-                TextButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh, size: 17),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ],
-          ),
+    child: switch (icon) {
+      null => const CircularProgressIndicator(strokeWidth: 2),
+      final icon => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FlucordIcon(icon, size: 30, color: context.surfaces.muted),
+          const SizedBox(height: 10),
+          Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (onRetry != null) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const FlucordIcon(FlucordIcons.refresh, size: 17),
+              label: const Text('Retry'),
+            ),
+          ],
+        ],
+      ),
+    },
   );
 }
 
@@ -528,7 +530,7 @@ class _InlineEventError extends StatelessWidget {
     padding: const EdgeInsets.only(top: 12),
     child: TextButton.icon(
       onPressed: onRetry,
-      icon: const Icon(Icons.refresh, size: 16),
+      icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
       label: const Text('Refresh failed - retry'),
     ),
   );

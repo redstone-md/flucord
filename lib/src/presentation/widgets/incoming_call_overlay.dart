@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/direct_call_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -99,7 +100,11 @@ class IncomingCallCard extends StatelessWidget {
               if (caller != null)
                 MemberAvatar(member: caller!, size: 40, showPresence: false)
               else
-                Icon(Icons.call, size: 28, color: context.surfaces.muted),
+                FlucordIcon(
+                  FlucordIcons.call,
+                  size: 28,
+                  color: context.surfaces.muted,
+                ),
               const SizedBox(width: 12),
               Flexible(
                 child: Column(
@@ -136,7 +141,7 @@ class IncomingCallCard extends StatelessWidget {
                   backgroundColor: context.surfaces.danger,
                   foregroundColor: Colors.white,
                 ),
-                icon: const Icon(Icons.call_end),
+                icon: const FlucordIcon(FlucordIcons.hangUp),
               ),
               const SizedBox(width: 8),
               IconButton.filled(
@@ -147,7 +152,7 @@ class IncomingCallCard extends StatelessWidget {
                   backgroundColor: context.surfaces.success,
                   foregroundColor: Colors.white,
                 ),
-                icon: const Icon(Icons.call),
+                icon: const FlucordIcon(FlucordIcons.call),
               ),
             ],
           ),

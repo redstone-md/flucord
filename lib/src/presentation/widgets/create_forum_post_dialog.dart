@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import '../pending_attachment_picker.dart';
@@ -145,8 +146,8 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
           FlucordDialogHeader(
             title: 'Create a post',
             icon: widget.channel.kind == ChannelKind.media
-                ? Icons.perm_media_outlined
-                : Icons.forum_outlined,
+                ? FlucordIcons.media
+                : FlucordIcons.forum,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -181,7 +182,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
               OutlinedButton.icon(
                 key: const ValueKey('forum-post-add-attachments'),
                 onPressed: _isCreating ? null : _pickAttachments,
-                icon: const Icon(Icons.attach_file, size: 16),
+                icon: const FlucordIcon(FlucordIcons.attach, size: 16),
                 label: const Text('Add files'),
               ),
               const SizedBox(width: 10),
@@ -286,7 +287,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.add_comment_outlined, size: 16),
+                    : const FlucordIcon(FlucordIcons.newPost, size: 16),
                 label: const Text('Create post'),
               ),
             ],
@@ -336,8 +337,8 @@ class _ForumDialogError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Icon(
-        Icons.error_outline,
+      FlucordIcon(
+        FlucordIcons.error,
         size: 15,
         color: Theme.of(context).colorScheme.error,
       ),

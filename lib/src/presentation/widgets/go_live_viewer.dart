@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -75,8 +76,8 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
     final error = widget.error;
     if (error != null) {
       return _stage('go-live-error', [
-        Icon(
-          Icons.error_outline,
+        FlucordIcon(
+          FlucordIcons.error,
           size: 24,
           color: Theme.of(context).colorScheme.error,
         ),
@@ -121,7 +122,7 @@ Widget _waiting(
       child: CircularProgressIndicator(strokeWidth: 2),
     )
   else
-    const Icon(Icons.live_tv_outlined, size: 24),
+    const FlucordIcon(FlucordIcons.streaming, size: 24),
   if (label.isNotEmpty) ...[
     const SizedBox(height: 10),
     Text(

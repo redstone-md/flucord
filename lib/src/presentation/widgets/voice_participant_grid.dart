@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
@@ -59,8 +60,8 @@ class VoiceParticipantGrid extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.headset_mic_outlined,
+              FlucordIcon(
+                FlucordIcons.voiceCall,
                 size: 32,
                 color: context.surfaces.muted,
               ),
@@ -206,9 +207,9 @@ class VoiceParticipantTile extends StatelessWidget {
   /// What is wrong with the participant's microphone, if anything.
   List<Widget> get _stateIcons => [
     if (participant.isDeafened)
-      const _StateIcon(icon: Icons.headset_off_outlined, label: 'Deafened')
+      const _StateIcon(icon: FlucordIcons.headphonesOff, label: 'Deafened')
     else if (participant.isMuted)
-      const _StateIcon(icon: Icons.mic_off_outlined, label: 'Muted'),
+      const _StateIcon(icon: FlucordIcons.micOff, label: 'Muted'),
   ];
 
   @override
@@ -357,8 +358,8 @@ class _SelfPreview extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.error_outline,
+                FlucordIcon(
+                  FlucordIcons.error,
                   size: 24,
                   color: Theme.of(context).colorScheme.error,
                 ),
@@ -445,14 +446,14 @@ class _StreamCard extends StatelessWidget {
             if (showsLive)
               _mark(
                 key: 'voice-stream-open-$userId',
-                icon: Icons.live_tv,
+                icon: FlucordIcons.streaming,
                 label: isOwn ? 'Live' : 'Watching',
                 color: accent,
               )
             else if (hasFailed)
               _mark(
                 key: 'voice-stream-error-$userId',
-                icon: Icons.error_outline,
+                icon: FlucordIcons.error,
                 label: 'Stream unavailable',
                 color: Theme.of(context).colorScheme.error,
               ),
@@ -473,7 +474,7 @@ class _StreamCard extends StatelessWidget {
   /// One small line above the name: what is true of this stream right now.
   Widget _mark({
     required String key,
-    required IconData icon,
+    required FlucordIconData icon,
     required String label,
     required Color color,
   }) => Padding(
@@ -481,7 +482,7 @@ class _StreamCard extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12, color: color),
+        FlucordIcon(icon, size: 12, color: color),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
@@ -584,7 +585,7 @@ class _TileName extends StatelessWidget {
 class _StateIcon extends StatelessWidget {
   const _StateIcon({required this.icon, required this.label});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String label;
 
   @override
@@ -593,7 +594,7 @@ class _StateIcon extends StatelessWidget {
       padding: const EdgeInsets.only(left: 7),
       child: Tooltip(
         message: label,
-        child: Icon(icon, size: 15, color: context.surfaces.danger),
+        child: FlucordIcon(icon, size: 15, color: context.surfaces.danger),
       ),
     );
   }
@@ -647,7 +648,7 @@ class _TileVolumeSlider extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
-            const Icon(Icons.volume_up_outlined, size: 14),
+            const FlucordIcon(FlucordIcons.voiceChannel, size: 14),
             const SizedBox(width: 6),
             Expanded(
               child: SliderTheme(
