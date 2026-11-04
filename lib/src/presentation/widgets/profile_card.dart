@@ -28,6 +28,7 @@ import 'profile_card_data.dart';
 import 'profile_card_route.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
+import 'service_logo.dart';
 
 part 'profile_card_full.dart';
 part 'profile_card_full_side.dart';
