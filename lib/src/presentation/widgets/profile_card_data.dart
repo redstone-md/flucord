@@ -8,7 +8,6 @@ import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
-import 'discord_relationship_avatar.dart';
 
 /// A friend both people share, with their status where the workspace knows
 /// it.
@@ -136,9 +135,7 @@ final class ProfileCardData {
       monogram: monogramOf(user.displayName),
       username: user.username,
       avatarUrl: user.avatarUrl,
-      presence: UserPresence(
-        status: DiscordRelationshipAvatar.presenceOf(user.status),
-      ),
+      presence: UserPresence(status: user.status.presence),
       activity: activity == null
           ? null
           : UserActivity(

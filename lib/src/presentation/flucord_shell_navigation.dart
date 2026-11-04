@@ -621,7 +621,7 @@ extension _FlucordShellNavigation on FlucordShell {
       _onSeats(
         (seated) => ActiveNowColumn(
           friends: activeFriends(
-            [for (final friend in friends.friends) friend.user.id],
+            [for (final friend in friends.friends) friend.user],
             workspace: workspace,
             seatedByChannel: seated,
           ),

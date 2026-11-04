@@ -1,5 +1,6 @@
 import 'package:flucord/src/application/active_friends.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +52,15 @@ VoiceParticipantStateEvent _seat(String userId, {String? channelId}) =>
       isVideoEnabled: false,
     );
 
+List<DiscordRelationshipUser> _friends(List<String> ids) => [
+  for (final id in ids)
+    DiscordRelationshipUser(
+      id: id,
+      displayName: id,
+      status: DiscordPresenceStatus.idle,
+    ),
+];
+
 ChatWorkspace _workspace(List<Member> members) => ChatWorkspace(
   spaces: const [_guild],
   channels: const [_voice],
@@ -70,7 +80,7 @@ void main() {
     ]);
 
     final active = activeFriends(
-      const ['gamer', 'talker', 'quiet'],
+      _friends(['gamer', 'talker', 'quiet']),
       workspace: workspace,
       seatedByChannel: {
         _voice.id: [_seat('talker'), _seat('other')],
@@ -89,7 +99,7 @@ void main() {
 
   test('a seat in a channel this workspace does not know is no room', () {
     final active = activeFriends(
-      const ['talker'],
+      _friends(['talker']),
       workspace: _workspace([_person('talker')]),
       seatedByChannel: {
         'unknown': [_seat('talker', channelId: 'unknown')],
@@ -97,5 +107,21 @@ void main() {
     );
 
     expect(active, isEmpty);
+  });
+
+  test('a friend in voice with no member row is still listed', () {
+    final active = activeFriends(
+      _friends(['talker']),
+      workspace: _workspace(const []),
+      seatedByChannel: {
+        _voice.id: [_seat('talker')],
+      },
+    );
+
+    final talker = active.single;
+    expect(talker.person.id, 'talker');
+    expect(talker.person.displayName, 'talker');
+    expect(talker.person.presence, Presence.idle);
+    expect(talker.room?.channel, _voice);
   });
 }
