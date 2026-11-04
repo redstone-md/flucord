@@ -218,8 +218,8 @@ final class ProfileBadge {
 
 /// The avatar decoration somebody wears, as the profile route reports it.
 ///
-/// `asset` is a CDN path under `avatar-decoration-decoration`, which is the
-/// shape Discord's own client pastes onto the CDN root.
+/// `asset` names a file under the CDN's `avatar-decoration-presets`, as
+/// Discord's image reference gives it.
 final class ProfileDecoration {
   const ProfileDecoration({required this.asset, this.skuId});
 

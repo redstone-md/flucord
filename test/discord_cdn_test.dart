@@ -33,7 +33,7 @@ void main() {
     expect(DiscordCdn.badgeIcon(''), isNull);
     expect(
       DiscordCdn.avatarDecoration('a_deco'),
-      'https://cdn.discordapp.com/avatar-decoration-decoration/a_deco.png?size=96&passthrough=true',
+      'https://cdn.discordapp.com/avatar-decoration-presets/a_deco.png?size=96&passthrough=true',
     );
     expect(DiscordCdn.avatarDecoration(''), isNull);
   });

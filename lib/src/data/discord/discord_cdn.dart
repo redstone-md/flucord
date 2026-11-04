@@ -49,7 +49,7 @@ final class DiscordCdn {
       ? null
       : Uri.https(
           'cdn.discordapp.com',
-          '/avatar-decoration-decoration/$asset.png',
+          '/avatar-decoration-presets/$asset.png',
           {'size': '$size', 'passthrough': 'true'},
         ).toString();
 
