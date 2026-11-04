@@ -106,7 +106,7 @@ class _FullProfileCard extends StatelessWidget {
     required this.note,
   });
 
-  static const _metrics = _HeaderMetrics.window;
+  static const _metrics = _ProfileMetrics.window;
 
   final ProfileCardData data;
   final ProfileCardActions actions;
@@ -146,8 +146,8 @@ class _FullProfileCard extends StatelessWidget {
                   children: [
                     _Names(
                       data: data,
+                      metrics: _metrics,
                       backdrop: surfaces.inset,
-                      inWindow: true,
                     ),
                     ?_FullProfileButtons.of(actions),
                     if (data.bio.isNotEmpty) _AboutText(data.bio),

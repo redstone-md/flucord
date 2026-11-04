@@ -181,7 +181,7 @@ class ProfileCard extends StatelessWidget {
               children: [
                 _Header(
                   data: data,
-                  metrics: _HeaderMetrics.card,
+                  metrics: _ProfileMetrics.card,
                   backdrop: surfaces.raised,
                   actions: actions,
                   onOpenFullProfile: actions.onOpenFullProfile,
@@ -199,6 +199,7 @@ class ProfileCard extends StatelessWidget {
                     children: [
                       _Names(
                         data: data,
+                        metrics: _ProfileMetrics.card,
                         backdrop: surfaces.raised,
                         onOpenFullProfile: actions.onOpenFullProfile,
                       ),
@@ -234,35 +235,46 @@ class ProfileCard extends StatelessWidget {
   }
 }
 
-/// The sizes of the banner and the avatar, in the card and in the window.
+/// What differs between the card and the window: the sizes of the banner
+/// and the avatar, the name's size, and whether the mutual line shows (the
+/// window has tabs for the mutuals instead).
 @immutable
-final class _HeaderMetrics {
-  const _HeaderMetrics({
+final class _ProfileMetrics {
+  const _ProfileMetrics({
     required this.bannerHeight,
     required this.avatarSize,
     required this.ring,
     required this.avatarTop,
     required this.padding,
     required this.dot,
+    required this.name,
+    required this.showsMutualLine,
   });
 
-  static const card = _HeaderMetrics(
+  static const card = _ProfileMetrics(
     bannerHeight: 72,
     avatarSize: 80,
     ring: 4,
     avatarTop: 32,
     padding: ProfileCard._padding,
     dot: 16,
+    name: FlucordTextRole.title,
+    showsMutualLine: true,
   );
 
-  static const window = _HeaderMetrics(
+  static const window = _ProfileMetrics(
     bannerHeight: 120,
     avatarSize: 96,
     ring: 6,
     avatarTop: 72,
     padding: 20,
     dot: 18,
+    name: FlucordTextRole.display,
+    showsMutualLine: false,
   );
+
+  final FlucordTextRole name;
+  final bool showsMutualLine;
 
   final double bannerHeight;
   final double avatarSize;
@@ -292,7 +304,7 @@ class _Header extends StatelessWidget {
   });
 
   final ProfileCardData data;
-  final _HeaderMetrics metrics;
+  final _ProfileMetrics metrics;
 
   /// The colour the header sits on, which rings the avatar.
   final Color backdrop;
@@ -382,7 +394,7 @@ class _Avatar extends StatelessWidget {
   });
 
   final ProfileCardData data;
-  final _HeaderMetrics metrics;
+  final _ProfileMetrics metrics;
   final Color backdrop;
 
   @override
