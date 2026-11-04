@@ -16,7 +16,8 @@ import 'streamer_mode_scope.dart';
 /// Each card asks [GuildAccessScope.previewInvite] for its server. An invite
 /// Discord refuses shows the invalid card. Nothing is drawn when the host
 /// cannot look invites up, and a lookup that fails in transit leaves only the
-/// link in the text.
+/// link in the text until the message is drawn again, when the card asks
+/// again.
 class MessageInviteCards extends StatelessWidget {
   const MessageInviteCards({
     required this.body,
@@ -73,9 +74,28 @@ class _InviteCard extends StatefulWidget {
 }
 
 class _InviteCardState extends State<_InviteCard> {
-  /// Asked once per card. The cards are keyed by code, so a new code is a
-  /// new card rather than a change to this one.
-  late final Future<InvitePreview> _preview = widget.lookup(widget.code);
+  /// Asked once per card while it has an answer. The cards are keyed by
+  /// code, so a new code is a new card rather than a change to this one.
+  late Future<InvitePreview> _preview = _ask();
+
+  /// Whether the last ask failed without an answer about the invite.
+  bool _failedInTransit = false;
+
+  Future<InvitePreview> _ask() =>
+      widget.lookup(widget.code).catchError((Object error) {
+        if (error is! GuildAccessException || !error.isAboutTheInvite) {
+          _failedInTransit = true;
+        }
+        throw error;
+      });
+
+  @override
+  void didUpdateWidget(_InviteCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_failedInTransit) return;
+    _failedInTransit = false;
+    _preview = _ask();
+  }
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
@@ -84,13 +104,9 @@ class _InviteCardState extends State<_InviteCard> {
       (final preview?, _) => _InviteFrame(
         child: _ValidInvite(preview: preview, onJoin: widget.onJoin),
       ),
-      (
-        _,
-        GuildAccessException(
-          refusal: GuildAccessRefusal.invalid || GuildAccessRefusal.expired,
-        ),
-      ) =>
-        _InviteFrame(child: _InvalidInvite(sentByMe: widget.sentByMe)),
+      (_, GuildAccessException(isAboutTheInvite: true)) => _InviteFrame(
+        child: _InvalidInvite(sentByMe: widget.sentByMe),
+      ),
       _ => const SizedBox.shrink(),
     },
   );
@@ -183,6 +199,7 @@ class _ValidInvite extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
+    final localizations = MaterialLocalizations.of(context);
     final name = preview.name.trim();
     return _InviteLayout(
       caption: "You've been invited to join a server",
@@ -213,9 +230,15 @@ class _ValidInvite extends StatelessWidget {
         spacing: _Count.spacing,
         children: [
           if (preview.approximatePresenceCount case final online?)
-            _Count(dot: surfaces.success, label: '$online Online'),
+            _Count(
+              dot: surfaces.success,
+              label: '${localizations.formatDecimal(online)} Online',
+            ),
           if (preview.approximateMemberCount case final members?)
-            _Count(dot: surfaces.offline, label: '$members Members'),
+            _Count(
+              dot: surfaces.offline,
+              label: '${localizations.formatDecimal(members)} Members',
+            ),
         ],
       ),
       action: FilledButton(onPressed: onJoin, child: const Text('Join')),

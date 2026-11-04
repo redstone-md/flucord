@@ -106,6 +106,12 @@ final class GuildAccessException implements Exception {
 
   final String message;
 
+  /// Whether Discord answered about the invite itself, which a later ask
+  /// would answer the same way.
+  bool get isAboutTheInvite =>
+      refusal == GuildAccessRefusal.invalid ||
+      refusal == GuildAccessRefusal.expired;
+
   @override
   String toString() => message;
 }

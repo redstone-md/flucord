@@ -30,16 +30,17 @@ extension ChatControllerGuildAccess on ChatController {
   /// [previewInvite] for an invite card in a message: asked once per code
   /// for the session, so the same link in many messages costs one request.
   ///
-  /// A refusal is an answer and stays cached. Any other failure is dropped,
-  /// so the next card that asks tries again.
+  /// An invalid or expired invite is an answer and stays cached. Any other
+  /// failure, in transit or on Discord's side, is dropped, so the next card
+  /// that asks tries again.
   Future<InvitePreview> cachedInvitePreview(String code) =>
       _invitePreviews.putIfAbsent(code, () async {
         try {
           return await previewInvite(code);
-        } on GuildAccessException {
-          rethrow;
-        } on Object {
-          _invitePreviews.remove(code);
+        } on Object catch (error) {
+          if (error is! GuildAccessException || !error.isAboutTheInvite) {
+            _invitePreviews.remove(code);
+          }
           rethrow;
         }
       });

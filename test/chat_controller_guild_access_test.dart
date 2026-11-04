@@ -235,6 +235,26 @@ void main() {
       expect(access.previewedCodes, ['aurora', 'aurora']);
     });
 
+    test('a refusal that is not about the invite is asked again', () async {
+      final access = _FakeGuildManagement()
+        ..previewFailure = const GuildAccessException(
+          refusal: GuildAccessRefusal.unknown,
+          message: 'Discord could not check this invite.',
+        );
+      final controller = ChatController(_Repository(guildManagement: access));
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await expectLater(
+        controller.cachedInvitePreview('aurora'),
+        throwsA(isA<GuildAccessException>()),
+      );
+      final preview = await controller.cachedInvitePreview('aurora');
+
+      expect(preview.name, 'Aurora Labs');
+      expect(access.previewedCodes, ['aurora', 'aurora']);
+    });
+
     test('a new session looks the code up again', () async {
       final first = _FakeGuildManagement();
       final second = _FakeGuildManagement();
