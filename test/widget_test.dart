@@ -274,7 +274,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    expect(find.text('Direct Messages'), findsOneWidget);
+    expect(find.text('Direct messages'), findsOneWidget);
     expect(find.text('User mira'), findsWidgets);
     expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
   });
