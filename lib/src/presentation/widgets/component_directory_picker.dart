@@ -197,19 +197,12 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('directory-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('directory-confirm'),
-        onPressed: _chosen.isEmpty
-            ? null
-            : () => Navigator.of(context).pop(_chosen.toList(growable: false)),
-        child: const Text('Choose'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('directory-confirm'),
+      label: 'Choose',
+      onPressed: _chosen.isEmpty
+          ? null
+          : () => Navigator.of(context).pop(_chosen.toList(growable: false)),
+    ),
   );
 }

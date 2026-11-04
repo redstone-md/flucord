@@ -78,12 +78,7 @@ class _DirectMessageDialogState extends State<DirectMessageDialog> {
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-      ],
+      actions: const [FlucordDialogCancel()],
     );
   }
 }

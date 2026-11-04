@@ -258,17 +258,10 @@ class _SlashCommandOptionsDialogState extends State<SlashCommandOptionsDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('slash-options-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('slash-options-run'),
-        onPressed: _isComplete ? _submit : null,
-        child: const Text('Run'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('slash-options-run'),
+      label: 'Run',
+      onPressed: _isComplete ? _submit : null,
+    ),
   );
 }

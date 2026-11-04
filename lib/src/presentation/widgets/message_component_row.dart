@@ -340,22 +340,14 @@ class _MessageModalDialogState extends State<MessageModalDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('modal-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('modal-submit'),
-        onPressed: _isComplete
-            ? () => Navigator.of(context).pop({
-                for (final entry in _fields.entries)
-                  entry.key: entry.value.text,
-              })
-            : null,
-        child: const Text('Submit'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('modal-submit'),
+      label: 'Submit',
+      onPressed: _isComplete
+          ? () => Navigator.of(context).pop({
+              for (final entry in _fields.entries) entry.key: entry.value.text,
+            })
+          : null,
+    ),
   );
 }

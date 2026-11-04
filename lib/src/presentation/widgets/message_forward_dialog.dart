@@ -72,6 +72,12 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       maxWidth: 520,
       maxHeight: math.min(560, availableHeight),
+      cancelEnabled: !_isSubmitting,
+      confirm: FlucordDialogConfirm(
+        key: const ValueKey('message-forward-submit'),
+        label: _isSubmitting ? 'Forwarding' : 'Forward',
+        onPressed: _selected == null || _isSubmitting ? null : _submit,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -80,8 +86,6 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
           Divider(height: 1, color: context.surfaces.border),
           Flexible(child: _destinationList(context)),
           if (_error case final error?) _errorLine(context, error),
-          Divider(height: 1, color: context.surfaces.border),
-          _actions(context),
         ],
       ),
     );
@@ -162,30 +166,6 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
         color: Theme.of(context).colorScheme.error,
         fontSize: FlucordType.caption,
       ),
-    ),
-  );
-
-  Widget _actions(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          key: const ValueKey('message-forward-submit'),
-          onPressed: _selected == null || _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Forward'),
-        ),
-      ],
     ),
   );
 

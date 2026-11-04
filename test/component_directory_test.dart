@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/presentation/widgets/component_directory_picker.dart';
+import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -185,7 +187,7 @@ void main() {
       expect(find.text('Pick a member'), findsOne);
       expect(
         tester
-            .widget<FilledButton>(
+            .widget<FlucordButton>(
               find.byKey(const ValueKey('directory-confirm')),
             )
             .onPressed,
@@ -292,7 +294,7 @@ void main() {
 
       // With no placeholder the picker still names itself.
       expect(find.text('Choose'), findsWidgets);
-      await tester.tap(find.byKey(const ValueKey('directory-cancel')));
+      await tester.tap(find.byType(FlucordDialogCancel));
       await tester.pumpAndSettle();
 
       expect(await result, isNull);

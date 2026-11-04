@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/chat_controller.dart';
-import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 
@@ -79,21 +78,11 @@ class _CreateServerDialogState extends State<CreateServerDialog> {
       },
       onSubmitted: (_) => unawaited(_create()),
     ),
-    onConfirm: () => unawaited(_create()),
-    actions: [
-      FlucordButton(
-        label: 'Cancel',
-        keyHint: FlucordKeyHint.escape,
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      FlucordButton(
-        key: const ValueKey('create-server-submit'),
-        kind: FlucordButtonKind.primary,
-        label: _creating ? 'Creating' : 'Create',
-        keyHint: FlucordKeyHint.enter,
-        onPressed: _creating ? null : () => unawaited(_create()),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-server-submit'),
+      label: _creating ? 'Creating' : 'Create',
+      onPressed: _creating ? null : () => unawaited(_create()),
+    ),
   );
 }
 

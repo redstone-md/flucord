@@ -37,7 +37,7 @@ void main() {
       'SQLite v13 is ready.',
     );
     await _tapConfirm(tester);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Creating'), findsOneWidget);
     expect(
       tester
           .widget<TextField>(find.byKey(const ValueKey('forum-post-name')))

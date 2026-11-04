@@ -114,24 +114,12 @@ class _DiscordAddFriendDialogState extends State<_DiscordAddFriendDialog> {
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: sending ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              key: const ValueKey('discord-add-friend-submit'),
-              onPressed: sending || _textController.text.isEmpty
-                  ? null
-                  : _submit,
-              child: sending
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Send Friend Request'),
-            ),
-          ],
+          cancelEnabled: !sending,
+          confirm: FlucordDialogConfirm(
+            key: const ValueKey('discord-add-friend-submit'),
+            label: sending ? 'Sending' : 'Send Friend Request',
+            onPressed: sending || _textController.text.isEmpty ? null : _submit,
+          ),
         );
       },
     );

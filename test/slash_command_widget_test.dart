@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flucord/src/application/slash_command_controller.dart';
 import 'package:flucord/src/domain/application_command.dart';
+import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/presentation/widgets/slash_command_list.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -114,7 +116,7 @@ void main() {
     // Nothing filled in, so it cannot be run.
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('slash-options-run')))
+          .widget<FlucordButton>(find.byKey(const ValueKey('slash-options-run')))
           .onPressed,
       isNull,
     );
@@ -157,7 +159,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('slash-command-cmd-ban')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('slash-options-cancel')));
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     expect(repository.invocations, isEmpty);

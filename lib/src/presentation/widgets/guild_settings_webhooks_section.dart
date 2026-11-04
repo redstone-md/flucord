@@ -213,20 +213,14 @@ class _WebhookDialogState extends State<_WebhookDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('webhook-confirm'),
-        onPressed: _name.text.trim().isEmpty || _channelId == null
-            ? null
-            : () => Navigator.of(
-                context,
-              ).pop((channelId: _channelId!, name: _name.text.trim())),
-        child: Text(widget.confirmLabel),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('webhook-confirm'),
+      label: widget.confirmLabel,
+      onPressed: _name.text.trim().isEmpty || _channelId == null
+          ? null
+          : () => Navigator.of(
+              context,
+            ).pop((channelId: _channelId!, name: _name.text.trim())),
+    ),
   );
 }

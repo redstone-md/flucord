@@ -60,11 +60,6 @@ class GoLiveDisplayDialog extends StatelessWidget {
               ],
             ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-    ],
+    actions: const [FlucordDialogCancel()],
   );
 }

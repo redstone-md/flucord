@@ -47,7 +47,7 @@ void main() {
     expect(find.text('Connect Discord'), findsNothing);
     expect(find.byKey(const ValueKey('discord-bot-token')), findsNothing);
     expect(find.byKey(const ValueKey('developer-bot-transport')), findsNothing);
-    await tester.tap(find.byTooltip('Close'));
+    await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('channel-forge-design')));

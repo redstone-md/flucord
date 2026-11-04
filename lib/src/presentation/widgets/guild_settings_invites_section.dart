@@ -198,27 +198,21 @@ class _CreateInviteDialogState extends State<_CreateInviteDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('create-invite-confirm'),
-        onPressed: () => Navigator.of(context).pop(
-          _InviteChoice(
-            channelId: _channelId,
-            options: InviteOptions(
-              maxAgeSeconds: _maxAge,
-              maxUses: _maxUses,
-              temporary: _temporary,
-              unique: true,
-            ),
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-invite-confirm'),
+      label: 'Create',
+      onPressed: () => Navigator.of(context).pop(
+        _InviteChoice(
+          channelId: _channelId,
+          options: InviteOptions(
+            maxAgeSeconds: _maxAge,
+            maxUses: _maxUses,
+            temporary: _temporary,
+            unique: true,
           ),
         ),
-        child: const Text('Create'),
       ),
-    ],
+    ),
   );
 
   static String _expiryLabel(int seconds) => switch (seconds) {

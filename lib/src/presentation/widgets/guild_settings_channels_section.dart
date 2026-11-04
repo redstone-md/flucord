@@ -919,20 +919,14 @@ class _CreateChannelDialogState extends State<_CreateChannelDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('create-channel-confirm'),
-        onPressed: _name.text.trim().isEmpty
-            ? null
-            : () => Navigator.of(
-                context,
-              ).pop(GuildChannelDraft(type: _type, name: _name.text.trim())),
-        child: const Text('Create'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-channel-confirm'),
+      label: 'Create',
+      onPressed: _name.text.trim().isEmpty
+          ? null
+          : () => Navigator.of(
+              context,
+            ).pop(GuildChannelDraft(type: _type, name: _name.text.trim())),
+    ),
   );
 }

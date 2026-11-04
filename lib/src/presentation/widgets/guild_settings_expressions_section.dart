@@ -311,17 +311,11 @@ class _NameDialogState extends State<_NameDialog> {
       autofocus: true,
       decoration: InputDecoration(hintText: widget.hint, isDense: true),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('guild-expression-name-confirm'),
-        onPressed: () => Navigator.of(context).pop(_name.text.trim()),
-        child: const Text('Upload'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('guild-expression-name-confirm'),
+      label: 'Upload',
+      onPressed: () => Navigator.of(context).pop(_name.text.trim()),
+    ),
   );
 }
 
@@ -376,18 +370,11 @@ class _SoundDialogState extends State<_SoundDialog> {
         ),
       ],
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('guild-expression-sound-name-confirm'),
-        onPressed: () => Navigator.of(
-          context,
-        ).pop((name: _name.text.trim(), volume: _volume)),
-        child: const Text('Upload'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('guild-expression-sound-name-confirm'),
+      label: 'Upload',
+      onPressed: () =>
+          Navigator.of(context).pop((name: _name.text.trim(), volume: _volume)),
+    ),
   );
 }

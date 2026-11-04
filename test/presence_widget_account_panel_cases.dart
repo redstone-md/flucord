@@ -117,7 +117,7 @@ void _accountPanelCases() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('self-status-custom')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('custom-status-cancel')));
+      await tester.tap(find.byType(FlucordDialogCancel));
       await tester.pumpAndSettle();
 
       expect(service.customStatuses, isEmpty);

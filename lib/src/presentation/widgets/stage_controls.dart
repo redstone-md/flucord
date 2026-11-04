@@ -268,37 +268,30 @@ class _StageTopicDialogState extends State<StageTopicDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => FlucordDialog(
-    key: const ValueKey('stage-topic-dialog'),
-    title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
-    content: TextField(
-      key: const ValueKey('stage-topic-field'),
-      controller: _topic,
-      autofocus: true,
-      maxLength: 120,
-      decoration: const InputDecoration(
-        labelText: 'Topic',
-        helperText: 'What this stage is about.',
-      ),
-      onSubmitted: (_) => _submit(),
-    ),
-    actions: [
-      TextButton(
-        key: const ValueKey('stage-topic-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      ListenableBuilder(
-        listenable: _topic,
-        builder: (context, _) => FilledButton(
-          key: const ValueKey('stage-topic-confirm'),
-          // Discord requires a topic; an empty one comes back as a 400 with
-          // nothing on screen to explain it.
-          onPressed: _topic.text.trim().isEmpty ? null : _submit,
-          child: Text(widget.isStarting ? 'Start' : 'Save'),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _topic,
+    builder: (context, _) => FlucordDialog(
+      key: const ValueKey('stage-topic-dialog'),
+      title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
+      content: TextField(
+        key: const ValueKey('stage-topic-field'),
+        controller: _topic,
+        autofocus: true,
+        maxLength: 120,
+        decoration: const InputDecoration(
+          labelText: 'Topic',
+          helperText: 'What this stage is about.',
         ),
+        onSubmitted: (_) => _submit(),
       ),
-    ],
+      confirm: FlucordDialogConfirm(
+        key: const ValueKey('stage-topic-confirm'),
+        label: widget.isStarting ? 'Start' : 'Save',
+        // Discord requires a topic; an empty one comes back as a 400 with
+        // nothing on screen to explain it.
+        onPressed: _topic.text.trim().isEmpty ? null : _submit,
+      ),
+    ),
   );
 
   void _submit() {
