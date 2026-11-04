@@ -14,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-
 const _twilight = Nameplate(
   asset: 'nameplates/nameplates/twilight/',
   palette: NameplatePalette.cobalt,
@@ -129,8 +128,7 @@ Future<void> _pumpDirectMessages(WidgetTester tester, Member person) {
 Future<void> _pumpName(
   WidgetTester tester,
   NameStyle? style, {
-  bool inServer = false,
-  int? roleColor,
+  InServer? inServer,
 }) => tester.pumpWidget(
   MaterialApp(
     theme: FlucordTheme.dark,
@@ -143,7 +141,6 @@ Future<void> _pumpName(
             style: FlucordTextRole.label.style.copyWith(color: Colors.white),
             nameStyle: style,
             inServer: inServer,
-            roleColor: roleColor,
           ),
         ),
       ),
@@ -325,10 +322,14 @@ void main() {
       tester,
     ) async {
       const style = NameStyle(colors: [_red], fontId: 11, effectId: 1);
-      await _pumpName(tester, style, inServer: true, roleColor: _blue);
+      await _pumpName(
+        tester,
+        style,
+        inServer: const InServer(roleColor: _blue),
+      );
       expect(_drawnColorOf(tester), const Color(_blue));
 
-      await _pumpName(tester, style, inServer: true);
+      await _pumpName(tester, style, inServer: const InServer());
       expect(_drawnColorOf(tester), Colors.white);
     });
   });

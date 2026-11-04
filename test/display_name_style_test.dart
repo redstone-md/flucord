@@ -28,15 +28,13 @@ Future<void> _pumpName(
   WidgetTester tester,
   NameStyle? style, {
   DisplayNameFonts? fonts,
-  bool inServer = false,
-  int? roleColor,
+  InServer? inServer,
 }) {
   final name = DisplayName(
     'Freez',
     style: FlucordTextRole.label.style.copyWith(color: Colors.white),
     nameStyle: style,
     inServer: inServer,
-    roleColor: roleColor,
   );
   return tester.pumpWidget(
     MaterialApp(
@@ -202,8 +200,7 @@ void main() {
         tester,
         const NameStyle(colors: [_red], fontId: 14, effectId: 3),
         fonts: fonts,
-        inServer: true,
-        roleColor: _blue,
+        inServer: const InServer(roleColor: _blue),
       );
       await tester.runAsync(() => fonts.loaded(DisplayNameFont.mainframe));
       await tester.pump();
@@ -326,7 +323,9 @@ void main() {
             for (final background in surfaces.backgrounds) {
               final outline = look.outline;
               final readable =
-                  look.fill.every((fill) => contrast(fill, background) >= 4.5) ||
+                  look.fill.every(
+                    (fill) => contrast(fill, background) >= 4.5,
+                  ) ||
                   (outline != null && contrast(outline, background) >= 4.5);
               expect(
                 readable,

@@ -22,8 +22,7 @@ class DisplayName extends StatelessWidget {
     this.text, {
     required this.style,
     this.nameStyle,
-    this.roleColor,
-    this.inServer = false,
+    this.inServer,
     this.maxLines = 1,
     super.key,
   });
@@ -34,16 +33,15 @@ class DisplayName extends StatelessWidget {
   final TextStyle style;
   final NameStyle? nameStyle;
 
-  /// The colour of the member's role here, or null for none.
-  final int? roleColor;
-  final bool inServer;
+  /// The server the name is drawn in, or null outside any server.
+  final InServer? inServer;
   final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     final typed = _inFont(context);
-    if (inServer) {
-      return _line(switch (roleColor) {
+    if (inServer case final server?) {
+      return _line(switch (server.roleColor) {
         final color? => typed.copyWith(color: Color(color)),
         null => typed,
       });
@@ -151,4 +149,14 @@ class DisplayName extends StatelessWidget {
     overflow: TextOverflow.ellipsis,
     style: style,
   );
+}
+
+/// A name drawn in a server, where the role colour wins over the name's
+/// style.
+@immutable
+final class InServer {
+  const InServer({this.roleColor});
+
+  /// The colour of the member's role here, or null for none.
+  final int? roleColor;
 }
