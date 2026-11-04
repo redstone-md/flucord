@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
@@ -8,6 +10,9 @@ import '../../theme/flucord_type.dart';
 /// the date lives.
 class MessageDayDivider extends StatelessWidget {
   const MessageDayDivider({required this.day, super.key});
+
+  /// The least of each line a long date leaves standing.
+  static const _minLine = 16.0;
 
   /// Any moment on the day this divider opens.
   final DateTime day;
@@ -26,20 +31,34 @@ class MessageDayDivider extends StatelessWidget {
     // same above and below the line.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
-      child: Row(
-        children: [
-          Expanded(child: line),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              MaterialLocalizations.of(context).formatFullDate(day.toLocal()),
-              style: FlucordTextRole.caption.style.copyWith(
-                color: surfaces.captionText,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Expanded(child: line),
+            // In a narrow timeline the date is cut short rather than pushed past
+            // the edge: "Wednesday, September 30, 2026" is wide. Each line
+            // keeps a stub, so it still reads as a divider.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: math.max(0, constraints.maxWidth - 2 * _minLine),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  MaterialLocalizations.of(
+                    context,
+                  ).formatFullDate(day.toLocal()),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: FlucordTextRole.caption.style.copyWith(
+                    color: surfaces.captionText,
+                  ),
+                ),
               ),
             ),
-          ),
-          Expanded(child: line),
-        ],
+            Expanded(child: line),
+          ],
+        ),
       ),
     );
   }
