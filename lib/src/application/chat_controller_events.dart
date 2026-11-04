@@ -180,10 +180,11 @@ extension _ChatControllerEvents on ChatController {
     // The local mark stays: it is the whole unread model on a transport with no
     // read state, and on one that has read state the projection below simply
     // overwrites it with the server's answer a moment later.
+    final channel = _workspace?.channelOrNull(message.channelId);
     _workspace = _workspace?.markChannelUnread(
       message.channelId,
       messageId: message.id,
-      mention: message.mentionsCurrentMember,
+      mention: channel != null && readState.countsAsMention(channel, message),
     );
     _applyReadState();
     _persistChannelActivity(message.channelId);
