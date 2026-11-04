@@ -337,7 +337,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reaches the dialog from the server rail', (tester) async {
+  testWidgets('reaches the dialog from the user panel, not the rail', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(1180, 820));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -345,7 +347,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('open-user-settings')));
+    expect(find.byTooltip('User settings'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('account-settings')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('user-settings-dialog')), findsOneWidget);

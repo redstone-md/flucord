@@ -19,8 +19,8 @@ void main() {
           code: code,
           name: 'Aurora',
           guildId: 'aurora-guild',
-          approximateMemberCount: 1204,
-          approximatePresenceCount: 312,
+          approximateMemberCount: 12045,
+          approximatePresenceCount: 1312,
         ),
         onOpenInvite: (_, code) => opened.add(code),
       ),
@@ -29,8 +29,8 @@ void main() {
 
     expect(find.text("You've been invited to join a server"), findsOneWidget);
     expect(find.text('Aurora'), findsOneWidget);
-    expect(find.text('312 Online'), findsOneWidget);
-    expect(find.text('1204 Members'), findsOneWidget);
+    expect(find.text('1,312 Online'), findsOneWidget);
+    expect(find.text('12,045 Members'), findsOneWidget);
 
     final text = tester.getRect(_messageText);
     final card = tester.getRect(find.byKey(const ValueKey('invite-card')));
@@ -75,6 +75,47 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(_messageText, findsOneWidget);
     expect(find.byKey(const ValueKey('invite-card')), findsNothing);
+  });
+
+  testWidgets('a card whose lookup failed in transit asks again when redrawn', (
+    tester,
+  ) async {
+    var asked = 0;
+    Future<InvitePreview> lookup(String code) async {
+      asked++;
+      if (asked == 1) {
+        throw const GuildAccessException(
+          refusal: GuildAccessRefusal.unknown,
+          message: 'Discord could not be reached. Try again.',
+        );
+      }
+      return InvitePreview(code: code, name: 'Aurora');
+    }
+
+    await tester.pumpWidget(_row(previewInvite: lookup));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('invite-card')), findsNothing);
+
+    await tester.pumpWidget(_row(previewInvite: lookup));
+    await tester.pumpAndSettle();
+
+    expect(asked, 2);
+    expect(find.byKey(const ValueKey('invite-card')), findsOneWidget);
+  });
+
+  testWidgets('a card that got an answer does not ask again', (tester) async {
+    var asked = 0;
+    Future<InvitePreview> lookup(String code) async {
+      asked++;
+      return InvitePreview(code: code, name: 'Aurora');
+    }
+
+    await tester.pumpWidget(_row(previewInvite: lookup));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(_row(previewInvite: lookup));
+    await tester.pumpAndSettle();
+
+    expect(asked, 1);
   });
 }
 

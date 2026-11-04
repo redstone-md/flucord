@@ -573,7 +573,9 @@ final class ChatWorkspace {
       ? [...spaces, space]
       : [
           for (final existing in spaces)
-            existing.id == space.id ? space : existing,
+            existing.id == space.id
+                ? space.keepingSummaryOf(existing)
+                : existing,
         ];
 
   ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(

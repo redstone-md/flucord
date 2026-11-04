@@ -13,9 +13,10 @@ extension ChatControllerGuildAccess on ChatController {
 
   /// Resolves an invite code to the preview the join surface shows.
   ///
-  /// Invalid and expired invites refuse with [GuildAccessException]; the
-  /// caller shows the message rather than an error state, because the refusal
-  /// is an answer about the invite, not a failure of the client.
+  /// Every failure refuses with [GuildAccessException]; the caller shows the
+  /// message rather than an error state. Invalid and expired invites are
+  /// answers about the invite. Anything else, such as a network fault,
+  /// refuses as [GuildAccessRefusal.unknown] and may work on the next try.
   Future<InvitePreview> previewInvite(String code) async {
     final repository = _guildManagement;
     if (repository == null) {
@@ -24,22 +25,32 @@ extension ChatControllerGuildAccess on ChatController {
         message: 'This session cannot join servers.',
       );
     }
-    return repository.previewInvite(code);
+    try {
+      return await repository.previewInvite(code);
+    } on GuildAccessException {
+      rethrow;
+    } on Exception {
+      throw const GuildAccessException(
+        refusal: GuildAccessRefusal.unknown,
+        message: 'Discord could not be reached. Try again.',
+      );
+    }
   }
 
   /// [previewInvite] for an invite card in a message: asked once per code
   /// for the session, so the same link in many messages costs one request.
   ///
-  /// A refusal is an answer and stays cached. Any other failure is dropped,
-  /// so the next card that asks tries again.
+  /// An invalid or expired invite is an answer and stays cached. Any other
+  /// failure, in transit or on Discord's side, is dropped, so the next card
+  /// that asks tries again.
   Future<InvitePreview> cachedInvitePreview(String code) =>
       _invitePreviews.putIfAbsent(code, () async {
         try {
           return await previewInvite(code);
-        } on GuildAccessException {
-          rethrow;
-        } on Object {
-          _invitePreviews.remove(code);
+        } on Object catch (error) {
+          if (error is! GuildAccessException || !error.isAboutTheInvite) {
+            _invitePreviews.remove(code);
+          }
           rethrow;
         }
       });

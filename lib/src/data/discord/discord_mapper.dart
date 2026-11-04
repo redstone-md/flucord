@@ -478,6 +478,11 @@ final class DiscordMapper {
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
       premiumTier:
           (payload['premium_tier'] ?? core['premium_tier']) as int? ?? 0,
+      memberCount: (payload['member_count'] ?? core['member_count']) as int?,
+      joinedAt: switch (payload['joined_at'] ?? core['joined_at']) {
+        final String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 

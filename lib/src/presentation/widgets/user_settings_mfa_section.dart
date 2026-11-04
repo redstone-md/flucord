@@ -370,11 +370,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
     SelectableText(
       controller.secret?.readable ?? '',
       key: const ValueKey('mfa-secret'),
-      style: const TextStyle(
-        fontFamily: 'monospace',
-        fontWeight: FontWeight.w500,
-        fontSize: FlucordType.body,
-      ),
+      style: FlucordTextRole.heading.style.copyWith(fontFamily: 'monospace'),
     ),
     const SizedBox(height: 4),
     Text(
@@ -532,7 +528,7 @@ class _SecurityKeyRow extends StatelessWidget {
             child: Text(
               securityKey.name,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: FlucordTextRole.label.strong,
             ),
           ),
           if (created != null)

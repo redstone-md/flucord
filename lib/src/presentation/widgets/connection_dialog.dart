@@ -25,6 +25,7 @@ class ConnectionDialog extends StatelessWidget {
     return FlucordDialog.frame(
       maxWidth: 520,
       maxHeight: maxHeight,
+      actions: const [FlucordDialogCancel(label: 'Close')],
       child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) => ListenableBuilder(
@@ -33,12 +34,9 @@ class ConnectionDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
-                child: FlucordDialogHeader(
-                  title: 'Connections',
-                  onClose: () => Navigator.of(context).pop(),
-                ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: FlucordDialogHeader(title: 'Connections'),
               ),
               Flexible(
                 child: SingleChildScrollView(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flucord/src/domain/account_connections.dart';
 import 'package:flucord/src/domain/account_data_package.dart';
@@ -220,19 +221,66 @@ void main() {
 
     test('a lookup that failed in transit is asked again', () async {
       final access = _FakeGuildManagement()
-        ..previewFailure = StateError('offline');
+        ..previewFailure = const SocketException('offline');
       final controller = ChatController(_Repository(guildManagement: access));
       addTearDown(controller.dispose);
       await controller.load();
 
       await expectLater(
         controller.cachedInvitePreview('aurora'),
-        throwsStateError,
+        throwsA(
+          isA<GuildAccessException>().having(
+            (error) => error.refusal,
+            'refusal',
+            GuildAccessRefusal.unknown,
+          ),
+        ),
       );
       final preview = await controller.cachedInvitePreview('aurora');
 
       expect(preview.name, 'Aurora Labs');
       expect(access.previewedCodes, ['aurora', 'aurora']);
+    });
+
+    test('a refusal that is not about the invite is asked again', () async {
+      final access = _FakeGuildManagement()
+        ..previewFailure = const GuildAccessException(
+          refusal: GuildAccessRefusal.unknown,
+          message: 'Discord could not check this invite.',
+        );
+      final controller = ChatController(_Repository(guildManagement: access));
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await expectLater(
+        controller.cachedInvitePreview('aurora'),
+        throwsA(isA<GuildAccessException>()),
+      );
+      final preview = await controller.cachedInvitePreview('aurora');
+
+      expect(preview.name, 'Aurora Labs');
+      expect(access.previewedCodes, ['aurora', 'aurora']);
+    });
+
+    test('the join dialog gets a refusal when the network fails', () async {
+      final access = _FakeGuildManagement()
+        ..previewFailure = const SocketException('offline');
+      final controller = ChatController(_Repository(guildManagement: access));
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await expectLater(
+        controller.previewInvite('aurora'),
+        throwsA(
+          isA<GuildAccessException>()
+              .having(
+                (error) => error.refusal,
+                'refusal',
+                GuildAccessRefusal.unknown,
+              )
+              .having((error) => error.message, 'message', isNotEmpty),
+        ),
+      );
     });
 
     test('a new session looks the code up again', () async {

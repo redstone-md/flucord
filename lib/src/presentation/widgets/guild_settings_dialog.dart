@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_icons.dart';
-import 'flucord_button.dart';
 import 'guild_settings_audit_section.dart';
 import 'guild_settings_automod_section.dart';
 import 'guild_settings_channels_section.dart';
@@ -163,15 +162,7 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
       title: const Text('You cannot manage this server'),
       description:
           'Your roles here do not include any server settings permission.',
-      onConfirm: () => Navigator.of(context).maybePop(),
-      actions: [
-        FlucordButton(
-          kind: FlucordButtonKind.primary,
-          label: 'Close',
-          keyHint: FlucordKeyHint.enter,
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ],
+      actions: const [FlucordDialogCancel(label: 'Close')],
     ),
   );
 }

@@ -87,7 +87,7 @@ void main() {
     await tester.tap(find.text('1 week'));
     await tester.tap(find.byKey(const ValueKey('create-thread-confirm')));
     await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Creating'), findsOneWidget);
     expect(submittedName, 'Long-running review');
     expect(submittedDuration, 10080);
 

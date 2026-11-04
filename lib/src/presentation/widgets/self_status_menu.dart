@@ -202,23 +202,16 @@ class _CustomStatusDialogState extends State<CustomStatusDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('custom-status-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('custom-status-save'),
-        onPressed: () => Navigator.of(context).pop(
-          CustomStatusDraft(
-            text: _text.text.trim(),
-            emojiName: _emoji.text.trim(),
-            expiry: _expiry,
-          ),
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('custom-status-save'),
+      label: 'Save',
+      onPressed: () => Navigator.of(context).pop(
+        CustomStatusDraft(
+          text: _text.text.trim(),
+          emojiName: _emoji.text.trim(),
+          expiry: _expiry,
         ),
-        child: const Text('Save'),
       ),
-    ],
+    ),
   );
 }

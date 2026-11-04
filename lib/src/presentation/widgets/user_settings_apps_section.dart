@@ -288,7 +288,7 @@ class _InvitationCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   application?.name ?? 'This app',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: FlucordTextRole.label.strong,
                 ),
               ),
             ],
@@ -423,9 +423,7 @@ class _GuildChoice extends StatelessWidget {
               Expanded(
                 child: Text(
                   guild.name,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w500 : null,
-                  ),
+                  style: selected ? FlucordTextRole.label.strong : null,
                 ),
               ),
             ],
@@ -467,10 +465,7 @@ class _GrantRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  grant.name,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
+                Text(grant.name, style: FlucordTextRole.label.strong),
                 if (grant.description.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 1),

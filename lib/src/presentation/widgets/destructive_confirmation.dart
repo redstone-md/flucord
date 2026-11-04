@@ -32,21 +32,12 @@ Future<bool> confirmDestructiveAction(
         title: Text(title),
         description: message,
         content: detail,
-        onConfirm: () => answer(true),
-        actions: [
-          FlucordButton(
-            label: 'Cancel',
-            keyHint: FlucordKeyHint.escape,
-            onPressed: () => answer(false),
-          ),
-          FlucordButton(
-            key: confirmKey,
-            label: confirmLabel,
-            kind: FlucordButtonKind.danger,
-            keyHint: FlucordKeyHint.enter,
-            onPressed: () => answer(true),
-          ),
-        ],
+        confirm: FlucordDialogConfirm(
+          key: confirmKey,
+          label: confirmLabel,
+          kind: FlucordButtonKind.danger,
+          onPressed: () => answer(true),
+        ),
       );
     },
   );

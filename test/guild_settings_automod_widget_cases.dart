@@ -54,7 +54,7 @@ void _automodWidgetCases() {
     // Nothing to save until the rule has a name and something to match.
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('automod-save')))
+          .widget<FlucordButton>(find.byKey(const ValueKey('automod-save')))
           .onPressed,
       isNull,
     );
@@ -363,7 +363,7 @@ void _automodDialogCases() {
     // Nothing to save until at least one list is on.
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('automod-save')))
+          .widget<FlucordButton>(find.byKey(const ValueKey('automod-save')))
           .onPressed,
       isNull,
     );
@@ -408,7 +408,7 @@ void _automodDialogCases() {
 
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('automod-save')))
+          .widget<FlucordButton>(find.byKey(const ValueKey('automod-save')))
           .onPressed,
       isNull,
     );

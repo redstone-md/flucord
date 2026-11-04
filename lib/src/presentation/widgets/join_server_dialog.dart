@@ -10,7 +10,6 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
-import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 
@@ -175,21 +174,11 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
         ],
       ),
     ),
-    onConfirm: _buttonAction,
-    actions: [
-      FlucordButton(
-        label: 'Cancel',
-        keyHint: FlucordKeyHint.escape,
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      FlucordButton(
-        key: const ValueKey('join-server-submit'),
-        kind: FlucordButtonKind.primary,
-        label: _buttonLabel,
-        keyHint: FlucordKeyHint.enter,
-        onPressed: _buttonAction,
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('join-server-submit'),
+      label: _buttonLabel,
+      onPressed: _buttonAction,
+    ),
   );
 
   /// The one button resolves first and joins once the preview is on screen,

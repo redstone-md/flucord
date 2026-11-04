@@ -59,6 +59,33 @@ void _serverAccessCases() {
       );
     });
 
+    test('a server fault is not an invalid invite', () async {
+      const fault = DiscordHttpResponse(
+        statusCode: 503,
+        headers: {},
+        body: '{"message": "Service Unavailable"}',
+      );
+      final transport = _Transport([fault, fault, fault]);
+      final repository = DiscordGuildManagementRepository(
+        DiscordRestClient(
+          authorization: DiscordDesktopAuthorization('token'),
+          transport: transport,
+          baseUri: Uri.parse('https://discord.com/api/v9'),
+          delay: (_) async {},
+        ),
+      );
+      await expectLater(
+        repository.previewInvite('aurora'),
+        throwsA(
+          isA<GuildAccessException>().having(
+            (error) => error.refusal,
+            'refusal',
+            GuildAccessRefusal.unknown,
+          ),
+        ),
+      );
+    });
+
     test('an expired invite says so in the preview, before the join', () async {
       final expired = _Transport([
         const DiscordHttpResponse(

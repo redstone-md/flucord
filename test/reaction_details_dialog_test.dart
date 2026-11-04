@@ -4,6 +4,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/presentation/widgets/reaction_details_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 
 void main() {
   testWidgets('separates normal and super reactors and switches emoji', (
@@ -36,6 +37,8 @@ void main() {
     expect(find.text('Jack'), findsOneWidget);
     expect(find.text('Omar'), findsOneWidget);
     expect(find.text('Super'), findsOneWidget);
+    expect(find.byTooltip('Close'), findsNothing);
+    expect(find.byType(FlucordDialogCancel), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('reaction-detail-tab-✅')));
     await tester.pumpAndSettle();

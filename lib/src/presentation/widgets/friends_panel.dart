@@ -143,7 +143,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
                     child: Text(
-                      'You may know — ${suggestions.length}',
+                      'You may know ${suggestions.length}',
                       style: TextStyle(
                         fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
@@ -205,7 +205,7 @@ class _Group extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
         child: Text(
-          '$title — ${entries.length}',
+          '$title ${entries.length}',
           style: TextStyle(
             fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,

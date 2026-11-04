@@ -14,6 +14,7 @@ import 'package:flucord/src/presentation/widgets/discord_friends_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_activity_scope.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 
 import 'support/flucord_icon_finder.dart';
 
@@ -98,9 +99,8 @@ void main() {
     expect(find.text('3 participants'), findsOneWidget);
     expect(find.text('Connected'), findsNWidgets(3));
     expect(find.text('Discord user · 999'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('close-activity-voice-participants')),
-    );
+    expect(find.byTooltip('Close participants'), findsNothing);
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     harness.activityGateway.emit(_invite);

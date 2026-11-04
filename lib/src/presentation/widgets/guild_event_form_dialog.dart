@@ -248,17 +248,11 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
         ),
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('event-save'),
-        onPressed: _draft().isValid ? _save : null,
-        child: Text(_isEditing ? 'Save' : 'Create'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('event-save'),
+      label: _isEditing ? 'Save' : 'Create',
+      onPressed: _draft().isValid ? _save : null,
+    ),
   );
 
   List<ConversationChannel> get _channelForKind => [

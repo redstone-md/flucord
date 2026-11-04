@@ -5,6 +5,7 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
+import 'rail_tile.dart';
 import 'remote_identity_image.dart';
 
 /// Asks before leaving a server.
@@ -27,7 +28,8 @@ Future<bool> showLeaveServerConfirmation(
   confirmKey: const ValueKey('leave-server-confirm'),
 );
 
-/// The server being left: its 40 px tile and its name, on a recessed card.
+/// The server being left: its 40 px tile, its name, and a caption with its
+/// member count and the day the user joined, as far as they are known.
 class _LeftServerCard extends StatelessWidget {
   const _LeftServerCard({required this.space});
 
@@ -35,9 +37,24 @@ class _LeftServerCard extends StatelessWidget {
 
   final CommunitySpace space;
 
+  String? _caption(MaterialLocalizations localizations) {
+    final count = space.memberCount;
+    final joined = space.joinedAt?.toLocal();
+    final parts = [
+      if (count != null)
+        '${localizations.formatDecimal(count)} '
+            '${count == 1 ? 'member' : 'members'}',
+      if (joined != null)
+        'Joined ${localizations.formatShortMonthDay(joined)}, '
+            '${localizations.formatYear(joined)}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
+    final caption = _caption(MaterialLocalizations.of(context));
     return Container(
       key: const ValueKey('leave-server-card'),
       padding: const EdgeInsets.all(12),
@@ -56,28 +73,34 @@ class _LeftServerCard extends StatelessWidget {
                 color: Color(space.colorValue),
                 child: RemoteIdentityImage(
                   url: space.iconUrl,
-                  fallback: Center(
-                    child: Text(
-                      space.monogram,
-                      style: FlucordTextRole.label.style.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+                  fallback: RailMonogram(space.monogram),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              space.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlucordTextRole.heading.style.copyWith(
-                color: surfaces.text,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  space.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: FlucordTextRole.heading.style.copyWith(
+                    color: surfaces.text,
+                  ),
+                ),
+                if (caption != null)
+                  Text(
+                    caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: FlucordTextRole.caption.style.copyWith(
+                      color: surfaces.captionText,
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

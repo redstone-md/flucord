@@ -145,7 +145,7 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
           final _FriendSection section => Padding(
             padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
             child: Text(
-              '${section.label} — ${section.count}',
+              '${section.label} ${section.count}',
               style: FlucordTextRole.caption.style.copyWith(
                 color: context.surfaces.captionText,
               ),

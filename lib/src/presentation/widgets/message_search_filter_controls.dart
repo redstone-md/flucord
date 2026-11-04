@@ -273,17 +273,10 @@ class _DateFilterDialogState extends State<_DateFilterDialog> {
         ),
       ],
     ),
-    actions: [
-      TextButton(
-        key: ValueKey('search-date-cancel-${widget.filter}'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: ValueKey('search-date-apply-${widget.filter}'),
-        onPressed: _submit,
-        child: const Text('Apply'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: ValueKey('search-date-apply-${widget.filter}'),
+      label: 'Apply',
+      onPressed: _submit,
+    ),
   );
 }

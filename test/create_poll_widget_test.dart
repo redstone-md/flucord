@@ -41,7 +41,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('poll-multiselect')));
     await _tapCreate(tester);
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Creating'), findsOneWidget);
     expect(submitted?.question, 'Which build ships?');
     expect(submitted?.answers, ['Stable', 'Canary']);
     expect(submitted?.allowMultiselect, isTrue);

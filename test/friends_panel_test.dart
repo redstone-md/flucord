@@ -213,9 +213,9 @@ void main() {
     ) async {
       await _pump(tester, _FakeGraph(_graph));
 
-      expect(find.text('Requests — 2'), findsOneWidget);
-      expect(find.text('Friends — 1'), findsOneWidget);
-      expect(find.text('Blocked — 1'), findsOneWidget);
+      expect(find.text('Requests 2'), findsOneWidget);
+      expect(find.text('Friends 1'), findsOneWidget);
+      expect(find.text('Blocked 1'), findsOneWidget);
       expect(find.text('Wants to be friends'), findsOneWidget);
       expect(find.text('Request sent'), findsOneWidget);
       // The action says what it does to this particular entry.
@@ -344,7 +344,7 @@ void main() {
         ];
       await _pump(tester, graph);
 
-      expect(find.text('You may know — 1'), findsOneWidget);
+      expect(find.text('You may know 1'), findsOneWidget);
       expect(find.text('2 mutual friends'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('suggestion-add-maybe')));

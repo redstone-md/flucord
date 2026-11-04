@@ -292,22 +292,18 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
       ),
     ),
     actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
       if (widget.validate != null && !_isEditing)
         TextButton(
           key: const ValueKey('automod-check'),
           onPressed: _checking ? null : _check,
           child: const Text('Check'),
         ),
-      FilledButton(
-        key: const ValueKey('automod-save'),
-        onPressed: _draft().isValid ? _save : null,
-        child: Text(_isEditing ? 'Save' : 'Create'),
-      ),
     ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('automod-save'),
+      label: _isEditing ? 'Save' : 'Create',
+      onPressed: _draft().isValid ? _save : null,
+    ),
   );
 
   AutoModRuleDraft _draft() => AutoModRuleDraft(

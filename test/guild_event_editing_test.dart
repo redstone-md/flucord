@@ -1,5 +1,6 @@
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/profile_image_picker.dart';
+import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/presentation/widgets/guild_event_form_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -885,7 +886,7 @@ void main() {
 
 bool _saveEnabled(WidgetTester tester) =>
     tester
-        .widget<FilledButton>(find.byKey(const ValueKey('event-save')))
+        .widget<FlucordButton>(find.byKey(const ValueKey('event-save')))
         .onPressed !=
     null;
 
