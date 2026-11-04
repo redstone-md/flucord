@@ -238,6 +238,7 @@ class _Card extends StatelessWidget {
   final Widget body;
 
   static const _closeInset = 16.0;
+  static const _spinnerSize = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -288,9 +289,15 @@ class _Card extends StatelessWidget {
                     ),
                     if (busy)
                       const Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(0, 6, 12, 0),
+                        // Centred on the close button beside it.
+                        padding: EdgeInsetsDirectional.fromSTEB(
+                          0,
+                          (FlucordIconButton.size - _spinnerSize) / 2,
+                          12,
+                          0,
+                        ),
                         child: SizedBox.square(
-                          dimension: 16,
+                          dimension: _spinnerSize,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),

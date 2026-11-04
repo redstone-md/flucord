@@ -606,6 +606,8 @@ class _MessageFieldState extends State<_MessageField> {
             hintStyle: FlucordTextRole.label.style.copyWith(
               color: surfaces.captionText,
             ),
+            // 9 + 18 + 9: the label line in the middle of a 36 px field,
+            // as the app's other fields have it.
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 9,

@@ -265,7 +265,7 @@ class _SideRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: FlucordRadius.medium,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.all(8),
         child: Row(
           children: [
             leading,
