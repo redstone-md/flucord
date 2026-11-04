@@ -44,6 +44,58 @@ Future<MessageMenuAction?> showMessageContextMenu({
 }) {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final canDelete = isCurrentUser || capabilities.manageMessages;
+  // What this account may do here. The copy rows below are always there.
+  final actions = <PopupMenuEntry<MessageMenuAction>>[
+    if (capabilities.addReactions)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-add-reaction'),
+        value: MessageMenuAction.addReaction,
+        icon: FlucordIcons.emoji,
+        label: 'Add reaction',
+      ),
+    if (capabilities.sendMessages)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-reply'),
+        value: MessageMenuAction.reply,
+        icon: FlucordIcons.reply,
+        label: 'Reply',
+      ),
+    if (isCurrentUser && message.canEdit)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-edit'),
+        value: MessageMenuAction.edit,
+        icon: FlucordIcons.edit,
+        label: 'Edit message',
+      ),
+    if (capabilities.pinMessages)
+      FlucordMenuItem(
+        key: const ValueKey('message-menu-pin'),
+        value: MessageMenuAction.pin,
+        icon: FlucordIcons.pin,
+        label: message.isPinned ? 'Unpin message' : 'Pin message',
+      ),
+    if (capabilities.sendMessages)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-forward'),
+        value: MessageMenuAction.forward,
+        icon: FlucordIcons.forward,
+        label: 'Forward',
+      ),
+    if (capabilities.createPublicThreads)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-thread'),
+        value: MessageMenuAction.createThread,
+        icon: FlucordIcons.threads,
+        label: 'Create thread',
+      ),
+    if (canMarkUnread)
+      const FlucordMenuItem(
+        key: ValueKey('message-menu-mark-unread'),
+        value: MessageMenuAction.markUnread,
+        icon: FlucordIcons.markUnread,
+        label: 'Mark unread',
+      ),
+  ];
   return showMenu<MessageMenuAction>(
     context: context,
     position: RelativeRect.fromRect(
@@ -51,56 +103,8 @@ Future<MessageMenuAction?> showMessageContextMenu({
       Offset.zero & overlay.size,
     ),
     items: [
-      if (capabilities.addReactions)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-add-reaction'),
-          value: MessageMenuAction.addReaction,
-          icon: FlucordIcons.emoji,
-          label: 'Add reaction',
-        ),
-      if (capabilities.sendMessages)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-reply'),
-          value: MessageMenuAction.reply,
-          icon: FlucordIcons.reply,
-          label: 'Reply',
-        ),
-      if (isCurrentUser && message.canEdit)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-edit'),
-          value: MessageMenuAction.edit,
-          icon: FlucordIcons.edit,
-          label: 'Edit message',
-        ),
-      if (capabilities.pinMessages)
-        FlucordMenuItem(
-          key: const ValueKey('message-menu-pin'),
-          value: MessageMenuAction.pin,
-          icon: FlucordIcons.pin,
-          label: message.isPinned ? 'Unpin message' : 'Pin message',
-        ),
-      if (capabilities.sendMessages)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-forward'),
-          value: MessageMenuAction.forward,
-          icon: FlucordIcons.forward,
-          label: 'Forward',
-        ),
-      if (capabilities.createPublicThreads)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-thread'),
-          value: MessageMenuAction.createThread,
-          icon: FlucordIcons.threads,
-          label: 'Create thread',
-        ),
-      if (canMarkUnread)
-        const FlucordMenuItem(
-          key: ValueKey('message-menu-mark-unread'),
-          value: MessageMenuAction.markUnread,
-          icon: FlucordIcons.markUnread,
-          label: 'Mark unread',
-        ),
-      const FlucordMenuDivider(),
+      ...actions,
+      if (actions.isNotEmpty) const FlucordMenuDivider(),
       if (selectedText.isNotEmpty)
         const FlucordMenuItem(
           key: ValueKey('message-menu-copy-selection'),

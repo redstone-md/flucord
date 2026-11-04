@@ -1,5 +1,6 @@
 import 'package:flucord/src/domain/channel_capabilities.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/widgets/flucord_menu.dart';
 import 'package:flucord/src/presentation/widgets/message_context_menu.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
@@ -138,6 +139,8 @@ void main() {
         find.byKey(const ValueKey('message-menu-copy-id')),
         findsOneWidget,
       );
+      // With nothing above the copy rows, no line opens the menu.
+      expect(find.byType(FlucordMenuDivider), findsNothing);
     });
 
     testWidgets('no Mark unread on a transport with no read state', (
