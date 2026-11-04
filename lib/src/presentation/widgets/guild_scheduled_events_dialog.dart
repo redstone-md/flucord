@@ -54,6 +54,7 @@ class GuildScheduledEventsDialog extends StatelessWidget {
     key: const ValueKey('guild-events-dialog'),
     maxWidth: 680,
     maxHeight: 680,
+    actions: const [FlucordDialogCancel(label: 'Close')],
     child: SizedBox(
       width: 680,
       height: MediaQuery.sizeOf(context).height * 0.78,
@@ -163,12 +164,6 @@ class _EventsHeader extends StatelessWidget {
             icon: const FlucordIcon(FlucordIcons.add, size: 19),
             tooltip: 'Create event',
           ),
-        IconButton(
-          key: const ValueKey('close-guild-events'),
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const FlucordIcon(FlucordIcons.clear, size: 19),
-          tooltip: 'Close events',
-        ),
         const SizedBox(width: 6),
       ],
     ),

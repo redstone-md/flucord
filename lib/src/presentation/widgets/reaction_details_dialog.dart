@@ -157,6 +157,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     final media = MediaQuery.sizeOf(context);
     return FlucordDialog.frame(
       insetPadding: const EdgeInsets.all(16),
+      actions: const [FlucordDialogCancel(label: 'Close')],
       child: SizedBox(
         width: math.min(540, media.width - 32),
         height: math.min(520, media.height - 32),
@@ -193,12 +194,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
             ),
           ),
         ),
-        IconButton(
-          tooltip: 'Close',
-          onPressed: () => Navigator.pop(context),
-          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
-        ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 16),
       ],
     ),
   );

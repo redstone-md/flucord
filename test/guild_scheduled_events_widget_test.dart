@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/guild_scheduled_events_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 
 void main() {
   testWidgets('renders responsive event states and returns a voice channel', (
@@ -42,6 +43,8 @@ void main() {
     expect(find.text('LIVE NOW'), findsOneWidget);
     expect(find.text('UPCOMING'), findsOneWidget);
     expect(find.text('18 interested'), findsOneWidget);
+    expect(find.byTooltip('Close events'), findsNothing);
+    expect(find.byType(FlucordDialogCancel), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('guild-event-active')));
     await tester.pumpAndSettle();

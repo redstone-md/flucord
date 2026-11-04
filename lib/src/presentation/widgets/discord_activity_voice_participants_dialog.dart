@@ -39,6 +39,7 @@ class _ParticipantsDialog extends StatelessWidget {
   Widget build(BuildContext context) => FlucordDialog.frame(
     maxWidth: 380,
     maxHeight: 460,
+    actions: const [FlucordDialogCancel(label: 'Close')],
     child: AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -102,7 +103,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
     child: Row(
       children: [
         FlucordIcon(
@@ -132,13 +133,6 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        IconButton(
-          key: const ValueKey('close-activity-voice-participants'),
-          tooltip: 'Close participants',
-          visualDensity: VisualDensity.compact,
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
         ),
       ],
     ),

@@ -107,6 +107,7 @@ class InboxDialog extends StatelessWidget {
         key: const ValueKey('inbox-dialog'),
         alignment: Alignment.topRight,
         insetPadding: const EdgeInsets.fromLTRB(24, 64, 12, 24),
+        actions: const [FlucordDialogCancel(label: 'Close')],
         child: SizedBox(
           width: 480,
           height: math.min(680, availableHeight),
@@ -174,13 +175,6 @@ class _InboxHeader extends StatelessWidget {
                 style: TextStyle(fontSize: FlucordType.caption),
               ),
             ),
-          const SizedBox(width: 4),
-          IconButton(
-            key: const ValueKey('close-inbox'),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Close',
-            icon: const FlucordIcon(FlucordIcons.clear, size: 18),
-          ),
         ],
       ),
     ),

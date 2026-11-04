@@ -247,44 +247,33 @@ class _ReportDialogState extends State<ReportDialog> {
             ),
           ),
         ),
-        IconButton(
-          key: const ValueKey('report-close'),
-          tooltip: 'Close',
-          icon: const FlucordIcon(FlucordIcons.clear),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
       ],
     ),
   );
 
+  /// Cancel, and the node's own button when it has one that moves on.
   Widget _footer(
     BuildContext context,
     ReportNode node, {
     required bool submitting,
   }) {
     final button = node.button;
-    if (button == null ||
-        button.type == ReportButtonType.cancel ||
-        button.type == ReportButtonType.unknown) {
-      return const SizedBox(height: 12);
-    }
     final controller = widget.controller;
-    final isSubmit = button.type == ReportButtonType.submit;
+    final moves =
+        button != null &&
+        button.type != ReportButtonType.cancel &&
+        button.type != ReportButtonType.unknown;
+    final isSubmit = button?.type == ReportButtonType.submit;
     final enabled = !submitting && controller.canAdvance;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (submitting)
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+    return FlucordDialogFooter(
+      actions: [
+        if (submitting)
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        FlucordDialogCancel(enabled: !submitting),
+        if (moves)
           FilledButton(
             key: const ValueKey('report-primary-action'),
             onPressed: enabled
@@ -294,8 +283,7 @@ class _ReportDialogState extends State<ReportDialog> {
                 : null,
             child: Text(isSubmit ? 'Submit report' : 'Next'),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
