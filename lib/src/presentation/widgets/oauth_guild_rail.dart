@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/discord_oauth.dart';
+import '../../domain/monogram.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import 'rail_tile.dart';
@@ -75,7 +76,7 @@ class OAuthGuildRail extends StatelessWidget {
                   activeColor: context.surfaces.brand,
                   builder: (_, _) => RemoteIdentityImage(
                     url: guild.iconUrl,
-                    fallback: RailMonogram(_guildMonogram(guild.name)),
+                    fallback: RailMonogram(monogramOf(guild.name)),
                   ),
                 );
               },
@@ -96,13 +97,4 @@ class OAuthGuildRail extends StatelessWidget {
       ),
     );
   }
-}
-
-String _guildMonogram(String name) {
-  final words = name.trim().split(RegExp(r'\s+'));
-  return words
-      .where((word) => word.isNotEmpty)
-      .take(2)
-      .map((word) => word.substring(0, 1).toUpperCase())
-      .join();
 }

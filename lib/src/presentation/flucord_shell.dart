@@ -48,6 +48,7 @@ import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/disconnected_workspace_view.dart';
+import 'widgets/friends_panel.dart';
 import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
@@ -411,14 +412,13 @@ class FlucordShell extends StatelessWidget {
                                   FlucordTheme.canvasInset -
                                   _sidePanelMaxWidth <
                               _conversationMinWidth;
+                      // The Friends page takes the conversation's place,
+                      // and the conversation's side panels go with it.
                       final friendsOpen = friends?.isPanelOpen ?? false;
-                      // While the friends panel is open, the right column
-                      // of the DM space is Active now, as on Discord's
-                      // Friends page. It needs the conversation to keep its
-                      // width beside it.
+                      // Its right column is Active now, as on Discord, when
+                      // the window still leaves the page its minimum width.
                       final showActiveNow =
                           friendsOpen &&
-                          sidePanel == null &&
                           constraints.maxWidth -
                                   _railWidth -
                                   (showChannels ? _channelSidebarWidth : 0) -
@@ -558,7 +558,10 @@ class FlucordShell extends StatelessWidget {
                                         onOpenChannel: _openVoiceRoom,
                                       ),
                                       channels: channels,
-                                      selectedChannelId: channelId,
+                                      // On the Friends page no DM is open.
+                                      selectedChannelId: friendsOpen
+                                          ? null
+                                          : channelId,
                                       collapsedCategoryIds: workspaceController
                                           .collapsedCategoryIds,
                                       onToggleCategory:
@@ -630,7 +633,7 @@ class FlucordShell extends StatelessWidget {
                                       fit: StackFit.expand,
                                       children: [
                                         Offstage(
-                                          offstage: panelCovers,
+                                          offstage: panelCovers || friendsOpen,
                                           child: channel == null
                                               ? DirectMessagesEmptyView(
                                                   onNewMessage: () =>
@@ -656,48 +659,58 @@ class FlucordShell extends StatelessWidget {
                                                   canSearch: canSearch,
                                                 ),
                                         ),
-                                        if (panelCovers) sidePanel,
+                                        if (friends != null && friendsOpen)
+                                          _friendsPage(
+                                            context,
+                                            workspace,
+                                            friends,
+                                          )
+                                        else if (panelCovers)
+                                          sidePanel,
                                       ],
                                     ),
                                   ),
-                                  if (sidePanel != null && !panelCovers)
-                                    sidePanel,
-                                  if (friends != null && showActiveNow)
-                                    _activeNow(workspace, friends)
-                                  else if (showMembers &&
-                                      space.isDirectMessages)
-                                    if (_recipientOf(workspace, channel)
-                                        case final person?)
-                                      MemberProfilePanel(
-                                        person: person,
-                                        spaces: workspace.spaces,
-                                      )
-                                    else
-                                      const SizedBox.shrink()
-                                  else if (showMembers)
-                                    // A member's "In voice" line follows the
-                                    // seats. Only the seats: the controller
-                                    // also fires on every speaking change.
-                                    ListenableBuilder(
-                                      listenable: voiceController.seats,
-                                      builder: (_, _) => MemberSidebar(
-                                        seatedByChannel:
-                                            voiceController.seatedByChannel,
-                                        heldRolesOf: (member) => workspace
-                                            .heldRolesOf(member, spaceId),
-                                        members: workspace.members,
-                                        spaceId: spaceId,
-                                        channelId: channel?.id,
-                                        memberList: memberListController,
-                                        roles: workspace.roles,
-                                        cardFor: (member, close) => _memberCard(
-                                          context,
-                                          member: member,
+                                  if (friends != null && friendsOpen) ...[
+                                    if (showActiveNow)
+                                      _activeNow(workspace, friends),
+                                  ] else ...[
+                                    if (sidePanel != null && !panelCovers)
+                                      sidePanel,
+                                    if (showMembers && space.isDirectMessages)
+                                      if (_recipientOf(workspace, channel)
+                                          case final person?)
+                                        MemberProfilePanel(
+                                          person: person,
+                                          spaces: workspace.spaces,
+                                        )
+                                      else
+                                        const SizedBox.shrink()
+                                    else if (showMembers)
+                                      // A member's "In voice" line follows the
+                                      // seats. Only the seats: the controller
+                                      // also fires on every speaking change.
+                                      ListenableBuilder(
+                                        listenable: voiceController.seats,
+                                        builder: (_, _) => MemberSidebar(
+                                          seatedByChannel:
+                                              voiceController.seatedByChannel,
+                                          heldRolesOf: (member) => workspace
+                                              .heldRolesOf(member, spaceId),
+                                          members: workspace.members,
                                           spaceId: spaceId,
-                                          close: close,
+                                          channelId: channel?.id,
+                                          memberList: memberListController,
+                                          roles: workspace.roles,
+                                          cardFor: (member, close) =>
+                                              _memberCard(
+                                                context,
+                                                member: member,
+                                                spaceId: spaceId,
+                                                close: close,
+                                              ),
                                         ),
                                       ),
-                                    ),
+                                  ],
                                 ],
                               ),
                             ),

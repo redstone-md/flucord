@@ -6,17 +6,26 @@ import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/friend_suggestion.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
+import 'flucord_icon_button.dart';
+import 'friends_page_header.dart';
 import 'presence_indicator.dart';
 
-/// The account's friends, requests and blocks.
-///
-/// Requests come first: they are the entries that want an answer, and burying
-/// them under a long friend list is how somebody misses one for a week.
+/// The Friends page: a header with the Online, All, Pending and Blocked
+/// lists and the Add friend view, then whichever of them is chosen.
 class FriendsPanel extends StatefulWidget {
-  const FriendsPanel({required this.controller, this.presenceOf, super.key});
+  const FriendsPanel({
+    required this.controller,
+    this.presenceOf,
+    this.onMessage,
+    this.inbox,
+    super.key,
+  });
 
   final FriendsController controller;
 
@@ -27,23 +36,163 @@ class FriendsPanel extends StatefulWidget {
   /// go stale.
   final Presence? Function(String userId)? presenceOf;
 
+  /// Opens the DM with a friend, by user id. Without it a friend row offers
+  /// no message button.
+  final ValueChanged<String>? onMessage;
+
+  /// The inbox button at the right end of the header.
+  final Widget? inbox;
+
   @override
   State<FriendsPanel> createState() => _FriendsPanelState();
 }
 
 class _FriendsPanelState extends State<FriendsPanel> {
-  final TextEditingController _username = TextEditingController();
+  FriendsTab _tab = FriendsTab.online;
 
   @override
   void initState() {
     super.initState();
-    _username.addListener(_onTyped);
     // Read once when the panel opens. Discord serves a route for these, but
     // it is not something to poll: a suggestion is not urgent. After the
     // frame, because loading notifies, and the shell listens to it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(widget.controller.loadSuggestions());
     });
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const ValueKey('friends-panel'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      FriendsPageHeader(
+        selected: _tab,
+        onSelected: (tab) => setState(() => _tab = tab),
+        inbox: widget.inbox,
+      ),
+      Expanded(
+        child: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => _tab == FriendsTab.add
+              ? _AddFriendView(controller: widget.controller)
+              : _RelationshipList(
+                  groups: _groupsFor(_tab),
+                  emptyText: _emptyText(_tab),
+                  controller: widget.controller,
+                  presenceOf: widget.presenceOf,
+                  onMessage: widget.onMessage,
+                ),
+        ),
+      ),
+    ],
+  );
+
+  /// The headed groups a list tab shows, each with its count.
+  List<(String, List<DiscordRelationship>)> _groupsFor(FriendsTab tab) {
+    final controller = widget.controller;
+    return switch (tab) {
+      FriendsTab.online => [
+        (
+          'Online',
+          [
+            for (final friend in controller.friends)
+              if (widget.presenceOf?.call(friend.user.id)?.isOnline ?? false)
+                friend,
+          ],
+        ),
+      ],
+      // Relationships the account never asked for are shown rather than
+      // dropped: one that exists and appears nowhere is one nobody can act on.
+      FriendsTab.all => [
+        ('All friends', controller.friends),
+        ('Other', controller.others),
+      ],
+      FriendsTab.pending => [('Pending', controller.requests)],
+      FriendsTab.blocked => [('Blocked', controller.blocked)],
+      FriendsTab.add => const [],
+    };
+  }
+
+  static String _emptyText(FriendsTab tab) => switch (tab) {
+    FriendsTab.online => 'No friends are online right now.',
+    FriendsTab.all => 'No friends yet.',
+    FriendsTab.pending => 'No pending requests.',
+    FriendsTab.blocked => 'You have not blocked anyone.',
+    FriendsTab.add => '',
+  };
+}
+
+/// One list tab: headed groups like "Online 5", or [emptyText] when every
+/// group is empty.
+class _RelationshipList extends StatelessWidget {
+  const _RelationshipList({
+    required this.groups,
+    required this.emptyText,
+    required this.controller,
+    this.presenceOf,
+    this.onMessage,
+  });
+
+  final List<(String, List<DiscordRelationship>)> groups;
+  final String emptyText;
+  final FriendsController controller;
+  final Presence? Function(String userId)? presenceOf;
+  final ValueChanged<String>? onMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = [
+      for (final group in groups)
+        if (group.$2.isNotEmpty) group,
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      children: [
+        if (shown.isEmpty)
+          Padding(
+            key: const ValueKey('friends-empty'),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              emptyText,
+              style: FlucordTextRole.label.style.copyWith(
+                color: context.surfaces.muted,
+              ),
+            ),
+          ),
+        for (final (title, entries) in shown) ...[
+          _SectionTitle('$title ${entries.length}'),
+          for (final entry in entries)
+            _RelationshipRow(
+              entry: entry,
+              controller: controller,
+              presence: presenceOf?.call(entry.user.id),
+              onMessage: onMessage,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The Add friend view: a username field, then people Discord thinks the
+/// account may know.
+class _AddFriendView extends StatefulWidget {
+  const _AddFriendView({required this.controller});
+
+  final FriendsController controller;
+
+  @override
+  State<_AddFriendView> createState() => _AddFriendViewState();
+}
+
+class _AddFriendViewState extends State<_AddFriendView> {
+  final TextEditingController _username = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _username.addListener(_onTyped);
   }
 
   void _onTyped() {
@@ -58,167 +207,92 @@ class _FriendsPanelState extends State<FriendsPanel> {
     super.dispose();
   }
 
+  bool get _canSend =>
+      !widget.controller.isBusy && _username.text.trim().isNotEmpty;
+
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.controller,
-    builder: (context, _) {
-      final controller = widget.controller;
-      final requests = controller.requests;
-      final friends = controller.friends;
-      final blocked = controller.blocked;
-      final others = controller.others;
-      final suggestions = controller.suggestions;
-      return Column(
-        key: const ValueKey('friends-panel'),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('friends-add-username'),
-                    controller: _username,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: 'Add by username',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                TextButton(
-                  key: const ValueKey('friends-add'),
-                  onPressed: controller.isBusy || _username.text.trim().isEmpty
-                      ? null
-                      : () => unawaited(_add(controller)),
-                  child: const Text('Add'),
-                ),
-              ],
-            ),
-          ),
-          if (controller.lastRequestRefused)
-            Padding(
-              key: const ValueKey('friends-refused'),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                // Somebody with requests off is a fact about them, not a
-                // failure here, so it reads as one.
-                'Discord would not send that request.',
-                style: TextStyle(
-                  fontSize: FlucordType.caption,
-                  color: Theme.of(context).colorScheme.error,
-                ),
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final surfaces = context.surfaces;
+    final suggestions = controller.suggestions;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      children: [
+        Text(
+          'Add friend',
+          style: FlucordTextRole.heading.style.copyWith(color: surfaces.text),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'You can add friends with their Discord username.',
+          style: FlucordTextRole.label.style.copyWith(color: surfaces.muted),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: FlucordTextField(
+                fieldKey: const ValueKey('friends-add-username'),
+                controller: _username,
+                hintText: 'Username',
+                onSubmitted: (_) {
+                  if (_canSend) unawaited(_send());
+                },
               ),
             ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: [
-                if (requests.isNotEmpty)
-                  _Group(
-                    title: 'Requests',
-                    entries: requests,
-                    controller: controller,
-                    presenceOf: widget.presenceOf,
-                  ),
-                if (friends.isNotEmpty)
-                  _Group(
-                    title: 'Friends',
-                    entries: friends,
-                    controller: controller,
-                    presenceOf: widget.presenceOf,
-                  ),
-                if (blocked.isNotEmpty)
-                  _Group(
-                    title: 'Blocked',
-                    entries: blocked,
-                    controller: controller,
-                    presenceOf: widget.presenceOf,
-                  ),
-                if (others.isNotEmpty)
-                  _Group(
-                    title: 'Other',
-                    entries: others,
-                    controller: controller,
-                  ),
-                if (suggestions.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
-                    child: Text(
-                      'You may know ${suggestions.length}',
-                      style: FlucordTextRole.caption.strong.copyWith(
-                        color: context.surfaces.muted,
-                      ),
-                    ),
-                  ),
-                  for (final suggestion in suggestions)
-                    _SuggestionRow(
-                      suggestion: suggestion,
-                      controller: controller,
-                    ),
-                ],
-                if (requests.isEmpty &&
-                    friends.isEmpty &&
-                    blocked.isEmpty &&
-                    others.isEmpty &&
-                    suggestions.isEmpty)
-                  Padding(
-                    key: const ValueKey('friends-empty'),
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      'Nobody yet.',
-                      style: TextStyle(color: context.surfaces.muted),
-                    ),
-                  ),
-              ],
+            const SizedBox(width: 8),
+            FlucordButton(
+              key: const ValueKey('friends-add'),
+              label: 'Send request',
+              kind: FlucordButtonKind.primary,
+              onPressed: _canSend ? () => unawaited(_send()) : null,
+            ),
+          ],
+        ),
+        if (controller.lastRequestRefused)
+          Padding(
+            key: const ValueKey('friends-refused'),
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              // Somebody with requests off is a fact about them, not a
+              // failure here, so it reads as one.
+              'Discord would not send that request.',
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.danger,
+              ),
             ),
           ),
+        if (suggestions.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _SectionTitle('You may know ${suggestions.length}'),
+          for (final suggestion in suggestions)
+            _SuggestionRow(suggestion: suggestion, controller: controller),
         ],
-      );
-    },
-  );
+      ],
+    );
+  }
 
-  Future<void> _add(FriendsController controller) async {
-    final username = _username.text;
-    final accepted = await controller.addFriend(username);
+  Future<void> _send() async {
+    final accepted = await widget.controller.addFriend(_username.text);
     if (accepted) _username.clear();
   }
 }
 
-class _Group extends StatelessWidget {
-  const _Group({
-    required this.title,
-    required this.entries,
-    required this.controller,
-    this.presenceOf,
-  });
+/// A list's caption heading, such as "Online 5".
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
 
-  final String title;
-  final List<DiscordRelationship> entries;
-  final FriendsController controller;
-  final Presence? Function(String userId)? presenceOf;
+  final String text;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
-        child: Text(
-          '$title ${entries.length}',
-          style: FlucordTextRole.caption.strong.copyWith(
-            color: context.surfaces.muted,
-          ),
-        ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+    child: Text(
+      text,
+      style: FlucordTextRole.caption.style.copyWith(
+        color: context.surfaces.captionText,
       ),
-      for (final entry in entries)
-        _RelationshipRow(
-          entry: entry,
-          controller: controller,
-          presence: presenceOf?.call(entry.user.id),
-        ),
-    ],
+    ),
   );
 }
 
@@ -227,72 +301,84 @@ class _RelationshipRow extends StatelessWidget {
     required this.entry,
     required this.controller,
     this.presence,
+    this.onMessage,
   });
 
   final DiscordRelationship entry;
   final FriendsController controller;
   final Presence? presence;
+  final ValueChanged<String>? onMessage;
 
   @override
-  Widget build(BuildContext context) => Container(
-    key: ValueKey('friend-${entry.user.id}'),
-    margin: const EdgeInsets.only(bottom: 4),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-    decoration: BoxDecoration(
-      color: context.surfaces.raised,
-      borderRadius: FlucordRadius.small,
-    ),
-    child: Row(
-      children: [
-        if (presence case final status?) ...[
-          // The shared indicator rather than a coloured dot: it paints a
-          // distinct shape per status, which is what keeps the four apart for
-          // somebody who cannot separate green from red.
-          PresenceIndicator(
-            key: ValueKey('friend-presence-${entry.user.id}'),
-            presence: UserPresence(status: status),
-          ),
-          const SizedBox(width: 8),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                entry.user.displayName,
-                overflow: TextOverflow.ellipsis,
-                style: FlucordTextRole.label.strong,
-              ),
-              Text(
-                _describe(entry.kind),
-                style: TextStyle(
-                  fontSize: FlucordType.caption,
-                  color: context.surfaces.muted,
+  Widget build(BuildContext context) {
+    final onMessage = this.onMessage;
+    return Container(
+      key: ValueKey('friend-${entry.user.id}'),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.surfaces.raised,
+        borderRadius: FlucordRadius.small,
+      ),
+      child: Row(
+        children: [
+          if (presence case final status?) ...[
+            // The shared indicator rather than a coloured dot: it paints a
+            // distinct shape per status, which is what keeps the four apart
+            // for somebody who cannot separate green from red.
+            PresenceIndicator(
+              key: ValueKey('friend-presence-${entry.user.id}'),
+              presence: UserPresence(status: status),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.user.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: FlucordTextRole.label.strong,
                 ),
-              ),
-            ],
+                Text(
+                  _describe(entry.kind),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        // Accepting is the same call as asking: Discord treats a request to
-        // somebody who already asked as the acceptance.
-        if (entry.kind == DiscordRelationshipKind.incomingRequest)
+          if (onMessage != null && entry.kind == DiscordRelationshipKind.friend)
+            FlucordIconButton(
+              key: ValueKey('friend-message-${entry.user.id}'),
+              icon: FlucordIcons.chat,
+              tooltip: 'Message',
+              onPressed: () => onMessage(entry.user.id),
+            ),
+          // Accepting is the same call as asking: Discord treats a request to
+          // somebody who already asked as the acceptance.
+          if (entry.kind == DiscordRelationshipKind.incomingRequest)
+            TextButton(
+              key: ValueKey('friend-accept-${entry.user.id}'),
+              onPressed: controller.isBusy
+                  ? null
+                  : () => unawaited(controller.acceptRequest(entry)),
+              child: const Text('Accept'),
+            ),
           TextButton(
-            key: ValueKey('friend-accept-${entry.user.id}'),
+            key: ValueKey('friend-remove-${entry.user.id}'),
             onPressed: controller.isBusy
                 ? null
-                : () => unawaited(controller.acceptRequest(entry)),
-            child: const Text('Accept'),
+                : () => unawaited(controller.remove(entry)),
+            child: Text(_removeLabel(entry.kind)),
           ),
-        TextButton(
-          key: ValueKey('friend-remove-${entry.user.id}'),
-          onPressed: controller.isBusy
-              ? null
-              : () => unawaited(controller.remove(entry)),
-          child: Text(_removeLabel(entry.kind)),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
   static String _describe(DiscordRelationshipKind kind) => switch (kind) {
     DiscordRelationshipKind.friend => 'Friend',

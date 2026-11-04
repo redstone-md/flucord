@@ -561,6 +561,7 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   void _selectChannel(String channelId, {VoiceChannelSurface? voiceSurface}) {
+    _leaveFriendsPageFor(channelId);
     workspaceController.selectChannel(channelId, surface: voiceSurface);
     unawaited(chatController.openChannel(channelId));
   }
@@ -576,6 +577,31 @@ extension _FlucordShellNavigation on FlucordShell {
       voiceSurface: VoiceChannelSurface.room,
     );
   }
+
+  /// Opening a DM leaves the Friends page, as on Discord. A channel in a
+  /// server does not: back in direct messages the page is still there.
+  void _leaveFriendsPageFor(String channelId) {
+    if (_channelOf(channelId)?.spaceId == CommunitySpace.directMessagesId) {
+      friendsController?.closePanel();
+    }
+  }
+
+  /// The Friends page in the canvas, with the inbox at its header's end.
+  Widget _friendsPage(
+    BuildContext context,
+    ChatWorkspace workspace,
+    FriendsController friends,
+  ) => FriendsPanel(
+    controller: friends,
+    // From the workspace, which the presence service already keeps current;
+    // a second copy would be a second thing to go stale.
+    presenceOf: (userId) => workspace.memberOrNull(userId)?.presence,
+    onMessage: (userId) => unawaited(_openDirectConversation(context, userId)),
+    inbox: InboxActivityButton(
+      summary: InboxSummary.fromWorkspace(workspace),
+      onPressed: () => unawaited(_openInbox(context)),
+    ),
+  );
 
   /// The friends doing something now. Rebuilt on the seats alone, since the
   /// controller also fires on every speaking change.
@@ -656,6 +682,7 @@ extension _FlucordShellNavigation on FlucordShell {
     final workspace = chatController.workspace;
     if (workspace == null) return;
     if (channelId != null && workspace.channelOrNull(channelId) == null) return;
+    if (channelId != null) _leaveFriendsPageFor(channelId);
     workspaceController.selectSpace(workspace, spaceId);
     if (channelId != null && messageId != null) {
       workspaceController.selectMessage(channelId, messageId);
