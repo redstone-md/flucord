@@ -13,7 +13,9 @@ import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_roster_view.dart';
+import 'display_name.dart';
 import 'name_tags.dart';
+import 'nameplate_backdrop.dart';
 import 'popup_anchor.dart';
 import 'profile_card_route.dart';
 
@@ -432,7 +434,52 @@ class _MemberRow extends StatelessWidget {
       member.presenceDetail?.activities ?? const [],
       inVoice: inVoice,
     );
-    final color = nameColor;
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          MemberAvatar(
+            member: member,
+            size: 28,
+            spaceId: spaceId,
+            presenceBorderColor: surfaces.surface,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: NameplateText(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: DisplayName(
+                          member.displayName,
+                          style: FlucordTextRole.label.style.copyWith(
+                            color: surfaces.text,
+                          ),
+                          nameStyle: member.tags.nameStyle,
+                          roleColor: nameColor,
+                          inServer: true,
+                        ),
+                      ),
+                      NameTags(member: member),
+                    ],
+                  ),
+                  if (summary != null)
+                    ActivitySummaryLine(
+                      key: ValueKey('member-activity-${member.id}'),
+                      summary: summary,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final nameplate = member.tags.nameplate;
     return Opacity(
       opacity: offline ? 0.58 : 1,
       child: Material(
@@ -448,50 +495,17 @@ class _MemberRow extends StatelessWidget {
             // ignores it is a place where the mouse stops working.
             onSecondaryTap: () => onPressed(context),
             borderRadius: FlucordRadius.control,
-            child: Container(
+            child: SizedBox(
               height: MemberRosterView.rowHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  MemberAvatar(
-                    member: member,
-                    size: 28,
-                    spaceId: spaceId,
-                    presenceBorderColor: surfaces.surface,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                member.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: FlucordTextRole.label.style.copyWith(
-                                  color: color == null
-                                      ? surfaces.text
-                                      : Color(color),
-                                ),
-                              ),
-                            ),
-                            NameTags(member: member),
-                          ],
-                        ),
-                        if (summary != null)
-                          ActivitySummaryLine(
-                            key: ValueKey('member-activity-${member.id}'),
-                            summary: summary,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              child: switch (nameplate) {
+                final nameplate? => NameplateBackdrop(
+                  nameplate: nameplate,
+                  placement: NameplatePlacement.memberList,
+                  selected: selected,
+                  child: content,
+                ),
+                null => content,
+              },
             ),
           ),
         ),
