@@ -8,7 +8,7 @@ abstract final class FlucordRadius {
   /// Rows, buttons, icon buttons and small fields.
   static const control = BorderRadius.all(Radius.circular(6));
 
-  /// The composer, cards, menus, toolbars, popovers and dialogs.
+  /// The composer, cards, toolbars, and rows inside a menu.
   static const medium = BorderRadius.all(mediumCorner);
 
   /// One corner of [medium], for a shape rounded on some sides only, such as
@@ -17,6 +17,10 @@ abstract final class FlucordRadius {
 
   /// The canvas card and server tiles.
   static const large = BorderRadius.all(Radius.circular(12));
+
+  /// Anything that opens over the interface: dialogs, menus, popovers,
+  /// pickers and the incoming call card.
+  static const overlay = large;
 
   /// A pill or a circle, whatever the height.
   static const full = BorderRadius.all(Radius.circular(999));

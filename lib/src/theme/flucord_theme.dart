@@ -290,7 +290,7 @@ abstract final class FlucordTheme {
         elevation: 24,
         insetPadding: const EdgeInsets.all(24),
         shape: RoundedRectangleBorder(
-          borderRadius: FlucordRadius.large,
+          borderRadius: FlucordRadius.overlay,
           side: BorderSide(color: border),
         ),
         titleTextStyle: FlucordTextRole.heading.style.copyWith(color: text),
@@ -302,7 +302,7 @@ abstract final class FlucordTheme {
         color: raised,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: FlucordRadius.medium,
+          borderRadius: FlucordRadius.overlay,
           side: BorderSide(color: border),
         ),
         menuPadding: const EdgeInsets.symmetric(vertical: 4),

@@ -86,13 +86,13 @@ class IncomingCallCard extends StatelessWidget {
         key: const ValueKey('incoming-call-card'),
         color: context.surfaces.raised,
         elevation: 8,
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.overlay,
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             border: Border.all(color: context.surfaces.border),
-            borderRadius: FlucordRadius.medium,
+            borderRadius: FlucordRadius.overlay,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

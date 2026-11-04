@@ -138,7 +138,7 @@ final Color _panelShadow = Colors.black.withValues(alpha: 0.42);
 
 RoundedRectangleBorder _panelShape(BuildContext context) =>
     RoundedRectangleBorder(
-      borderRadius: FlucordRadius.medium,
+      borderRadius: FlucordRadius.overlay,
       side: BorderSide(color: context.surfaces.border),
     );
 

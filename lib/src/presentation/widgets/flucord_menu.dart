@@ -104,10 +104,12 @@ class _FlucordMenuItemState<T> extends State<FlucordMenuItem<T>> {
           data: IconThemeData(size: 16, color: surfaces.muted),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
+            // The menu is rounded by the overlay radius and the row sits 4 in
+            // from its edge, so the row takes the radius that stays parallel.
             child: InkWell(
               onTap: item.enabled ? _choose : null,
               canRequestFocus: item.enabled,
-              borderRadius: FlucordRadius.control,
+              borderRadius: FlucordRadius.medium,
               child: Opacity(
                 opacity: item.enabled ? 1 : FlucordTheme.disabledAlpha,
                 child: row,

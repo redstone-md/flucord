@@ -285,7 +285,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
       color: context.surfaces.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.surfaces.border),
-        borderRadius: FlucordRadius.small,
+        borderRadius: FlucordRadius.overlay,
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(

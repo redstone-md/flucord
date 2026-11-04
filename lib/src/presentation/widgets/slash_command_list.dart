@@ -51,7 +51,7 @@ class SlashCommandList extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.overlay,
         border: Border.all(color: context.surfaces.border),
       ),
       child: _body(context),

@@ -103,7 +103,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
       color: context.surfaces.raised,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.overlay,
         side: BorderSide(color: context.surfaces.border),
       ),
       child: ConstrainedBox(

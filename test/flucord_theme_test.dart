@@ -400,6 +400,7 @@ void main() {
       expect(FlucordRadius.control, BorderRadius.circular(6));
       expect(FlucordRadius.medium, BorderRadius.circular(8));
       expect(FlucordRadius.large, BorderRadius.circular(12));
+      expect(FlucordRadius.overlay, BorderRadius.circular(12));
       expect(FlucordRadius.full, BorderRadius.circular(999));
     });
 

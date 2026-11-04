@@ -47,7 +47,7 @@ void main() {
   });
 
   group('how the menu looks', () {
-    testWidgets('sits one layer up: raised, a thin border, medium corners', (
+    testWidgets('sits one layer up: raised, a thin border, overlay corners', (
       tester,
     ) async {
       await _pumpMenu(tester, isCurrentUser: false);
@@ -61,7 +61,7 @@ void main() {
       expect(menu.color, surfaces.raised);
       expect(shape.side.color, surfaces.border);
       expect(shape.side.width, 1);
-      expect(shape.borderRadius, FlucordRadius.medium);
+      expect(shape.borderRadius, FlucordRadius.overlay);
     });
 
     testWidgets('rows are in the label role with an icon each', (
