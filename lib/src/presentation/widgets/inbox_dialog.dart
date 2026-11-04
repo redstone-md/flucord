@@ -179,7 +179,7 @@ class _InboxHeader extends StatelessWidget {
             key: const ValueKey('close-inbox'),
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Close',
-            icon: const Icon(Icons.close, size: 18),
+            icon: const FlucordIcon(FlucordIcons.clear, size: 18),
           ),
         ],
       ),
@@ -223,7 +223,7 @@ class _UnreadList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entries.isEmpty) {
       return const _InboxEmptyState(
-        icon: Icons.mark_email_read_outlined,
+        icon: FlucordIcons.caughtUp,
         title: 'You are all caught up',
         detail: 'New unread channels will appear here.',
       );
@@ -302,7 +302,7 @@ class _UnreadRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18),
+              const FlucordIcon(FlucordIcons.chevronRight, size: 18),
             ],
           ),
         ),
@@ -321,7 +321,7 @@ class _MentionList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (groups.isEmpty) {
       return const _InboxEmptyState(
-        icon: Icons.alternate_email,
+        icon: FlucordIcons.mention,
         title: 'No recent mentions',
         detail: 'Messages that mention this bot will appear here.',
       );
@@ -511,7 +511,7 @@ class _InboxEmptyState extends StatelessWidget {
     required this.detail,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final String detail;
 
@@ -520,7 +520,7 @@ class _InboxEmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 30, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 30, color: context.surfaces.muted),
         const SizedBox(height: 10),
         Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/report_flow_controller.dart';
 import '../../domain/moderation_report.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'report_element_views.dart';
@@ -79,7 +80,7 @@ class _ReportDialogState extends State<ReportDialog> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.cloud_off, size: 28),
+        const FlucordIcon(FlucordIcons.offline, size: 28),
         const SizedBox(height: 12),
         const Text('The report form could not be loaded.'),
         const SizedBox(height: 12),
@@ -111,7 +112,7 @@ class _ReportDialogState extends State<ReportDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.check_circle_outline, size: 32),
+          const FlucordIcon(FlucordIcons.checkCircle, size: 32),
           const SizedBox(height: 12),
           const Text(
             'Thanks for the report.',
@@ -134,7 +135,7 @@ class _ReportDialogState extends State<ReportDialog> {
               onPressed: widget.controller.isBlocked
                   ? null
                   : () => unawaited(widget.controller.blockReportedUser()),
-              icon: const Icon(Icons.block, size: 16),
+              icon: const FlucordIcon(FlucordIcons.block, size: 16),
               label: Text(
                 widget.controller.isBlocked ? 'Blocked' : 'Also block them',
               ),
@@ -234,7 +235,7 @@ class _ReportDialogState extends State<ReportDialog> {
           IconButton(
             key: const ValueKey('report-back'),
             tooltip: 'Back',
-            icon: const Icon(Icons.arrow_back),
+            icon: const FlucordIcon(FlucordIcons.back),
             onPressed: widget.controller.goBack,
           ),
         Expanded(
@@ -249,7 +250,7 @@ class _ReportDialogState extends State<ReportDialog> {
         IconButton(
           key: const ValueKey('report-close'),
           tooltip: 'Close',
-          icon: const Icon(Icons.close),
+          icon: const FlucordIcon(FlucordIcons.clear),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ],

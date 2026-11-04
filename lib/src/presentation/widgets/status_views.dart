@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -44,8 +45,8 @@ class FailedWorkspaceView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.warning_amber,
+            FlucordIcon(
+              FlucordIcons.warning,
               color: context.surfaces.warning,
               size: 30,
             ),
@@ -65,7 +66,7 @@ class FailedWorkspaceView extends StatelessWidget {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 17),
+              icon: const FlucordIcon(FlucordIcons.refresh, size: 17),
               label: const Text('Retry'),
             ),
           ],
@@ -100,7 +101,11 @@ class ChannelFailureView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.cloud_off, color: context.surfaces.warning, size: 28),
+          FlucordIcon(
+            FlucordIcons.offline,
+            color: context.surfaces.warning,
+            size: 28,
+          ),
           const SizedBox(height: 10),
           const Text(
             'Message history unavailable',
@@ -109,7 +114,7 @@ class ChannelFailureView extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 16),
+            icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
             label: const Text('Retry'),
           ),
         ],
@@ -130,7 +135,11 @@ class EmptyWorkspaceView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.dns_outlined, size: 30, color: context.surfaces.muted),
+            FlucordIcon(
+              FlucordIcons.server,
+              size: 30,
+              color: context.surfaces.muted,
+            ),
             const SizedBox(height: 12),
             const Text(
               'No accessible servers',
@@ -147,7 +156,7 @@ class EmptyWorkspaceView extends StatelessWidget {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: onOpenConnections,
-              icon: const Icon(Icons.link, size: 16),
+              icon: const FlucordIcon(FlucordIcons.link, size: 16),
               label: const Text('Connections'),
             ),
           ],

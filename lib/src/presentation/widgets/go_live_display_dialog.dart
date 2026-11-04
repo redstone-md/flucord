@@ -51,7 +51,7 @@ class GoLiveDisplayDialog extends StatelessWidget {
                   ListTile(
                     key: ValueKey('go-live-display-${display.index}'),
                     leading: FlucordIcon(
-                      FlucordIcons.display,
+                      FlucordIcons.desktop,
                       color: context.surfaces.muted,
                     ),
                     title: Text(display.name),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -219,7 +220,9 @@ class _MembershipAvatar extends StatelessWidget {
           url: avatarUrl ?? account.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Icon(Icons.person_outline, size: 16),
+            child: const Center(
+              child: FlucordIcon(FlucordIcons.person, size: 16),
+            ),
           ),
         ),
       ),

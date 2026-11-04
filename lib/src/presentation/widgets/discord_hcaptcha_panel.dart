@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 import '../../domain/discord_remote_auth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_hcaptcha_bridge.dart';
@@ -223,13 +224,13 @@ final class _CaptchaError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, color: context.surfaces.errorText),
+          FlucordIcon(FlucordIcons.error, color: context.surfaces.errorText),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 18),
+            icon: const FlucordIcon(FlucordIcons.refresh, size: 18),
             label: const Text('Try again'),
           ),
         ],

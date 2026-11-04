@@ -17,9 +17,11 @@ import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/zoomed_app.dart';
 
 void main() {
@@ -35,6 +37,13 @@ void main() {
 
     expect(find.text('Discord Social SDK is not bundled'), findsOneWidget);
     expect(find.textContaining('not routed through Bot API'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('discord-social-sdk-status')),
+        matching: findFlucordIcon(FlucordIcons.packageMissing),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders native pending, online, and offline relationships', (
