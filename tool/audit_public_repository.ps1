@@ -34,68 +34,14 @@ class RepositoryPrivacyAudit {
     $this.AllowedSnowflakes = [System.Collections.Generic.HashSet[string]]::new(
       [System.StringComparer]::Ordinal
     )
-    # Values no account, guild or channel can be behind: a repeated digit, a
-    # run of consecutive ones, or a one followed by nothing but zeroes. Test
-    # fixtures reach for these, and history keeps them forever, so they are
-    # named here rather than treated as a leak.
-    foreach ($value in @(
-      '100000000000000000',
-      '111111111111111111',
-      '123456789012345678',
-      '200000000000000000',
-      '222222222222222222',
-      '234567890123456789',
-      '300000000000000000',
-      '333333333333333333',
-      '444444444444444444',
-      '555555555555555555',
-      '666666666666666666',
-      '777777777777777777',
-      '888888888888888888',
-      '999999999999999999',
-      '987654321098765432',
-      '400000000000000000',
-      '500000000000000000',
-      '600000000000000000',
-      '700000000000000000',
-      '800000000000000000',
-      '900000000000000000',
-      # 2^64 - 1 and 2^63: the largest a fixed64 field can carry and the first
-      # value past the signed range. Both exist in tests to prove a snowflake
-      # is read unsigned, and neither is a number Discord has ever minted.
-      '18446744073709551615',
-      '9223372036854775808',
-      # The DAVE stream-key triple: an RTC server, its channel, and the group one
-      # below that server. Synthetic, and named here because the group is derived
-      # from the server instead of being a value a fixture can pick on its own.
-      '500000000000000001',
-      '500000000000000002',
-      '500000000000000003',
-      # Legacy: a realistic-looking triple that reached the history of
-      # test/discord_voice_socket_factory_test.dart before this list covered it.
-      # History keeps them forever, and rewriting it costs more than naming them.
-      '1541148819067248680',
-      '1541148819067248681',
-      '1541148819067248682',
-      # The digits in counting order, as a fixture writes them.
-      '1234567890123456789',
-      # Legacy: the first and last of 5000 generated channel ids that reached
-      # the history of test/session_reconnect_diff_test.dart.
-      '310000000000000000',
-      '310000000000004999',
-      # Legacy: made-up group DM and message ids that reached the history of
-      # test/group_dm_session_test.dart and
-      # test/discord_direct_messages_test.dart.
-      '410000000000000031',
-      '450000000000000031',
-      # Legacy: Discord's public catalogue SKU of the Twilight nameplate, in
-      # the history of the nameplate tests. It names a shop item, not a person.
-      '1349849614353829990',
-      # Legacy: a round Steam id, not a Discord one, in the history of
-      # test/user_profile_test.dart.
-      '76561198000000000'
-    )) {
-      [void] $this.AllowedSnowflakes.Add($value)
+    # Values no account, guild or channel can be behind, kept in one list
+    # that the working-tree test reads too.
+    $allowedPath = Join-Path $root 'tool/allowed_snowflakes.txt'
+    foreach ($line in [System.IO.File]::ReadAllLines($allowedPath)) {
+      $value = $line.Trim()
+      if ($value -and -not $value.StartsWith('#')) {
+        [void] $this.AllowedSnowflakes.Add($value)
+      }
     }
 
     $options = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
@@ -117,6 +63,7 @@ class RepositoryPrivacyAudit {
     # is fewer than twenty such stretches since 2015, so a real id of this
     # shape is very unlikely, and a match is taken for a fixture. Naming each
     # fixture id instead would grow this list with every test.
+    # test/repository_snowflake_test.dart applies the same pattern.
     $this.FixtureSnowflakePattern = [regex]::new('^[1-9]0{9,}[0-9]{0,8}$')
 
     $privateKey = 'BEGIN\s+(?:(?:RSA|EC|OPENSSH|DSA)\s+)?' +
