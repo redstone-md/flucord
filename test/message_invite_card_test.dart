@@ -83,7 +83,12 @@ void main() {
     var asked = 0;
     Future<InvitePreview> lookup(String code) async {
       asked++;
-      if (asked == 1) throw StateError('offline');
+      if (asked == 1) {
+        throw const GuildAccessException(
+          refusal: GuildAccessRefusal.unknown,
+          message: 'Discord could not be reached. Try again.',
+        );
+      }
       return InvitePreview(code: code, name: 'Aurora');
     }
 
