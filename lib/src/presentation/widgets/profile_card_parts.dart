@@ -85,7 +85,7 @@ class _Badges extends StatelessWidget {
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: surfaces.quietFill,
-          borderRadius: FlucordRadius.small,
+          borderRadius: FlucordRadius.full,
         ),
         child: Center(widthFactor: 1, child: child),
       ),
@@ -101,9 +101,7 @@ class _Badges extends StatelessWidget {
             child: SizedBox.square(
               dimension: 16,
               child: RemoteIdentityImage(
-                url: badge.icon.isEmpty
-                    ? null
-                    : 'https://cdn.discordapp.com/badge-icons/${badge.icon}.png',
+                url: DiscordCdn.badgeIcon(badge.icon),
                 fallback: const SizedBox.shrink(),
               ),
             ),
@@ -133,8 +131,6 @@ class _MutualLine extends StatelessWidget {
   const _MutualLine({required this.friends, required this.serverCount});
 
   static const _face = 16.0;
-  static const _overlap = 4.0;
-  static const _ring = 2.0;
 
   final List<MutualFriend> friends;
   final int serverCount;
@@ -146,37 +142,20 @@ class _MutualLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final faces = friends.take(3).toList(growable: false);
-    final outer = _face + 2 * _ring;
     return Row(
       key: const ValueKey('profile-card-mutual'),
       children: [
         if (faces.isNotEmpty) ...[
-          SizedBox(
-            width: outer + (faces.length - 1) * (outer - _overlap - _ring),
-            height: outer,
-            child: Stack(
-              children: [
-                for (var index = 0; index < faces.length; index++)
-                  Positioned(
-                    left: index * (outer - _overlap - _ring),
-                    child: Container(
-                      width: outer,
-                      height: outer,
-                      padding: const EdgeInsets.all(_ring),
-                      decoration: BoxDecoration(
-                        color: surfaces.raised,
-                        shape: BoxShape.circle,
-                      ),
-                      child: ClipOval(
-                        child: RemoteIdentityImage(
-                          url: faces[index].avatarUrl,
-                          fallback: ColoredBox(color: surfaces.muted),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          OverlappingFaces(
+            size: _face,
+            ringColor: surfaces.raised,
+            faces: [
+              for (final face in faces)
+                RemoteIdentityImage(
+                  url: face.avatarUrl,
+                  fallback: ColoredBox(color: surfaces.muted),
+                ),
+            ],
           ),
           const SizedBox(width: 6),
         ],
@@ -273,7 +252,7 @@ class _Roles extends StatelessWidget {
   Future<void> _pick(BuildContext context) async {
     final role = await showMenu<CommunityRole>(
       context: context,
-      position: _menuBelow(context),
+      position: menuBelow(context),
       items: [
         if (addable.isEmpty)
           const FlucordMenuItem(label: 'No roles to add', enabled: false),
@@ -313,7 +292,7 @@ class _Roles extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(6, 2, 8, 2),
                 decoration: BoxDecoration(
                   color: surfaces.quietFill,
-                  borderRadius: FlucordRadius.small,
+                  borderRadius: FlucordRadius.full,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -331,23 +310,13 @@ class _Roles extends StatelessWidget {
               ),
             if (add != null)
               Builder(
-                builder: (context) => Tooltip(
-                  message: 'Add role',
-                  child: InkWell(
-                    key: const ValueKey('profile-card-add-role'),
-                    onTap: () => _pick(context),
-                    borderRadius: FlucordRadius.small,
-                    child: SizedBox.square(
-                      dimension: 20,
-                      child: Center(
-                        child: FlucordIcon(
-                          FlucordIcons.add,
-                          size: 14,
-                          color: surfaces.muted,
-                        ),
-                      ),
-                    ),
-                  ),
+                builder: (context) => FlucordIconButton(
+                  key: const ValueKey('profile-card-add-role'),
+                  icon: FlucordIcons.add,
+                  tooltip: 'Add role',
+                  dimension: 20,
+                  borderRadius: FlucordRadius.full,
+                  onPressed: () => _pick(context),
                 ),
               ),
           ],
@@ -375,4 +344,38 @@ class _RoleDot extends StatelessWidget {
       child: const SizedBox.square(dimension: 8),
     );
   }
+}
+
+/// A profile picture, or [monogram] on [fill] where there is none. The
+/// profile card and the profile editor's avatar row both draw it; the caller
+/// sizes it and clips it round.
+class ProfileAvatarImage extends StatelessWidget {
+  const ProfileAvatarImage({
+    required this.url,
+    required this.monogram,
+    this.fill,
+    super.key,
+  });
+
+  final String? url;
+  final String monogram;
+
+  /// The colour behind [monogram]. Null takes the control colour.
+  final Color? fill;
+
+  @override
+  Widget build(BuildContext context) => RemoteIdentityImage(
+    url: url,
+    fallback: ColoredBox(
+      color: fill ?? context.surfaces.control,
+      child: Center(
+        child: Text(
+          monogram,
+          style: FlucordTextRole.display.style.copyWith(
+            color: FlucordFixedColors.onFill,
+          ),
+        ),
+      ),
+    ),
+  );
 }

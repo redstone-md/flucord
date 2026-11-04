@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/flucord_icons.dart';
 
+import '../../domain/discord_rgb.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
@@ -9,7 +10,6 @@ import '../../theme/flucord_type.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'profile_card.dart';
-import 'remote_identity_image.dart';
 import 'user_settings_controls.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
@@ -177,20 +177,7 @@ class ProfileAvatarRow extends StatelessWidget {
       ClipOval(
         child: SizedBox.square(
           dimension: _size,
-          child: RemoteIdentityImage(
-            url: url,
-            fallback: ColoredBox(
-              color: context.surfaces.control,
-              child: Center(
-                child: Text(
-                  monogram,
-                  style: FlucordTextRole.display.style.copyWith(
-                    color: FlucordFixedColors.onFill,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          child: ProfileAvatarImage(url: url, monogram: monogram),
         ),
       ),
       const SizedBox(width: 16),
@@ -270,7 +257,7 @@ class ProfileAccentPicker extends StatelessWidget {
             _Swatch(
               swatchKey: ValueKey('profile-accent-${swatch.toRadixString(16)}'),
               selected: value == swatch,
-              colour: Color(0xff000000 | swatch),
+              colour: Color(DiscordRgb(swatch).opaque),
               onPressed: () => onChanged(swatch),
             ),
         ],

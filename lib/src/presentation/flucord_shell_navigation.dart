@@ -597,6 +597,9 @@ extension _FlucordShellNavigation on FlucordShell {
     // a second copy would be a second thing to go stale.
     presenceOf: (userId) => workspace.memberOrNull(userId)?.presence,
     onMessage: (userId) => unawaited(_openDirectConversation(context, userId)),
+    onOpenProfile: (userId, anchor) => unawaited(
+      _openMemberCard(context, CommunitySpace.directMessagesId, userId, anchor),
+    ),
     inbox: InboxActivityButton(
       summary: InboxSummary.fromWorkspace(workspace),
       onPressed: () => unawaited(_openInbox(context)),
@@ -727,14 +730,14 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   /// Opens [userId]'s profile card beside [anchor]: a message author's name
-  /// or avatar, or a voice seat.
+  /// or avatar, a voice seat, or a friend's name.
   Future<void> _openMemberCard(
     BuildContext context,
     String spaceId,
     String userId,
     Rect anchor,
   ) async {
-    final member = chatController.workspace?.memberOrNull(userId);
+    final member = _memberOf(userId) ?? _friendAsMember(userId);
     if (member == null) return;
     await showProfileCard(
       context: context,
@@ -779,7 +782,7 @@ extension _FlucordShellNavigation on FlucordShell {
                 _openDirectConversation(context, member.id, text: text),
               );
             },
-      onAddFriend: friends != null && !isSelf && _canBefriend(friends, member)
+      onAddFriend: friends != null && !isSelf && friends.canBefriend(member.id)
           ? () => unawaited(friends.addFriend(member.id))
           : null,
       onReport: canReport
@@ -792,20 +795,23 @@ extension _FlucordShellNavigation on FlucordShell {
         : ListenableBuilder(listenable: friends, builder: (_, _) => card());
   }
 
-  /// Whether a friend request to [member] makes sense: not somebody already
-  /// a friend, already asked, or blocked.
-  bool _canBefriend(FriendsController friends, Member member) {
-    if (!friends.isAvailable) return false;
-    final kind = friends.all
-        .where((entry) => entry.user.id == member.id)
-        .firstOrNull
-        ?.kind;
-    return switch (kind) {
-      DiscordRelationshipKind.friend ||
-      DiscordRelationshipKind.outgoingRequest ||
-      DiscordRelationshipKind.blocked => false,
-      _ => true,
-    };
+  /// A friend who shares no server or DM with the account, as the
+  /// relationship describes them. The workspace holds no record of them, and
+  /// the card fetches the rest of their profile itself.
+  Member? _friendAsMember(String userId) {
+    final user = friendsController?.relationshipWith(userId)?.user;
+    if (user == null) return null;
+    return Member(
+      id: user.id,
+      displayName: user.displayName,
+      username: user.username,
+      initials: monogramOf(user.displayName),
+      role: 'Discord user',
+      presence: Presence.unknown,
+      // Discord's neutral grey: there is no server colour to take.
+      colorValue: 0xff4a4e50,
+      avatarUrl: user.avatarUrl,
+    );
   }
 
   /// Opens the DM with [recipientId] and sends [text] there, when given.

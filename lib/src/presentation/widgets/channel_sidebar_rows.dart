@@ -96,9 +96,7 @@ class _ServerHeader extends StatelessWidget {
       case ServerMenuAction.settings:
         onOpenSettings?.call();
       case ServerMenuAction.notifications:
-        if (_belowHeader(context) case final position?) {
-          onOpenNotifications?.call(context, position);
-        }
+        onOpenNotifications?.call(context, menuBelow(context));
       case ServerMenuAction.report:
         onReport?.call();
       case ServerMenuAction.leave:
@@ -107,21 +105,6 @@ class _ServerHeader extends StatelessWidget {
       case ServerMenuAction.markRead:
         break;
     }
-  }
-
-  /// Where a follow-up menu opens: under the header, where this one was.
-  RelativeRect? _belowHeader(BuildContext context) {
-    final header = context.findRenderObject();
-    final overlay = Overlay.of(context).context.findRenderObject();
-    if (header is! RenderBox || overlay is! RenderBox) return null;
-    final corner = header.localToGlobal(
-      header.size.bottomLeft(Offset.zero),
-      ancestor: overlay,
-    );
-    return RelativeRect.fromRect(
-      corner & Size.zero,
-      Offset.zero & overlay.size,
-    );
   }
 }
 
@@ -791,11 +774,11 @@ class VoiceSeatRow extends StatelessWidget {
     final open = onOpenProfile;
     if (open == null) return row;
     return InkWell(
-      onTap: () => open(state.userId, profileCardAnchorOf(context)),
+      onTap: () => open(state.userId, popupAnchorOf(context)),
       // The right button too: Discord opens the same card from it, and a row
       // that ignores it is the one place in the app where the mouse stops
       // working.
-      onSecondaryTap: () => open(state.userId, profileCardAnchorOf(context)),
+      onSecondaryTap: () => open(state.userId, popupAnchorOf(context)),
       borderRadius: FlucordRadius.control,
       child: row,
     );

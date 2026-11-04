@@ -6,7 +6,7 @@ import '../../theme/flucord_theme.dart';
 import 'voice_control.dart';
 
 /// The app's icon button: a square, 28 px unless told otherwise, around a
-/// 16 px icon, with the control radius. Hover, press, focus and the disabled
+/// 16 px icon, with the control radius unless told otherwise. Hover, press, focus and the disabled
 /// shade come from the theme.
 ///
 /// [selected] draws the icon in the text colour while what it opens is
@@ -22,6 +22,7 @@ class FlucordIconButton extends StatelessWidget {
     this.color,
     this.fill,
     this.dimension = size,
+    this.borderRadius = FlucordRadius.control,
     super.key,
   });
 
@@ -76,6 +77,10 @@ class FlucordIconButton extends StatelessWidget {
   /// The button's height, and its width unless a parent stretches it.
   final double dimension;
 
+  /// The corners of the hover, the focus ring and [fill]. A button that sits
+  /// among pills, such as "Add role" after role chips, is a pill too.
+  final BorderRadius borderRadius;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
@@ -89,6 +94,9 @@ class FlucordIconButton extends StatelessWidget {
       style: squareStyle.copyWith(
         fixedSize: WidgetStatePropertyAll(Size.square(dimension)),
         minimumSize: WidgetStatePropertyAll(Size.square(dimension)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: borderRadius),
+        ),
         foregroundColor: selected && iconColor == null
             ? WidgetStatePropertyAll(surfaces.text)
             : null,
@@ -97,10 +105,7 @@ class FlucordIconButton extends StatelessWidget {
     );
     if (background == null) return button;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: FlucordRadius.control,
-      ),
+      decoration: BoxDecoration(color: background, borderRadius: borderRadius),
       child: button,
     );
   }

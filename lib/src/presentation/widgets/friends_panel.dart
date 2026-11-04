@@ -14,7 +14,9 @@ import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_icon_button.dart';
 import 'friends_page_header.dart';
+import 'popup_anchor.dart';
 import 'presence_indicator.dart';
+import 'profile_card_route.dart';
 
 /// The Friends page: a header with the Online, All, Pending and Blocked
 /// lists and the Add friend view, then whichever of them is chosen.
@@ -23,6 +25,7 @@ class FriendsPanel extends StatefulWidget {
     required this.controller,
     this.presenceOf,
     this.onMessage,
+    this.onOpenProfile,
     this.inbox,
     super.key,
   });
@@ -39,6 +42,9 @@ class FriendsPanel extends StatefulWidget {
   /// Opens the DM with a friend, by user id. Without it a friend row offers
   /// no message button.
   final ValueChanged<String>? onMessage;
+
+  /// Opens somebody's profile card, from the name on their row.
+  final OpenProfileCard? onOpenProfile;
 
   /// The inbox button at the right end of the header.
   final Widget? inbox;
@@ -78,10 +84,11 @@ class _FriendsPanelState extends State<FriendsPanel> {
               ? _AddFriendView(controller: widget.controller)
               : _RelationshipList(
                   groups: _groupsFor(_tab),
-                  emptyText: _emptyText(_tab),
+                  emptyText: _tab.empty,
                   controller: widget.controller,
                   presenceOf: widget.presenceOf,
                   onMessage: widget.onMessage,
+                  onOpenProfile: widget.onOpenProfile,
                 ),
         ),
       ),
@@ -113,14 +120,6 @@ class _FriendsPanelState extends State<FriendsPanel> {
       FriendsTab.add => const [],
     };
   }
-
-  static String _emptyText(FriendsTab tab) => switch (tab) {
-    FriendsTab.online => 'No friends are online right now.',
-    FriendsTab.all => 'No friends yet.',
-    FriendsTab.pending => 'No pending requests.',
-    FriendsTab.blocked => 'You have not blocked anyone.',
-    FriendsTab.add => '',
-  };
 }
 
 /// One list tab: headed groups like "Online 5", or [emptyText] when every
@@ -132,6 +131,7 @@ class _RelationshipList extends StatelessWidget {
     required this.controller,
     this.presenceOf,
     this.onMessage,
+    this.onOpenProfile,
   });
 
   final List<(String, List<DiscordRelationship>)> groups;
@@ -139,6 +139,7 @@ class _RelationshipList extends StatelessWidget {
   final FriendsController controller;
   final Presence? Function(String userId)? presenceOf;
   final ValueChanged<String>? onMessage;
+  final OpenProfileCard? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +169,7 @@ class _RelationshipList extends StatelessWidget {
               controller: controller,
               presence: presenceOf?.call(entry.user.id),
               onMessage: onMessage,
+              onOpenProfile: onOpenProfile,
             ),
         ],
       ],
@@ -302,12 +304,14 @@ class _RelationshipRow extends StatelessWidget {
     required this.controller,
     this.presence,
     this.onMessage,
+    this.onOpenProfile,
   });
 
   final DiscordRelationship entry;
   final FriendsController controller;
   final Presence? presence;
   final ValueChanged<String>? onMessage;
+  final OpenProfileCard? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -322,33 +326,10 @@ class _RelationshipRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (presence case final status?) ...[
-            // The shared indicator rather than a coloured dot: it paints a
-            // distinct shape per status, which is what keeps the four apart
-            // for somebody who cannot separate green from red.
-            PresenceIndicator(
-              key: ValueKey('friend-presence-${entry.user.id}'),
-              presence: UserPresence(status: status),
-            ),
-            const SizedBox(width: 8),
-          ],
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.user.displayName,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.label.strong,
-                ),
-                Text(
-                  _describe(entry.kind),
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
-                    color: context.surfaces.muted,
-                  ),
-                ),
-              ],
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _identity(context),
             ),
           ),
           if (onMessage != null && entry.kind == DiscordRelationshipKind.friend)
@@ -376,6 +357,54 @@ class _RelationshipRow extends StatelessWidget {
             child: Text(_removeLabel(entry.kind)),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The status and the name, which open the profile card beside them.
+  Widget _identity(BuildContext context) {
+    final identity = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (presence case final status?) ...[
+          // The shared indicator rather than a coloured dot: it paints a
+          // distinct shape per status, which is what keeps the four apart
+          // for somebody who cannot separate green from red.
+          PresenceIndicator(
+            key: ValueKey('friend-presence-${entry.user.id}'),
+            presence: UserPresence(status: status),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                entry.user.displayName,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.strong,
+              ),
+              Text(
+                _describe(entry.kind),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final open = onOpenProfile;
+    if (open == null) return identity;
+    return Builder(
+      builder: (context) => InkWell(
+        key: ValueKey('friend-profile-${entry.user.id}'),
+        onTap: () => open(entry.user.id, popupAnchorOf(context)),
+        borderRadius: FlucordRadius.small,
+        child: identity,
       ),
     );
   }

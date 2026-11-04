@@ -25,6 +25,19 @@ void main() {
     );
   });
 
+  test('builds profile badge and avatar decoration URLs', () {
+    expect(
+      DiscordCdn.badgeIcon('badge-hash'),
+      'https://cdn.discordapp.com/badge-icons/badge-hash.png',
+    );
+    expect(DiscordCdn.badgeIcon(''), isNull);
+    expect(
+      DiscordCdn.avatarDecoration('a_deco'),
+      'https://cdn.discordapp.com/avatar-decoration-decoration/a_deco.png?size=96&passthrough=true',
+    );
+    expect(DiscordCdn.avatarDecoration(''), isNull);
+  });
+
   test('uses the documented default avatar index', () {
     expect(
       DiscordCdn.userAvatar('4194304', null),

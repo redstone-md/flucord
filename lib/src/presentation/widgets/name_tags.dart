@@ -105,7 +105,7 @@ class ClanTagChip extends StatelessWidget {
   }
 }
 
-/// The shared shape of a tag: fixed height, small radius, centred content.
+/// The shared shape of a tag: fixed height, a pill, centred content.
 class _TagBox extends StatelessWidget {
   const _TagBox({
     required this.height,
@@ -123,7 +123,7 @@ class _TagBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: height,
     padding: const EdgeInsets.symmetric(horizontal: _padding),
-    decoration: BoxDecoration(color: color, borderRadius: FlucordRadius.small),
+    decoration: BoxDecoration(color: color, borderRadius: FlucordRadius.full),
     alignment: Alignment.center,
     child: child,
   );

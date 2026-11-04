@@ -199,6 +199,21 @@ void main() {
       expect(controller.isBusy, isFalse);
     });
 
+    test('a request is offered only to somebody not already in reach', () {
+      final controller = FriendsController(() => _FakeGraph(_graph));
+      addTearDown(controller.dispose);
+
+      expect(controller.canBefriend('stranger'), isTrue);
+      expect(controller.canBefriend('incoming'), isTrue);
+      expect(controller.canBefriend('friend'), isFalse);
+      expect(controller.canBefriend('outgoing'), isFalse);
+      expect(controller.canBefriend('blocked'), isFalse);
+      expect(
+        controller.relationshipWith('friend')?.kind,
+        DiscordRelationshipKind.friend,
+      );
+    });
+
     test('the panel flag survives a rebuild, because it lives here', () {
       final controller = FriendsController(() => _FakeGraph(_graph));
       addTearDown(controller.dispose);

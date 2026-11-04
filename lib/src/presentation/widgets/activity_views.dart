@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/monogram.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'art_tile.dart';
 import 'remote_identity_image.dart';
 
 /// Formats how long an activity has run or has left, in whole minutes:
@@ -27,7 +29,8 @@ abstract final class ActivityElapsed {
         null => null,
       };
 
-  /// The timing line, or null when the activity carries no usable stamp.
+  /// The timing, or null when the activity carries no usable stamp: the
+  /// time run so far bare ("1 h 20 min"), a countdown with "left".
   ///
   /// R07's `isCountDown` decides the direction: a track that ends counts up
   /// from its start, while a match with an end counts down to it.
@@ -35,12 +38,13 @@ abstract final class ActivityElapsed {
     if (timestamps == null) return null;
     final remaining = timestamps.remainingAt(now);
     final elapsed = timestamps.elapsedAt(now);
-    final (span, word) =
-        remaining != null && (timestamps.isCountDown || elapsed == null)
-        ? (remaining, 'left')
-        : (elapsed, 'elapsed');
-    final text = span == null ? null : format(span);
-    return text == null ? null : '$text $word';
+    if (remaining != null && (timestamps.isCountDown || elapsed == null)) {
+      return switch (format(remaining)) {
+        final text? => '$text left',
+        null => null,
+      };
+    }
+    return elapsed == null ? null : format(elapsed);
   }
 }
 
@@ -189,11 +193,17 @@ class ActivitySummaryLine extends StatelessWidget {
   }
 }
 
-/// What somebody is doing, as the profile card draws it: an inset card with
-/// the kind ("Playing"), the artwork, the name, the detail lines and the
-/// timing line.
+/// What somebody is doing, as the profile card draws it: the artwork, and
+/// beside it the kind ("Playing"), the name, the details with the time, and
+/// the state.
+///
+/// The art sits 8 in from the card's edge, so the card is
+/// [FlucordRadius.framed] around the art's [FlucordRadius.medium].
 class ActivityCard extends StatelessWidget {
   const ActivityCard({required this.activity, required this.now, super.key});
+
+  static const _artSize = 56.0;
+  static const _padding = 8.0;
 
   final UserActivity activity;
 
@@ -203,77 +213,69 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assets = activity.assets;
-    final timing = ActivityElapsed.line(activity.timestamps, now);
+    final surfaces = context.surfaces;
     final party = activity.party;
     final state = activity.state;
-    final lines = <String>[
+    final details = [
       ?activity.details,
-      if (state != null)
-        party != null && party.hasSize
-            ? '$state (${party.currentSize} of ${party.maxSize})'
-            : state,
-      ?timing,
-    ];
-    final surfaces = context.surfaces;
+      ?ActivityElapsed.line(activity.timestamps, now),
+    ].join(' · ');
     final verb = activity.type.verb;
+    final caption = FlucordTextRole.caption.style.copyWith(
+      color: surfaces.muted,
+    );
+    Widget line(String text, TextStyle style) =>
+        Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
     return Container(
       key: const ValueKey('activity-card'),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(_padding, _padding, 12, _padding),
       decoration: BoxDecoration(
         color: surfaces.inset,
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.framed,
         border: Border.all(color: surfaces.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            verb.isEmpty ? 'Activity' : verb,
-            style: FlucordTextRole.caption.style.copyWith(
-              color: surfaces.muted,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              if (assets?.largeImageUrl case final url?) ...[
-                _ActivityArtwork(
-                  largeUrl: url,
-                  smallUrl: assets?.smallImageUrl,
-                  largeText: assets?.largeText,
-                  smallText: assets?.smallText,
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      activity.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: FlucordTextRole.label.strong.copyWith(
-                        color: surfaces.text,
-                      ),
-                    ),
-                    for (final line in lines) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        line,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: FlucordTextRole.caption.style.copyWith(
-                          color: surfaces.muted,
-                        ),
-                      ),
-                    ],
-                  ],
+          _ActivityArtwork(activity: activity, size: _artSize),
+          const SizedBox(width: 12),
+          Expanded(
+            // Lifted so the letters, not the line boxes, centre on the art.
+            child: Transform.translate(
+              offset: Offset(
+                0,
+                -FlucordType.opticalLift(
+                  FlucordTextRole.caption,
+                  details.isEmpty && state == null
+                      ? FlucordTextRole.label
+                      : FlucordTextRole.caption,
                 ),
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  line(verb.isEmpty ? 'Activity' : verb, caption),
+                  const SizedBox(height: 2),
+                  line(
+                    activity.name,
+                    FlucordTextRole.label.strong.copyWith(color: surfaces.text),
+                  ),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    line(details, caption),
+                  ],
+                  if (state != null) ...[
+                    const SizedBox(height: 2),
+                    line(
+                      party != null && party.hasSize
+                          ? '$state (${party.currentSize} of ${party.maxSize})'
+                          : state,
+                      caption,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -281,65 +283,61 @@ class ActivityCard extends StatelessWidget {
   }
 }
 
-/// The large asset with the small one badged over its corner.
+/// The large asset, or the activity's monogram where there is none, with
+/// the small asset badged over its corner.
 class _ActivityArtwork extends StatelessWidget {
-  const _ActivityArtwork({
-    required this.largeUrl,
-    this.smallUrl,
-    this.largeText,
-    this.smallText,
-  });
+  const _ActivityArtwork({required this.activity, required this.size});
 
-  final String largeUrl;
-  final String? smallUrl;
-  final String? largeText;
-  final String? smallText;
+  final UserActivity activity;
+  final double size;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: 56,
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          child: Tooltip(
+  Widget build(BuildContext context) {
+    final assets = activity.assets;
+    final largeText = assets?.largeText;
+    final smallText = assets?.smallText;
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Tooltip(
             message: largeText ?? '',
             excludeFromSemantics: largeText == null,
-            child: ClipRRect(
-              borderRadius: FlucordRadius.medium,
-              child: RemoteIdentityImage(
-                url: largeUrl,
-                imageKey: const ValueKey('activity-large-image'),
-                fallback: ColoredBox(color: context.surfaces.raised),
-              ),
+            child: ArtTile(
+              url: assets?.largeImageUrl,
+              imageKey: const ValueKey('activity-large-image'),
+              monogram: monogramOf(activity.name),
+              color: context.surfaces.raised,
+              size: size,
             ),
           ),
-        ),
-        if (smallUrl case final url?)
-          Positioned(
-            right: -4,
-            bottom: -4,
-            child: Tooltip(
-              message: smallText ?? '',
-              excludeFromSemantics: smallText == null,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: context.surfaces.inset, width: 2),
-                ),
-                child: ClipOval(
-                  child: RemoteIdentityImage(
-                    url: url,
-                    imageKey: const ValueKey('activity-small-image'),
-                    fallback: ColoredBox(color: context.surfaces.raised),
+          if (assets?.smallImageUrl case final url?)
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: Tooltip(
+                message: smallText ?? '',
+                excludeFromSemantics: smallText == null,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: context.surfaces.inset, width: 2),
+                  ),
+                  child: ClipOval(
+                    child: RemoteIdentityImage(
+                      url: url,
+                      imageKey: const ValueKey('activity-small-image'),
+                      fallback: ColoredBox(color: context.surfaces.raised),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

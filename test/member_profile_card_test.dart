@@ -59,7 +59,8 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('member-row-222222222222222222')),
     );
-    await tester.pump();
+    // The card fades in, as every profile card does.
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
     expect(find.text('Mira Chen'), findsWidgets);

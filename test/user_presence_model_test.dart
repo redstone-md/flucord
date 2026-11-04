@@ -265,6 +265,19 @@ void main() {
   });
 
   group('user presence', () {
+    test('what somebody is doing leaves out moods', () {
+      const presence = UserPresence(
+        status: Presence.online,
+        activities: [
+          UserActivity(name: 'Custom Status', type: ActivityType.customStatus),
+          UserActivity(name: 'Hang', type: ActivityType.hangStatus),
+          UserActivity(name: 'Dota 2'),
+        ],
+      );
+
+      expect(presence.doing.map((activity) => activity.name), ['Dota 2']);
+    });
+
     const custom = UserActivity(
       name: 'Custom Status',
       type: ActivityType.customStatus,

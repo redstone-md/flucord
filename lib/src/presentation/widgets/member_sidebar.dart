@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../application/guild_member_list_controller.dart';
 import '../../domain/chat_models.dart';
@@ -15,6 +14,8 @@ import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_roster_view.dart';
 import 'name_tags.dart';
+import 'popup_anchor.dart';
+import 'profile_card_route.dart';
 
 /// The right-hand member panel.
 ///
@@ -66,17 +67,16 @@ class MemberSidebar extends StatefulWidget {
 }
 
 class _MemberSidebarState extends State<MemberSidebar> {
-  final OverlayPortalController _overlayController = OverlayPortalController();
   final TextEditingController _search = TextEditingController();
-  final Map<String, LayerLink> _memberLinks = {};
   List<Member>? _indexedMembers;
   Map<String, Member> _membersById = const {};
   Map<String, List<VoiceParticipantStateEvent>>? _indexedSeats;
   String? _seatedSpaceId;
   Set<String> _seatedIds = const {};
-  Member? _selectedMember;
-  LayerLink? _selectedLink;
-  bool _openUp = false;
+
+  /// Whose card is open, and what closes it.
+  String? _openMemberId;
+  VoidCallback? _closeCard;
 
   /// The member search as typed. Blank restores the roster, which is what
   /// Discord does too: the results list is not a second roster to keep in
@@ -114,20 +114,14 @@ class _MemberSidebarState extends State<MemberSidebar> {
         oldWidget.memberList != widget.memberList) {
       _watchChannel();
     }
-    if (!identical(oldWidget.members, widget.members)) {
-      _memberLinks.removeWhere((id, _) => !_memberIndex.containsKey(id));
-    }
-    final selectedId = _selectedMember?.id;
-    if (oldWidget.spaceId != widget.spaceId ||
-        (selectedId != null &&
-            !widget.members.any((member) => member.id == selectedId))) {
-      if (_overlayController.isShowing) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _overlayController.hide();
-        });
-      }
-      _selectedMember = null;
-      _selectedLink = null;
+    final openId = _openMemberId;
+    final close = _closeCard;
+    if (openId != null &&
+        close != null &&
+        (oldWidget.spaceId != widget.spaceId ||
+            !_memberIndex.containsKey(openId))) {
+      // Not during the build: closing pops a route.
+      WidgetsBinding.instance.addPostFrameCallback((_) => close());
     }
   }
 
@@ -144,30 +138,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
   Widget build(BuildContext context) {
     final roster = widget.memberList?.list;
     final searching = _searchQuery.trim().isNotEmpty;
-    return OverlayPortal(
-      controller: _overlayController,
-      overlayChildBuilder: _buildOverlay,
-      child: Container(
-        width: 240,
-        decoration: BoxDecoration(
-          color: context.surfaces.surface,
-          border: Border(left: BorderSide(color: context.surfaces.border)),
-        ),
-        child: Column(
-          children: [
-            _MemberSearchHeader(
-              controller: _search,
-              onChanged: _onSearchChanged,
-            ),
-            Expanded(
-              child: searching
-                  ? _buildSearchResults()
-                  : roster != null && roster.isLoaded
-                  ? _buildRoster(roster)
-                  : _buildCachedMembers(_visibleMembers()),
-            ),
-          ],
-        ),
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: context.surfaces.surface,
+        border: Border(left: BorderSide(color: context.surfaces.border)),
+      ),
+      child: Column(
+        children: [
+          _MemberSearchHeader(controller: _search, onChanged: _onSearchChanged),
+          Expanded(
+            child: searching
+                ? _buildSearchResults()
+                : roster != null && roster.isLoaded
+                ? _buildRoster(roster)
+                : _buildCachedMembers(_visibleMembers()),
+          ),
+        ],
       ),
     );
   }
@@ -334,80 +321,30 @@ class _MemberSidebarState extends State<MemberSidebar> {
     );
   }
 
-  Widget _rowFor(Member member) {
-    final link = _memberLinks.putIfAbsent(member.id, LayerLink.new);
-    return _MemberRow(
-      member: member,
-      spaceId: widget.spaceId,
-      inVoice: _seatedHere.contains(member.id),
-      nameColor: _rolesOf(member).nameColor,
-      link: link,
-      selected: member.id == _selectedMember?.id,
-      onPressed: (context) => _showMember(context, member, link),
+  Widget _rowFor(Member member) => _MemberRow(
+    member: member,
+    spaceId: widget.spaceId,
+    inVoice: _seatedHere.contains(member.id),
+    nameColor: _rolesOf(member).nameColor,
+    selected: member.id == _openMemberId,
+    onPressed: (context) => unawaited(_showMember(context, member)),
+  );
+
+  /// Opens [member]'s card beside the row at [rowContext].
+  Future<void> _showMember(BuildContext rowContext, Member member) async {
+    final cardFor = widget.cardFor;
+    if (cardFor == null) return;
+    setState(() => _openMemberId = member.id);
+    await showProfileCard(
+      context: rowContext,
+      anchor: popupAnchorOf(rowContext),
+      builder: (close) {
+        _closeCard = close;
+        return cardFor(member, close);
+      },
     );
-  }
-
-  Widget _buildOverlay(BuildContext context) {
-    final member = _selectedMember;
-    final link = _selectedLink;
-    if (member == null || link == null) return const SizedBox.shrink();
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _dismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: link,
-          showWhenUnlinked: false,
-          targetAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
-          followerAnchor: _openUp ? Alignment.bottomRight : Alignment.topRight,
-          offset: const Offset(-8, 0),
-          child: Focus(
-            autofocus: true,
-            onKeyEvent: (_, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.escape) {
-                _dismiss();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: widget.cardFor!(member, _dismiss),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showMember(BuildContext context, Member member, LayerLink link) {
-    if (widget.cardFor == null) return;
-    final box = context.findRenderObject() as RenderBox?;
-    final centerY = box == null
-        ? 0.0
-        : box
-              .localToGlobal(
-                Offset(0, box.size.height / 2),
-                ancestor: Overlay.of(context).context.findRenderObject(),
-              )
-              .dy;
-    setState(() {
-      _selectedMember = member;
-      _selectedLink = link;
-      _openUp = centerY > MediaQuery.sizeOf(context).height / 2;
-    });
-    _overlayController.show();
-  }
-
-  void _dismiss() {
-    _overlayController.hide();
-    if (!mounted) return;
-    setState(() {
-      _selectedMember = null;
-      _selectedLink = null;
-    });
+    _closeCard = null;
+    if (mounted) setState(() => _openMemberId = null);
   }
 }
 
@@ -472,7 +409,6 @@ class _MemberRow extends StatelessWidget {
     required this.spaceId,
     required this.inVoice,
     required this.nameColor,
-    required this.link,
     required this.selected,
     required this.onPressed,
   });
@@ -483,7 +419,6 @@ class _MemberRow extends StatelessWidget {
 
   /// The member's role colour as a value, or null for the plain text colour.
   final int? nameColor;
-  final LayerLink link;
   final bool selected;
   final ValueChanged<BuildContext> onPressed;
 
@@ -498,67 +433,64 @@ class _MemberRow extends StatelessWidget {
       inVoice: inVoice,
     );
     final color = nameColor;
-    return CompositedTransformTarget(
-      link: link,
-      child: Opacity(
-        opacity: offline ? 0.58 : 1,
-        child: Material(
-          color: selected ? surfaces.raised : Colors.transparent,
-          borderRadius: FlucordRadius.control,
-          child: Semantics(
-            button: true,
-            label: 'Open profile for ${member.displayName}',
-            child: InkWell(
-              key: ValueKey('member-row-${member.id}'),
-              onTap: () => onPressed(context),
-              // Discord opens the same card from the right button. A row that
-              // ignores it is a place where the mouse stops working.
-              onSecondaryTap: () => onPressed(context),
-              borderRadius: FlucordRadius.control,
-              child: Container(
-                height: MemberRosterView.rowHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    MemberAvatar(
-                      member: member,
-                      size: 28,
-                      spaceId: spaceId,
-                      presenceBorderColor: surfaces.surface,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  member.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: FlucordTextRole.label.style.copyWith(
-                                    color: color == null
-                                        ? surfaces.text
-                                        : Color(color),
-                                  ),
+    return Opacity(
+      opacity: offline ? 0.58 : 1,
+      child: Material(
+        color: selected ? surfaces.raised : Colors.transparent,
+        borderRadius: FlucordRadius.control,
+        child: Semantics(
+          button: true,
+          label: 'Open profile for ${member.displayName}',
+          child: InkWell(
+            key: ValueKey('member-row-${member.id}'),
+            onTap: () => onPressed(context),
+            // Discord opens the same card from the right button. A row that
+            // ignores it is a place where the mouse stops working.
+            onSecondaryTap: () => onPressed(context),
+            borderRadius: FlucordRadius.control,
+            child: Container(
+              height: MemberRosterView.rowHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  MemberAvatar(
+                    member: member,
+                    size: 28,
+                    spaceId: spaceId,
+                    presenceBorderColor: surfaces.surface,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                member.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: FlucordTextRole.label.style.copyWith(
+                                  color: color == null
+                                      ? surfaces.text
+                                      : Color(color),
                                 ),
                               ),
-                              NameTags(member: member),
-                            ],
-                          ),
-                          if (summary != null)
-                            ActivitySummaryLine(
-                              key: ValueKey('member-activity-${member.id}'),
-                              summary: summary,
                             ),
-                        ],
-                      ),
+                            NameTags(member: member),
+                          ],
+                        ),
+                        if (summary != null)
+                          ActivitySummaryLine(
+                            key: ValueKey('member-activity-${member.id}'),
+                            summary: summary,
+                          ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_icons.dart';
@@ -7,10 +11,14 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
+import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'name_tags.dart';
+import 'overlapping_faces.dart';
+import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
+import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 
 part 'profile_card_parts.dart';
@@ -56,6 +64,16 @@ final class ProfileCardMenuEntry {
     this.key,
   });
 
+  /// "Copy user ID", which every card offers.
+  ProfileCardMenuEntry.copyUserId(String userId, {Key? key})
+    : this(
+        key: key,
+        label: 'Copy user ID',
+        icon: FlucordIcons.id,
+        onSelected: () =>
+            unawaited(Clipboard.setData(ClipboardData(text: userId))),
+      );
+
   final String label;
   final FlucordIconData icon;
   final VoidCallback onSelected;
@@ -66,8 +84,8 @@ final class ProfileCardMenuEntry {
 /// The profile card: one person, drawn the way Discord's popout draws them.
 ///
 /// Every host opens this same card: member list rows, message authors,
-/// voice seats and friend rows. It is 300 wide and scrolls when the window
-/// is shorter than it.
+/// voice seats and friend rows. It scrolls when the window is shorter than
+/// it.
 class ProfileCard extends StatelessWidget {
   const ProfileCard({
     required this.data,
@@ -118,7 +136,7 @@ class ProfileCard extends StatelessWidget {
         key: const ValueKey('profile-card'),
         color: surfaces.raised,
         elevation: _preview ? 0 : 12,
-        shadowColor: Colors.black,
+        shadowColor: FlucordFixedColors.shadow,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: FlucordRadius.overlay,
@@ -260,8 +278,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// An 80 px avatar in a ring of the card's colour, with its decoration and
-/// the status dot.
+/// The avatar in a ring of the card's colour, with its decoration and the
+/// status dot.
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.data});
 
@@ -289,21 +307,10 @@ class _Avatar extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(ProfileCard._ring),
               child: ClipOval(
-                child: RemoteIdentityImage(
+                child: ProfileAvatarImage(
                   url: data.avatarUrl,
-                  fallback: ColoredBox(
-                    color: colorValue == null
-                        ? surfaces.control
-                        : Color(colorValue),
-                    child: Center(
-                      child: Text(
-                        data.monogram,
-                        style: FlucordTextRole.display.style.copyWith(
-                          color: FlucordFixedColors.onFill,
-                        ),
-                      ),
-                    ),
-                  ),
+                  monogram: data.monogram,
+                  fill: colorValue == null ? null : Color(colorValue),
                 ),
               ),
             ),
@@ -408,7 +415,7 @@ class _MoreButton extends StatelessWidget {
   Future<void> _open(BuildContext context) async {
     final chosen = await showMenu<ProfileCardMenuEntry>(
       context: context,
-      position: _menuBelow(context),
+      position: menuBelow(context),
       items: [
         for (final entry in entries)
           FlucordMenuItem(
@@ -431,18 +438,6 @@ class _MoreButton extends StatelessWidget {
       tooltip: 'More',
       onPressed: () => _open(context),
     ),
-  );
-}
-
-/// Where a menu opened from the control at [context] goes: just under it.
-RelativeRect _menuBelow(BuildContext context) {
-  final control = context.findRenderObject()! as RenderBox;
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
-  final rect =
-      control.localToGlobal(Offset.zero, ancestor: overlay) & control.size;
-  return RelativeRect.fromRect(
-    Rect.fromLTWH(rect.left, rect.bottom + 4, rect.width, 0),
-    Offset.zero & overlay.size,
   );
 }
 
@@ -469,31 +464,27 @@ class _MessageFieldState extends State<_MessageField> {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final border = OutlineInputBorder(
-      borderRadius: FlucordRadius.medium,
-      borderSide: BorderSide(color: surfaces.border),
-    );
     return TextField(
       key: const ValueKey('profile-card-message'),
       controller: _text,
       textInputAction: TextInputAction.send,
       onSubmitted: (text) => widget.onSubmit(text.trim()),
       style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: surfaces.inset,
-        hintText: 'Message @${widget.name}',
-        hintStyle: FlucordTextRole.label.style.copyWith(
-          color: surfaces.captionText,
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        border: border,
-        enabledBorder: border,
-        focusedBorder: border.copyWith(
-          borderSide: BorderSide(color: surfaces.focusRing),
-        ),
-      ),
+      // Framed, as the activity card above it: siblings share a corner.
+      decoration:
+          recessedFieldDecoration(
+            context,
+            borderRadius: FlucordRadius.framed,
+          ).copyWith(
+            hintText: 'Message @${widget.name}',
+            hintStyle: FlucordTextRole.label.style.copyWith(
+              color: surfaces.captionText,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 9,
+            ),
+          ),
     );
   }
 }

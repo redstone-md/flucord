@@ -366,6 +366,10 @@ abstract final class FlucordFixedColors {
 
   /// The star on a favourite.
   static const favourite = Color(0xFFF0B232);
+
+  /// The shadow under something that floats over the interface, such as the
+  /// profile card.
+  static const shadow = Color(0xFF000000);
 }
 
 @immutable

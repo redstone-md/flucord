@@ -9,9 +9,9 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
+import 'art_tile.dart';
 import 'member_avatar.dart';
-import 'rail_tile.dart';
-import 'remote_identity_image.dart';
+import 'overlapping_faces.dart';
 
 /// The Friends page's right column: one card per friend who is playing,
 /// listening, watching or sitting in voice.
@@ -171,7 +171,7 @@ class _ActiveFriendCard extends StatelessWidget {
           if (rich != null) ...[
             const _CardDivider(),
             _Block(
-              art: _ArtTile(
+              art: ArtTile(
                 url: rich.assets?.largeImageUrl,
                 monogram: monogramOf(rich.name),
                 color: surfaces.inset,
@@ -183,14 +183,21 @@ class _ActiveFriendCard extends StatelessWidget {
           if (room != null) ...[
             const _CardDivider(),
             _Block(
-              art: _ArtTile(
+              art: ArtTile(
                 url: room.space.iconUrl,
                 monogram: room.space.monogram,
                 color: Color(room.space.colorValue),
               ),
               title: room.channel.name,
               caption: '${room.space.name} · ${_people(room.people.length)}',
-              trailing: _Faces(people: room.people.take(3).toList()),
+              trailing: OverlappingFaces(
+                size: 20,
+                ringColor: surfaces.raised,
+                faces: [
+                  for (final person in room.people.take(3))
+                    MemberAvatar(member: person, size: 20, showPresence: false),
+                ],
+              ),
             ),
           ],
         ],
@@ -225,7 +232,7 @@ class _CardDivider extends StatelessWidget {
   );
 }
 
-/// A card's second block: a 40 px tile, a title, a caption, and maybe
+/// A card's second block: a tile, a title, a caption, and maybe
 /// something on the right.
 class _Block extends StatelessWidget {
   const _Block({
@@ -278,54 +285,4 @@ class _Block extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Artwork on a 40 px tile, or [monogram] on [color] when there is none.
-class _ArtTile extends StatelessWidget {
-  const _ArtTile({
-    required this.url,
-    required this.monogram,
-    required this.color,
-  });
-
-  final String? url;
-  final String monogram;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: FlucordRadius.medium,
-    child: SizedBox.square(
-      dimension: 40,
-      child: ColoredBox(
-        color: color,
-        child: RemoteIdentityImage(url: url, fallback: RailMonogram(monogram)),
-      ),
-    ),
-  );
-}
-
-/// Up to three faces from a voice channel, overlapping a little.
-class _Faces extends StatelessWidget {
-  const _Faces({required this.people});
-
-  final List<Member> people;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (final person in people)
-        Align(
-          widthFactor: 0.8,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: context.surfaces.raised, width: 2),
-            ),
-            child: MemberAvatar(member: person, size: 20, showPresence: false),
-          ),
-        ),
-    ],
-  );
 }
