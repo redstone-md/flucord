@@ -115,8 +115,12 @@ void main() {
       await session.dispatch('CHANNEL_CREATE', _rawDirectMessage());
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      // The rail has the pip while the account is looking at another server.
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      // The rail shows it while the account is looking at another server. A
+      // DM message counts as a mention, as in Discord.
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
       await session.settle();
@@ -139,7 +143,10 @@ void main() {
       );
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
     });
 
     testSession('a first DM with no CHANNEL_CREATE still shows', (
@@ -150,7 +157,10 @@ void main() {
 
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
       await session.settle();
       expect(_channelRow(_newDmId), findsOneWidget);
