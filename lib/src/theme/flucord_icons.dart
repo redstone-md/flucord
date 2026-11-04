@@ -211,6 +211,15 @@ abstract final class FlucordIcons {
 
   // The channel list and its voice seats.
   static const forum = FlucordIconData(HugeIcons.strokeRoundedBubbleChat);
+
+  // Activity kinds, as a member row shows them.
+  static const game = FlucordIconData(HugeIcons.strokeRoundedGameController03);
+  static const streaming = FlucordIconData(
+    HugeIcons.strokeRoundedLiveStreaming02,
+  );
+  static const listening = FlucordIconData(HugeIcons.strokeRoundedMusicNote01);
+  static const watching = FlucordIconData(HugeIcons.strokeRoundedTv01);
+  static const competing = FlucordIconData(HugeIcons.strokeRoundedChampion);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.
