@@ -23,6 +23,18 @@ abstract final class FlucordTheme {
   /// A field's text is the body role, 21 px a line.
   static const _fieldLineHeight = 21.0;
 
+  /// The frame every button shares, whatever its colours: the control
+  /// height, the padding, the [label] style and the control corner. The
+  /// theme's filled button and every FlucordButton kind start from it.
+  static ButtonStyle buttonFrame(TextStyle? label) => ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(0, _controlHeight)),
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+    textStyle: WidgetStatePropertyAll(label),
+    shape: const WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: FlucordRadius.control),
+    ),
+  );
+
   static OutlineInputBorder fieldBorder(Color color, double width) =>
       OutlineInputBorder(
         borderRadius: FlucordRadius.control,
@@ -201,22 +213,14 @@ abstract final class FlucordTheme {
       // The primary button is light, with the label in the rail colour:
       // white on the violet accent does not reach 4.5:1.
       filledButtonTheme: FilledButtonThemeData(
-        style: ButtonStyle(
+        style: buttonFrame(textTheme.labelLarge).copyWith(
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
                 ? text.withValues(alpha: disabledAlpha)
                 : text,
           ),
           foregroundColor: WidgetStatePropertyAll(rail),
-          minimumSize: const WidgetStatePropertyAll(Size(0, _controlHeight)),
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: 12),
-          ),
-          textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
           side: focusSide,
-          shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: FlucordRadius.control),
-          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(style: ButtonStyle(side: focusSide)),
