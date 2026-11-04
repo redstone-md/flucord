@@ -357,10 +357,10 @@ class ChatHeader extends StatelessWidget {
     ],
   );
 
-  /// The member list's button. A DM has one person instead, so there it
-  /// opens their profile.
+  /// The member list's button. A one-to-one DM has one person instead, so
+  /// there it opens their profile.
   Widget _membersToggle() {
-    final person = channel.isDirectMessage;
+    final person = channel.soleRecipientId != null;
     return FlucordIconButton(
       key: const ValueKey('toggle-members'),
       onPressed: onToggleMembers,
@@ -377,6 +377,7 @@ class ChatHeader extends StatelessWidget {
 
   static String _channelLabel(ConversationChannel channel) {
     if (channel.isThread) return 'Post:';
+    if (channel.isGroupDirectMessage) return 'Group:';
     if (channel.isDirectMessage) return '@';
     return switch (channel.kind) {
       ChannelKind.text => '#',
@@ -388,6 +389,7 @@ class ChatHeader extends StatelessWidget {
 
   static FlucordIconData _channelIcon(ConversationChannel channel) {
     if (channel.isThread) return FlucordIcons.threads;
+    if (channel.isGroupDirectMessage) return FlucordIcons.members;
     if (channel.isDirectMessage) return FlucordIcons.person;
     return switch (channel.kind) {
       ChannelKind.text => FlucordIcons.textChannel,

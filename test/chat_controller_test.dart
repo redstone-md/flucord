@@ -712,10 +712,9 @@ void main() {
           controller.workspace!.spaceById(CommunitySpace.directMessagesId).kind,
           SpaceKind.directMessages,
         );
-        expect(
-          controller.workspace!.channelById(channelId!).recipientId,
-          isNotNull,
-        );
+        expect(controller.workspace!.channelById(channelId!).recipientIds, [
+          '123456789012345678',
+        ]);
       },
     );
 
@@ -740,7 +739,7 @@ void main() {
           name: 'Jack',
           topic: 'Direct message with Jack',
           kind: ChannelKind.text,
-          recipientId: 'dm-user',
+          recipientIds: ['dm-user'],
         );
 
         repository.emit(

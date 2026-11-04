@@ -64,11 +64,12 @@ enum Presence {
   };
 }
 
+/// A DM with its recipients, as Discord hands out a private channel.
 final class DirectConversation {
-  const DirectConversation({required this.channel, required this.recipient});
+  const DirectConversation({required this.channel, required this.recipients});
 
   final ConversationChannel channel;
-  final Member recipient;
+  final List<Member> recipients;
 }
 
 /// A server's tag that a user shows beside their name, such as "CODE".

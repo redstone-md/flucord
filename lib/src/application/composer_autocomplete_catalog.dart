@@ -231,7 +231,7 @@ final class _CatalogSources {
             .where((member) {
               if (_activeChannel.isDirectMessage) {
                 return member.id == _currentMemberId ||
-                    member.id == _activeChannel.recipientId;
+                    _activeChannel.recipientIds.contains(member.id);
               }
               return member.spaceIds.isEmpty ||
                   member.spaceIds.contains(_activeChannel.spaceId);

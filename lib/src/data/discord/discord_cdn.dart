@@ -11,6 +11,13 @@ final class DiscordCdn {
   static String? guildBanner(String guildId, String? hash, {int size = 512}) =>
       _asset(['banners', guildId], hash, size: size);
 
+  /// A group DM's own picture.
+  static String? channelIcon(
+    String channelId,
+    String? hash, {
+    int size = 128,
+  }) => _asset(['channel-icons', channelId], hash, size: size);
+
   static String? userAvatar(String userId, String? hash, {int size = 128}) =>
       hash == null || hash.isEmpty
       ? defaultUserAvatar(userId)

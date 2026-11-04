@@ -44,13 +44,18 @@ extension _DiscordDesktopChatSession on DiscordDesktopChatRepository {
 
   /// R09 computes `private_channels_version` over the read states of private
   /// channels only, so the store has to be told which channels those are. The
-  /// DM path needs them too, to tell a new conversation from a known one.
-  void _adoptPrivateChannels(ChatWorkspace workspace) {
+  /// DM path needs them too, to tell a new conversation from a known one, and
+  /// [payloads], READY's own private channels, to rebuild a group DM whose
+  /// recipients change.
+  void _adoptPrivateChannels(
+    ChatWorkspace workspace, {
+    List<Map<String, Object?>> payloads = const [],
+  }) {
     final privateChannels = workspace.channels
         .where((channel) => channel.isDirectMessage)
         .toList(growable: false);
     _readState.setPrivateChannelIds(privateChannels.map((c) => c.id));
-    _directMessages.seed(privateChannels);
+    _directMessages.seed(privateChannels, payloads: payloads);
   }
 
   Future<T> _bootstrapStage<T>(

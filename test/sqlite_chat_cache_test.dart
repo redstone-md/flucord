@@ -305,7 +305,7 @@ void main() {
           name: 'Jack',
           topic: 'Direct message with Jack',
           kind: ChannelKind.text,
-          recipientId: 'user-1',
+          recipientIds: ['user-1'],
         ),
       ],
       members: const [
@@ -336,7 +336,7 @@ void main() {
     final restored = await cache.readWorkspace();
 
     expect(restored?.spaces.single.kind, SpaceKind.directMessages);
-    expect(restored?.channels.single.recipientId, 'user-1');
+    expect(restored?.channels.single.recipientIds, ['user-1']);
     expect(restored?.channels.single.isDirectMessage, isTrue);
     expect(restored?.memberById('user-1').displayName, 'Jack');
   });

@@ -167,6 +167,39 @@ class DirectMessageHeaderAvatar extends StatelessWidget {
   );
 }
 
+/// A group DM's picture: its own icon, or the group glyph on the brand fill.
+class GroupDirectMessageAvatar extends StatelessWidget {
+  const GroupDirectMessageAvatar({
+    required this.channel,
+    required this.size,
+    super.key,
+  });
+
+  final ConversationChannel channel;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    key: ValueKey('group-dm-avatar-${channel.id}'),
+    dimension: size,
+    child: ClipOval(
+      child: RemoteIdentityImage(
+        url: channel.iconUrl,
+        fallback: ColoredBox(
+          color: context.surfaces.brand,
+          child: Center(
+            child: FlucordIcon(
+              FlucordIcons.members,
+              size: size * 0.6,
+              color: FlucordFixedColors.onFill,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// What a DM opens on, above its first message: the person, large, and a
 /// line that says this is where the history starts.
 class DirectMessageStart extends StatelessWidget {

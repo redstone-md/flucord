@@ -25,7 +25,8 @@ final class ConversationChannel {
     this.defaultAutoArchiveDurationMinutes,
     this.defaultSortOrder,
     this.defaultForumLayout,
-    this.recipientId,
+    this.recipientIds = const [],
+    this.iconUrl,
     this.isMessageRequest = false,
     this.messageRequestedAt,
     this.unread = false,
@@ -63,7 +64,15 @@ final class ConversationChannel {
   final int? defaultAutoArchiveDurationMinutes;
   final ForumSortOrder? defaultSortOrder;
   final ForumLayout? defaultForumLayout;
-  final String? recipientId;
+
+  /// Who this DM is with, never this account. Empty outside the DM list.
+  ///
+  /// One recipient makes a one-to-one DM; any other count is a group DM,
+  /// including a group everybody else has left.
+  final List<String> recipientIds;
+
+  /// A group DM's own picture, or null for the group avatar.
+  final String? iconUrl;
 
   /// A direct message the account has not answered yet, so it belongs in the
   /// message-request folder rather than the DM list.
@@ -112,7 +121,14 @@ final class ConversationChannel {
   /// editor offers a fixed list plus Auto; the id is whatever it accepts.
   final String? rtcRegion;
 
-  bool get isDirectMessage => recipientId != null;
+  /// Whether this is a DM, one-to-one or group: a channel in the DM list.
+  bool get isDirectMessage => spaceId == CommunitySpace.directMessagesId;
+
+  bool get isGroupDirectMessage => isDirectMessage && recipientIds.length != 1;
+
+  /// The one person a one-to-one DM is with, or null for anything else.
+  String? get soleRecipientId =>
+      isDirectMessage && recipientIds.length == 1 ? recipientIds.single : null;
 
   /// The guild this channel belongs to, or null outside a server.
   ///
@@ -228,7 +244,8 @@ final class ConversationChannel {
         this.defaultAutoArchiveDurationMinutes,
     defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
     defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
-    recipientId: recipientId,
+    recipientIds: recipientIds,
+    iconUrl: iconUrl,
     isMessageRequest: isMessageRequest ?? this.isMessageRequest,
     messageRequestedAt:
         identical(messageRequestedAt, _keepMessageRequestTimestamp)

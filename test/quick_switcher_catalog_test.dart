@@ -71,7 +71,7 @@ void main() {
             name: 'User mira',
             topic: '',
             kind: ChannelKind.text,
-            recipientId: 'mira',
+            recipientIds: ['mira'],
             unread: true,
           ),
         ],

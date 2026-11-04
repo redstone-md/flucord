@@ -148,7 +148,7 @@ void main() {
         name: 'Jack',
         topic: '',
         kind: ChannelKind.text,
-        recipientId: 'jack',
+        recipientIds: ['jack'],
       ),
       leading: person,
     );

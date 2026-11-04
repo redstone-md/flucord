@@ -152,7 +152,7 @@ class ConversationPaneState extends State<ConversationPane> {
   final _timelineKey = GlobalKey<MessageListState>();
 
   static String _composerHintPrefix(ConversationChannel channel) {
-    if (channel.isDirectMessage) return '@';
+    if (channel.soleRecipientId != null) return '@';
     final hasNoHash =
         channel.kind == ChannelKind.voice ||
         channel.spaceId == CommunitySpace.directMessagesId;
@@ -525,6 +525,10 @@ class ConversationPaneState extends State<ConversationPane> {
           channel: channel,
           leading: switch (_recipientOf(channel)) {
             final person? => DirectMessageHeaderAvatar(person: person),
+            null when channel.isGroupDirectMessage => GroupDirectMessageAvatar(
+              channel: channel,
+              size: DirectMessageHeaderAvatar.size,
+            ),
             null => null,
           },
           // Only a thread has a membership to join; every other channel gets
@@ -728,7 +732,7 @@ class ConversationPaneState extends State<ConversationPane> {
 
   /// The one other person in a DM, or null for a channel or a group DM.
   Member? _recipientOf(ConversationChannel channel) =>
-      switch (channel.recipientId) {
+      switch (channel.soleRecipientId) {
         final id? => widget.workspace.memberOrNull(id),
         null => null,
       };

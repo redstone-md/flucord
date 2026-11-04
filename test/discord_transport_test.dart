@@ -613,7 +613,7 @@ void main() {
     expect(workspace.spaces.single.kind, SpaceKind.directMessages);
     final channel = workspace.channels.single;
     expect(channel.name, 'Jack');
-    expect(channel.recipientId, '123456789012345678');
+    expect(channel.recipientIds, ['123456789012345678']);
     expect(channel.isDirectMessage, isTrue);
     expect(
       workspace.memberById('123456789012345678').avatarUrl,

@@ -189,7 +189,7 @@ final _workspace = ChatWorkspace(
       name: 'Mira Stone',
       topic: '',
       kind: ChannelKind.text,
-      recipientId: 'member-1',
+      recipientIds: ['member-1'],
     ),
   ],
   members: const [

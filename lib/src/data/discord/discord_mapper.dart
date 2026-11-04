@@ -22,16 +22,6 @@ part 'discord_sticker_mapper.dart';
 part 'discord_scheduled_event_mapper.dart';
 part 'discord_channel_mapper.dart';
 
-final class DiscordMappedDirectMessage {
-  const DiscordMappedDirectMessage({
-    required this.channel,
-    required this.recipient,
-  });
-
-  final ConversationChannel channel;
-  final Member recipient;
-}
-
 final class DiscordMapper {
   static const directMessagesSpaceId = CommunitySpace.directMessagesId;
   static const _colors = [
@@ -70,7 +60,9 @@ final class DiscordMapper {
       final mapped = directMessage(payload, currentUser['id']! as String);
       if (mapped == null) continue;
       channels.add(mapped.channel);
-      members[mapped.recipient.id] = mapped.recipient;
+      for (final recipient in mapped.recipients) {
+        members[recipient.id] = recipient;
+      }
     }
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
@@ -153,31 +145,42 @@ final class DiscordMapper {
     );
   }
 
-  DiscordMappedDirectMessage? directMessage(
+  /// A DM from Discord's private channel: a one-to-one DM (type 1) or a
+  /// group DM (type 3). Null for any other type, and for a one-to-one DM that
+  /// names nobody.
+  DirectConversation? directMessage(
     Map<String, Object?> payload,
     String currentUserId,
   ) {
-    if (payload['type'] != 1) return null;
+    final type = payload['type'];
+    if (type != 1 && type != 3) return null;
     final recipients = (payload['recipients'] as List? ?? const [])
         .whereType<Map>()
         .map((recipient) => recipient.cast<String, Object?>())
         .where((recipient) => recipient['id'] != currentUserId)
+        .map(
+          (recipient) => member(
+            recipient,
+            role: 'Direct message',
+            spaceIds: const {directMessagesSpaceId},
+          ),
+        )
         .toList(growable: false);
-    if (recipients.isEmpty) return null;
-    final recipient = member(
-      recipients.first,
-      role: 'Direct message',
-      spaceIds: const {directMessagesSpaceId},
-    );
-    return DiscordMappedDirectMessage(
-      recipient: recipient,
+    if (type == 1 && recipients.isEmpty) return null;
+    final id = payload['id']! as String;
+    final name = type == 1
+        ? recipients.first.displayName
+        : _groupName(payload['name'], recipients);
+    return DirectConversation(
+      recipients: recipients,
       channel: ConversationChannel(
-        id: payload['id']! as String,
+        id: id,
         spaceId: directMessagesSpaceId,
-        name: recipient.displayName,
-        topic: 'Direct message with ${recipient.displayName}',
+        name: name,
+        topic: type == 1 ? 'Direct message with $name' : '',
         kind: ChannelKind.text,
-        recipientId: recipient.id,
+        recipientIds: [for (final recipient in recipients) recipient.id],
+        iconUrl: DiscordCdn.channelIcon(id, payload['icon'] as String?),
         isMessageRequest: payload['is_message_request'] as bool? ?? false,
         messageRequestedAt: _messageRequestTimestamp(
           payload['is_message_request_timestamp'],
@@ -185,6 +188,14 @@ final class DiscordMapper {
         lastMessageId: _lastMessageId(payload),
       ),
     );
+  }
+
+  /// A group DM's own name, or its recipients' names when it has none, the
+  /// way Discord titles an unnamed group.
+  static String _groupName(Object? name, List<Member> recipients) {
+    if (name is String && name.trim().isNotEmpty) return name;
+    if (recipients.isEmpty) return 'Unnamed group';
+    return recipients.map((recipient) => recipient.displayName).join(', ');
   }
 
   /// The request's own timestamp, promoted out of its ISO string. Discord

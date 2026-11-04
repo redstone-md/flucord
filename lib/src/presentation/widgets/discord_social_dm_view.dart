@@ -173,7 +173,7 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
         name: user.displayName,
         topic: '',
         kind: ChannelKind.text,
-        recipientId: user.id,
+        recipientIds: [user.id],
       );
 }
 

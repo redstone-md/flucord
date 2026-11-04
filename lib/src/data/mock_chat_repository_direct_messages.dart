@@ -24,12 +24,12 @@ mixin _MockChatRepositoryDirectMessages implements ChatRepository {
       name: recipient.displayName,
       topic: 'Direct message with ${recipient.displayName}',
       kind: ChannelKind.text,
-      recipientId: recipient.id,
+      recipientIds: [recipient.id],
     );
     _workspace = _workspace
         .upsertSpace(space)
         .upsertMember(recipient)
         .upsertChannel(channel);
-    return DirectConversation(channel: channel, recipient: recipient);
+    return DirectConversation(channel: channel, recipients: [recipient]);
   }
 }

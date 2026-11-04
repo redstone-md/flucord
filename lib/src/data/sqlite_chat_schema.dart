@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 26;
+  static const version = 27;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -55,7 +55,8 @@ abstract final class SqliteChatSchema {
         default_auto_archive_duration INTEGER,
         default_sort_order INTEGER,
         default_forum_layout INTEGER,
-        recipient_id TEXT,
+        recipient_ids_json TEXT NOT NULL DEFAULT '[]',
+        icon_url TEXT,
         is_message_request INTEGER NOT NULL DEFAULT 0,
         message_requested_at TEXT,
         permission_overwrites_json TEXT,
@@ -401,6 +402,23 @@ abstract final class SqliteChatSchema {
       );
       await _addColumn(database, 'channels', 'message_requested_at TEXT');
     }
+    if (oldVersion < 27) {
+      // A DM keeps every recipient, so a group DM fits. The old single
+      // recipient moves into the list and its column is left unused: dropping
+      // a column needs a newer SQLite than every install has.
+      await _addColumn(
+        database,
+        'channels',
+        "recipient_ids_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await _addColumn(database, 'channels', 'icon_url TEXT');
+      if (await _hasTable(database, 'channels')) {
+        await database.execute(
+          "UPDATE channels SET recipient_ids_json = '[\"' || recipient_id || '\"]' "
+          'WHERE recipient_id IS NOT NULL',
+        );
+      }
+    }
   }
 
   /// Adds a column, skipping tables this database does not have.
@@ -414,6 +432,11 @@ abstract final class SqliteChatSchema {
     String table,
     String definition,
   ) async {
+    if (!await _hasTable(database, table)) return;
+    await database.execute('ALTER TABLE $table ADD $definition');
+  }
+
+  static Future<bool> _hasTable(Database database, String table) async {
     final existing = await database.query(
       'sqlite_master',
       columns: ['name'],
@@ -421,8 +444,7 @@ abstract final class SqliteChatSchema {
       whereArgs: ['table', table],
       limit: 1,
     );
-    if (existing.isEmpty) return;
-    await database.execute('ALTER TABLE $table ADD $definition');
+    return existing.isNotEmpty;
   }
 
   static Future<void> _createGuildStickers(DatabaseExecutor database) async {

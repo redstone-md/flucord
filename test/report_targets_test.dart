@@ -157,7 +157,7 @@ final _directWorkspace = ChatWorkspace(
       name: 'Mira Chen',
       topic: '',
       kind: ChannelKind.text,
-      recipientId: 'member-1',
+      recipientIds: ['member-1'],
     ),
   ],
   members: const [_member, _currentMember],

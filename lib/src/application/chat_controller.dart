@@ -548,9 +548,11 @@ final class ChatController extends ChangeNotifier {
     if (value.isEmpty || _workspace == null) return null;
     try {
       final conversation = await _repository.openDirectConversation(value);
-      _workspace = _workspace!
-          .upsertSpace(const CommunitySpace.directMessages())
-          .upsertMember(conversation.recipient)
+      _workspace = conversation.recipients
+          .fold(
+            _workspace!.upsertSpace(const CommunitySpace.directMessages()),
+            (workspace, recipient) => workspace.upsertMember(recipient),
+          )
           .upsertChannel(conversation.channel);
       notifyListeners();
       return conversation.channel.id;

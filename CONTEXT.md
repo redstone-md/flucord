@@ -67,3 +67,15 @@ _Avoid_: frame, access unit, image
 **Screen-share audio**:
 The sound of what is being shared, travelling with the stream rather than with the room's voice.
 _Avoid_: system audio, loopback audio, desktop audio
+
+**Direct message (DM)**:
+A conversation outside any server, listed under Direct Messages. It has a list of recipients: one makes a one-to-one DM, any other number a group DM.
+_Avoid_: private channel (Discord's API name)
+
+**Recipient**:
+Somebody a DM is with. Never this account.
+_Avoid_: participant, peer, member
+
+**Group DM**:
+A DM that is not one-to-one. It may have its own name and picture; with no name, it goes by its recipients' names.
+_Avoid_: group chat, group channel

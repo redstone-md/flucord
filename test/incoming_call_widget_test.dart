@@ -226,11 +226,11 @@ final ChatWorkspace _workspace = ChatWorkspace(
   channels: const [
     ConversationChannel(
       id: 'dm-1',
-      spaceId: 'direct-messages',
+      spaceId: CommunitySpace.directMessagesId,
       name: 'Jack',
       topic: 'Direct message with Jack',
       kind: ChannelKind.text,
-      recipientId: 'friend-1',
+      recipientIds: ['friend-1'],
     ),
   ],
   members: const [_jack],
