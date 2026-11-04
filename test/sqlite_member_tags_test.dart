@@ -34,11 +34,13 @@ void main() {
         role: 'Member',
         presence: Presence.offline,
         colorValue: 0xff456b5a,
-        isBot: true,
-        clanTag: ClanTag(
-          tag: 'CODE',
-          guildId: 'guild-9',
-          badgeUrl: 'https://cdn.discordapp.com/clan-badges/guild-9/b.webp',
+        tags: MemberTags(
+          isBot: true,
+          clanTag: ClanTag(
+            tag: 'CODE',
+            guildId: 'guild-9',
+            badgeUrl: 'https://cdn.discordapp.com/clan-badges/guild-9/b.webp',
+          ),
         ),
       ),
     );
@@ -53,6 +55,43 @@ void main() {
       'https://cdn.discordapp.com/clan-badges/guild-9/b.webp',
     );
   });
+
+  test(
+    'a member written without a word on the clan keeps the stored tag',
+    () async {
+      final cache = await SqliteChatCache.openAt(
+        inMemoryDatabasePath,
+        factory: databaseFactoryFfi,
+      );
+      addTearDown(cache.close);
+      Member helper(MemberTags tags) => Member(
+        id: _authorId,
+        displayName: 'Helper',
+        initials: 'H',
+        role: 'Member',
+        presence: Presence.offline,
+        colorValue: 0xff456b5a,
+        tags: tags,
+      );
+
+      await cache.writeMessage(
+        _message(),
+        member: helper(
+          const MemberTags(
+            clanTag: ClanTag(tag: 'CODE', guildId: 'guild-9'),
+          ),
+        ),
+      );
+      await cache.writeMember(helper(const MemberTags.clanTagUnsaid()));
+      final kept = (await cache.readChannelHistory('channel-1')).members.single;
+
+      await cache.writeMember(helper(const MemberTags()));
+      final cleared = (await cache.readChannelHistory('channel-1')).members;
+
+      expect(kept.clanTag?.tag, 'CODE');
+      expect(cleared.single.clanTag, isNull);
+    },
+  );
 
   test('a member cached before v25 opens as a person with no tag', () async {
     final directory = await Directory.systemTemp.createTemp(

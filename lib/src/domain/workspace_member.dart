@@ -97,6 +97,43 @@ final class ClanTag {
   int get hashCode => Object.hash(tag, guildId, badgeUrl);
 }
 
+/// What Discord draws beside a user's name: APP for an application, and the
+/// server tag the user shows.
+final class MemberTags {
+  /// Tags from a payload that named the clan tag, even as null.
+  const MemberTags({this.isBot = false, this.clanTag}) : knowsClanTag = true;
+
+  /// Tags from a user object that left `primary_guild` out. Such a payload
+  /// says nothing about the clan tag, so the tag already known stays.
+  const MemberTags.clanTagUnsaid({this.isBot = false})
+    : clanTag = null,
+      knowsClanTag = false;
+
+  static const none = MemberTags();
+
+  final bool isBot;
+  final ClanTag? clanTag;
+
+  /// Whether [clanTag] is what the payload said, rather than a gap.
+  final bool knowsClanTag;
+
+  /// These tags laid over [known]: a clan tag the payload left out keeps the
+  /// one in [known].
+  MemberTags over(MemberTags known) => knowsClanTag || !known.knowsClanTag
+      ? this
+      : MemberTags(isBot: isBot, clanTag: known.clanTag);
+
+  @override
+  bool operator ==(Object other) =>
+      other is MemberTags &&
+      other.isBot == isBot &&
+      other.clanTag == clanTag &&
+      other.knowsClanTag == knowsClanTag;
+
+  @override
+  int get hashCode => Object.hash(isBot, clanTag, knowsClanTag);
+}
+
 final class Member {
   const Member({
     required this.id,
@@ -111,8 +148,7 @@ final class Member {
     this.avatarUrlsBySpace = const {},
     this.membershipsBySpace = const {},
     this.presenceDetail,
-    this.isBot = false,
-    this.clanTag,
+    this.tags = MemberTags.none,
   });
 
   final String id;
@@ -139,11 +175,13 @@ final class Member {
   /// Discord reported the user as offline. Only the second may be cached.
   final UserPresence? presenceDetail;
 
+  final MemberTags tags;
+
   /// Whether this user is an application, which Discord marks with APP.
-  final bool isBot;
+  bool get isBot => tags.isBot;
 
   /// The server tag shown beside the name, or null for none.
-  final ClanTag? clanTag;
+  ClanTag? get clanTag => tags.clanTag;
 
   /// The presence a row should render, falling back to the coarse status the
   /// member cache persists.
@@ -166,8 +204,7 @@ final class Member {
     Map<String, String>? avatarUrlsBySpace,
     Map<String, GuildMembership>? membershipsBySpace,
     UserPresence? presenceDetail,
-    bool? isBot,
-    ClanTag? clanTag,
+    MemberTags? tags,
   }) => Member(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -181,8 +218,7 @@ final class Member {
     avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
     membershipsBySpace: membershipsBySpace ?? this.membershipsBySpace,
     presenceDetail: presenceDetail ?? this.presenceDetail,
-    isBot: isBot ?? this.isBot,
-    clanTag: clanTag ?? this.clanTag,
+    tags: tags ?? this.tags,
   );
 
   /// This member with [spaceId] gone, or null when nothing of them is left.
@@ -204,49 +240,15 @@ final class Member {
     );
   }
 
-  /// Replaces the whole presence, detail included.
-  ///
-  /// Separate from [copyWith] because presence is the one field whose new
-  /// value is routinely "nothing is known any more": a `copyWith` that ignores
-  /// a null would keep showing the activity of a user who has gone offline.
-  Member withPresence(UserPresence presence) => Member(
-    id: id,
-    displayName: displayName,
-    initials: initials,
-    role: role,
-    presence: presence.status,
-    colorValue: colorValue,
-    spaceIds: spaceIds,
-    rolesBySpace: rolesBySpace,
-    avatarUrl: avatarUrl,
-    avatarUrlsBySpace: avatarUrlsBySpace,
-    membershipsBySpace: membershipsBySpace,
-    presenceDetail: presence,
-    isBot: isBot,
-    clanTag: clanTag,
-  );
+  /// Replaces the whole presence: the coarse status and the detail together.
+  Member withPresence(UserPresence presence) =>
+      copyWith(presence: presence.status, presenceDetail: presence);
 
-  /// This member with the tags Discord last sent. Separate from [copyWith]
-  /// because a clan tag can go away, and a null there means "keep".
-  Member withTags({required bool isBot, required ClanTag? clanTag}) =>
-      isBot == this.isBot && clanTag == this.clanTag
-      ? this
-      : Member(
-          id: id,
-          displayName: displayName,
-          initials: initials,
-          role: role,
-          presence: presence,
-          colorValue: colorValue,
-          spaceIds: spaceIds,
-          rolesBySpace: rolesBySpace,
-          avatarUrl: avatarUrl,
-          avatarUrlsBySpace: avatarUrlsBySpace,
-          membershipsBySpace: membershipsBySpace,
-          presenceDetail: presenceDetail,
-          isBot: isBot,
-          clanTag: clanTag,
-        );
+  /// This member with the tags Discord last sent, laid over the ones known.
+  Member withTags(MemberTags tags) {
+    final next = tags.over(this.tags);
+    return next == this.tags ? this : copyWith(tags: next);
+  }
 
   /// Whether [withPresence] would change nothing.
   bool hasPresence(UserPresence presence) =>
@@ -263,8 +265,7 @@ final class Member {
       other.colorValue == colorValue &&
       other.avatarUrl == avatarUrl &&
       other.presenceDetail == presenceDetail &&
-      other.isBot == isBot &&
-      other.clanTag == clanTag &&
+      other.tags == tags &&
       const SetEquality<String>().equals(other.spaceIds, spaceIds) &&
       const MapEquality<String, String>().equals(
         other.rolesBySpace,

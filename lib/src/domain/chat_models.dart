@@ -536,14 +536,10 @@ final class ChatWorkspace {
 
   /// Sets a known member's tags. Answers this same workspace when the member
   /// is unknown or the tags are unchanged.
-  ChatWorkspace withMemberTags(
-    String memberId, {
-    required bool isBot,
-    required ClanTag? clanTag,
-  }) {
+  ChatWorkspace withMemberTags(String memberId, MemberTags tags) {
     final member = memberOrNull(memberId);
     if (member == null) return this;
-    final next = member.withTags(isBot: isBot, clanTag: clanTag);
+    final next = member.withTags(tags);
     return identical(next, member) ? this : upsertMember(next);
   }
 
@@ -895,6 +891,7 @@ final class ChatWorkspace {
       // offline; letting that erase a presence the gateway already reported
       // would blank out every activity the moment the member is re-mapped.
       presenceDetail: incoming.presenceDetail ?? previous.presenceDetail,
+      tags: incoming.tags.over(previous.tags),
     );
   }
 }
