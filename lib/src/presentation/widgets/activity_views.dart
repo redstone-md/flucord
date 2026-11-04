@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/monogram.dart';
 import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'art_tile.dart';
@@ -196,18 +197,13 @@ class ActivitySummaryLine extends StatelessWidget {
 /// beside it the kind ("Playing"), the name, the details with the time, and
 /// the state.
 ///
-/// The card's corners are the art's plus the padding around it, so the two
-/// curves are concentric.
+/// The art sits 8 in from the card's edge, so the card is
+/// [FlucordRadius.framed] around the art's [FlucordRadius.medium].
 class ActivityCard extends StatelessWidget {
   const ActivityCard({required this.activity, required this.now, super.key});
 
   static const _artSize = 56.0;
   static const _padding = 8.0;
-
-  /// The card's corners: the art's plus the padding.
-  static final radius = BorderRadius.all(
-    ArtTile.radius + const Radius.circular(_padding),
-  );
 
   final UserActivity activity;
 
@@ -235,7 +231,7 @@ class ActivityCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(_padding, _padding, 12, _padding),
       decoration: BoxDecoration(
         color: surfaces.inset,
-        borderRadius: radius,
+        borderRadius: FlucordRadius.framed,
         border: Border.all(color: surfaces.border),
       ),
       child: Row(

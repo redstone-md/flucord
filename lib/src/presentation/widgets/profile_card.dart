@@ -466,11 +466,11 @@ class _MessageFieldState extends State<_MessageField> {
       textInputAction: TextInputAction.send,
       onSubmitted: (text) => widget.onSubmit(text.trim()),
       style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
-      // The activity card's radius: siblings in one column share a corner.
+      // Framed, as the activity card above it: siblings share a corner.
       decoration:
           recessedFieldDecoration(
             context,
-            borderRadius: ActivityCard.radius,
+            borderRadius: FlucordRadius.framed,
           ).copyWith(
             hintText: 'Message @${widget.name}',
             hintStyle: FlucordTextRole.label.style.copyWith(

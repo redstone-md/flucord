@@ -17,10 +17,6 @@ class ArtTile extends StatelessWidget {
     super.key,
   });
 
-  /// The tile's corners. A card around a tile adds its padding to this, so
-  /// the two curves stay concentric.
-  static const radius = FlucordRadius.mediumCorner;
-
   final String? url;
   final String monogram;
   final Color color;
@@ -29,7 +25,7 @@ class ArtTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: const BorderRadius.all(radius),
+    borderRadius: FlucordRadius.medium,
     child: SizedBox.square(
       dimension: size,
       child: ColoredBox(
