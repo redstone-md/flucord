@@ -84,6 +84,9 @@ void main() {
       find.byKey(const ValueKey('thread-name')),
       'Long-running review',
     );
+    await tester.pump();
+    // A name is there now, so the complaint about it goes.
+    expect(find.text('Enter a thread name.'), findsNothing);
     await tester.tap(find.text('1 week'));
     await tester.tap(find.byKey(const ValueKey('create-thread-confirm')));
     await tester.pump();
