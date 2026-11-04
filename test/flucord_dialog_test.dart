@@ -2,6 +2,7 @@ import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -229,6 +230,28 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(answers, ['sent']);
+  });
+
+  testWidgets('the title sits as far below the top as it is from the side', (
+    tester,
+  ) async {
+    await open(
+      tester,
+      const FlucordDialog(
+        title: Text('Leave Play&day?'),
+        description: 'You will lose its channels.',
+      ),
+    );
+
+    final dialog = tester.getRect(
+      find
+          .descendant(of: find.byType(Dialog), matching: find.byType(Material))
+          .first,
+    );
+    final title = tester.getRect(find.text('Leave Play&day?'));
+    final capitals =
+        title.top + FlucordType.roomAboveCapitals(FlucordTextRole.heading);
+    expect(capitals - dialog.top, closeTo(title.left - dialog.left, 0.01));
   });
 
   testWidgets('a framed dialog header has no close button', (tester) async {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_button.dart';
 
 /// The one dialog frame in the app.
@@ -100,6 +101,12 @@ class FlucordDialog extends StatelessWidget {
   final bool fullWindow;
 
   static const _padding = 20.0;
+
+  /// The top padding above a dialog's title. The font leaves room above its
+  /// capitals, so the title starts that much higher and its capitals sit as
+  /// far from the top as the text sits from the side.
+  static final titleTop =
+      _padding - FlucordType.roomAboveCapitals(FlucordTextRole.heading);
   static const _gap = 16.0;
 
   @override
@@ -148,7 +155,9 @@ class FlucordDialog extends StatelessWidget {
     builder: (context) {
       final dialogTheme = DialogTheme.of(context);
       return SingleChildScrollView(
-        padding: const EdgeInsets.all(_padding),
+        padding: title == null
+            ? const EdgeInsets.all(_padding)
+            : EdgeInsets.fromLTRB(_padding, titleTop, _padding, _padding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

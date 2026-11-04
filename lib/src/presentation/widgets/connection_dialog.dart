@@ -82,9 +82,14 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
-                child: FlucordDialogHeader(title: 'Connections'),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  FlucordDialog.titleTop,
+                  20,
+                  12,
+                ),
+                child: const FlucordDialogHeader(title: 'Connections'),
               ),
               Flexible(
                 child: SingleChildScrollView(
