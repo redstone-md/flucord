@@ -78,13 +78,23 @@ Future<void> _pumpMembers(
   WidgetTester tester,
   _FakeVideos videos, {
   bool reducedMotion = false,
+  ValueListenable<bool>? lookedAt,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: FlucordTheme.dark,
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(disableAnimations: reducedMotion),
-        child: child!,
+      // As the app's motion rule does for an unfocused or suspended window.
+      builder: (context, child) => ValueListenableBuilder(
+        valueListenable: lookedAt ?? ValueNotifier(true),
+        builder: (context, lookedAt, _) => TickerMode(
+          enabled: lookedAt,
+          child: MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: reducedMotion),
+            child: child!,
+          ),
+        ),
       ),
       home: NameStyleScope(
         videos: videos,
@@ -118,6 +128,18 @@ Future<TestGesture> _mouse(WidgetTester tester) async {
 Future<void> _hover(TestGesture mouse, WidgetTester tester, String id) async {
   await mouse.moveTo(tester.getCenter(find.byKey(ValueKey('member-row-$id'))));
   await tester.pump();
+}
+
+/// Puts a still picture for [id] in the image cache that arrives only when
+/// the returned callback is called.
+Future<VoidCallback> _stillPictureLater(WidgetTester tester, String id) async {
+  final image = await tester.runAsync(() => createTestImage(width: 16));
+  final arrived = Completer<ImageInfo>();
+  PaintingBinding.instance.imageCache.putIfAbsent(
+    NetworkImage(DiscordCdn.nameplate('nameplates/nameplates/$id/')!),
+    () => OneFrameImageStreamCompleter(arrived.future),
+  );
+  return () => arrived.complete(ImageInfo(image: image!.clone()));
 }
 
 Finder _stillOf(String id) => find.byWidgetPredicate(
@@ -224,5 +246,45 @@ void main() {
 
     expect(videos.live, isEmpty);
     expect(_stillOf('mira'), findsOneWidget);
+  });
+
+  testWidgets('a hover that came before the still picture plays once it shows', (
+    tester,
+  ) async {
+    final videos = _FakeVideos();
+    final arrive = await _stillPictureLater(tester, 'mira');
+    await _pumpMembers(tester, videos);
+    final mouse = await _mouse(tester);
+    await _hover(mouse, tester, 'mira');
+    expect(videos.opened, isEmpty);
+
+    arrive();
+    await tester.pump();
+    await tester.pump();
+
+    expect(videos.live.single.url, _moving('mira'));
+  });
+
+  testWidgets('a nameplate stops while the window is not looked at', (
+    tester,
+  ) async {
+    final videos = _FakeVideos();
+    final lookedAt = ValueNotifier(true);
+    addTearDown(lookedAt.dispose);
+    await _stillPicturesLoaded(tester, ['mira', 'jack']);
+    await _pumpMembers(tester, videos, lookedAt: lookedAt);
+    final mouse = await _mouse(tester);
+    await _hover(mouse, tester, 'mira');
+    videos.live.single.showFirstFrame();
+    await tester.pump();
+
+    lookedAt.value = false;
+    await tester.pump();
+    expect(videos.live, isEmpty);
+    expect(find.byKey(ValueKey('moving ${_moving('mira')}')), findsNothing);
+
+    lookedAt.value = true;
+    await tester.pump();
+    expect(videos.live.single.url, _moving('mira'));
   });
 }

@@ -60,10 +60,12 @@ final class DiscordCdn {
   /// Kord's `DiscordCdn.staticNameplate`.
   static String? nameplate(String asset) => _collectible(asset, 'static.png');
 
-  /// The moving nameplate, `asset.webm` beside the still picture (the same
-  /// sources as [nameplate]).
+  /// The moving nameplate as an animated PNG with alpha, `img.png` beside
+  /// the still picture (the same sources as [nameplate]). The `asset.webm`
+  /// beside it carries its alpha in a side channel that common VP9 decoders
+  /// drop.
   static String? movingNameplate(String asset) =>
-      _collectible(asset, 'asset.webm');
+      _collectible(asset, 'img.png');
 
   static String? _collectible(String asset, String file) => _named(
     asset,

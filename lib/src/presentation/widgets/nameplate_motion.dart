@@ -4,9 +4,9 @@ import 'package:flutter/widgets.dart';
 
 import '../../app_log.dart';
 
-/// Opens moving nameplates. The app's is `MediaKitNameplateVideos`;
-/// media_kit cannot run under `flutter test`, so
-/// tests hand [NameplateMotion] a fake.
+/// Opens moving nameplates. The app's is `ImageNameplateVideos`; tests hand
+/// [NameplateMotion] a fake, because the test binding answers every network
+/// request with 400.
 abstract interface class NameplateVideos {
   /// Starts playing [url], muted and looping.
   NameplateVideo open(String url);
@@ -26,7 +26,7 @@ abstract interface class NameplateVideo {
 
 /// The one moving nameplate in the app.
 ///
-/// Discord's clients play a nameplate's `asset.webm` only while its row is
+/// Discord's clients play a moving nameplate only while its row is
 /// under the pointer, and keep the still picture otherwise (the mobile
 /// client's Nameplate.tsx in Wumpus-Central/discord-mobile-datamining takes
 /// an `animate` flag and the reduced motion setting). Playing one at a time
