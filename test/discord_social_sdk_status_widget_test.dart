@@ -73,9 +73,9 @@ void main() {
       find.byKey(const ValueKey('discord-friend-directory')),
       findsOneWidget,
     );
-    expect(find.text('Pending — 1'), findsOneWidget);
-    expect(find.text('Online — 1'), findsOneWidget);
-    expect(find.text('Offline — 1'), findsOneWidget);
+    expect(find.text('Pending 1'), findsOneWidget);
+    expect(find.text('Online 1'), findsOneWidget);
+    expect(find.text('Offline 1'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('discord-friend-online-1')),
       findsOneWidget,
@@ -311,8 +311,8 @@ void main() {
       harness.gateway.mutations.single.action,
       DiscordRelationshipAction.acceptRequest,
     );
-    expect(find.text('Pending — 1'), findsNothing);
-    expect(find.text('Offline — 1'), findsOneWidget);
+    expect(find.text('Pending 1'), findsNothing);
+    expect(find.text('Offline 1'), findsOneWidget);
   });
 
   testWidgets('confirms removal before mutating a native friendship', (
