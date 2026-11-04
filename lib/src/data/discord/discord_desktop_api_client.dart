@@ -794,6 +794,10 @@ final class DiscordDesktopApiClient
     }
   }
 
+  @override
+  Future<Map<String, Object?>> patchCurrentProfile(Map<String, Object?> body) =>
+      _rest.requestObject('PATCH', '/users/@me/profile', body: body);
+
   /// `GET /users/{id}/profile`, with the mutuals the popover wants.
   ///
   /// The route refuses somebody this account has no relationship with, and a

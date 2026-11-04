@@ -15,6 +15,10 @@ abstract interface class DiscordUserProfileTransport {
   /// business, not this layer's.
   Future<Map<String, Object?>?> patchCurrentUser(Map<String, Object?> body);
 
+  /// `PATCH /users/@me/profile`, for what Discord keeps only on the profile.
+  /// Answers the profile as saved.
+  Future<Map<String, Object?>> patchCurrentProfile(Map<String, Object?> body);
+
   /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`,
   /// plus `guild_id` when [guildId] is given, which adds the server profile.
   ///
@@ -49,21 +53,38 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   @override
   Stream<UserProfile> get updates => _updates.stream;
 
+  /// Reads the user object, then the profile for the theme colours, which
+  /// the user object does not carry.
   @override
   Future<UserProfile?> load() async {
-    final payload = await _transport.readCurrentUser();
-    return _install(payload);
+    final profile = readProfile(await _transport.readCurrentUser());
+    if (profile == null) return _current;
+    final published = await _transport.readUserProfile(profile.userId);
+    final metadata = _object(published?['user_profile']) ?? const {};
+    return _publish(
+      profile.withThemeColors(_themeColors(metadata['theme_colors'])),
+    );
   }
 
   @override
   Future<UserProfile?> apply(UserProfilePatch patch) async {
     if (patch.isEmpty) return _current;
-    final payload = await _transport.patchCurrentUser(patch.toJson());
-    // A refusal comes back as no payload rather than as a throw: a wrong
-    // password and a username somebody else already has are both answers
-    // about the request, and reporting either as an outage would be wrong.
-    if (payload == null) return null;
-    return _install(payload);
+    final user = patch.toJson();
+    if (user.isNotEmpty) {
+      final payload = await _transport.patchCurrentUser(user);
+      // A refusal comes back as no payload rather than as a throw: a wrong
+      // password and a username somebody else already has are both answers
+      // about the request, and reporting either as an outage would be wrong.
+      if (payload == null) return null;
+      _install(payload);
+    }
+    final profile = patch.toProfileJson();
+    final current = _current;
+    if (profile.isEmpty || current == null) return current;
+    final saved = await _transport.patchCurrentProfile(profile);
+    return _publish(
+      current.withThemeColors(_themeColors(saved['theme_colors'])),
+    );
   }
 
   @override
@@ -88,9 +109,15 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     if (!_updates.isClosed) await _updates.close();
   }
 
+  /// Takes a user object, which has no theme colours, so the known ones
+  /// stay.
   UserProfile? _install(Map<String, Object?> payload) {
     final profile = readProfile(payload);
     if (profile == null) return _current;
+    return _publish(profile.withThemeColors(_current?.themeColors));
+  }
+
+  UserProfile _publish(UserProfile profile) {
     _current = profile;
     if (!_updates.isClosed) _updates.add(profile);
     return profile;

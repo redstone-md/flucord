@@ -165,6 +165,7 @@ final class ProfileCardData {
     required String pronouns,
     required String bio,
     required int? accentColor,
+    required ProfileThemeColors? themeColors,
     required String? avatarUrl,
     required String? bannerUrl,
     UserPresence? presence,
@@ -183,6 +184,7 @@ final class ProfileCardData {
       accentColorValue: accentColor == null
           ? null
           : DiscordRgb(accentColor).opaque,
+      themeColors: themeColors,
       pronouns: pronouns,
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),

@@ -18,6 +18,7 @@ final class UserProfile {
     this.avatarHash,
     this.bannerHash,
     this.accentColor,
+    this.themeColors,
   });
 
   final String userId;
@@ -39,6 +40,10 @@ final class UserProfile {
 
   /// A 24-bit RGB value, or `null` when the avatar's own colour is used.
   final int? accentColor;
+
+  /// The Nitro theme, or null when the account set none. Discord keeps it on
+  /// the profile, not on the user object, so it is read and written apart.
+  final ProfileThemeColors? themeColors;
 
   /// What other people see as this account's name.
   String get effectiveName => displayName.isEmpty ? username : displayName;
@@ -66,6 +71,21 @@ final class UserProfile {
     avatarHash: avatarHash ?? this.avatarHash,
     bannerHash: bannerHash ?? this.bannerHash,
     accentColor: accentColor ?? this.accentColor,
+    themeColors: themeColors,
+  );
+
+  /// This profile with [colors] as its theme, which may be none.
+  UserProfile withThemeColors(ProfileThemeColors? colors) => UserProfile(
+    userId: userId,
+    username: username,
+    displayName: displayName,
+    discriminator: discriminator,
+    bio: bio,
+    pronouns: pronouns,
+    avatarHash: avatarHash,
+    bannerHash: bannerHash,
+    accentColor: accentColor,
+    themeColors: colors,
   );
 
   @override
@@ -79,7 +99,8 @@ final class UserProfile {
       other.pronouns == pronouns &&
       other.avatarHash == avatarHash &&
       other.bannerHash == bannerHash &&
-      other.accentColor == accentColor;
+      other.accentColor == accentColor &&
+      other.themeColors == themeColors;
 
   @override
   int get hashCode => Object.hash(
@@ -92,6 +113,7 @@ final class UserProfile {
     avatarHash,
     bannerHash,
     accentColor,
+    themeColors,
   );
 }
 
@@ -107,6 +129,7 @@ final class UserProfilePatch {
     this.bio,
     this.pronouns,
     this.accentColor = const ProfileValue.untouched(),
+    this.themeColors = const ProfileValue.untouched(),
     this.avatar = const ProfileImage.untouched(),
     this.banner = const ProfileImage.untouched(),
     this.username,
@@ -118,6 +141,7 @@ final class UserProfilePatch {
   final String? bio;
   final String? pronouns;
   final ProfileValue<int> accentColor;
+  final ProfileValue<ProfileThemeColors> themeColors;
   final ProfileImage avatar;
   final ProfileImage banner;
 
@@ -140,6 +164,7 @@ final class UserProfilePatch {
       bio == null &&
       pronouns == null &&
       accentColor.isUntouched &&
+      themeColors.isUntouched &&
       avatar.isUntouched &&
       banner.isUntouched &&
       username == null &&
@@ -149,7 +174,7 @@ final class UserProfilePatch {
   /// password. Stated here so a caller cannot forget which fields those are.
   bool get needsPassword => username != null || newPassword != null;
 
-  /// The request body. Only touched fields appear.
+  /// The `PATCH /users/@me` body. Only touched fields appear.
   Map<String, Object?> toJson() => {
     if (displayName != null) 'global_name': displayName,
     if (bio != null) 'bio': bio,
@@ -162,6 +187,16 @@ final class UserProfilePatch {
     // Sent only where Discord asks for it, so an ordinary profile edit does
     // not carry a password it has no use for.
     if (needsPassword && password != null) 'password': password,
+  };
+
+  /// The `PATCH /users/@me/profile` body, for what Discord keeps only on the
+  /// profile. Empty when none of it was touched.
+  Map<String, Object?> toProfileJson() => {
+    if (!themeColors.isUntouched)
+      'theme_colors': switch (themeColors.value) {
+        final colors? => [colors.primary, colors.accent],
+        null => null,
+      },
   };
 }
 

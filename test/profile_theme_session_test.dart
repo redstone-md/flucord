@@ -237,4 +237,81 @@ void main() {
     ready: _readyWithRole(),
     routes: _profileRoute(themeColors: _lightTheme),
   );
+
+  testSession(
+    'the profile editor starts from the account\'s saved theme colours',
+    (tester, session) async {
+      await _openProfileEditor(tester, session);
+
+      _expectGradient(tester, _cardTheme, _lightTheme);
+    },
+    routes: _ownProfileRoutes(themeColors: _lightTheme),
+  );
+
+  testSession(
+    'the profile editor sets primary and accent, previews and saves them',
+    (tester, session) async {
+      await _openProfileEditor(tester, session);
+      expect(_gradientIn(tester, _cardTheme), isNull);
+
+      await _tapSwatch(tester, 'profile-theme-primary-2c2f33');
+      await _tapSwatch(tester, 'profile-theme-accent-5865f2');
+      _expectGradient(tester, _cardTheme, [0x2c2f33, 0x5865f2]);
+
+      await _tapSwatch(tester, 'profile-save');
+      await session.settle();
+
+      final saves = session.transport.requests.where(
+        (request) => request.method == 'PATCH',
+      );
+      expect(saves.map((request) => request.uri.path), [
+        '/api/v9/users/@me/profile',
+      ]);
+      expect(saves.single.json, {
+        'theme_colors': [0x2c2f33, 0x5865f2],
+      });
+      expect(_key('profile-save-bar'), findsNothing);
+      _expectGradient(tester, _cardTheme, [0x2c2f33, 0x5865f2]);
+    },
+    routes: _ownProfileRoutes(),
+  );
+}
+
+/// The account's own user object and profile, and a profile edit that
+/// echoes what it was sent.
+void Function(FakeDiscordTransport) _ownProfileRoutes({
+  List<int>? themeColors,
+}) => (transport) {
+  const me = {'id': SessionHarness.currentUserId, 'username': 'me'};
+  transport
+    ..on('GET', '/api/v9/users/@me', (_) => jsonResponse(me))
+    ..on(
+      'GET',
+      '/api/v9/users/${SessionHarness.currentUserId}/profile',
+      (_) => jsonResponse({
+        'user': me,
+        'user_profile': {'theme_colors': ?themeColors},
+      }),
+    )
+    ..on(
+      'PATCH',
+      '/api/v9/users/@me/profile',
+      (request) => jsonResponse(request.json! as Map<String, Object?>),
+    );
+};
+
+Future<void> _openProfileEditor(
+  WidgetTester tester,
+  SessionHarness session,
+) async {
+  await tester.tap(_key('account-settings'));
+  await session.settle();
+  expect(_key('settings-section-profile'), findsOneWidget);
+}
+
+Future<void> _tapSwatch(WidgetTester tester, String key) async {
+  await tester.ensureVisible(_key(key));
+  await tester.pump();
+  await tester.tap(_key(key));
+  await tester.pump();
 }
