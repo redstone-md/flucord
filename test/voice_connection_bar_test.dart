@@ -273,6 +273,33 @@ void main() {
     expect(find.text('Voice channel'), findsOne);
   });
 
+  testWidgets('a failed connection is red, and Try again joins again', (
+    tester,
+  ) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.failure),
+    );
+    await pump(tester, controller);
+
+    final status = tester.widget<Text>(find.text('Could not connect'));
+    expect(status.style?.color, _surfaces.danger);
+    signaling.joined.clear();
+
+    await tester.tap(find.byKey(const ValueKey('voice-bar-retry-connection')));
+    await tester.pumpAndSettle();
+
+    expect(signaling.joined, ['voice-1']);
+    expect(find.text('Joining voice channel...'), findsOne);
+  });
+
   testWidgets('reports a silent microphone', (tester) async {
     final signaling = _FakeSignaling();
     final controller = VoiceController(
@@ -314,6 +341,7 @@ final class _FakeSignaling implements VoiceSignalingService {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final List<String> left = [];
+  final List<String> joined = [];
 
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
@@ -331,7 +359,7 @@ final class _FakeSignaling implements VoiceSignalingService {
     bool selfMute = false,
     bool selfDeaf = false,
     bool selfVideo = false,
-  }) async {}
+  }) async => joined.add(channelId);
 
   @override
   Future<void> leaveVoiceChannel(String guildId) async => left.add(guildId);

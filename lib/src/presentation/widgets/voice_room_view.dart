@@ -412,6 +412,13 @@ class _VoiceStage extends StatelessWidget {
                     // Offered here because the alternative was leaving the
                     // channel and coming back, which is not an obvious way to
                     // ask a client to look for a headset again.
+                    if (voiceRoomOffersConnectionRetry(controller))
+                      TextButton(
+                        key: const ValueKey('voice-room-retry-connection'),
+                        onPressed: () =>
+                            unawaited(controller.retryConnection()),
+                        child: const Text('Try again'),
+                      ),
                     if (voiceRoomOffersDeviceRetry(controller))
                       TextButton(
                         key: const ValueKey('voice-room-retry-devices'),
