@@ -36,19 +36,22 @@ abstract final class ComponentDirectory {
     required ChatWorkspace workspace,
     required String spaceId,
   }) => switch (component.type) {
-    5 => _members(workspace),
+    5 => _members(workspace, spaceId),
     6 => _roles(workspace, spaceId),
-    7 => [..._members(workspace), ..._roles(workspace, spaceId)],
+    7 => [..._members(workspace, spaceId), ..._roles(workspace, spaceId)],
     8 => _channels(workspace, spaceId),
     _ => const [],
   };
 
-  static List<DirectoryEntry> _members(ChatWorkspace workspace) => [
+  static List<DirectoryEntry> _members(
+    ChatWorkspace workspace,
+    String spaceId,
+  ) => [
     for (final member in workspace.members)
       DirectoryEntry(
         id: member.id,
         label: member.displayName,
-        detail: member.role,
+        detail: workspace.heldRolesOf(member, spaceId).nameFor(member),
       ),
   ];
 

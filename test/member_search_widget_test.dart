@@ -78,12 +78,7 @@ void main() {
               body: Row(
                 children: [
                   const Expanded(child: SizedBox()),
-                  MemberSidebar(
-                    members: members,
-                    spaceId: 'guild-1',
-                    currentMemberId: _me,
-                    onMessage: (_) {},
-                  ),
+                  MemberSidebar(members: members, spaceId: 'guild-1'),
                 ],
               ),
             );
@@ -117,8 +112,6 @@ Widget _host(GuildMemberListController controller) => MaterialApp(
         MemberSidebar(
           members: const [_mira, _roman],
           spaceId: 'guild-1',
-          currentMemberId: _me,
-          onMessage: (_) {},
           memberList: controller,
         ),
       ],
@@ -126,7 +119,6 @@ Widget _host(GuildMemberListController controller) => MaterialApp(
   ),
 );
 
-const _me = '111111111111111111';
 const _mira = Member(
   id: '222222222222222222',
   displayName: 'Mira Chen',

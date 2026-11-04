@@ -128,7 +128,7 @@ final class DiscordSharedDispatches {
           unawaited(_changeRole(change));
         }
       case 'PRESENCE_UPDATE':
-        unawaited(_presenceTags(event.data));
+        unawaited(_presenceIdentity(event.data));
     }
   }
 
@@ -196,17 +196,19 @@ final class DiscordSharedDispatches {
     await _cache.writeMember(member);
   }
 
-  /// The tags on a presence's user. Most presences name the user by id
-  /// alone, which says nothing about the tags; only a whole user, one with a
-  /// username, does.
-  Future<void> _presenceTags(Map<String, Object?> data) async {
+  /// The username and tags on a presence's user. Most presences name the
+  /// user by id alone, which says nothing about either; only a whole user,
+  /// one with a username, does.
+  Future<void> _presenceIdentity(Map<String, Object?> data) async {
     final user = data['user'];
-    if (user is! Map || user['username'] is! String) return;
+    if (user is! Map) return;
     final memberId = user['id'];
-    if (memberId is! String) return;
-    final tags = _mapper.tags(user.cast<String, Object?>());
-    _events.publish(MemberTagsChangedEvent(memberId: memberId, tags: tags));
-    await _cache.writeMemberTags(memberId, tags);
+    final identity = _mapper.identity(user.cast<String, Object?>());
+    if (memberId is! String || identity == null) return;
+    _events.publish(
+      MemberIdentityChangedEvent(memberId: memberId, identity: identity),
+    );
+    await _cache.writeMemberIdentity(memberId, identity);
   }
 
   Future<void> _changeRole(DiscordRoleDispatch change) async {

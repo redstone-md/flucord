@@ -198,7 +198,8 @@ Future<void> _openDirectMessage(
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('member-row-mira')));
   await tester.pump();
-  await tester.tap(find.byKey(const ValueKey('message-member')));
+  await tester.showKeyboard(find.byKey(const ValueKey('profile-card-message')));
+  await tester.testTextInput.receiveAction(TextInputAction.send);
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
 }

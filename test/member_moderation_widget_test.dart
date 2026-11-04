@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/guild_member_admin_controller.dart';
-import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/workspace_permissions.dart';
-import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
+import 'package:flucord/src/presentation/widgets/member_moderation_section.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/guild_settings_fixtures.dart';
 
 void main() {
-  testWidgets('the popover grants and revokes a role', (tester) async {
+  testWidgets('the moderation block grants and revokes a role', (tester) async {
     await tester.binding.setSurfaceSize(const Size(600, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = FakeGuildManagementRepository();
@@ -39,7 +39,7 @@ void main() {
     expect(repository.calls, contains('revokeMemberRole'));
   });
 
-  testWidgets('the popover renames a member', (tester) async {
+  testWidgets('the moderation block renames a member', (tester) async {
     await tester.binding.setSurfaceSize(const Size(600, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = FakeGuildManagementRepository();
@@ -68,7 +68,9 @@ void main() {
     expect(repository.memberProfiles[lowMemberId]?.nickname, 'Forge Ada');
   });
 
-  testWidgets('the popover times a member out and lifts it', (tester) async {
+  testWidgets('the moderation block times a member out and lifts it', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(600, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = FakeGuildManagementRepository();
@@ -168,27 +170,96 @@ void main() {
     expect(find.byKey(const ValueKey('member-role-member')), findsNothing);
     expect(repository.calls, contains('loadMember'));
   });
+
+  testWidgets('the card offers "+" to a moderator, and it gives the role', (
+    tester,
+  ) async {
+    final repository = await _pumpCard(tester);
+
+    await tester.tap(find.byKey(const ValueKey('profile-card-add-role')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('profile-card-role-choice-member')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, contains('grantMemberRole'));
+  });
+
+  testWidgets('the card opens the moderation block from its menu', (
+    tester,
+  ) async {
+    await _pumpCard(tester);
+
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-card-moderate')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('member-kick')), findsOneWidget);
+  });
+
+  testWidgets('a card seen without authority has no "+" and no Moderate', (
+    tester,
+  ) async {
+    await _pumpCard(
+      tester,
+      moderatorPermissions: DiscordPermissions.viewChannel,
+    );
+
+    expect(find.byKey(const ValueKey('profile-card-add-role')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('profile-card-moderate')), findsNothing);
+  });
 }
 
 Widget _host(GuildMemberAdminController controller) => MaterialApp(
   theme: FlucordTheme.dark,
   home: Scaffold(
     body: Center(
-      child: MemberProfilePopover(
-        member: const Member(
-          id: lowMemberId,
-          displayName: 'Ada',
-          initials: 'AD',
-          role: 'member',
-          presence: Presence.online,
-          colorValue: 0xff456b5a,
-          spaceIds: {guildId},
-        ),
-        spaceId: guildId,
-        canMessage: true,
-        onMessage: () {},
-        moderation: controller,
+      child: SingleChildScrollView(
+        child: MemberModerationSection(controller: controller),
       ),
     ),
   ),
 );
+
+/// The card for Ada, a member of the guild, as [moderatorPermissions] sees
+/// her. The card owns the controller it builds.
+Future<FakeGuildManagementRepository> _pumpCard(
+  WidgetTester tester, {
+  BigInt? moderatorPermissions,
+}) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1400));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final repository = FakeGuildManagementRepository();
+  final workspace = moderatorPermissions == null
+      ? guildWorkspace()
+      : guildWorkspace(moderatorPermissions: moderatorPermissions);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: Center(
+          child: MemberProfileCard(
+            member: workspace.memberById(lowMemberId),
+            spaceId: guildId,
+            roles: workspace.roles,
+            moderationBuilder: () => GuildMemberAdminController(
+              repository,
+              WorkspacePermissions(
+                workspace,
+                memberId: moderatorId,
+              ).administrationOf(guildId),
+              guildId: guildId,
+              userId: lowMemberId,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return repository;
+}

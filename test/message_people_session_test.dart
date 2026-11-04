@@ -7,7 +7,7 @@ import 'support/session_harness.dart';
 
 const _messageId = '900000000000000001';
 
-final _profileCard = find.byKey(const ValueKey('member-profile-popover'));
+final _profileCard = find.byKey(const ValueKey('profile-card'));
 
 Future<void> _openWithMessageFromFriend(SessionHarness session) async {
   await session.openChannel(SessionHarness.channelId);

@@ -123,8 +123,16 @@ final class HeldRoles {
     Member member,
     String spaceId,
     CommunityRole? Function(String roleId) roleOf,
+  ) => HeldRoles.ofIds(
+    member.membershipIn(spaceId)?.roleIds ?? const [],
+    roleOf,
+  );
+
+  /// The roles named by [roleIds] that [roleOf] knows, highest first.
+  factory HeldRoles.ofIds(
+    Iterable<String> roleIds,
+    CommunityRole? Function(String roleId) roleOf,
   ) {
-    final roleIds = member.membershipIn(spaceId)?.roleIds ?? const [];
     if (roleIds.isEmpty) return none;
     return HeldRoles(
       [for (final roleId in roleIds) ?roleOf(roleId)]..sort(

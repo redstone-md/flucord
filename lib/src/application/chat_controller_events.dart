@@ -74,8 +74,8 @@ extension _ChatControllerEvents on ChatController {
         _workspace = _workspace?.upsertMember(event.member);
       case MembersUpsertedEvent():
         _workspace = _workspace?.upsertMembers(event.members);
-      case MemberTagsChangedEvent(:final memberId, :final tags):
-        _workspace = _workspace?.withMemberTags(memberId, tags);
+      case MemberIdentityChangedEvent(:final memberId, :final identity):
+        _workspace = _workspace?.withMemberIdentity(memberId, identity);
       case MemberRemovedEvent():
         _workspace = _workspace?.removeMemberFromSpace(
           event.memberId,
@@ -184,10 +184,11 @@ extension _ChatControllerEvents on ChatController {
     // The local mark stays: it is the whole unread model on a transport with no
     // read state, and on one that has read state the projection below simply
     // overwrites it with the server's answer a moment later.
+    final channel = _workspace?.channelOrNull(message.channelId);
     _workspace = _workspace?.markChannelUnread(
       message.channelId,
       messageId: message.id,
-      mention: message.mentionsCurrentMember,
+      mention: channel != null && readState.countsAsMention(channel, message),
     );
     _applyReadState();
     _persistChannelActivity(message.channelId);

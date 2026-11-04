@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 /// Decides, frame by frame, whether the microphone is carrying speech.
 ///
 /// The threshold is not fixed: it sits [margin] dB above the noise floor, and
@@ -14,14 +17,29 @@
 final class VoiceActivityGate {
   VoiceActivityGate({
     this.margin = 10,
-    this.minThreshold = -65,
-    this.maxThreshold = -30,
+    this.minThreshold = lowestThreshold,
+    this.maxThreshold = highestThreshold,
     this.hangoverFrames = defaultHangoverFrames,
     this.floorWindow = 150,
   });
 
   /// 400 ms of 20 ms frames.
   static const int defaultHangoverFrames = 20;
+
+  /// The range a threshold is held to unless the gate is built with another.
+  static const double lowestThreshold = -65;
+  static const double highestThreshold = -30;
+
+  /// A frame's loudness as the gate judges it: RMS in dB relative to full
+  /// scale; silence is minus infinity.
+  static double levelOf(Int16List frame) {
+    var energy = 0.0;
+    for (final sample in frame) {
+      energy += sample * sample;
+    }
+    final rms = math.sqrt(energy / frame.length) / 32768;
+    return 20 * math.log(rms) / math.ln10;
+  }
 
   /// Where the floor is assumed to be before anything has been heard: a quiet
   /// room with a decent microphone.

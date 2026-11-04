@@ -101,15 +101,18 @@ final class MembersUpsertedEvent extends ChatRepositoryEvent {
   final List<Member> members;
 }
 
-/// A user's tags, as a presence update carried them.
+/// A user's username and tags, as a presence update carried them.
 ///
 /// Kept apart from [MemberUpsertedEvent] because a presence's user has no
 /// guild standing: as a whole member it would erase the nickname and roles.
-final class MemberTagsChangedEvent extends ChatRepositoryEvent {
-  const MemberTagsChangedEvent({required this.memberId, required this.tags});
+final class MemberIdentityChangedEvent extends ChatRepositoryEvent {
+  const MemberIdentityChangedEvent({
+    required this.memberId,
+    required this.identity,
+  });
 
   final String memberId;
-  final MemberTags tags;
+  final MemberIdentity identity;
 }
 
 final class MemberRemovedEvent extends ChatRepositoryEvent {

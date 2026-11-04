@@ -59,9 +59,9 @@ abstract interface class ChatCache {
 
   Future<void> writeMember(Member member);
 
-  /// Sets the tags of a member the cache holds, laid over the stored ones.
-  /// A member the cache does not hold stays out of it.
-  Future<void> writeMemberTags(String memberId, MemberTags tags);
+  /// Sets the username and tags of a member the cache holds, the tags laid
+  /// over the stored ones. A member the cache does not hold stays out of it.
+  Future<void> writeMemberIdentity(String memberId, MemberIdentity identity);
   Future<void> writeSpace(CommunitySpace space);
 
   Future<void> writeCategory(ChannelCategory category);

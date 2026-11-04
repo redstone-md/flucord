@@ -38,6 +38,7 @@ import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
 import 'message_row_metrics.dart';
 import 'message_sticker_view.dart';
+import 'profile_card_route.dart';
 import 'message_timestamp.dart';
 import 'name_tags.dart';
 import 'reaction_details_dialog.dart';
@@ -132,9 +133,9 @@ class MessageItem extends StatefulWidget {
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
-  /// Opens the profile of the user with this id. Null where no profile can
-  /// show, which leaves the author's name and avatar as plain content.
-  final ValueChanged<String>? onOpenMemberProfile;
+  /// Opens the author's profile beside their name or avatar. Null where no
+  /// profile can show, which leaves both as plain content.
+  final OpenProfileCard? onOpenMemberProfile;
 
   /// Jumps to another message of this channel, by id.
   final ValueChanged<String>? onOpenMessage;
@@ -693,11 +694,15 @@ class _MessageItemState extends State<MessageItem> {
 
   Widget _opensAuthorProfile({required Key key, required Widget child}) {
     final open = widget.onOpenMemberProfile;
-    return _clickable(
-      key: key,
-      label: '${widget.member.displayName} profile',
-      onTap: open == null ? null : () => open(widget.message.authorId),
-      child: child,
+    return Builder(
+      builder: (context) => _clickable(
+        key: key,
+        label: '${widget.member.displayName} profile',
+        onTap: open == null
+            ? null
+            : () => open(widget.message.authorId, profileCardAnchorOf(context)),
+        child: child,
+      ),
     );
   }
 

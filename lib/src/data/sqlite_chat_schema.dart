@@ -89,7 +89,8 @@ abstract final class SqliteChatSchema {
         avatar_urls_by_space_json TEXT NOT NULL,
         memberships_json TEXT,
         is_bot INTEGER NOT NULL DEFAULT 0,
-        clan_tag_json TEXT
+        clan_tag_json TEXT,
+        username TEXT
       )
     ''');
     await database.execute('''
@@ -387,6 +388,11 @@ abstract final class SqliteChatSchema {
         'is_bot INTEGER NOT NULL DEFAULT 0',
       );
       await _addColumn(database, 'members', 'clan_tag_json TEXT');
+    }
+    if (oldVersion < 28) {
+      // A row written before this version has no username. It comes back the
+      // next time Discord sends the user.
+      await _addColumn(database, 'members', 'username TEXT');
     }
     if (oldVersion < 29) {
       // A role's name, place and grouping are read from the roles table by id,

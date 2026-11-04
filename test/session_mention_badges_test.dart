@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'support/session_harness.dart';
 const _channelId = SessionHarness.channelId;
 const _otherChannelId = SessionHarness.otherChannelId;
 const _guildId = SessionHarness.guildId;
+const _dmChannelId = SessionHarness.dmChannelId;
 const _accountId = SessionHarness.currentUserId;
 
 /// An id for a moment [age] ago. Read cursors must be recent, because the app
@@ -77,6 +79,26 @@ Map<String, Object?> _fromAccount(String id) => rawMessage(
   content: 'mine',
 );
 
+/// A message in the one-to-one DM with the friend, as the gateway sends it.
+Map<String, Object?> _inDirectMessage(
+  String id, {
+  String authorId = SessionHarness.friendId,
+}) => {
+  ...rawMessage(
+    id: id,
+    channelId: _dmChannelId,
+    authorId: authorId,
+    content: 'hey',
+  ),
+  'channel_type': 1,
+};
+
+Map<String, Object?> _toEveryone(String id) => {
+  ..._fromFriend(id),
+  'content': '@everyone hey',
+  'mention_everyone': true,
+};
+
 /// A dispatch that tells the read state something unrelated, so every channel
 /// is projected again from what the store holds.
 Future<void> _anyOtherEvent(SessionHarness session) =>
@@ -92,6 +114,15 @@ Finder _badgeShowing(String channelId, String count) => find.descendant(
   of: _mentionBadge(channelId),
   matching: find.text(count),
 );
+
+/// The count on the rail's DM button. Opening the DM list opens a DM, which
+/// reads it, so these tests look at the rail.
+final _directMessagesBadge = find.byKey(
+  const ValueKey('space-mention-${CommunitySpace.directMessagesId}'),
+);
+
+Finder _directMessagesBadgeShowing(String count) =>
+    find.descendant(of: _directMessagesBadge, matching: find.text(count));
 
 /// Moves to another channel of the open server by its row, as a user does.
 ///
@@ -201,6 +232,86 @@ void main() {
           'MESSAGE_CREATE',
           _fromFriend(_firstMessage, mentionedUsers: [_accountId]),
         );
+
+        expect(_mentionBadge(_channelId), findsNothing);
+      },
+      ready: _ready(),
+    );
+  });
+
+  group('a one-to-one DM', () {
+    testSession(
+      'raises the badge by one for each message from the other person',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _inDirectMessage(_firstMessage),
+        );
+        expect(_directMessagesBadgeShowing('1'), findsOneWidget);
+
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _inDirectMessage(_secondMessage),
+        );
+        expect(_directMessagesBadgeShowing('2'), findsOneWidget);
+      },
+      ready: _ready(),
+    );
+
+    testSession(
+      'raises nothing for a message of the account',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _inDirectMessage(_firstMessage, authorId: _accountId),
+        );
+
+        expect(_directMessagesBadge, findsNothing);
+      },
+      ready: _ready(),
+    );
+  });
+
+  group('@everyone or @here', () {
+    testSession(
+      'raises the badge of the channel by one',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch('MESSAGE_CREATE', _toEveryone(_firstMessage));
+
+        expect(_badgeShowing(_channelId, '1'), findsOneWidget);
+      },
+      ready: _ready(),
+    );
+
+    testSession(
+      'raises nothing in a guild that suppresses it',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch('MESSAGE_CREATE', _toEveryone(_firstMessage));
+
+        expect(_mentionBadge(_channelId), findsNothing);
+      },
+      ready: _ready(
+        guildSettings: {'guild_id': _guildId, 'suppress_everyone': true},
+      ),
+    );
+
+    testSession(
+      'from the account raises nothing',
+      (tester, session) async {
+        await session.openChannel(_otherChannelId);
+
+        await session.dispatch('MESSAGE_CREATE', {
+          ..._toEveryone(_firstMessage),
+          'author': {'id': _accountId, 'username': 'me'},
+        });
 
         expect(_mentionBadge(_channelId), findsNothing);
       },

@@ -10,11 +10,17 @@ mixin _SqliteChatCacheEntities implements ChatCache {
   }
 
   @override
-  Future<void> writeMemberTags(String memberId, MemberTags tags) async {
+  Future<void> writeMemberIdentity(
+    String memberId,
+    MemberIdentity identity,
+  ) async {
     _writes.add(
       (transaction) => transaction.update(
         'members',
-        SqliteChatCache._tagsToRow(tags),
+        {
+          'username': identity.username,
+          ...SqliteChatCache._tagsToRow(identity.tags),
+        },
         where: 'id = ?',
         whereArgs: [memberId],
       ),

@@ -143,9 +143,7 @@ void main() {
     await tester.tap(row);
     await tester.pumpAndSettle();
 
-    final profile = find.byKey(
-      const ValueKey('discord-friend-profile-popover'),
-    );
+    final profile = find.byKey(const ValueKey('profile-card'));
     expect(tester.getTopLeft(profile).dy, greaterThanOrEqualTo(rowTop - 1));
   });
 
@@ -249,41 +247,36 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsOneWidget,
-    );
-    expect(find.text('@ada.dev'), findsOneWidget);
-    expect(find.text('Friend'), findsOneWidget);
-    expect(find.text('PLAYING'), findsOneWidget);
-    expect(
-      find.text('Night Circuit\nRanked match\nParty of 3'),
-      findsOneWidget,
-    );
-    expect(find.text('friend-1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+    expect(find.text('ada.dev'), findsOneWidget);
+    final activity = find.byKey(const ValueKey('activity-card'));
+    for (final line in ['Playing', 'Night Circuit', 'Ranked match']) {
+      expect(
+        find.descendant(of: activity, matching: find.text(line)),
+        findsOne,
+      );
+    }
     expect(tester.takeException(), isNull);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
     await tester.pump();
 
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('copy-friend-id')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(copiedId, 'friend-1');
 
-    final messageButton = find.byKey(const ValueKey('message-friend-profile'));
-    await tester.tap(messageButton);
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('profile-card-message')),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
     expect(harness.dmNavigation.selectedUserId, 'friend-1');
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
   });
 
   testWidgets('accepts an incoming request from its native row actions', (

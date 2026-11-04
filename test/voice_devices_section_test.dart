@@ -191,9 +191,12 @@ void main() {
     );
   });
 
-  testWidgets('input sensitivity offers a switch and a slider', (tester) async {
+  testWidgets('input sensitivity is a mark on the live input meter', (
+    tester,
+  ) async {
     const switchKey = ValueKey('voice-settings-manual-sensitivity');
-    const sliderKey = ValueKey('voice-settings-input-sensitivity');
+    const meterKey = ValueKey('voice-settings-input-sensitivity');
+    const markKey = ValueKey('voice-input-meter-mark');
 
     final repository = MemoryVoiceProcessingRepository();
     final controller = VoiceController(
@@ -215,29 +218,52 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // The automatic gate is the default: no slider until it is asked for.
-    expect(find.byKey(switchKey), findsOneWidget);
-    expect(find.byKey(sliderKey), findsNothing);
+    // The automatic gate is the default: the meter shows the level, with no
+    // mark until one is asked for.
+    expect(find.byKey(meterKey), findsOneWidget);
+    expect(find.byKey(markKey), findsNothing);
 
     await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(sliderKey), findsOneWidget);
-    // The slider starts at the automatic threshold's midpoint.
-    final value = tester.widget<Slider>(find.byKey(sliderKey)).value;
-    expect(value, inExclusiveRange(-65, -30));
-    expect(controller.inputSensitivity, value);
+    expect(
+      find.text('The microphone opens when your voice passes the mark.'),
+      findsOneWidget,
+    );
+    // The mark starts halfway along the meter, at the midpoint of the gate's
+    // range.
+    final meter = tester.getRect(find.byKey(meterKey));
+    expect(tester.getCenter(find.byKey(markKey)).dx, meter.center.dx);
+    expect(controller.inputSensitivity, -47.5);
+
+    await tester.drag(find.byKey(markKey), Offset(meter.width / 7, 0));
+    await tester.pumpAndSettle();
+    // A seventh of the 35 dB range.
+    expect(controller.inputSensitivity, closeTo(-42.5, 0.01));
     expect(
       repository.saved!.inputSensitivity,
-      value,
+      controller.inputSensitivity,
       reason: 'the manual level is kept for the next session',
     );
 
-    // Back to automatic: the slider goes away and nothing is saved.
+    // Back to automatic: the mark goes away and nothing is saved.
     await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(sliderKey), findsNothing);
+    expect(find.byKey(markKey), findsNothing);
+    expect(find.byKey(meterKey), findsOneWidget);
     expect(controller.inputSensitivity, isNull);
     expect(repository.saved!.inputSensitivity, isNull);
+  });
+
+  testWidgets('the meter holds the microphone only while the section is open', (
+    tester,
+  ) async {
+    final media = _FakeMedia();
+    await pumpSection(tester, media: media);
+    expect(media.microphoneOpen, isTrue);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(media.microphoneOpen, isFalse);
   });
 
   testWidgets('the release delay offers the steps a key needs', (tester) async {
@@ -362,6 +388,7 @@ final class _RecordingAttenuation implements ApplicationAttenuation {
 
 final class _FakeMedia implements VoiceMediaService {
   bool failNext = false;
+  bool microphoneOpen = false;
   List<VoiceDevice> devices = const [
     VoiceDevice(id: 'mic-1', label: 'Webcam', kind: VoiceDeviceKind.audioInput),
     VoiceDevice(
@@ -393,7 +420,7 @@ final class _FakeMedia implements VoiceMediaService {
   Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
 
   @override
-  Future<void> startMicrophone(String? deviceId) async {}
+  Future<void> startMicrophone(String? deviceId) async => microphoneOpen = true;
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {}
@@ -402,7 +429,7 @@ final class _FakeMedia implements VoiceMediaService {
   Future<void> selectAudioOutput(String deviceId) async {}
 
   @override
-  Future<void> stopMicrophone() async {}
+  Future<void> stopMicrophone() async => microphoneOpen = false;
 
   @override
   Future<void> dispose() async {}

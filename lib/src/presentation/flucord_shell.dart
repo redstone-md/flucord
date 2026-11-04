@@ -25,6 +25,7 @@ import '../application/voice_controller.dart';
 import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
+import '../domain/discord_relationship.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
@@ -51,7 +52,8 @@ import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
-import 'widgets/member_profile_popover.dart';
+import 'widgets/member_profile_card.dart';
+import 'widgets/profile_card_route.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_search_panel.dart';
 import 'widgets/navigation_theme.dart';
@@ -215,7 +217,6 @@ class FlucordShell extends StatelessWidget {
             final administration = permissions.administrationOf(spaceId);
             final canOpenSettings =
                 !space.isDirectMessages && _canOpenSettings(administration);
-            final canReport = chatController.moderation != null;
 
             /// Joining, creating and leaving need the guild-management plane;
             /// without it the rail hides its plus rather than opening a
@@ -505,12 +506,13 @@ class FlucordShell extends StatelessWidget {
                                       speakingUserIds: speaking,
                                       // Discord opens a profile from these rows with
                                       // either mouse button. Ours were labels.
-                                      onOpenMemberProfile: (userId) =>
+                                      onOpenMemberProfile: (userId, anchor) =>
                                           unawaited(
                                             _openMemberCard(
                                               context,
                                               spaceId,
                                               userId,
+                                              anchor,
                                             ),
                                           ),
                                       // A voice connection outlives the room view, so
@@ -654,30 +656,12 @@ class FlucordShell extends StatelessWidget {
                                         channelId: channel?.id,
                                         memberList: memberListController,
                                         roles: workspace.roles,
-                                        profile: memberProfileController,
-                                        currentMemberId:
-                                            workspace.currentMemberId,
-                                        onMessage: (member) => unawaited(
-                                          _openDirectConversation(
-                                            context,
-                                            member.id,
-                                          ),
+                                        cardFor: (member, close) => _memberCard(
+                                          context,
+                                          member: member,
+                                          spaceId: spaceId,
+                                          close: close,
                                         ),
-                                        onReport: canReport
-                                            ? (member) => unawaited(
-                                                _reportMember(context, member),
-                                              )
-                                            : null,
-                                        onBlock: canReport
-                                            ? (member) => unawaited(
-                                                _blockMember(context, member),
-                                              )
-                                            : null,
-                                        moderationBuilder: (member) =>
-                                            _memberAdminController(
-                                              spaceId,
-                                              member.id,
-                                            ),
                                       ),
                                     ),
                                 ],

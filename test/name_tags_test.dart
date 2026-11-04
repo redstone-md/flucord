@@ -251,12 +251,7 @@ void main() {
           body: Row(
             children: [
               const Expanded(child: SizedBox()),
-              MemberSidebar(
-                members: const [bot],
-                spaceId: 'guild-1',
-                currentMemberId: 'me',
-                onMessage: (_) {},
-              ),
+              MemberSidebar(members: const [bot], spaceId: 'guild-1'),
             ],
           ),
         ),

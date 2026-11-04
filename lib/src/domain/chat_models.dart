@@ -531,12 +531,12 @@ final class ChatWorkspace {
     return identical(next, members) ? this : _copy(members: next);
   }
 
-  /// Sets a known member's tags. Answers this same workspace when the member
-  /// is unknown or the tags are unchanged.
-  ChatWorkspace withMemberTags(String memberId, MemberTags tags) {
+  /// Sets a known member's username and tags. Answers this same workspace
+  /// when the member is unknown or nothing changed.
+  ChatWorkspace withMemberIdentity(String memberId, MemberIdentity identity) {
     final member = memberOrNull(memberId);
     if (member == null) return this;
-    final next = member.withTags(tags);
+    final next = member.withIdentity(identity);
     return identical(next, member) ? this : upsertMember(next);
   }
 
@@ -959,6 +959,7 @@ final class ChatWorkspace {
       // would blank out every activity the moment the member is re-mapped.
       presenceDetail: incoming.presenceDetail ?? previous.presenceDetail,
       tags: incoming.tags.over(previous.tags),
+      username: incoming.username ?? previous.username,
     );
   }
 }
