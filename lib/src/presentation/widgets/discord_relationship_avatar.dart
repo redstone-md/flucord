@@ -48,7 +48,7 @@ class DiscordRelationshipAvatar extends StatelessWidget {
             right: 0,
             bottom: 0,
             child: PresenceIndicator(
-              presence: UserPresence(status: _presenceOf(user.status)),
+              presence: UserPresence(status: presenceOf(user.status)),
               size: statusSize,
               borderColor: presenceBorderColor ?? context.surfaces.canvas,
               borderWidth: size >= 60 ? 3 : 2,
@@ -60,7 +60,7 @@ class DiscordRelationshipAvatar extends StatelessWidget {
   }
 
   /// The SDK's status as the app's own, so the shared glyph can draw it.
-  static Presence _presenceOf(DiscordPresenceStatus status) => switch (status) {
+  static Presence presenceOf(DiscordPresenceStatus status) => switch (status) {
     DiscordPresenceStatus.online => Presence.online,
     DiscordPresenceStatus.idle => Presence.idle,
     DiscordPresenceStatus.doNotDisturb => Presence.doNotDisturb,

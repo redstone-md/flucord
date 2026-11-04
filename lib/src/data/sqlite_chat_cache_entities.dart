@@ -6,11 +6,17 @@ mixin _SqliteChatCacheEntities implements ChatCache {
 
   @override
   Future<void> writeMember(Member member) async {
+    _writes.add(_MemberUpsert(member).run);
+  }
+
+  @override
+  Future<void> writeMemberTags(String memberId, MemberTags tags) async {
     _writes.add(
-      (transaction) => transaction.insert(
+      (transaction) => transaction.update(
         'members',
-        SqliteChatCache._memberToRow(member),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        SqliteChatCache._tagsToRow(tags),
+        where: 'id = ?',
+        whereArgs: [memberId],
       ),
     );
   }
@@ -21,6 +27,31 @@ mixin _SqliteChatCacheEntities implements ChatCache {
     SqliteChatCache._categoryToRow(category),
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
+}
+
+/// Writes one member row: a new row whole, a held one with only the columns
+/// the member knows. Unlike a replace, a column left out keeps its value.
+final class _MemberUpsert {
+  _MemberUpsert(Member member) : _row = SqliteChatCache._memberToRow(member);
+
+  final Map<String, Object?> _row;
+
+  String get _sql {
+    final columns = _row.keys.toList(growable: false);
+    final updates = columns
+        .where((column) => column != 'id')
+        .map((column) => '$column = excluded.$column')
+        .join(', ');
+    return 'INSERT INTO members (${columns.join(', ')}) '
+        'VALUES (${List.filled(columns.length, '?').join(', ')}) '
+        'ON CONFLICT(id) DO UPDATE SET $updates';
+  }
+
+  Future<void> run(DatabaseExecutor executor) =>
+      executor.rawInsert(_sql, _row.values.toList(growable: false));
+
+  void addTo(Batch batch) =>
+      batch.rawInsert(_sql, _row.values.toList(growable: false));
 }
 
 Map<String, Object?> _messageToRow(ChatMessage message) => {

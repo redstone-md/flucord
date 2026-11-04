@@ -9,6 +9,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
 import 'flucord_icon_button.dart';
+import 'message_row_metrics.dart';
 import 'message_timestamp.dart';
 import 'recessed_field.dart';
 
@@ -31,16 +32,6 @@ class DiscordSocialDmMessageRow extends StatefulWidget {
 }
 
 class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
-  // The server message row's sizes.
-  static const _groupGap = 10.0;
-  static const _inline = 16.0;
-  static const _block = 4.0;
-  static const _avatarSize = 40.0;
-  static const _avatarGap = 12.0;
-  static const _nameRowHeight = 18.0;
-  static const _barRise = 16.0;
-  static const _hoverAlpha = 0.025;
-
   TextEditingController? _editor;
   bool _hovered = false;
   bool _editing = false;
@@ -69,7 +60,7 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
     final mutating = widget.controller.isMutatingMessage(message.id);
     final actionError = widget.controller.messageActionErrorFor(message.id);
     return Padding(
-      padding: const EdgeInsets.only(top: _groupGap),
+      padding: const EdgeInsets.only(top: MessageRowMetrics.groupGap),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
@@ -78,11 +69,13 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
           children: [
             Container(
               color: _hovered
-                  ? surfaces.text.withValues(alpha: _hoverAlpha)
+                  ? surfaces.text.withValues(
+                      alpha: MessageRowMetrics.hoverAlpha,
+                    )
                   : Colors.transparent,
               padding: const EdgeInsets.symmetric(
-                horizontal: _inline,
-                vertical: _block,
+                horizontal: MessageRowMetrics.inline,
+                vertical: MessageRowMetrics.block,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,9 +83,9 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                   _InitialAvatar(
                     key: ValueKey('social-dm-avatar-${message.id}'),
                     name: author,
-                    size: _avatarSize,
+                    size: MessageRowMetrics.avatarSize,
                   ),
-                  const SizedBox(width: _avatarGap),
+                  const SizedBox(width: MessageRowMetrics.avatarGap),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +93,7 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                         _MessageMetadata(
                           message: message,
                           author: author,
-                          height: _nameRowHeight,
+                          height: MessageRowMetrics.nameRowHeight,
                         ),
                         if (_editing)
                           _buildEditor(context, mutating)
@@ -132,8 +125,8 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
             if (message.authoredByCurrentUser &&
                 (_hovered || _editing || mutating))
               PositionedDirectional(
-                end: _inline,
-                top: -_barRise,
+                end: MessageRowMetrics.inline,
+                top: -MessageRowMetrics.barRise,
                 child: _MessageActions(
                   messageId: message.id,
                   editing: _editing,

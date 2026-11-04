@@ -21,6 +21,7 @@ import 'member_avatar.dart';
 import 'count_badge.dart';
 import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
+import 'sidebar_row_metrics.dart';
 
 part 'channel_sidebar_rows.dart';
 

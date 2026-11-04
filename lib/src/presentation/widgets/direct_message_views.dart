@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/direct_message_candidate.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -171,6 +173,7 @@ class DirectMessageStart extends StatelessWidget {
   const DirectMessageStart({
     required this.avatar,
     required this.name,
+    this.username,
     super.key,
   });
 
@@ -179,6 +182,9 @@ class DirectMessageStart extends StatelessWidget {
 
   final Widget avatar;
   final String name;
+
+  /// The person's username, or null where the transport does not carry it.
+  final String? username;
 
   @override
   Widget build(BuildContext context) {
@@ -194,10 +200,199 @@ class DirectMessageStart extends StatelessWidget {
             name,
             style: FlucordTextRole.display.style.copyWith(color: surfaces.text),
           ),
+          if (username case final username?)
+            Text(
+              username,
+              style: FlucordTextRole.label.style.copyWith(
+                color: surfaces.muted,
+              ),
+            ),
           const SizedBox(height: 4),
           Text(
             'This is the beginning of your direct message history with $name.',
             style: FlucordTextRole.body.style.copyWith(color: surfaces.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// [DirectMessageProfilePanel] for a person the workspace knows.
+///
+/// The servers in common are the ones the workspace has seen them in, so the
+/// count can be low until their memberships load. With none seen, the
+/// section stays out rather than claiming there are none.
+class MemberProfilePanel extends StatelessWidget {
+  const MemberProfilePanel({
+    required this.person,
+    required this.spaces,
+    super.key,
+  });
+
+  final Member person;
+  final List<CommunitySpace> spaces;
+
+  @override
+  Widget build(BuildContext context) {
+    final mutual = [
+      for (final space in spaces)
+        if (!space.isDirectMessages && person.spaceIds.contains(space.id))
+          space,
+    ];
+    return DirectMessageProfilePanel(
+      avatar: MemberAvatar(
+        member: person,
+        size: DirectMessageProfilePanel.avatarSize,
+        presenceBorderColor: context.surfaces.surface,
+      ),
+      name: person.displayName,
+      status: person.presence,
+      memberSince: DiscordSnowflake.createdAt(person.id),
+      mutualServers: mutual.isEmpty ? null : mutual,
+    );
+  }
+}
+
+/// Who a DM is with, in a column on the conversation's right: the person,
+/// how long they have been on Discord, and the servers you share.
+class DirectMessageProfilePanel extends StatelessWidget {
+  const DirectMessageProfilePanel({
+    required this.avatar,
+    required this.name,
+    this.username,
+    this.status = Presence.unknown,
+    this.memberSince,
+    this.mutualServers,
+    super.key,
+  });
+
+  static const width = 240.0;
+
+  /// The size [avatar] is drawn at.
+  static const avatarSize = 64.0;
+
+  static const _padding = 16.0;
+  static const _sectionGap = 16.0;
+  static const _serverTileSize = 20.0;
+  static const _serverRowHeight = 28.0;
+
+  final Widget avatar;
+  final String name;
+  final String? username;
+  final Presence status;
+
+  /// When the person made their account, or null where it is not known.
+  final DateTime? memberSince;
+
+  /// The servers both accounts are in, or null where the transport cannot
+  /// tell.
+  final List<CommunitySpace>? mutualServers;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final muted = FlucordTextRole.label.style.copyWith(color: surfaces.muted);
+    return Container(
+      key: const ValueKey('dm-profile-panel'),
+      width: width,
+      decoration: BoxDecoration(
+        color: surfaces.surface,
+        border: Border(left: BorderSide(color: surfaces.border)),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(_padding),
+        children: [
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SizedBox.square(dimension: avatarSize, child: avatar),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            name,
+            style: FlucordTextRole.title.style.copyWith(color: surfaces.text),
+          ),
+          if (username case final username?) Text(username, style: muted),
+          if (status != Presence.unknown)
+            Text(
+              status.label,
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.captionText,
+              ),
+            ),
+          const SizedBox(height: _sectionGap),
+          Divider(height: 1, thickness: 1, color: surfaces.border),
+          if (memberSince case final since?)
+            _section(
+              context,
+              'Member since',
+              Text(
+                MaterialLocalizations.of(
+                  context,
+                ).formatFullDate(since.toLocal()),
+                style: FlucordTextRole.label.style.copyWith(
+                  color: surfaces.text,
+                ),
+              ),
+            ),
+          if (mutualServers case final servers?)
+            _section(
+              context,
+              'Mutual servers ${servers.length}',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final server in servers) _serverRow(context, server),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(BuildContext context, String heading, Widget body) => Padding(
+    padding: const EdgeInsets.only(top: _sectionGap),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading,
+          style: FlucordTextRole.caption.style.copyWith(
+            color: context.surfaces.captionText,
+          ),
+        ),
+        const SizedBox(height: 4),
+        body,
+      ],
+    ),
+  );
+
+  Widget _serverRow(BuildContext context, CommunitySpace server) {
+    final surfaces = context.surfaces;
+    return SizedBox(
+      key: ValueKey('dm-profile-server-${server.id}'),
+      height: _serverRowHeight,
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: FlucordRadius.small,
+            child: SizedBox.square(
+              dimension: _serverTileSize,
+              child: RemoteIdentityImage(
+                url: server.iconUrl,
+                fallback: ColoredBox(color: Color(server.colorValue)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              server.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+            ),
           ),
         ],
       ),

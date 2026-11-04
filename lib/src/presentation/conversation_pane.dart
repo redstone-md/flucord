@@ -545,8 +545,6 @@ class ConversationPaneState extends State<ConversationPane> {
           isInCall: inCall,
           callLabel: _callLabel(callController, inCall),
           onToggleCall: _callToggle(callController, inCall),
-          allowMemberPanel: widget.allowMemberPanel,
-          allowThreadPanel: widget.allowThreadPanel,
           showMembers: widget.showMembers,
           showPins: widget.showPins,
           showThreads: widget.showThreads,
@@ -556,20 +554,25 @@ class ConversationPaneState extends State<ConversationPane> {
               workspaceController.selectVoiceSurface(channel.id, surface),
           onQueryChanged: workspaceController.setQuery,
           onSubmitQuery: widget.onSubmitQuery,
-          onToggleMembers: workspaceController.toggleMembers,
+          onToggleMembers: widget.allowMemberPanel
+              ? workspaceController.toggleMembers
+              : null,
           onTogglePins: () {
             workspaceController.togglePins();
             if (workspaceController.showPins) {
               unawaited(chat.loadPinnedMessages(channel.id));
             }
           },
-          onToggleThreads: () {
-            workspaceController.toggleThreads();
-            final threadParentId = channel.threadParentId;
-            if (workspaceController.showThreads && threadParentId != null) {
-              unawaited(chat.loadArchivedThreads(threadParentId));
-            }
-          },
+          onToggleThreads: widget.allowThreadPanel
+              ? () {
+                  workspaceController.toggleThreads();
+                  final threadParentId = channel.threadParentId;
+                  if (workspaceController.showThreads &&
+                      threadParentId != null) {
+                    unawaited(chat.loadArchivedThreads(threadParentId));
+                  }
+                }
+              : null,
           onOpenInbox: widget.onOpenInbox,
         ),
         Expanded(child: conversation),

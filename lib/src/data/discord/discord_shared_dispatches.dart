@@ -125,7 +125,7 @@ final class DiscordSharedDispatches {
       case 'GUILD_MEMBER_REMOVE':
         _removeMember(event.data);
       case 'PRESENCE_UPDATE':
-        _presenceTags(event.data);
+        unawaited(_presenceTags(event.data));
     }
   }
 
@@ -196,18 +196,14 @@ final class DiscordSharedDispatches {
   /// The tags on a presence's user. Most presences name the user by id
   /// alone, which says nothing about the tags; only a whole user, one with a
   /// username, does.
-  void _presenceTags(Map<String, Object?> data) {
+  Future<void> _presenceTags(Map<String, Object?> data) async {
     final user = data['user'];
     if (user is! Map || user['username'] is! String) return;
     final memberId = user['id'];
     if (memberId is! String) return;
-    _events.publish(
-      MemberTagsChangedEvent(
-        memberId: memberId,
-        isBot: user['bot'] == true,
-        clanTag: _mapper.clanTag(user.cast<String, Object?>()),
-      ),
-    );
+    final tags = _mapper.tags(user.cast<String, Object?>());
+    _events.publish(MemberTagsChangedEvent(memberId: memberId, tags: tags));
+    await _cache.writeMemberTags(memberId, tags);
   }
 
   void _removeMember(Map<String, Object?> data) {

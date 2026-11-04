@@ -1,3 +1,4 @@
+import 'package:flucord/src/presentation/widgets/chat_header.dart';
 import 'package:flucord/src/presentation/widgets/message_action_bar.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -264,6 +265,59 @@ void main() {
       expect(bar.top, surface.top - 16);
       expect(bar.bottom, greaterThan(surface.top));
       expect(bar.right, surface.right - 16);
+    });
+
+    testSession('stays inside the message list over the topmost message', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      for (var index = 0; index < 30; index++) {
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          rawMessage(
+            id: '${900000000000000100 + index}',
+            channelId: SessionHarness.channelId,
+            guildId: SessionHarness.guildId,
+            authorId: index.isEven
+                ? SessionHarness.friendId
+                : SessionHarness.currentUserId,
+            content: 'line $index',
+          ),
+        );
+      }
+      final header = tester.getRect(find.byType(ChatHeader));
+      // The last row that starts above the list's top edge.
+      final top =
+          [
+            for (var index = 0; index < 30; index++)
+              session.messageRow('${900000000000000100 + index}'),
+          ].lastWhere(
+            (row) =>
+                row.evaluate().isNotEmpty &&
+                tester.getRect(row).top < header.bottom,
+          );
+      final scroll = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(
+                    const ValueKey('messages-${SessionHarness.channelId}'),
+                  ),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      // Puts the message's top edge on the list's top edge.
+      scroll.jumpTo(scroll.pixels - (header.bottom - tester.getRect(top).top));
+      await tester.pump();
+      expect(tester.getRect(top).top, closeTo(header.bottom, 1));
+
+      await _hover(tester, tester.getRect(top).center);
+
+      final bar = tester.getRect(find.byType(MessageActionBar));
+      expect(bar.top, greaterThanOrEqualTo(header.bottom));
     });
 
     testSession('answers a click on the top edge of a button', (

@@ -35,6 +35,29 @@ Map<String, Object?> _fromBot() =>
         'primary_guild': _clan,
       };
 
+Map<String, Object?> _presenceWith(Map<String, Object?> clan) => {
+  'guild_id': SessionHarness.guildId,
+  'status': 'online',
+  'activities': <Object?>[],
+  'user': {
+    'id': SessionHarness.friendId,
+    'username': 'user-${SessionHarness.friendId}',
+    'primary_guild': clan,
+  },
+};
+
+/// A member update for the friend. Discord leaves `primary_guild` out of
+/// some of them; [primaryGuild] sends it as an explicit null.
+Map<String, Object?> _memberUpdate({bool primaryGuild = false}) => {
+  'guild_id': SessionHarness.guildId,
+  'roles': <Object?>[],
+  'user': {
+    'id': SessionHarness.friendId,
+    'username': 'user-${SessionHarness.friendId}',
+    if (primaryGuild) 'primary_guild': null,
+  },
+};
+
 Finder _in(Finder row, Finder matching) =>
     find.descendant(of: row, matching: matching);
 
@@ -142,6 +165,69 @@ void main() {
     expect(_in(row, find.text('CODE')), findsOneWidget);
   });
 
+  testSession(
+    'a member update without primary_guild keeps the tag; a null clears it',
+    (tester, session) async {
+      const messageId = '900000000000000024';
+      await session.openChannel(SessionHarness.channelId);
+      await session.dispatch(
+        'MESSAGE_CREATE',
+        rawMessage(
+          id: messageId,
+          channelId: SessionHarness.channelId,
+          guildId: SessionHarness.guildId,
+          authorId: SessionHarness.friendId,
+          content: 'hello',
+        ),
+      );
+      await session.dispatch('PRESENCE_UPDATE', _presenceWith(_clan));
+      final row = session.messageRow(messageId);
+      expect(_in(row, find.text('CODE')), findsOneWidget);
+
+      await session.dispatch('GUILD_MEMBER_UPDATE', _memberUpdate());
+      expect(_in(row, find.text('CODE')), findsOneWidget);
+
+      await session.dispatch(
+        'GUILD_MEMBER_UPDATE',
+        _memberUpdate(primaryGuild: true),
+      );
+      expect(_in(row, find.byType(ClanTagChip)), findsNothing);
+    },
+  );
+
+  testSession(
+    'a clan tag from a presence update is still there after a restart',
+    (tester, session) async {
+      const messageId = '900000000000000025';
+      await session.openChannel(SessionHarness.channelId);
+      await session.dispatch(
+        'MESSAGE_CREATE',
+        rawMessage(
+          id: messageId,
+          channelId: SessionHarness.channelId,
+          guildId: SessionHarness.guildId,
+          authorId: SessionHarness.friendId,
+          content: 'hello',
+        ),
+      );
+      await session.dispatch('PRESENCE_UPDATE', _presenceWith(_clan));
+
+      session.transport.on(
+        'GET',
+        '/api/v9/channels/${SessionHarness.channelId}/messages',
+        (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
+      );
+      await session.relaunchUnreachable();
+      await session.openChannel(SessionHarness.channelId);
+      await session.settleServerErrorRepeats();
+
+      final row = session.messageRow(messageId);
+      expect(row, findsOneWidget);
+      expect(_in(row, find.text('CODE')), findsOneWidget);
+    },
+    onDisk: true,
+  );
+
   testWidgets('a bot in the member list shows the clan chip and APP', (
     tester,
   ) async {
@@ -153,8 +239,10 @@ void main() {
       presence: Presence.online,
       colorValue: 0xff665f82,
       spaceIds: {'guild-1'},
-      isBot: true,
-      clanTag: ClanTag(tag: 'CODE', guildId: 'guild-9'),
+      tags: MemberTags(
+        isBot: true,
+        clanTag: ClanTag(tag: 'CODE', guildId: 'guild-9'),
+      ),
     );
     await tester.pumpWidget(
       MaterialApp(

@@ -181,11 +181,7 @@ final class SqliteChatCache
         batch.insert('roles', _roleToRow(role));
       }
       for (final member in workspace.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       await batch.commit(noResult: true);
     });
@@ -285,11 +281,7 @@ final class SqliteChatCache
       }
       final batch = transaction.batch();
       for (final member in history.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       for (final message in history.messages) {
         batch.insert(
@@ -337,13 +329,7 @@ final class SqliteChatCache
     ChatMessage message,
     Member? member,
   ) async {
-    if (member != null) {
-      await transaction.insert(
-        'members',
-        _memberToRow(member),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
+    if (member != null) await _MemberUpsert(member).run(transaction);
     await transaction.insert(
       'messages',
       _messageToRow(message),
@@ -427,11 +413,7 @@ final class SqliteChatCache
         );
       }
       for (final member in guild.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       await batch.commit(noResult: true);
     });
@@ -560,11 +542,7 @@ final class SqliteChatCache
         );
         continue;
       }
-      await transaction.insert(
-        'members',
-        _memberToRow(kept),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await _MemberUpsert(kept).run(transaction);
     }
   }
 
@@ -797,8 +775,14 @@ final class SqliteChatCache
       member.avatarUrlsBySpace,
     ),
     'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
-    'is_bot': member.isBot ? 1 : 0,
-    'clan_tag_json': ChatModelJson.clanTag(member.clanTag),
+    ..._tagsToRow(member.tags),
+  };
+
+  /// A clan tag the payload left out is no column at all, so a write keeps
+  /// the stored one.
+  static Map<String, Object?> _tagsToRow(MemberTags tags) => {
+    'is_bot': tags.isBot ? 1 : 0,
+    if (tags.knowsClanTag) 'clan_tag_json': ChatModelJson.clanTag(tags.clanTag),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -819,8 +803,10 @@ final class SqliteChatCache
     membershipsBySpace: ChatModelJson.membershipsFrom(
       row['memberships_json'] as String?,
     ),
-    isBot: row['is_bot'] == 1,
-    clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
+    tags: MemberTags(
+      isBot: row['is_bot'] == 1,
+      clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
+    ),
   );
 
   /// Every table is found by name, so a table added later cannot be missed.

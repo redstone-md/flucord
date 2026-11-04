@@ -96,7 +96,7 @@ void main() {
     expect(tester.getRect(find.byType(ConversationPane)), tester.getRect(card));
   }, size: window);
 
-  testSession('a direct message opens inside the card too', (
+  testSession('a direct message and its profile open inside the card too', (
     tester,
     session,
   ) async {
@@ -105,8 +105,13 @@ void main() {
       space: 'direct-messages',
     );
 
+    final pane = tester.getRect(find.byType(ConversationPane));
+    final profile = find.byKey(const ValueKey('dm-profile-panel'));
     expect(inCard(find.byType(ConversationPane)), findsOneWidget);
-    expect(tester.getRect(find.byType(ConversationPane)), tester.getRect(card));
+    expect(inCard(profile), findsOneWidget);
+    expect(pane.left, tester.getRect(card).left);
+    expect(pane.right, tester.getRect(profile).left);
+    expect(tester.getRect(profile).right, tester.getRect(card).right);
   }, size: window);
 
   testSession(

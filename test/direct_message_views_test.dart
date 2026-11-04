@@ -101,6 +101,31 @@ void main() {
     },
   );
 
+  testWidgets('a DM start shows the username, muted, under the name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: const Scaffold(
+          body: DirectMessageStart(
+            avatar: SizedBox(),
+            name: 'Ada',
+            username: 'ada.lovelace',
+          ),
+        ),
+      ),
+    );
+
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+    final username = find.text('ada.lovelace');
+    expect(
+      tester.getRect(username).top,
+      greaterThanOrEqualTo(tester.getRect(find.text('Ada')).bottom),
+    );
+    expect(tester.widget<Text>(username).style!.color, surfaces.muted);
+  });
+
   testWidgets('empty direct inbox exposes one stable creation action', (
     tester,
   ) async {

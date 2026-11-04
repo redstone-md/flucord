@@ -27,7 +27,9 @@ extension _FlucordShellConversation on FlucordShell {
     channel: channel,
     channels: channels,
     compact: !showChannels,
-    allowMemberPanel: membersFit && !space.isDirectMessages,
+    // A DM with one person has their profile there instead.
+    allowMemberPanel:
+        membersFit && (!space.isDirectMessages || channel.isDirectMessage),
     allowThreadPanel: allowThreadPanel,
     showMembers: showMembers,
     showPins: showPins,
@@ -91,4 +93,11 @@ extension _FlucordShellConversation on FlucordShell {
         if (permissions.can(DiscordPermissions.readMessageHistory, item)) item,
     ];
   }
+
+  /// The person a one-to-one DM is with, when the workspace knows them.
+  Member? _recipientOf(ChatWorkspace workspace, ConversationChannel? channel) =>
+      switch (channel?.recipientId) {
+        final id? => workspace.memberOrNull(id),
+        null => null,
+      };
 }

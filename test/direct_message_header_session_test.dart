@@ -98,6 +98,42 @@ void main() {
     ready: _ready(),
     routes: _oneMessageInTheDm,
   );
+
+  testSession(
+    'a DM shows who it is with in a profile panel beside it',
+    (tester, session) async {
+      await session.dispatch('GUILD_MEMBER_ADD', {
+        'guild_id': SessionHarness.guildId,
+        'roles': <Object?>[],
+        'user': _friend,
+      });
+      await session.openChannel(
+        SessionHarness.dmChannelId,
+        space: 'direct-messages',
+      );
+
+      final panel = find.byKey(const ValueKey('dm-profile-panel'));
+      Finder inPanel(Finder matching) =>
+          find.descendant(of: panel, matching: matching);
+      expect(tester.getSize(panel).width, 240);
+      expect(
+        tester.getSize(inPanel(find.byType(MemberAvatar))),
+        const Size.square(64),
+      );
+      expect(inPanel(find.text(_name)), findsOneWidget);
+      // The friend's id was minted in October 2015.
+      expect(inPanel(find.text('Member since')), findsOneWidget);
+      expect(inPanel(find.textContaining('2015')), findsOneWidget);
+      expect(inPanel(find.text('Mutual servers 1')), findsOneWidget);
+      expect(inPanel(find.text('The Forge')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Hide user profile'));
+      await session.settle();
+      expect(panel, findsNothing);
+    },
+    ready: _ready(),
+    size: const Size(1280, 720),
+  );
 }
 
 /// The DM's whole history is one message, so it opens at its start.
