@@ -20,6 +20,7 @@ import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
+import 'member_avatar.dart';
 import 'name_tags.dart';
 import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
