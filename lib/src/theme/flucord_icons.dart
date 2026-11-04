@@ -71,7 +71,6 @@ abstract final class FlucordIcons {
   static const attach = FlucordIconData(HugeIcons.strokeRoundedAddCircle);
   static const upload = FlucordIconData(HugeIcons.strokeRoundedFileUpload);
   static const poll = FlucordIconData(HugeIcons.strokeRoundedChartBarLine);
-  static const notify = FlucordIconData(HugeIcons.strokeRoundedNotification01);
   static const gif = FlucordIconData(HugeIcons.strokeRoundedGif01);
   static const sticker = FlucordIconData(HugeIcons.strokeRoundedSticker);
   static const send = FlucordIconData(

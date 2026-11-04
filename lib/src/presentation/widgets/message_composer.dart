@@ -920,7 +920,7 @@ class MessageComposerState extends State<MessageComposer>
           ? const FlucordMenuItem(
               key: ValueKey('send-silently'),
               value: _ComposerMenuAction.silent,
-              icon: FlucordIcons.notify,
+              icon: FlucordIcons.notifications,
               label: 'Send with notifications',
             )
           : const FlucordMenuItem(

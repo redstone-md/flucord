@@ -39,7 +39,7 @@ class DiscordFriendDirectory extends StatelessWidget {
       ),
       DiscordFriendsLoadState.authorizationRequired => _FriendsState(
         key: const ValueKey('discord-friends-auth-required'),
-        icon: FlucordIcons.twoFactor,
+        icon: FlucordIcons.credential,
         title: 'Native account authorization required',
         detail:
             'Connect your Discord account through the native Social SDK to synchronize friends.',
