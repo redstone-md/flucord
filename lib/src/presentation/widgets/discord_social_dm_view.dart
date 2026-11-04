@@ -6,11 +6,16 @@ import 'package:flutter/services.dart';
 import '../../application/discord_social_dm_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_dm.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'discord_social_dm_message_row.dart';
 import 'accessibility_scope.dart';
+import 'direct_message_views.dart';
+import 'discord_relationship_avatar.dart';
+import 'discord_social_dm_message_row.dart';
+import 'flucord_icon_button.dart';
+import 'recessed_field.dart';
 import 'spell_check_scope.dart';
 
 class DiscordSocialDmView extends StatefulWidget {
@@ -108,43 +113,66 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
   }
 }
 
+/// The DM's header, built like the chat header: the person's avatar with a
+/// status dot, their name as a heading, and 28 px buttons on the right.
+///
+/// The native SDK has no calls or profile card here yet, so those buttons
+/// show where they will be and stay disabled.
 class _DmHeader extends StatelessWidget {
   const _DmHeader({required this.user});
+
+  static const _height = 48.0;
+  static const _avatarSize = 24.0;
+  static const _gap = 8.0;
+  static const _buttonGap = 4.0;
 
   final DiscordRelationshipUser user;
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     return Container(
-      height: 58,
+      key: const ValueKey('social-dm-header'),
+      height: _height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: context.surfaces.border)),
+        border: Border(bottom: BorderSide(color: surfaces.border)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.alternate_email, size: 18),
-          const SizedBox(width: 9),
+          DiscordRelationshipAvatar(
+            user: user,
+            size: _avatarSize,
+            presenceBorderColor: surfaces.canvas,
+          ),
+          const SizedBox(width: _gap),
           Expanded(
             child: Text(
               user.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: FlucordType.label,
-                fontWeight: FontWeight.w600,
+              style: FlucordTextRole.heading.style.copyWith(
+                color: surfaces.text,
               ),
             ),
           ),
-          Icon(Icons.phone_outlined, size: 18, color: context.surfaces.muted),
-          const SizedBox(width: 16),
-          Icon(
-            Icons.videocam_outlined,
-            size: 19,
-            color: context.surfaces.muted,
+          const FlucordIconButton(
+            icon: FlucordIcons.call,
+            tooltip: 'Start call',
+            onPressed: null,
           ),
-          const SizedBox(width: 16),
-          Icon(Icons.person_outline, size: 19, color: context.surfaces.muted),
+          const SizedBox(width: _buttonGap),
+          const FlucordIconButton(
+            icon: FlucordIcons.camera,
+            tooltip: 'Start video call',
+            onPressed: null,
+          ),
+          const SizedBox(width: _buttonGap),
+          const FlucordIconButton(
+            icon: FlucordIcons.profile,
+            tooltip: 'Profile',
+            onPressed: null,
+          ),
         ],
       ),
     );
@@ -174,7 +202,7 @@ class _DmTimeline extends StatelessWidget {
       return const Center(
         child: SizedBox.square(
           key: ValueKey('social-dm-loading'),
-          dimension: 26,
+          dimension: FlucordIconButton.size,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       );
@@ -182,23 +210,32 @@ class _DmTimeline extends StatelessWidget {
     if (error != null && messages.isEmpty) {
       return _DmTimelineState(
         key: const ValueKey('social-dm-error'),
-        icon: Icons.error_outline,
+        icon: FlucordIcons.error,
         title: 'Messages could not be loaded',
         detail: 'The native Discord chat request failed ($error).',
         action: OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
       );
     }
     if (messages.isEmpty) {
-      return _DmTimelineState(
-        key: const ValueKey('social-dm-empty'),
-        icon: Icons.waving_hand_outlined,
-        title: 'This is the beginning of your conversation',
-        detail: 'Send a message to ${user.displayName}.',
+      // The start sits on the composer, where the first message will appear.
+      return Align(
+        alignment: AlignmentDirectional.bottomStart,
+        child: SingleChildScrollView(
+          child: DirectMessageStart(
+            key: const ValueKey('social-dm-empty'),
+            avatar: DiscordRelationshipAvatar(
+              user: user,
+              size: DirectMessageStart.avatarSize,
+            ),
+            name: user.displayName,
+          ),
+        ),
       );
     }
+    // The rows carry their own 16 px sides, like server messages.
     return ListView.builder(
       key: const ValueKey('social-dm-timeline'),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+      padding: const EdgeInsets.only(top: 8, bottom: 16),
       itemCount: messages.length,
       itemBuilder: (context, index) => DiscordSocialDmMessageRow(
         key: ValueKey('social-dm-message-${messages[index].id}'),
@@ -243,59 +280,83 @@ class _DmComposerState extends State<_DmComposer> {
     }
   }
 
+  /// The empty box's height, the same as the server composer's.
+  static const _height = 44.0;
+
+  /// Above and below one line of text, so one line makes [_height].
+  static final _textInset = (_height - FlucordTextRole.body.lineHeight) / 2;
+  static const _gutter = 16.0;
+  static const _buttonInset = 8.0;
+
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final sending = widget.controller.isSending(widget.user.id);
+    const buttonBox = BoxConstraints(
+      minWidth: FlucordIconButton.size,
+      minHeight: FlucordIconButton.size,
+    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.surfaces.raised,
-          borderRadius: FlucordRadius.medium,
-        ),
-        padding: const EdgeInsets.only(left: 12, right: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: CallbackShortcuts(
-                bindings: {
-                  const SingleActivator(LogicalKeyboardKey.enter): _submit,
-                },
-                child: TextField(
-                  key: const ValueKey('social-dm-composer'),
-                  controller: _textController,
-                  focusNode: _focusNode,
-                  minLines: 1,
-                  maxLines: 5,
-                  maxLength: 2000,
-                  // Same local dictionary as the guild composer, so direct
-                  // messages underline the same way.
-                  spellCheckConfiguration: _spellCheckConfiguration(context),
-                  enabled: !sending,
-                  decoration: InputDecoration(
-                    hintText: 'Message @${widget.user.displayName}',
-                    border: InputBorder.none,
-                    counterText: '',
-                  ),
-                  onChanged: (_) => setState(() {}),
+      padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, _gutter),
+      child: CallbackShortcuts(
+        bindings: {const SingleActivator(LogicalKeyboardKey.enter): _submit},
+        child: TextField(
+          key: const ValueKey('social-dm-composer'),
+          controller: _textController,
+          focusNode: _focusNode,
+          minLines: 1,
+          maxLines: 5,
+          maxLength: 2000,
+          // Same local dictionary as the guild composer, so direct
+          // messages underline the same way.
+          spellCheckConfiguration: _spellCheckConfiguration(context),
+          enabled: !sending,
+          style: FlucordTextRole.body.style.copyWith(color: surfaces.text),
+          decoration:
+              recessedFieldDecoration(
+                context,
+                borderRadius: FlucordRadius.medium,
+              ).copyWith(
+                hintText: 'Message @${widget.user.displayName}',
+                hintStyle: FlucordTextRole.body.style.copyWith(
+                  color: surfaces.captionText,
+                ),
+                hintMaxLines: 1,
+                counterText: '',
+                contentPadding: EdgeInsetsDirectional.fromSTEB(
+                  _gutter,
+                  _textInset,
+                  0,
+                  _textInset,
+                ),
+                suffixIconConstraints: buttonBox,
+                suffixIcon: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: _buttonInset),
+                  child: sending
+                      ? const SizedBox.square(
+                          key: ValueKey('social-dm-send'),
+                          dimension: FlucordIconButton.size,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: FlucordIconButton.iconSize,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        )
+                      : FlucordIconButton(
+                          key: const ValueKey('social-dm-send'),
+                          tooltip: 'Send message',
+                          icon: FlucordIcons.send,
+                          color: _textController.text.trim().isEmpty
+                              ? null
+                              : surfaces.accentIcon,
+                          onPressed: _textController.text.trim().isEmpty
+                              ? null
+                              : _submit,
+                        ),
                 ),
               ),
-            ),
-            IconButton(
-              key: const ValueKey('social-dm-send'),
-              tooltip: 'Send message',
-              onPressed: sending || _textController.text.trim().isEmpty
-                  ? null
-                  : _submit,
-              icon: sending
-                  ? const SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded, size: 19),
-            ),
-          ],
+          onChanged: (_) => setState(() {}),
         ),
       ),
     );
@@ -326,33 +387,40 @@ class _DmTimelineState extends StatelessWidget {
     super.key,
   });
 
-  final IconData icon;
+  static const _iconSize = 32.0;
+
+  final FlucordIconData icon;
   final String title;
   final String detail;
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 32, color: context.surfaces.muted),
+            FlucordIcon(icon, size: _iconSize, color: surfaces.muted),
             const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 5),
+            Text(
+              title,
+              style: FlucordTextRole.heading.style.copyWith(
+                color: surfaces.text,
+              ),
+            ),
+            const SizedBox(height: 4),
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.muted,
               ),
             ),
             if (action case final action?) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               action,
             ],
           ],
