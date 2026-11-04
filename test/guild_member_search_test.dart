@@ -1,6 +1,7 @@
 import 'package:flucord/src/data/discord/discord_desktop_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
+import 'package:flucord/src/domain/monogram.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -65,6 +66,8 @@ void main() {
       expect(members.first.displayName, 'Mira');
       // The guild nickname wins: it is the name everybody there sees.
       expect(members.last.displayName, 'Forge Lena');
+      // A row with no picture draws the monogram of that same name.
+      expect(members.last.initials, monogramOf('Forge Lena'));
       // Each one is filed under the guild the chunk named, so the mention list
       // for that guild can find them.
       expect(members.first.spaceIds, {'guild-1'});

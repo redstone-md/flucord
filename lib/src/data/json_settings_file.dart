@@ -30,7 +30,21 @@ final class JsonSettingsFile {
     }
   }
 
-  Future<void> write(Object? document) async {
+  /// Writes [document] after every write asked for before it.
+  ///
+  /// A slider saves on every step of a drag. Two writes to one file that
+  /// overlap can finish out of order and leave the older document on disk,
+  /// so each waits for the one before it.
+  Future<void> write(Object? document) {
+    final write = _lastWrite.then((_) => _writeNow(document));
+    // The caller gets this write's error; the queue only needs its end.
+    _lastWrite = write.then<void>((_) {}, onError: (Object _) {});
+    return write;
+  }
+
+  Future<void> _lastWrite = Future.value();
+
+  Future<void> _writeNow(Object? document) async {
     final file = await _file();
     await file.parent.create(recursive: true);
     await file.writeAsString(jsonEncode(document));

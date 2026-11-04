@@ -21,26 +21,43 @@ class ProfileNoteSection extends StatefulWidget {
 class _ProfileNoteSectionState extends State<ProfileNoteSection> {
   late final TextEditingController _field;
   bool _dirty = false;
+  String? _userId;
 
   @override
   void initState() {
     super.initState();
+    _userId = widget.controller.openUserId;
     _field = TextEditingController(text: widget.controller.note ?? '');
+    widget.controller.addListener(_followNote);
   }
 
   @override
   void didUpdateWidget(covariant ProfileNoteSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller.openUserId != widget.controller.openUserId) {
-      _field.text = widget.controller.note ?? '';
-      _dirty = false;
-    }
+    if (identical(oldWidget.controller, widget.controller)) return;
+    oldWidget.controller.removeListener(_followNote);
+    widget.controller.addListener(_followNote);
+    _followNote();
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_followNote);
     _field.dispose();
     super.dispose();
+  }
+
+  /// Shows the newest note while the field is untouched, so a save never
+  /// writes back text older than the note. An edit in progress is kept; its
+  /// Discard shows the newest note. Another user starts from their own note.
+  void _followNote() {
+    final controller = widget.controller;
+    final otherUser = controller.openUserId != _userId;
+    if (_dirty && !otherUser) return;
+    _userId = controller.openUserId;
+    _dirty = false;
+    final note = controller.note ?? '';
+    if (_field.text != note) _field.text = note;
   }
 
   @override

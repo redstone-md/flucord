@@ -621,7 +621,7 @@ extension _FlucordShellNavigation on FlucordShell {
       _onSeats(
         (seated) => ActiveNowColumn(
           friends: activeFriends(
-            [for (final friend in friends.friends) friend.user.id],
+            [for (final friend in friends.friends) friend.user],
             workspace: workspace,
             seatedByChannel: seated,
           ),
@@ -861,6 +861,10 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   /// Opens the DM with [recipientId] and sends [text] there, when given.
+  ///
+  /// The text is sent before the DM opens: a text Discord refuses goes into
+  /// the DM's draft, which the box shows when it opens, so it can be sent
+  /// again. A box already open would not read a draft written under it.
   Future<void> _openDirectConversation(
     BuildContext context,
     String recipientId, {
@@ -874,11 +878,16 @@ extension _FlucordShellNavigation on FlucordShell {
       );
       return;
     }
-    final workspace = chatController.workspace!;
-    final channel = workspace.channelById(channelId);
-    _openDestination(spaceId: channel.spaceId, channelId: channel.id);
-    if (text.isNotEmpty) {
-      await chatController.sendMessage(channelId: channelId, body: text);
+    if (text.isNotEmpty &&
+        !await chatController.sendMessage(channelId: channelId, body: text)) {
+      final drafts = chatController.drafts;
+      drafts.write(
+        channelId,
+        drafts.read(channelId).withFailedSend(ComposerDraft(text: text)),
+      );
     }
+    if (!context.mounted) return;
+    final channel = chatController.workspace!.channelById(channelId);
+    _openDestination(spaceId: channel.spaceId, channelId: channel.id);
   }
 }

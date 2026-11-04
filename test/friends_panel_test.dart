@@ -199,6 +199,18 @@ void main() {
       expect(controller.isBusy, isFalse);
     });
 
+    test('suggestions load while another request is on its way', () async {
+      final graph = _FakeGraph(_graph);
+      final controller = FriendsController(() => graph);
+      addTearDown(controller.dispose);
+
+      final adding = controller.addFriend('mira');
+      await controller.loadSuggestions();
+      await adding;
+
+      expect(graph.suggestionLoads, 1);
+    });
+
     test('a request is offered only to somebody not already in reach', () {
       final controller = FriendsController(() => _FakeGraph(_graph));
       addTearDown(controller.dispose);

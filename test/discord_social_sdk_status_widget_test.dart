@@ -176,6 +176,31 @@ void main() {
     expect(find.byKey(const ValueKey('profile-card-message')), findsOneWidget);
   });
 
+  testWidgets('a full profile closes when the relationship is gone', (
+    tester,
+  ) async {
+    final ada = _relationship(id: 'friend-1', name: 'Ada');
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [ada],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+    await tester.tap(find.text('Ada'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-card-avatar')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('full-profile')), findsOneWidget);
+
+    await harness.friends.updateRelationship(
+      ada,
+      DiscordRelationshipAction.removeFriend,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('full-profile')), findsNothing);
+  });
+
   testWidgets('keeps linked-package authorization distinct from loading', (
     tester,
   ) async {

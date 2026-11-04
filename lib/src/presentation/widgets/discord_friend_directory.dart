@@ -149,50 +149,71 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     );
   }
 
-  /// Opens [relationship]'s card beside the row at [rowContext].
+  /// Opens [relationship]'s card beside the row at [rowContext], and its
+  /// full profile after it when the card asks for that.
   Future<void> _showProfile(
     BuildContext rowContext,
     DiscordRelationship relationship,
   ) async {
-    setState(() => _openUserId = relationship.user.id);
-    await showProfileCard(
-      context: rowContext,
-      anchor: popupAnchorOf(rowContext),
-      builder: (close) {
-        _closeCard = close;
-        return _latest(
-          relationship,
-          (current) => ProfileCard(
-            data: ProfileCardData.relationship(current),
-            actions: _profileActions(
-              current,
-              close,
-              onOpenFullProfile: () {
-                close();
-                unawaited(_showFullProfile(relationship));
-              },
+    var openFullProfile = false;
+    await _whileOpen(
+      relationship,
+      (track) => showProfileCard(
+        context: rowContext,
+        anchor: popupAnchorOf(rowContext),
+        builder: (close) {
+          track(close);
+          return _latest(
+            relationship,
+            (current) => ProfileCard(
+              data: ProfileCardData.relationship(current),
+              actions: _profileActions(
+                current,
+                close,
+                onOpenFullProfile: () {
+                  openFullProfile = true;
+                  close();
+                },
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
-    _closeCard = null;
-    if (mounted) setState(() => _openUserId = null);
+    if (openFullProfile && mounted) await _showFullProfile(relationship);
   }
 
   /// Opens [relationship]'s full profile. The SDK has no profile route, so
   /// it shows the name, the status and the game.
-  Future<void> _showFullProfile(DiscordRelationship relationship) =>
-      showFullProfile(
-        context: context,
-        builder: (close) => _latest(
+  Future<void> _showFullProfile(DiscordRelationship relationship) => _whileOpen(
+    relationship,
+    (track) => showFullProfile(
+      context: context,
+      builder: (close) {
+        track(close);
+        return _latest(
           relationship,
           (current) => FullProfile(
             data: ProfileCardData.relationship(current),
             actions: _profileActions(current, close),
           ),
-        ),
-      );
+        );
+      },
+    ),
+  );
+
+  /// Marks [relationship]'s row as open while [show] runs. [show] hands
+  /// `track` the close of what it opened, so that a relationship that is
+  /// gone closes it (see [didUpdateWidget]).
+  Future<void> _whileOpen(
+    DiscordRelationship relationship,
+    Future<void> Function(void Function(VoidCallback close) track) show,
+  ) async {
+    setState(() => _openUserId = relationship.user.id);
+    await show((close) => _closeCard = close);
+    _closeCard = null;
+    if (mounted) setState(() => _openUserId = null);
+  }
 
   /// Builds [build] with the latest copy of [relationship], so a new status
   /// or an answered request shows at once. One that is gone keeps its last

@@ -146,6 +146,30 @@ void main() {
     expect(tester.getSize(_card('acapulco')).height, lessThan(80));
   });
 
+  testWidgets('a rich presence with a state and no details keeps its block', (
+    tester,
+  ) async {
+    final mira = _person(
+      'mira',
+      'Mira',
+      activities: [
+        UserActivity(
+          name: 'Deep Rock Galactic',
+          state: 'In a lobby',
+          timestamps: ActivityTimestamps(
+            startMs: _startedAgo(const Duration(minutes: 35)),
+          ),
+        ),
+      ],
+    );
+    await _pump(tester, [ActiveFriend(person: mira)]);
+
+    expect(_inCard('mira', find.text('In a lobby')), findsOneWidget);
+    expect(_inCard('mira', find.text('35 min')), findsOneWidget);
+    // The game's art block, here its initials.
+    expect(_inCard('mira', find.text('DR')), findsOneWidget);
+  });
+
   testWidgets('a friend in voice names the room and opens it when clicked', (
     tester,
   ) async {

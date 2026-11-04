@@ -2,6 +2,7 @@ import '../../app_log.dart';
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/discord_snowflake.dart';
 import 'discord_mapper.dart';
 import 'discord_rest_client.dart';
 
@@ -38,17 +39,21 @@ final class DiscordDirectMessages {
 
   /// The DMs the account holds after a READY or an offline launch.
   ///
+  /// [channels] replace what was known: a DM closed while the client was
+  /// away must be new again, so that its next message brings it back.
   /// [payloads] are the private channels the READY carried, with their
   /// recipients expanded. An offline launch has none.
   void seed(
     Iterable<ConversationChannel> channels, {
     Iterable<Map<String, Object?>> payloads = const [],
   }) {
-    _knownChannelIds.addAll(
-      channels
-          .where((channel) => channel.isDirectMessage)
-          .map((channel) => channel.id),
-    );
+    _knownChannelIds
+      ..clear()
+      ..addAll(
+        channels
+            .where((channel) => channel.isDirectMessage)
+            .map((channel) => channel.id),
+      );
     _payloads
       ..clear()
       ..addEntries([
@@ -129,7 +134,9 @@ final class DiscordDirectMessages {
   ) async {
     if (payload['guild_id'] != null) return;
     final channelId = payload['channel_id'] as String?;
-    if (channelId == null || _knownChannelIds.contains(channelId)) return;
+    if (channelId == null) return;
+    _recordLatestMessage(channelId, payload['id']);
+    if (_knownChannelIds.contains(channelId)) return;
     final channelType = payload['channel_type'];
     if (channelType != null && channelType != 1) return;
     final author = payload['author'];
@@ -139,6 +146,18 @@ final class DiscordDirectMessages {
       'type': 1,
       'recipients': [author],
     }, currentUserId);
+  }
+
+  /// Keeps the held payload's `last_message_id` at the newest message, so a
+  /// group rebuilt by a recipient event does not rewind it to READY's.
+  void _recordLatestMessage(String channelId, Object? messageId) {
+    final payload = _payloads[channelId];
+    if (payload == null || messageId is! String) return;
+    final held = payload['last_message_id'];
+    if (held is String && DiscordSnowflake.compare(messageId, held) <= 0) {
+      return;
+    }
+    _payloads[channelId] = {...payload, 'last_message_id': messageId};
   }
 
   Future<DirectConversation> _adopt(

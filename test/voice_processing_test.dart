@@ -41,4 +41,26 @@ void main() {
     ).writeAsString('{not json');
     expect(await repository.load(), const VoiceProcessingSettings());
   });
+
+  test('the last save wins, even when an earlier one is slower', () async {
+    final directory = await Directory.systemTemp.createTemp('flucord-voice');
+    addTearDown(() => directory.delete(recursive: true));
+    // The first save finds its directory late, as a busy disk would.
+    var calls = 0;
+    final repository = FileVoiceProcessingRepository(
+      directory: () async {
+        if (calls++ == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        return directory;
+      },
+    );
+
+    await Future.wait([
+      repository.save(const VoiceProcessingSettings(inputSensitivity: -40)),
+      repository.save(const VoiceProcessingSettings(inputSensitivity: -55)),
+    ]);
+
+    expect((await repository.load()).inputSensitivity, -55);
+  });
 }

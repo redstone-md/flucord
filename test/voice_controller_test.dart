@@ -37,6 +37,21 @@ void main() {
     expect(media.microphoneEnabled, isTrue);
   });
 
+  test('leave ends the room even when the microphone will not stop', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+    media.failMicrophoneStop = true;
+    await controller.disconnect();
+
+    expect(controller.isConnected, isFalse);
+    expect(controller.connectionStatus, VoiceConnectionStatus.disconnected);
+    expect(controller.error, isA<StateError>());
+  });
+
   test('deafening also mutes, and undeafening leaves the mute alone', () async {
     final media = _FakeVoiceMediaService();
     final controller = VoiceController(media);
@@ -1008,6 +1023,19 @@ void main() {
       expect(media.microphoneStopped, isTrue);
     });
 
+    test('opens no microphone once the controller is gone', () async {
+      final media = _FakeVoiceMediaService()..initializing = Completer();
+      final controller = VoiceController(media);
+
+      controller.inputLevels.listen((_) {});
+      await _flushEvents();
+      controller.dispose();
+      media.initializing!.complete();
+      await _flushEvents();
+
+      expect(media.startedInputs, isEmpty);
+    });
+
     test('leaves the microphone to a call when it closes', () async {
       final media = _FakeVoiceMediaService();
       final controller = VoiceController(media);
@@ -1213,7 +1241,11 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   final List<String?> startedInputs = [];
   bool failMicrophone = false;
   bool failMicrophoneToggle = false;
+  bool failMicrophoneStop = false;
   bool microphoneEnabled = true;
+
+  /// Set to hold [initialize] until it completes.
+  Completer<void>? initializing;
   bool microphoneStopped = false;
   String? selectedOutput;
 
@@ -1225,7 +1257,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async => initializing?.future;
 
   @override
   Future<List<VoiceDevice>> enumerateDevices() async => const [
@@ -1271,6 +1303,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
 
   @override
   Future<void> stopMicrophone() async {
+    if (failMicrophoneStop) throw StateError('device is gone');
     microphoneStopped = true;
     _operations?.add('microphone:stop');
   }

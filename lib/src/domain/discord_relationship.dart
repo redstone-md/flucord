@@ -1,3 +1,6 @@
+import 'chat_models.dart';
+import 'monogram.dart';
+
 enum DiscordRelationshipKind {
   friend,
   incomingRequest,
@@ -7,7 +10,18 @@ enum DiscordRelationshipKind {
   unknown,
 }
 
-enum DiscordPresenceStatus { online, idle, doNotDisturb, offline, unknown }
+enum DiscordPresenceStatus {
+  online(Presence.online),
+  idle(Presence.idle),
+  doNotDisturb(Presence.doNotDisturb),
+  offline(Presence.offline),
+  unknown(Presence.unknown);
+
+  const DiscordPresenceStatus(this.presence);
+
+  /// The same status as the app's own, which the shared glyph draws.
+  final Presence presence;
+}
 
 enum DiscordRelationshipAction {
   acceptRequest,
@@ -98,6 +112,19 @@ final class DiscordRelationshipUser {
   final DiscordPresenceStatus status;
   final bool isProvisional;
   final DiscordRelationshipActivity? activity;
+
+  /// This person as the workspace draws a member it holds no row for: their
+  /// picture, or their monogram on the colour of their id.
+  Member get asMember => Member(
+    id: id,
+    displayName: displayName,
+    initials: monogramOf(displayName),
+    role: '',
+    presence: status.presence,
+    colorValue: monogramColorOf(id),
+    avatarUrl: avatarUrl,
+    username: username,
+  );
 
   static String? _optionalText(String? value) {
     final normalized = value?.trim();

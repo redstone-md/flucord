@@ -155,7 +155,7 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
                   ),
                   name: user.displayName,
                   username: user.username,
-                  status: DiscordRelationshipAvatar.presenceOf(user.status),
+                  status: user.status.presence,
                   memberSince: DiscordSnowflake.createdAt(user.id),
                 ),
             ],

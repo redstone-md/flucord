@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
+import '../domain/discord_relationship.dart';
 import '../domain/voice_connection.dart';
 
 /// A friend who is doing something right now: playing, listening, watching,
@@ -36,21 +37,24 @@ final class ActiveFriendRoom {
   final List<Member> people;
 }
 
-/// The friends among [friendIds] who are doing something or sit in a voice
-/// channel, in the order given.
+/// The [friends] who are doing something or sit in a voice channel, in the
+/// order given.
+///
+/// A friend in voice whom the workspace holds no member for is still listed,
+/// drawn from the relationship: their room is known even when their row is
+/// not.
 List<ActiveFriend> activeFriends(
-  Iterable<String> friendIds, {
+  Iterable<DiscordRelationshipUser> friends, {
   required ChatWorkspace workspace,
   required Map<String, List<VoiceParticipantStateEvent>> seatedByChannel,
 }) {
   final seatOf = _seatsByUser(seatedByChannel);
   return [
-    for (final id in friendIds)
-      if (workspace.memberOrNull(id) case final person?)
-        ActiveFriend(
-          person: person,
-          room: _roomOf(seatOf[id], workspace, seatedByChannel),
-        ),
+    for (final friend in friends)
+      ActiveFriend(
+        person: workspace.memberOrNull(friend.id) ?? friend.asMember,
+        room: _roomOf(seatOf[friend.id], workspace, seatedByChannel),
+      ),
   ].where((friend) => friend.room != null || friend.doing.isNotEmpty).toList();
 }
 

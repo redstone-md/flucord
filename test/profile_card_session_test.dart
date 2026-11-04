@@ -94,6 +94,37 @@ void main() {
     routes: _routeOpenDm,
   );
 
+  testSession(
+    'a message Discord refuses waits in the DM box',
+    (tester, session) async {
+      session.transport.on(
+        'POST',
+        '/api/v9/channels/${SessionHarness.dmChannelId}/messages',
+        (_) => jsonResponse({
+          'code': 50007,
+          'message': 'Cannot send messages to this user',
+        }, statusCode: 403),
+      );
+      await _openAuthorCard(tester, session);
+
+      await tester.enterText(_messageField, 'gg');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await session.settle();
+
+      expect(_card, findsNothing);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('message-composer')),
+            )
+            .controller!
+            .text,
+        'gg',
+      );
+    },
+    routes: _routeOpenDm,
+  );
+
   testSession('add friend asks Discord for a friendship', (
     tester,
     session,

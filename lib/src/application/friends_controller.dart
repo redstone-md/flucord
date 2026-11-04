@@ -19,6 +19,7 @@ final class FriendsController extends ChangeNotifier {
   DesktopRelationshipRepository? _repository;
   StreamSubscription<List<DiscordRelationship>>? _updates;
   bool _busy = false;
+  bool _loadingSuggestions = false;
   bool _refused = false;
   Object? _error;
   bool _disposed = false;
@@ -85,17 +86,19 @@ final class FriendsController extends ChangeNotifier {
   }
 
   /// Reads the suggestions again. Unlike the graph, Discord serves a route.
+  ///
+  /// A read, so it does not wait for [isBusy] or hold it: the panel asks
+  /// once when it opens, which can be while a request is on its way.
   Future<void> loadSuggestions() async {
     final repository = _bind();
-    if (repository == null || _busy) return;
-    _busy = true;
-    _notify();
+    if (repository == null || _loadingSuggestions) return;
+    _loadingSuggestions = true;
     try {
       await repository.loadFriendSuggestions();
     } on Object catch (error) {
       _error = error;
     } finally {
-      _busy = false;
+      _loadingSuggestions = false;
       _notify();
     }
   }

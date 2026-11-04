@@ -238,6 +238,35 @@ void main() {
     expect(find.byType(MemberRosterView), findsNothing);
   });
 
+  testWidgets('cached groups at one position go in id order, as Discord does', (
+    tester,
+  ) async {
+    CommunityRole hoisted(String id, String name) => CommunityRole(
+      id: id,
+      spaceId: 'guild-1',
+      name: name,
+      position: 5,
+      hoist: true,
+    );
+    final later = hoisted('900000000000000001', 'Later');
+    final earlier = hoisted('100000000000000001', 'Earlier');
+    final mira = _mira.copyWith(presence: Presence.online);
+
+    await pumpSidebar(
+      tester,
+      repository: _FakeMemberListRepository(),
+      members: [_jack, mira],
+      heldRolesOf: (member) =>
+          HeldRoles([member.id == _jack.id ? later : earlier]),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.text('Earlier - 1')).dy,
+      lessThan(tester.getTopLeft(find.text('Later - 1')).dy),
+    );
+  });
+
   testWidgets('releases the subscription when the panel closes', (
     tester,
   ) async {
@@ -300,6 +329,54 @@ void main() {
     expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
 
     updateHost(() => members = const [_jack]);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('closes the profile when the member list goes away', (
+    tester,
+  ) async {
+    final repository = _FakeMemberListRepository()..cached = sample;
+    final controller = GuildMemberListController(() => repository);
+    addTearDown(controller.dispose);
+    var showList = true;
+    late StateSetter updateHost;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            updateHost = setState;
+            return Scaffold(
+              body: Row(
+                children: [
+                  const Expanded(child: SizedBox()),
+                  if (showList)
+                    MemberSidebar(
+                      members: const [_jack, _mira],
+                      spaceId: 'guild-1',
+                      channelId: 'channel-1',
+                      memberList: controller,
+                      cardFor: (member, _) =>
+                          MemberProfileCard(member: member, spaceId: 'guild-1'),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('member-row-222222222222222222')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+
+    updateHost(() => showList = false);
     await tester.pump();
     await tester.pump();
 

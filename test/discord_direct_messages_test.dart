@@ -1,111 +1,59 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flucord/src/data/discord/discord_api_client.dart';
-import 'package:flucord/src/data/discord/discord_chat_repository.dart';
-import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_direct_messages.dart';
+import 'package:flucord/src/data/discord/discord_mapper.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
-import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'support/fake_chat_gateway.dart';
+
+const _me = '100000000000000001';
+const _groupId = '400000000000000031';
+
+const _friend = {'id': '100000000000000002', 'username': 'friend'};
+const _newcomer = {'id': '100000000000000032', 'username': 'newcomer'};
 
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('discovers, emits, and caches an incoming bot direct message', () async {
+  test('a recipient change keeps the newest message of the group', () async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final gateway = FakeChatGateway();
-    final transport = _QueueTransport([
-      const DiscordHttpResponse(
-        statusCode: 200,
-        headers: {},
-        body: '{"id":"bot-1","username":"Flucord Bot"}',
-      ),
-      const DiscordHttpResponse(statusCode: 200, headers: {}, body: '[]'),
-      const DiscordHttpResponse(
-        statusCode: 200,
-        headers: {},
-        body: '{"url":"wss://gateway.discord.gg"}',
-      ),
-      const DiscordHttpResponse(
-        statusCode: 200,
-        headers: {},
-        body: '{"id":"bot-1","username":"Flucord Bot"}',
-      ),
-      const DiscordHttpResponse(statusCode: 200, headers: {}, body: '[]'),
-      const DiscordHttpResponse(
-        statusCode: 200,
-        headers: {},
-        body: '{"url":"wss://gateway.discord.gg"}',
-      ),
-    ]);
-    final repository = DiscordChatRepository(
-      DiscordApiClient(botToken: 'token', transport: transport),
-      gateway,
+    addTearDown(cache.close);
+    final events = <ChatRepositoryEvent>[];
+    final mapper = DiscordMapper();
+    final directMessages = DiscordDirectMessages(
+      (_) => throw UnimplementedError('No DM is opened here'),
       cache,
+      mapper,
+      events.add,
     );
-    addTearDown(repository.close);
+    final ready = {
+      'id': _groupId,
+      'type': 3,
+      'last_message_id': '410000000000000031',
+      'recipients': [_friend],
+    };
+    directMessages.seed([
+      mapper.directMessage(ready, _me)!.channel,
+    ], payloads: [ready]);
 
-    final workspace = await repository.loadWorkspace();
-    expect(workspace.spaces.single.kind, SpaceKind.directMessages);
-    expect(workspace.channels, isEmpty);
-    final emitted = repository.events.take(4).toList();
+    await directMessages.acceptMessage({
+      'id': '600000000000000031',
+      'channel_id': _groupId,
+      'channel_type': 3,
+      'author': _friend,
+    }, _me);
+    await directMessages.acceptRecipientChange({
+      'channel_id': _groupId,
+      'user': _newcomer,
+    }, _me, added: true);
 
-    gateway.emit(
-      DiscordGatewayDispatch(
-        name: 'MESSAGE_CREATE',
-        data: {
-          'id': 'message-1',
-          'channel_id': 'dm-1',
-          'channel_type': 1,
-          'content': 'Native DM path',
-          'timestamp': '2026-07-23T10:30:00Z',
-          'edited_timestamp': null,
-          'attachments': <Object?>[],
-          'embeds': <Object?>[],
-          'reactions': <Object?>[],
-          'mentions': <Object?>[],
-          'author': {
-            'id': '123456789012345678',
-            'username': 'jack',
-            'global_name': 'Jack',
-            'avatar': 'avatar-hash',
-          },
-        },
-      ),
-    );
-
-    final events = await emitted.timeout(const Duration(seconds: 2));
-    expect(events[0], isA<SpaceUpsertedEvent>());
-    expect(events[1], isA<MemberUpsertedEvent>());
-    expect(events[2], isA<ChannelUpsertedEvent>());
-    expect(events[3], isA<MessageUpsertedEvent>());
-    final restored = await cache.readWorkspace();
-    expect(restored?.channels.single.recipientIds, ['123456789012345678']);
-    expect(restored?.messages.single.body, 'Native DM path');
-    expect(restored?.memberById('123456789012345678').displayName, 'Jack');
-
-    final reloaded = await repository.loadWorkspace();
-    expect(reloaded.channels.single.id, 'dm-1');
-    expect(reloaded.messages.single.body, 'Native DM path');
+    final group = events
+        .whereType<ChannelUpsertedEvent>()
+        .map((event) => event.channel)
+        .last;
+    expect(group.recipientIds, contains(_newcomer['id']));
+    expect(group.lastMessageId, '600000000000000031');
   });
-}
-
-final class _QueueTransport implements DiscordHttpTransport {
-  _QueueTransport(this._responses);
-
-  final List<DiscordHttpResponse> _responses;
-
-  @override
-  Future<DiscordHttpResponse> send({
-    required String method,
-    required Uri uri,
-    required Map<String, String> headers,
-    List<int>? body,
-  }) async => _responses.removeAt(0);
-
-  @override
-  void close() {}
 }
