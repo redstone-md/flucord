@@ -120,11 +120,16 @@ final class DiscordRelationship {
     required this.user,
     required this.kind,
     this.isSpamRequest = false,
+    this.since,
   });
 
   final DiscordRelationshipUser user;
   final DiscordRelationshipKind kind;
   final bool isSpamRequest;
+
+  /// When the relationship took its kind, such as the day two people became
+  /// friends. Null when Discord did not say.
+  final DateTime? since;
 
   bool get isPending =>
       kind == DiscordRelationshipKind.incomingRequest ||
@@ -153,6 +158,8 @@ final class DiscordRelationship {
     _ => false,
   };
 
+  /// This relationship as [nextKind]. [since] belonged to the old kind, so
+  /// it is dropped until Discord says when the new one began.
   DiscordRelationship withKind(DiscordRelationshipKind nextKind) =>
       DiscordRelationship(
         user: user,
