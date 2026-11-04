@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 /// The app's type: one bundled font family and one scale of sizes.
 ///
 /// Every piece of text takes its size from this scale, so the interface has
-/// five sizes rather than one per widget. Nothing is under 12 px. The font
-/// dial in Accessibility then scales all of them together.
+/// five sizes rather than one per widget. Nothing is under 12 px, except the
+/// letters inside a tag beside a name ([appTag], [clanTag]). The font dial in
+/// Accessibility then scales all of them together.
 ///
 /// Hierarchy comes from weight and colour, not size. [FlucordTextRole] adds
 /// the line height and weight that go with each size.
@@ -31,6 +32,13 @@ abstract final class FlucordType {
   static const display = 24.0;
 
   static const sizes = [caption, label, body, title, display];
+
+  /// The APP tag beside a bot's name. A tag is a mark, not text to read, so it
+  /// sits under the scale, as Discord's does.
+  static const appTag = 10.0;
+
+  /// A clan tag beside a member's name.
+  static const clanTag = 11.0;
 
   /// The largest size on the scale that fits in [space], and never under
   /// [caption]. For text drawn to fill a box, such as an avatar's initial.

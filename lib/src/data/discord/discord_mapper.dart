@@ -323,6 +323,25 @@ final class DiscordMapper {
       spaceIds: spaceIds,
       rolesBySpace: rolesBySpace,
       avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
+      isBot: payload['bot'] == true,
+      clanTag: clanTag(payload),
+    );
+  }
+
+  /// The server tag [user] shows, or null when it shows none.
+  ///
+  /// Discord keeps a tag the user turned off, with `identity_enabled` false or
+  /// null. Such a tag is not drawn anywhere, so it is dropped here.
+  ClanTag? clanTag(Map<String, Object?> user) {
+    final clan = user['primary_guild'];
+    if (clan is! Map || clan['identity_enabled'] != true) return null;
+    final tag = clan['tag'];
+    final guildId = clan['identity_guild_id'];
+    if (tag is! String || tag.isEmpty || guildId is! String) return null;
+    return ClanTag(
+      tag: tag,
+      guildId: guildId,
+      badgeUrl: DiscordCdn.clanBadge(guildId, clan['badge'] as String?),
     );
   }
 
@@ -365,6 +384,8 @@ final class DiscordMapper {
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
       membershipsBySpace: {guildId: membership(payload)},
+      isBot: user['bot'] == true,
+      clanTag: clanTag(user),
     );
   }
 

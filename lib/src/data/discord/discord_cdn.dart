@@ -26,6 +26,10 @@ final class DiscordCdn {
     int size = 128,
   }) => _asset(['app-icons', applicationId], hash, size: size);
 
+  /// The small badge of a server's tag, drawn beside a member's name.
+  static String? clanBadge(String guildId, String? hash, {int size = 32}) =>
+      _asset(['clan-badges', guildId], hash, size: size);
+
   static String? guildMemberAvatar(
     String guildId,
     String userId,

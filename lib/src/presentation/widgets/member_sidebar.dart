@@ -17,6 +17,7 @@ import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_profile_popover.dart';
 import 'member_roster_view.dart';
+import 'name_tags.dart';
 
 /// The right-hand member panel.
 ///
@@ -579,15 +580,22 @@ class _MemberRow extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            member.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: FlucordTextRole.label.style.copyWith(
-                              color: color == null
-                                  ? surfaces.text
-                                  : Color(color),
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  member.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: FlucordTextRole.label.style.copyWith(
+                                    color: color == null
+                                        ? surfaces.text
+                                        : Color(color),
+                                  ),
+                                ),
+                              ),
+                              NameTags(member: member),
+                            ],
                           ),
                           if (summary != null)
                             ActivitySummaryLine(

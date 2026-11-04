@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 24;
+  static const version = 25;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -87,7 +87,9 @@ abstract final class SqliteChatSchema {
         roles_by_space_json TEXT NOT NULL,
         avatar_url TEXT,
         avatar_urls_by_space_json TEXT NOT NULL,
-        memberships_json TEXT
+        memberships_json TEXT,
+        is_bot INTEGER NOT NULL DEFAULT 0,
+        clan_tag_json TEXT
       )
     ''');
     await database.execute('''
@@ -375,6 +377,16 @@ abstract final class SqliteChatSchema {
         'messages',
         'mentions_everyone INTEGER NOT NULL DEFAULT 0',
       );
+    }
+    if (oldVersion < 25) {
+      // A row written before this version is read as a person with no clan
+      // tag. Both come back the next time Discord sends the user.
+      await _addColumn(
+        database,
+        'members',
+        'is_bot INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'members', 'clan_tag_json TEXT');
     }
   }
 

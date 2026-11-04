@@ -38,6 +38,7 @@ import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
+import 'name_tags.dart';
 import 'reaction_details_dialog.dart';
 import 'streamer_mode_scope.dart';
 import 'user_settings_scope.dart';
@@ -622,6 +623,7 @@ class _MessageItemState extends State<MessageItem> {
               ),
             ),
           ),
+          NameTags(member: widget.member),
           const SizedBox(width: 8),
           MessageTimeLabel(
             widget.message.sentAt,

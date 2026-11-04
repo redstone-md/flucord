@@ -62,6 +62,28 @@ final class ChatModelJson {
     );
   }
 
+  static String? clanTag(ClanTag? value) => value == null
+      ? null
+      : jsonEncode({
+          'tag': value.tag,
+          'guild_id': value.guildId,
+          'badge_url': value.badgeUrl,
+        });
+
+  static ClanTag? clanTagFrom(String? source) {
+    if (source == null) return null;
+    final raw = jsonDecode(source);
+    if (raw is! Map) return null;
+    final tag = raw['tag'];
+    final guildId = raw['guild_id'];
+    if (tag is! String || guildId is! String) return null;
+    return ClanTag(
+      tag: tag,
+      guildId: guildId,
+      badgeUrl: raw['badge_url'] as String?,
+    );
+  }
+
   static String reactions(List<MessageReaction> values) => jsonEncode([
     for (final value in values)
       {

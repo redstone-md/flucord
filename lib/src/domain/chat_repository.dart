@@ -101,6 +101,22 @@ final class MembersUpsertedEvent extends ChatRepositoryEvent {
   final List<Member> members;
 }
 
+/// A user's bot flag and clan tag, as a presence update carried them.
+///
+/// Kept apart from [MemberUpsertedEvent] because a presence's user has no
+/// guild standing: as a whole member it would erase the nickname and roles.
+final class MemberTagsChangedEvent extends ChatRepositoryEvent {
+  const MemberTagsChangedEvent({
+    required this.memberId,
+    required this.isBot,
+    required this.clanTag,
+  });
+
+  final String memberId;
+  final bool isBot;
+  final ClanTag? clanTag;
+}
+
 final class MemberRemovedEvent extends ChatRepositoryEvent {
   const MemberRemovedEvent({required this.memberId, required this.spaceId});
 
