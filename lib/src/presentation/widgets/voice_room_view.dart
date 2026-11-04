@@ -518,7 +518,7 @@ class _VoiceToolbar extends StatelessWidget {
             tooltip: 'Disconnect',
             style: IconButton.styleFrom(
               backgroundColor: context.surfaces.danger,
-              foregroundColor: Colors.white,
+              foregroundColor: FlucordFixedColors.onFill,
             ),
             icon: const FlucordIcon(FlucordIcons.hangUp),
           ),

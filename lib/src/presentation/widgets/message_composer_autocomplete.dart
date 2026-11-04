@@ -467,7 +467,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
                 child: Text(
                   suggestion.initials ?? '?',
                   style: FlucordTextRole.caption.strong.copyWith(
-                    color: Colors.white,
+                    color: FlucordFixedColors.onFill,
                   ),
                 ),
               ),

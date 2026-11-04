@@ -30,19 +30,19 @@ final class ConnectionBanner extends StatelessWidget {
       icon: FlucordIcons.syncing,
       message: 'Connecting to Discord...',
       background: context.surfaces.warning,
-      foreground: Colors.black,
+      foreground: FlucordFixedColors.onLightFill,
     ),
     RepositoryConnectionStatus.reconnecting => _Bar(
       icon: FlucordIcons.syncing,
       message: 'Connection lost. Reconnecting...',
       background: context.surfaces.warning,
-      foreground: Colors.black,
+      foreground: FlucordFixedColors.onLightFill,
     ),
     RepositoryConnectionStatus.offline => _Bar(
       icon: FlucordIcons.offline,
       message: 'Not connected to Discord. New messages will not arrive.',
       background: context.surfaces.danger,
-      foreground: Colors.white,
+      foreground: FlucordFixedColors.onFill,
       onRetry: onRetry,
     ),
   };
