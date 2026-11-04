@@ -62,4 +62,56 @@ void main() {
 
     expect(shownAlpha(tester, 'Row'), closeTo(button, 0.001));
   });
+
+  testWidgets('choosing a row closes the menu with its value', (tester) async {
+    final chosen = <String>[];
+    await openMenu(tester, const [
+      FlucordMenuItem(label: 'Copy', value: 'copy'),
+      FlucordMenuDivider(),
+      FlucordMenuItem(label: 'Delete', value: 'delete', danger: true),
+    ], onSelected: chosen.add);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(chosen, ['delete']);
+    expect(find.text('Copy'), findsNothing);
+  });
+
+  testWidgets('a disabled row cannot be chosen', (tester) async {
+    final chosen = <String>[];
+    await openMenu(tester, const [
+      FlucordMenuItem(label: 'Pin', value: 'pin', enabled: false),
+    ], onSelected: chosen.add);
+
+    await tester.tap(find.text('Pin'));
+    await tester.pumpAndSettle();
+
+    expect(chosen, isEmpty);
+    expect(find.text('Pin'), findsOneWidget);
+  });
+
+  testWidgets('a row is 32 px high and reads as a menu item', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await openMenu(tester, const [
+      FlucordMenuItem(label: 'Copy', value: 'copy'),
+    ]);
+
+    expect(
+      tester.getSize(find.byType(FlucordMenuItem<String>)).height,
+      FlucordMenuItem.rowHeight,
+    );
+    final row = tester.getSemantics(find.text('Copy'));
+    expect(row.role, SemanticsRole.menuItem);
+    expect(
+      row,
+      isSemantics(
+        label: 'Copy',
+        isButton: true,
+        isEnabled: true,
+        hasTapAction: true,
+      ),
+    );
+    semantics.dispose();
+  });
 }
