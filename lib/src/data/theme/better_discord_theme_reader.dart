@@ -64,6 +64,8 @@ abstract final class BetterDiscordThemeReader {
     }
 
     final canvas = pick(_canvas);
+    final text = pick(_text);
+    final muted = pick(_muted);
     return fallback.copyWith(
       // The background decides light from dark, and only when the theme said
       // nothing about it does the fallback's own answer stand.
@@ -74,8 +76,12 @@ abstract final class BetterDiscordThemeReader {
       raised: pick(_raised),
       inset: pick(_inset),
       control: pick(_control),
-      text: pick(_text),
-      muted: pick(_muted),
+      // Discord has one text colour where Flucord has two tiers, and one
+      // muted colour for both secondary text and captions.
+      text: text,
+      bodyText: text,
+      muted: muted,
+      captionText: muted,
       border: pick(_border),
       brand: pick(_brand),
       success: pick(_success),
