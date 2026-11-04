@@ -485,9 +485,15 @@ class _MessageItemState extends State<MessageItem> {
   String _announcement(BuildContext context) {
     final body = StreamerModeScope.redact(context, widget.message.body);
     return [
-      widget.member.displayName,
+      _authorName,
       MessageTimestamp.longOf(context, widget.message.sentAt),
-      if (body.isNotEmpty) messagePreviewText(context, body, widget.workspace),
+      if (body.isNotEmpty)
+        messagePreviewText(
+          context,
+          body,
+          widget.workspace,
+          spaceId: _channel?.spaceId,
+        ),
     ].join(', ');
   }
 
@@ -507,6 +513,7 @@ class _MessageItemState extends State<MessageItem> {
               color: context.surfaces.bodyText,
             ),
             workspace: widget.workspace,
+            spaceId: _channel?.spaceId,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
           ),
@@ -545,6 +552,7 @@ class _MessageItemState extends State<MessageItem> {
                 key: ValueKey('message-${message.id}-embed-$index'),
                 embed: message.embeds[index],
                 workspace: widget.workspace,
+                spaceId: _channel?.spaceId,
                 linkLauncher: widget.linkLauncher,
                 onSelectChannel: widget.onSelectChannel,
               ),
@@ -610,7 +618,7 @@ class _MessageItemState extends State<MessageItem> {
             child: _opensAuthorProfile(
               key: const ValueKey('message-author-name'),
               child: DisplayName(
-                widget.member.displayName,
+                _authorName,
                 style: FlucordTextRole.heading.style.copyWith(
                   height:
                       MessageRowMetrics.nameRowHeight /
@@ -663,6 +671,9 @@ class _MessageItemState extends State<MessageItem> {
   ConversationChannel? get _channel =>
       widget.workspace.channelOrNull(widget.message.channelId);
 
+  /// The author's name in the space the message was sent in.
+  String get _authorName => widget.member.displayNameFor(_channel?.spaceId);
+
   /// The colour of [member]'s role here, or null for none.
   int? _roleColorOf(Member member) => switch (_channel?.spaceId) {
     final spaceId? => widget.workspace.nameColorOf(member, spaceId),
@@ -704,7 +715,7 @@ class _MessageItemState extends State<MessageItem> {
     return Builder(
       builder: (context) => _clickable(
         key: key,
-        label: '${widget.member.displayName} profile',
+        label: '$_authorName profile',
         onTap: open == null
             ? null
             : () => open(widget.message.authorId, popupAnchorOf(context)),

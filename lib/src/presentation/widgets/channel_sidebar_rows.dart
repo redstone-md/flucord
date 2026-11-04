@@ -740,7 +740,7 @@ class VoiceSeatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final name = member?.displayName ?? 'Unknown user';
+    final name = member?.displayNameFor(spaceId) ?? 'Unknown user';
     final silenced = state.selfMuted || state.serverMuted;
     final deafened = state.selfDeafened || state.serverDeafened;
     final nameColor = speaking

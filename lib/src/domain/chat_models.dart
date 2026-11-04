@@ -938,30 +938,8 @@ final class ChatWorkspace {
     return [...current.where((member) => member.id != incoming.id), merged];
   }
 
-  static Member _mergeMember(Member? previous, Member incoming) {
-    if (previous == null) return incoming;
-    return incoming.copyWith(
-      spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
-      avatarUrlsBySpace: {
-        ...previous.avatarUrlsBySpace,
-        ...incoming.avatarUrlsBySpace,
-      },
-      membershipsBySpace: {
-        ...previous.membershipsBySpace,
-        ...incoming.membershipsBySpace,
-      },
-      presence: incoming.presence == Presence.offline
-          ? previous.presence
-          : incoming.presence,
-      // A member payload carries no presence, so the mapper defaults it to
-      // offline; letting that erase a presence the gateway already reported
-      // would blank out every activity the moment the member is re-mapped.
-      presenceDetail: incoming.presenceDetail ?? previous.presenceDetail,
-      tags: incoming.tags.over(previous.tags),
-      username: incoming.username ?? previous.username,
-    );
-  }
+  static Member _mergeMember(Member? previous, Member incoming) =>
+      previous == null ? incoming : incoming.over(previous);
 }
 
 final class ChannelHistory {

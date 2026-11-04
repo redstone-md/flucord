@@ -350,7 +350,10 @@ class MessageListState extends State<MessageList>
         .where((message) {
           final author = source.workspace.memberById(message.authorId);
           return message.body.toLowerCase().contains(query) ||
-              author.displayName.toLowerCase().contains(query) ||
+              author
+                  .displayNameFor(source.channel.spaceId)
+                  .toLowerCase()
+                  .contains(query) ||
               message.stickers.any(
                 (sticker) => sticker.name.toLowerCase().contains(query),
               ) ||

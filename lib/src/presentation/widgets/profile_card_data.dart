@@ -79,7 +79,7 @@ final class ProfileCardData {
         : member.membershipIn(spaceId)?.joinedAt;
     return ProfileCardData(
       userId: member.id,
-      displayName: member.displayName,
+      displayName: member.displayNameFor(spaceId),
       monogram: member.initials,
       username: member.username ?? _nonEmpty(profile?.username),
       avatarUrl: member.avatarUrlFor(spaceId),

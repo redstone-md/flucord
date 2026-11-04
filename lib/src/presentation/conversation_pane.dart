@@ -584,8 +584,10 @@ class ConversationPaneState extends State<ConversationPane> {
         if (showsMessages && !locked)
           ListenableBuilder(
             listenable: chat.activeChannelTyping,
-            builder: (_, _) =>
-                TypingIndicator(members: chat.typingMembersFor(channel.id)),
+            builder: (_, _) => TypingIndicator(
+              members: chat.typingMembersFor(channel.id),
+              spaceId: channel.spaceId,
+            ),
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()

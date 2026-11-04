@@ -161,7 +161,7 @@ class _PinnedMessageRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  member?.displayName ?? 'Unknown user',
+                  member?.displayNameFor(spaceId) ?? 'Unknown user',
                   style: FlucordTextRole.caption.strong,
                 ),
                 if (message.body.isNotEmpty) ...[
@@ -172,6 +172,7 @@ class _PinnedMessageRow extends StatelessWidget {
                       child: MessageContentView(
                         body: message.body,
                         workspace: workspace,
+                        spaceId: spaceId,
                         linkLauncher: linkLauncher,
                         onSelectChannel: onSelectChannel,
                         textStyle: const TextStyle(
@@ -195,6 +196,7 @@ class _PinnedMessageRow extends StatelessWidget {
                     child: MessageEmbedView(
                       embed: message.embeds.first,
                       workspace: workspace,
+                      spaceId: spaceId,
                       linkLauncher: linkLauncher,
                       onSelectChannel: onSelectChannel,
                     ),

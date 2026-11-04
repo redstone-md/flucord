@@ -203,9 +203,13 @@ final class DiscordMapper {
     final members = <String, Member>{};
     final messages = <ChatMessage>[];
     for (final payload in payloads.reversed) {
-      final authorPayload = (payload['author']! as Map).cast<String, Object?>();
-      final author = member(authorPayload);
-      members[author.id] = author;
+      // A page from history names no guild, so its author is only a user.
+      final author = payload['guild_id'] is String
+          ? messageAuthor(payload)!
+          : member((payload['author']! as Map).cast<String, Object?>());
+      for (final named in [author, ...mentionedMembers(payload)]) {
+        members[named.id] = _mergeMembers(members[named.id], named);
+      }
       messages.add(message(payload, currentMemberId: currentMemberId));
     }
     return ChannelHistory(
@@ -274,8 +278,7 @@ final class DiscordMapper {
     ];
   }
 
-  /// One row of a chunk. The guild nickname wins where there is one: it is
-  /// the name that guild knows somebody by, and the name everybody there sees.
+  /// One row of a chunk.
   Member _chunkMember(
     Map<String, Object?> user,
     Map<Object?, Object?> row,
@@ -288,20 +291,21 @@ final class DiscordMapper {
     );
   }
 
-  /// [mapped] with what a guild member payload adds: the nickname, and the
-  /// roles the name's colour comes from.
+  /// [mapped] with what a guild member payload adds: the membership, which
+  /// holds the nickname and the roles the name's colour comes from, and the
+  /// avatar set for this guild.
   Member _withGuildStanding(
     Member mapped,
     Map<String, Object?> guildMember,
     String guildId,
   ) {
-    final nickname = switch (guildMember['nick']) {
-      final String nick when nick.isNotEmpty => nick,
-      _ => null,
-    };
+    final guildAvatarUrl = DiscordCdn.guildMemberAvatar(
+      guildId,
+      mapped.id,
+      guildMember['avatar'] as String?,
+    );
     return mapped.copyWith(
-      displayName: nickname,
-      initials: nickname == null ? null : monogramOf(nickname),
+      avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
       membershipsBySpace: {guildId: membership(guildMember)},
     );
   }
@@ -401,38 +405,23 @@ final class DiscordMapper {
   /// role change shows on every member who holds it. See [HeldRoles].
   Member guildMember(Map<String, Object?> payload, String guildId) {
     final user = (payload['user']! as Map).cast<String, Object?>();
-    final username =
-        payload['nick'] as String? ??
-        user['global_name'] as String? ??
-        user['username'] as String? ??
-        'Unknown';
-    final id = user['id']! as String;
-    final guildAvatarUrl = DiscordCdn.guildMemberAvatar(
+    return _withGuildStanding(
+      member(user, spaceIds: {guildId}),
+      payload,
       guildId,
-      id,
-      payload['avatar'] as String?,
-    );
-    return Member(
-      id: id,
-      displayName: username,
-      initials: monogramOf(username),
-      role: 'Member',
-      presence: Presence.offline,
-      colorValue: monogramColorOf(id),
-      spaceIds: {guildId},
-      avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
-      avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
-      membershipsBySpace: {guildId: membership(payload)},
-      tags: tags(user),
-      username: _username(user),
     );
   }
 
-  /// The permission-relevant half of a guild member payload.
+  /// The standing half of a guild member payload: the nickname, and what
+  /// permissions depend on.
   GuildMembership membership(Map<String, Object?> payload) {
     final timeout = payload['communication_disabled_until'] as String?;
     final joined = payload['joined_at'] as String?;
     return GuildMembership(
+      nickname: switch (payload['nick']) {
+        final String nick when nick.isNotEmpty => nick,
+        _ => null,
+      },
       roleIds: (payload['roles'] as List? ?? const [])
           .whereType<String>()
           .toList(growable: false),
@@ -476,26 +465,8 @@ final class DiscordMapper {
     );
   }
 
-  static Member _mergeMembers(Member? previous, Member incoming) {
-    if (previous == null) return incoming;
-    return incoming.copyWith(
-      spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
-      avatarUrlsBySpace: {
-        ...previous.avatarUrlsBySpace,
-        ...incoming.avatarUrlsBySpace,
-      },
-      membershipsBySpace: {
-        ...previous.membershipsBySpace,
-        ...incoming.membershipsBySpace,
-      },
-      presence: incoming.presence == Presence.offline
-          ? previous.presence
-          : incoming.presence,
-      username: incoming.username ?? previous.username,
-      tags: incoming.tags.over(previous.tags),
-    );
-  }
+  static Member _mergeMembers(Member? previous, Member incoming) =>
+      previous == null ? incoming : incoming.over(previous);
 
   CommunitySpace _space(Map<String, Object?> payload) {
     final id = payload['id']! as String;

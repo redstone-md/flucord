@@ -142,13 +142,14 @@ final class FlucordAppSurface extends ChangeNotifier
 
     final space = workspace.spaceById(channel.spaceId);
     final author =
-        event.member ?? workspace.memberOrNull(event.message.authorId);
+        (event.member ?? workspace.memberOrNull(event.message.authorId))
+            ?.displayNameFor(channel.spaceId);
     _notifications.add(
       DesktopMessageNotification(
         identifier: 'flucord-${event.message.id}',
-        title: '${author?.displayName ?? 'New message'} - #${channel.name}',
+        title: '${author ?? 'New message'} - #${channel.name}',
         subtitle: space.name,
-        body: _notificationBody(event.message, author?.displayName),
+        body: _notificationBody(event.message, author),
         link: ChannelLink(spaceId: channel.spaceId, channelId: channel.id),
       ),
     );

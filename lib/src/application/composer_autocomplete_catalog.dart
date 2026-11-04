@@ -226,6 +226,10 @@ final class _CatalogSources {
   int get hashCode => _activeChannel.id.hashCode;
 
   List<ComposerAutocompleteSuggestion> _buildMentions() {
+    // In a DM, a person goes by their own name.
+    final spaceId = _activeChannel.isDirectMessage
+        ? null
+        : _activeChannel.spaceId;
     final members =
         _members
             .where((member) {
@@ -243,9 +247,10 @@ final class _CatalogSources {
             );
             return presence != 0
                 ? presence
-                : left.displayName.toLowerCase().compareTo(
-                    right.displayName.toLowerCase(),
-                  );
+                : left
+                      .displayNameFor(spaceId)
+                      .toLowerCase()
+                      .compareTo(right.displayNameFor(spaceId).toLowerCase());
           });
     final rolesById = {for (final role in _roles) role.id: role};
     final suggestions = members
@@ -257,18 +262,21 @@ final class _CatalogSources {
           ).nameFor(member);
           return ComposerAutocompleteSuggestion(
             id: member.id,
-            label: member.displayName,
+            label: member.displayNameFor(spaceId),
             description: _activeChannel.isDirectMessage
                 ? 'Member'
                 : '$roleName · Member',
             insertText: '<@${member.id}>',
             kind: ComposerAutocompleteKind.member,
-            searchTerms: [member.displayName, roleName, member.id],
+            searchTerms: [
+              member.displayNameFor(spaceId),
+              member.displayName,
+              roleName,
+              member.id,
+            ],
             initials: member.initials,
             colorValue: member.colorValue,
-            avatarUrl: member.avatarUrlFor(
-              _activeChannel.isDirectMessage ? null : _activeChannel.spaceId,
-            ),
+            avatarUrl: member.avatarUrlFor(spaceId),
           );
         })
         .toList(growable: true);

@@ -223,7 +223,8 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
             onSelected: () => unawaited(
               _openDialog(
                 context,
-                title: 'Moderate ${widget.member.displayName}',
+                title:
+                    'Moderate ${widget.member.displayNameFor(widget.spaceId)}',
                 content: MemberModerationSection(controller: moderation),
               ),
             ),

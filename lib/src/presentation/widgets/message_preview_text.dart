@@ -5,8 +5,9 @@ import 'discord_message_syntax.dart';
 
 /// What a mention reads as, in a message body and in a preview of one.
 abstract final class DiscordMentionLabel {
-  static String user(ChatWorkspace workspace, String id) =>
-      '@${workspace.memberOrNull(id)?.displayName ?? 'unknown-user'}';
+  /// A person goes by the name [spaceId] knows them by.
+  static String user(ChatWorkspace workspace, String id, String? spaceId) =>
+      '@${workspace.memberOrNull(id)?.displayNameFor(spaceId) ?? 'unknown-user'}';
 
   static String role(ChatWorkspace workspace, String id) =>
       '@${workspace.roleOrNull(id)?.name ?? 'unknown-role'}';
@@ -15,21 +16,25 @@ abstract final class DiscordMentionLabel {
       '#${workspace.channelOrNull(id)?.name ?? 'unknown-channel'}';
 }
 
+/// Where a preview is read: the workspace, and the space whose names apply.
+typedef _PreviewPlace = ({ChatWorkspace workspace, String? spaceId});
+
 /// How each marker reads in a preview.
-final List<(RegExp, String Function(Match, BuildContext, ChatWorkspace))>
+final List<(RegExp, String Function(Match, BuildContext, _PreviewPlace))>
 _readings = [
   (
     DiscordMarkers.roleMention,
-    (marker, _, workspace) => DiscordMentionLabel.role(workspace, marker[1]!),
+    (marker, _, place) => DiscordMentionLabel.role(place.workspace, marker[1]!),
   ),
   (
     DiscordMarkers.userMention,
-    (marker, _, workspace) => DiscordMentionLabel.user(workspace, marker[1]!),
+    (marker, _, place) =>
+        DiscordMentionLabel.user(place.workspace, marker[1]!, place.spaceId),
   ),
   (
     DiscordMarkers.channelMention,
-    (marker, _, workspace) =>
-        DiscordMentionLabel.channel(workspace, marker[1]!),
+    (marker, _, place) =>
+        DiscordMentionLabel.channel(place.workspace, marker[1]!),
   ),
   (DiscordMarkers.emoji, (marker, _, _) => ':${marker[2]}:'),
   (DiscordMarkers.command, (marker, _, _) => '/${marker[1]}'),
@@ -49,17 +54,19 @@ final _anyMarker = RegExp(
 );
 
 /// [body] as one plain string, for a place too small to draw the message, such
-/// as a reply preview. Mentions, emoji, commands and timestamps read as words.
+/// as a reply preview. Mentions, emoji, commands and timestamps read as words,
+/// people by the names [spaceId] knows them by.
 String messagePreviewText(
   BuildContext context,
   String body,
-  ChatWorkspace workspace,
-) => body.replaceAllMapped(_anyMarker, (found) {
+  ChatWorkspace workspace, {
+  required String? spaceId,
+}) => body.replaceAllMapped(_anyMarker, (found) {
   final text = found[0]!;
   for (final (marker, read) in _readings) {
     if (marker.matchAsPrefix(text) case final match?
         when match.end == text.length) {
-      return read(match, context, workspace);
+      return read(match, context, (workspace: workspace, spaceId: spaceId));
     }
   }
   return text;

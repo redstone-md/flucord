@@ -332,6 +332,14 @@ final class ChatMessage {
   /// broadcast that also names the account by id still counts as a mention.
   final bool mentionsEveryone;
 
+  /// Discord's marker for a person named in a body. Group 1 is the user id.
+  static final memberMention = RegExp(r'<@!?(\d+)>');
+
+  /// The people the body names, by id.
+  Set<String> get mentionedMemberIds => {
+    for (final match in memberMention.allMatches(body)) match[1]!,
+  };
+
   bool get isSystem => type.isSystem;
   bool hasFlag(DiscordMessageFlag flag) => flags & flag.bit != 0;
   bool get isVoiceMessage => hasFlag(DiscordMessageFlag.voiceMessage);

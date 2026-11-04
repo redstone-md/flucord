@@ -23,6 +23,7 @@ class MessageContentView extends StatefulWidget {
   const MessageContentView({
     required this.body,
     required this.workspace,
+    required this.spaceId,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.now,
@@ -32,6 +33,10 @@ class MessageContentView extends StatefulWidget {
 
   final String body;
   final ChatWorkspace workspace;
+
+  /// Where the message was sent, whose names the mentions read in. Null
+  /// where no space is known, which reads each person's own name.
+  final String? spaceId;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
   final DateTime? now;
@@ -134,6 +139,7 @@ class _MessageContentViewState extends State<MessageContentView> {
     inlineSyntaxes: discordMessageInlineSyntaxes(),
     builders: discordMessageBuilders(
       workspace: widget.workspace,
+      spaceId: widget.spaceId,
       onSelectChannel: widget.onSelectChannel,
       now: widget.now,
     ),
@@ -158,7 +164,10 @@ class _MessageContentViewState extends State<MessageContentView> {
     ];
     final mentions = BodyMentions.of(widget.body);
     for (final id in mentions.members) {
-      values.addAll([id, widget.workspace.memberOrNull(id)?.displayName]);
+      values.addAll([
+        id,
+        widget.workspace.memberOrNull(id)?.displayNameFor(widget.spaceId),
+      ]);
     }
     for (final id in mentions.roles) {
       final role = widget.workspace.roleOrNull(id);

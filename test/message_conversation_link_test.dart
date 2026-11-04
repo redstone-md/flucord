@@ -105,6 +105,7 @@ void main() {
           body: MessageContentView(
             body: 'https://discord.com/channels/forge/forge-design/m5',
             workspace: _workspace,
+            spaceId: null,
             linkLauncher: launcher,
             onSelectChannel: (_) {},
           ),
@@ -169,6 +170,7 @@ Widget _harness({
       body: MessageContentView(
         body: body,
         workspace: _workspace,
+        spaceId: null,
         linkLauncher: launcher,
         onSelectChannel: (_) {},
       ),
