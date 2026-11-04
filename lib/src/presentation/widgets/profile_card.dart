@@ -195,7 +195,8 @@ class ProfileCard extends StatelessWidget {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _spaced([
+                    spacing: 12,
+                    children: [
                       _Names(
                         data: data,
                         backdrop: surfaces.raised,
@@ -221,7 +222,7 @@ class ProfileCard extends StatelessWidget {
                         ),
                       if (actions.onMessage case final send?)
                         _MessageField(name: data.displayName, onSubmit: send),
-                    ]),
+                    ],
                   ),
                 ),
               ],
@@ -231,13 +232,6 @@ class ProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  static List<Widget> _spaced(List<Widget> children) => [
-    for (var index = 0; index < children.length; index++) ...[
-      if (index > 0) const SizedBox(height: 12),
-      children[index],
-    ],
-  ];
 }
 
 /// The sizes of the banner and the avatar, in the card and in the window.

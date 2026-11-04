@@ -142,7 +142,8 @@ class _FullProfileCard extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _spaced([
+                  spacing: 16,
+                  children: [
                     _Names(
                       data: data,
                       backdrop: surfaces.inset,
@@ -189,7 +190,7 @@ class _FullProfileCard extends StatelessWidget {
                         heading: 'Note (only you see it)',
                         child: note,
                       ),
-                  ]),
+                  ],
                 ),
               ),
             ],
@@ -198,13 +199,6 @@ class _FullProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  static List<Widget> _spaced(List<Widget> children) => [
-    for (var index = 0; index < children.length; index++) ...[
-      if (index > 0) const SizedBox(height: 16),
-      children[index],
-    ],
-  ];
 }
 
 /// Message, add friend and "more", under the names. Null when the host
