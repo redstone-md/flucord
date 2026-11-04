@@ -437,6 +437,11 @@ abstract final class SqliteChatSchema {
       // so a member row no longer keeps a copy of its top role's name. A role
       // row written before this version reads as not hoisted until Discord
       // next sends the role.
+      //
+      // Step 27 leaves recipient_id in place, but this step drops the old
+      // column. recipient_id is nullable, so new rows can leave it out. In a
+      // database created before this version, roles_by_space_json is NOT NULL
+      // with no default, so a new member row that leaves it out would fail.
       await _addColumn(database, 'roles', 'hoist INTEGER NOT NULL DEFAULT 0');
       await _dropColumn(database, 'members', 'roles_by_space_json');
     }
