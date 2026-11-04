@@ -1,4 +1,6 @@
+import 'chat_models.dart' show CommunityRole;
 import 'discord_permissions.dart';
+import 'discord_rgb.dart';
 import 'permission_overwrite.dart';
 
 part 'guild_ban.dart';

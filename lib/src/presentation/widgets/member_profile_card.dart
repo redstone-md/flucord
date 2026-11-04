@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../application/guild_member_admin_controller.dart';
 import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
-import '../../domain/guild_management.dart';
 import '../../theme/flucord_icons.dart';
 import 'flucord_dialog.dart';
 import 'member_moderation_section.dart';
@@ -140,7 +139,7 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
           : (role) => unawaited(moderation.grantRole(assignable[role.id]!)),
       addableRoles: [
         for (final role in assignable.values)
-          if (!held.contains(role.id)) _communityRole(role),
+          if (!held.contains(role.id)) role.asCommunityRole,
       ],
       menu: [
         ProfileCardMenuEntry(
@@ -208,14 +207,5 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
       content: SingleChildScrollView(child: content),
       actions: const [FlucordDialogCancel(label: 'Close')],
     ),
-  );
-
-  /// A role from the guild's own list, in the workspace's terms.
-  CommunityRole _communityRole(GuildRole role) => CommunityRole(
-    id: role.id,
-    spaceId: role.guildId,
-    name: role.name,
-    position: role.position,
-    colorValue: role.colorValue == 0 ? null : 0xff000000 | role.colorValue,
   );
 }

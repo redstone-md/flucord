@@ -3,7 +3,9 @@ import 'package:flutter/widgets.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
+import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
 import 'discord_relationship_avatar.dart';
 
@@ -58,7 +60,7 @@ final class ProfileCardData {
       presence: presence,
       bannerUrl: DiscordCdn.userBanner(member.id, profile?.bannerHash),
       accentColorValue: switch (profile?.accentColor) {
-        final rgb? => 0xff000000 | rgb,
+        final rgb? => DiscordRgb(rgb).opaque,
         null => member.colorValue,
       },
       pronouns: profile?.pronouns ?? '',
@@ -67,7 +69,8 @@ final class ProfileCardData {
       mutualFriends: profile?.mutualFriends ?? const [],
       mutualServerCount: profile?.mutualServers.length ?? 0,
       bio: profile?.bio ?? '',
-      activity: _shownActivity(presence),
+      // Discord's card shows a plain "Playing" too, not only rich presence.
+      activity: presence.doing.firstOrNull,
       roles: roles,
     );
   }
@@ -80,7 +83,7 @@ final class ProfileCardData {
     return ProfileCardData(
       userId: user.id,
       displayName: user.displayName,
-      monogram: user.displayName.characters.first.toUpperCase(),
+      monogram: monogramOf(user.displayName),
       username: user.username,
       avatarUrl: user.avatarUrl,
       presence: UserPresence(
@@ -113,14 +116,16 @@ final class ProfileCardData {
     return ProfileCardData(
       userId: profile.userId,
       displayName: name,
-      monogram: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+      monogram: monogramOf(name),
       username: profile.hasLegacyDiscriminator
           ? '${profile.username}#${profile.discriminator}'
           : _nonEmpty(profile.username),
       avatarUrl: avatarUrl,
       presence: presence,
       bannerUrl: bannerUrl,
-      accentColorValue: accentColor == null ? null : 0xff000000 | accentColor,
+      accentColorValue: accentColor == null
+          ? null
+          : DiscordRgb(accentColor).opaque,
       pronouns: pronouns,
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),
@@ -167,19 +172,6 @@ final class ProfileCardData {
     final String text when text.isNotEmpty => text,
     _ => null,
   };
-
-  /// The first activity that is not a custom status: Discord's card shows a
-  /// plain "Playing" too, not only rich presence.
-  static UserActivity? _shownActivity(UserPresence presence) {
-    for (final activity in presence.activities) {
-      if (activity.type == ActivityType.customStatus ||
-          activity.type == ActivityType.hangStatus) {
-        continue;
-      }
-      return activity;
-    }
-    return null;
-  }
 
   static String? _decorationUrl(ProfileDecoration? decoration) {
     final asset = decoration?.asset;

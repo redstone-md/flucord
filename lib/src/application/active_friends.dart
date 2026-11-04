@@ -15,15 +15,8 @@ final class ActiveFriend {
   /// workspace knows.
   final ActiveFriendRoom? room;
 
-  /// What they are doing. A custom status or a hang status is a mood, not
-  /// an activity, so neither counts.
-  List<UserActivity> get doing => [
-    for (final activity
-        in person.presenceDetail?.activities ?? const <UserActivity>[])
-      if (activity.type != ActivityType.customStatus &&
-          activity.type != ActivityType.hangStatus)
-        activity,
-  ];
+  /// What they are doing, moods left out.
+  List<UserActivity> get doing => person.presenceDetail?.doing ?? const [];
 }
 
 /// The guild voice channel a friend sits in, with everybody seated there.

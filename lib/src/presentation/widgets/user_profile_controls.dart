@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/flucord_icons.dart';
 
+import '../../domain/discord_rgb.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
@@ -270,7 +271,7 @@ class ProfileAccentPicker extends StatelessWidget {
             _Swatch(
               swatchKey: ValueKey('profile-accent-${swatch.toRadixString(16)}'),
               selected: value == swatch,
-              colour: Color(0xff000000 | swatch),
+              colour: Color(DiscordRgb(swatch).opaque),
               onPressed: () => onChanged(swatch),
             ),
         ],

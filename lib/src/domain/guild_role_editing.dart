@@ -44,6 +44,18 @@ final class GuildRole {
   /// The `@everyone` role, which Discord keys by the guild's own id.
   bool get isEveryone => id == guildId;
 
+  /// This role in the workspace's terms, which hierarchy checks and the
+  /// profile card read. Colour 0 is Discord's "no colour".
+  CommunityRole get asCommunityRole => CommunityRole(
+    id: id,
+    spaceId: guildId,
+    name: name,
+    position: position,
+    colorValue: colorValue == 0 ? null : DiscordRgb(colorValue).opaque,
+    permissions: permissions,
+    hoist: hoist,
+  );
+
   /// Top-to-bottom order, the way the settings page lists roles: the highest
   /// position first, ties broken by id so the list never reshuffles between
   /// frames over two roles Discord happens to have given the same position.

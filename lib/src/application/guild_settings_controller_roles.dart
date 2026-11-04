@@ -7,19 +7,11 @@ extension GuildSettingsControllerRoles on GuildSettingsController {
   /// Discord rejects every write to, and a role at or above the account's own
   /// highest, which is the hierarchy rule the bit alone does not express.
   bool canEditRole(GuildRole role) =>
-      !role.managed && _capabilities.canEditRole(_asCommunityRole(role));
+      !role.managed && _capabilities.canEditRole(role.asCommunityRole);
 
   /// Whether [role] may be deleted. `@everyone` never can be, by anybody.
   bool canDeleteRole(GuildRole role) =>
-      !role.managed && _capabilities.canDeleteRole(_asCommunityRole(role));
-
-  CommunityRole _asCommunityRole(GuildRole role) => CommunityRole(
-    id: role.id,
-    spaceId: role.guildId,
-    name: role.name,
-    position: role.position,
-    permissions: role.permissions,
-  );
+      !role.managed && _capabilities.canDeleteRole(role.asCommunityRole);
 
   Future<bool> createRole(GuildRoleDraft draft) async {
     if (!_capabilities.canManageRoles) return false;
