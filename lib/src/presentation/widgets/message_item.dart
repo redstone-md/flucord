@@ -618,6 +618,9 @@ class _MessageItemState extends State<MessageItem> {
                       FlucordTextRole.heading.size,
                 ),
                 nameStyle: widget.member.tags.nameStyle,
+                // Discord moves a name in chat only while its message is
+                // hovered.
+                animatesOnHover: true,
                 inServer: (_channel?.isDirectMessage ?? false)
                     ? null
                     : InServer(roleColor: _roleColorOf(widget.member)),

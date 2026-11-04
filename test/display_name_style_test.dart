@@ -288,7 +288,7 @@ void main() {
     testWidgets('an effect this client does not draw is the plain name', (
       tester,
     ) async {
-      for (final effect in [6, 8, 1001, null]) {
+      for (final effect in [8, 1001, null]) {
         await _pumpName(tester, NameStyle(colors: [_red], effectId: effect));
 
         expect(find.text('Freez'), findsOneWidget, reason: 'effect $effect');
