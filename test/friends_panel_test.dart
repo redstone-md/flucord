@@ -4,7 +4,9 @@ import 'package:flucord/src/application/friends_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/friend_suggestion.dart';
+import 'package:flucord/src/domain/relationship_request.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -102,7 +104,7 @@ void main() {
 
       expect(controller.isAvailable, isFalse);
       expect(controller.all, isEmpty);
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
     });
 
     test('adding, accepting and removing reach the session', () async {
@@ -110,15 +112,15 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('  mira  '), isTrue);
+      expect(await controller.addFriendByUsername('  mira  '), isTrue);
       // Trimmed: the trailing space is part of typing, not the name.
-      expect(graph.added, ['mira']);
+      expect(graph.addedByName, ['mira']);
 
       // Accepting is the same call as asking, which is how Discord spells it.
       await controller.acceptRequest(
         _entry('incoming', DiscordRelationshipKind.incomingRequest),
       );
-      expect(graph.added, ['mira', 'incoming']);
+      expect(graph.added, ['incoming']);
 
       await controller.remove(_entry('friend', DiscordRelationshipKind.friend));
       expect(graph.removed, ['friend']);
@@ -132,8 +134,8 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('   '), isFalse);
-      expect(graph.added, isEmpty);
+      expect(await controller.addFriendByUsername('   '), isFalse);
+      expect(graph.addedByName, isEmpty);
     });
 
     test('a refusal is an answer about them, not a fault here', () async {
@@ -141,9 +143,9 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
 
-      expect(controller.lastRequestRefused, isTrue);
+      expect(controller.refusal?.reason, RelationshipRefusal.other);
       expect(controller.error, isNull);
     });
 
@@ -152,7 +154,7 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
 
       expect(controller.error, isA<StateError>());
     });
@@ -204,7 +206,7 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      final adding = controller.addFriend('mira');
+      final adding = controller.addFriendByUsername('mira');
       await controller.loadSuggestions();
       await adding;
 
@@ -478,7 +480,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('friends-add')));
       await tester.pumpAndSettle();
 
-      expect(graph.added, ['mira']);
+      expect(graph.addedByName, ['mira']);
       expect(
         tester
             .widget<TextField>(
@@ -606,6 +608,7 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   final StreamController<List<DiscordRelationship>> _updates =
       StreamController.broadcast();
   final List<String> added = [];
+  final List<String> addedByName = [];
   final List<String> removed = [];
   final List<String> blocked = [];
   bool accept = true;
@@ -623,21 +626,32 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   Stream<List<DiscordRelationship>> get relationshipUpdates => _updates.stream;
 
   @override
-  Future<bool> addFriend(String userId) async {
+  Future<RelationshipResult> send(
+    RelationshipRequest request, {
+    DiscordCaptchaAnswer? captcha,
+  }) async {
     if (failNext) {
       failNext = false;
-      throw StateError('add failed');
+      throw StateError('request failed');
     }
-    if (!accept) return false;
-    added.add(userId);
-    return true;
-  }
-
-  @override
-  Future<bool> removeRelationship(String userId) async {
-    if (!accept) return false;
-    removed.add(userId);
-    return true;
+    if (!accept) return const RelationshipRefused(RelationshipRefusal.other);
+    switch (request) {
+      case BefriendUser(:final userId):
+        added.add(userId);
+      case BefriendUsername(:final username):
+        addedByName.add(username);
+      case RemoveRelationship(:final userId):
+        removed.add(userId);
+      case BlockUser(:final userId):
+        blocked.add(userId);
+      case DismissSuggestion(:final userId):
+        dismissed.add(userId);
+        suggestions = [
+          for (final entry in suggestions)
+            if (entry.userId != userId) entry,
+        ];
+    }
+    return const RelationshipDone();
   }
 
   List<FriendSuggestion> suggestions = const [];
@@ -656,23 +670,5 @@ final class _FakeGraph implements DesktopRelationshipRepository {
       throw StateError('suggestions failed');
     }
     suggestionLoads++;
-  }
-
-  @override
-  Future<bool> dismissSuggestion(String userId) async {
-    if (!accept) return false;
-    dismissed.add(userId);
-    suggestions = [
-      for (final entry in suggestions)
-        if (entry.userId != userId) entry,
-    ];
-    return true;
-  }
-
-  @override
-  Future<bool> blockUser(String userId) async {
-    if (!accept) return false;
-    blocked.add(userId);
-    return true;
   }
 }

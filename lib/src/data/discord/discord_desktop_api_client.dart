@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import '../../domain/chat_models.dart';
+import '../../domain/discord_remote_auth.dart';
+import 'discord_captcha.dart';
 import 'discord_call_api.dart';
 import 'discord_account_connections_repository.dart';
 import 'discord_account_data_package_repository.dart';
@@ -46,7 +50,8 @@ final class DiscordDesktopApiClient
     DiscordHttpTransport? transport,
     DelayFunction? delay,
     Uri? baseUri,
-  }) : _rest = DiscordRestClient(
+  }) : _browserUserAgent = headers[HttpHeaders.userAgentHeader] ?? '',
+       _rest = DiscordRestClient(
          authorization: DiscordDesktopAuthorization(authorization),
          additionalHeaders: headers,
          transport: transport,
@@ -55,6 +60,10 @@ final class DiscordDesktopApiClient
        );
 
   final DiscordRestClient _rest;
+
+  /// The browser user agent the session presents, which a captcha view must
+  /// present too.
+  final String _browserUserAgent;
 
   /// The guild-administration routes, sharing this session's credentials.
   ///
@@ -125,29 +134,60 @@ final class DiscordDesktopApiClient
   Future<List<Map<String, Object?>>> getFriendSuggestions() =>
       _rest.getList('/friend-suggestions');
 
-  /// `DELETE /friend-suggestions/{id}` — says no to one.
-  Future<void> deleteFriendSuggestion(String userId) => _rest.requestEmpty(
+  /// `DELETE /friend-suggestions/{id}`: says no to one.
+  Future<void> deleteFriendSuggestion(
+    String userId, {
+    Map<String, String> headers = const {},
+  }) => _rest.requestEmpty(
     'DELETE',
     '/friend-suggestions/${Uri.encodeComponent(userId)}',
+    headers: headers,
   );
 
   /// `PUT /users/@me/relationships/{id}`.
   ///
-  /// With no type, this is a friend request — or its acceptance, which Discord
+  /// With no type, this is a friend request, or its acceptance, which Discord
   /// does not distinguish. With a type it sets the relationship outright,
   /// which is how blocking works.
-  Future<void> putRelationship(String userId, {int? type}) =>
-      _rest.requestEmpty(
-        'PUT',
-        '/users/@me/relationships/${Uri.encodeComponent(userId)}',
-        body: type == null ? const <String, Object?>{} : {'type': type},
-      );
+  Future<void> putRelationship(
+    String userId, {
+    int? type,
+    Map<String, String> headers = const {},
+  }) => _rest.requestEmpty(
+    'PUT',
+    '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+    body: type == null ? const <String, Object?>{} : {'type': type},
+    headers: headers,
+  );
 
-  /// `DELETE /users/@me/relationships/{id}` — undoes whatever it was.
-  Future<void> deleteRelationship(String userId) => _rest.requestEmpty(
+  /// `POST /users/@me/relationships`: a friend request by username.
+  ///
+  /// Usernames have no discriminator any more, and Discord's own client
+  /// still sends the field as null.
+  Future<void> postRelationshipByUsername(
+    String username, {
+    Map<String, String> headers = const {},
+  }) => _rest.requestEmpty(
+    'POST',
+    '/users/@me/relationships',
+    body: {'username': username, 'discriminator': null},
+    headers: headers,
+  );
+
+  /// `DELETE /users/@me/relationships/{id}`: undoes whatever it was.
+  Future<void> deleteRelationship(
+    String userId, {
+    Map<String, String> headers = const {},
+  }) => _rest.requestEmpty(
     'DELETE',
     '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+    headers: headers,
   );
+
+  /// The captcha Discord asks for in [error], or null when it asked for none.
+  DiscordRemoteAuthCaptchaChallenge? captchaChallengeOf(
+    DiscordApiException error,
+  ) => DiscordCaptcha.challengeOf(error, userAgent: _browserUserAgent);
 
   /// The guild's scheduled events, with the interested counts Discord's own
   /// client asks for.
