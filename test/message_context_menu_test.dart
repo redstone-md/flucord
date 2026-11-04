@@ -64,9 +64,26 @@ void main() {
       expect(shape.borderRadius, FlucordRadius.overlay);
     });
 
-    testWidgets('rows are in the label role with an icon each', (
+    testWidgets("a row's highlight keeps its corner parallel to the menu", (
       tester,
     ) async {
+      await _pumpMenu(tester, isCurrentUser: false);
+
+      final row = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byKey(const ValueKey('message-menu-reply')),
+          matching: find.byType(InkWell),
+        ),
+      );
+      // The row sits 4 in from the menu edge, so its corner is 4 less.
+      expect(row.borderRadius, FlucordRadius.large);
+      expect(
+        FlucordRadius.overlay.topLeft.x - FlucordRadius.large.topLeft.x,
+        4,
+      );
+    });
+
+    testWidgets('rows are in the label role with an icon each', (tester) async {
       await _pumpMenu(tester, isCurrentUser: true);
 
       final reply = find.byKey(const ValueKey('message-menu-reply'));
