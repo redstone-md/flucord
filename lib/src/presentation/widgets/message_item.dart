@@ -36,6 +36,7 @@ import 'message_poll_view.dart';
 import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
+import 'message_row_metrics.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
 import 'name_tags.dart';
@@ -144,33 +145,6 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
-  // The row's measurements, from the Figma frame the owner signed off.
-
-  /// Space above a new author's message, outside the highlight. Compact
-  /// density shrinks it, as Discord's group spacing setting does.
-  static const _groupGap = 10.0;
-  static const _compactGroupGap = 4.0;
-
-  /// Space inside the highlight, on the left and right.
-  static const _inline = 16.0;
-
-  /// Space inside the highlight, above and below: the same on both sides.
-  static const _block = 4.0;
-  static const _followUpBlock = 1.0;
-  static const _mentionBlock = 7.0;
-  static const _avatarSize = 40.0;
-  static const _avatarGap = 12.0;
-  static const _nameRowHeight = 18.0;
-
-  /// Space between a reply line and the name row under it.
-  static const _replyGap = 4.0;
-
-  /// How far the toolbar rises above the highlight's top edge.
-  static const _barRise = 16.0;
-  static const _hoverAlpha = 0.025;
-  static const _mentionAlpha = 0.08;
-  static const _mentionBarWidth = 2.0;
-
   bool _hovered = false;
   bool _barHovered = false;
   bool _reactionPickerOpen = false;
@@ -305,8 +279,8 @@ class _MessageItemState extends State<MessageItem> {
     final groupGap = widget.grouped
         ? 0.0
         : compact
-        ? _compactGroupGap
-        : _groupGap;
+        ? MessageRowMetrics.compactGroupGap
+        : MessageRowMetrics.groupGap;
     return Semantics(
       container: true,
       // The parts of the row stay their own nodes, so links, attachments and
@@ -369,36 +343,39 @@ class _MessageItemState extends State<MessageItem> {
     final surfaces = context.surfaces;
     final mentioned = widget.message.mentionsCurrentMember;
     final block = mentioned
-        ? _mentionBlock
+        ? MessageRowMetrics.mentionBlock
         : widget.grouped
-        ? _followUpBlock
-        : _block;
+        ? MessageRowMetrics.followUpBlock
+        : MessageRowMetrics.block;
     return Container(
       key: ValueKey('message-surface-${widget.message.id}'),
       // Both always set, even when they draw nothing: a box that came and
       // went with the hover would rebuild the text and drop its selection.
       color: mentioned
-          ? surfaces.brand.withValues(alpha: _mentionAlpha)
+          ? surfaces.brand.withValues(alpha: MessageRowMetrics.mentionAlpha)
           : _hovered
-          ? surfaces.text.withValues(alpha: _hoverAlpha)
+          ? surfaces.text.withValues(alpha: MessageRowMetrics.hoverAlpha)
           : Colors.transparent,
       foregroundDecoration: BoxDecoration(
         border: mentioned
             ? BorderDirectional(
                 start: BorderSide(
                   color: surfaces.brand,
-                  width: _mentionBarWidth,
+                  width: MessageRowMetrics.mentionBarWidth,
                 ),
               )
             : null,
       ),
-      padding: EdgeInsets.symmetric(horizontal: _inline, vertical: block),
+      padding: EdgeInsets.symmetric(
+        horizontal: MessageRowMetrics.inline,
+        vertical: block,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.message.reply case final reply?) ...[
             _replyLine(context, reply),
-            const SizedBox(height: _replyGap),
+            const SizedBox(height: MessageRowMetrics.replyGap),
           ],
           _authorAndContent(context),
         ],
@@ -411,21 +388,21 @@ class _MessageItemState extends State<MessageItem> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       SizedBox(
-        width: _avatarSize,
+        width: MessageRowMetrics.avatarSize,
         child: widget.grouped
             ? _followUpTime(context)
             : _opensAuthorProfile(
                 key: const ValueKey('message-author-avatar'),
                 child: MemberAvatar(
                   member: widget.member,
-                  size: _avatarSize,
+                  size: MessageRowMetrics.avatarSize,
                   spaceId: widget.workspace
                       .channelById(widget.message.channelId)
                       .spaceId,
                 ),
               ),
       ),
-      const SizedBox(width: _avatarGap),
+      const SizedBox(width: MessageRowMetrics.avatarGap),
       Expanded(
         child: MessageMenuScope(
           onOpen: (position) => unawaited(_openContextMenu(context, position)),
@@ -444,7 +421,8 @@ class _MessageItemState extends State<MessageItem> {
     return SizedBox(
       height: FlucordTextRole.body.lineHeight,
       child: OverflowBox(
-        maxWidth: _avatarSize + 2 * _avatarGap,
+        maxWidth:
+            MessageRowMetrics.avatarSize + 2 * MessageRowMetrics.avatarGap,
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: MessageTimeLabel(
@@ -470,8 +448,9 @@ class _MessageItemState extends State<MessageItem> {
       Offset.zero & layout.childSize,
     );
     return Positioned(
-      top: surface.top - _barRise,
-      right: layout.overlaySize.width - surface.right + _inline,
+      top: surface.top - MessageRowMetrics.barRise,
+      right:
+          layout.overlaySize.width - surface.right + MessageRowMetrics.inline,
       child: MouseRegion(
         onEnter: (_) => _updateBar(() => _barHovered = true),
         onExit: (_) => _updateBar(() => _barHovered = false),
@@ -606,7 +585,7 @@ class _MessageItemState extends State<MessageItem> {
   Widget _authorLine(BuildContext context) {
     final muted = context.surfaces.captionText;
     return SizedBox(
-      height: _nameRowHeight,
+      height: MessageRowMetrics.nameRowHeight,
       child: Row(
         children: [
           Flexible(
@@ -617,7 +596,9 @@ class _MessageItemState extends State<MessageItem> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: FlucordTextRole.heading.style.copyWith(
-                  height: _nameRowHeight / FlucordTextRole.heading.size,
+                  height:
+                      MessageRowMetrics.nameRowHeight /
+                      FlucordTextRole.heading.size,
                   color: _nameColor(widget.member),
                 ),
               ),
@@ -713,8 +694,8 @@ class _MessageItemState extends State<MessageItem> {
     return Row(
       children: [
         const MessageReplySpine(
-          laneWidth: _avatarSize + _avatarGap,
-          avatarSize: _avatarSize,
+          laneWidth: MessageRowMetrics.avatarSize + MessageRowMetrics.avatarGap,
+          avatarSize: MessageRowMetrics.avatarSize,
         ),
         Expanded(
           child: _clickable(
