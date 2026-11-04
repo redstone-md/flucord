@@ -6,6 +6,7 @@ import '../application/channel_sidebar_order.dart';
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
+import '../application/active_friends.dart';
 import '../application/friends_controller.dart';
 import '../domain/direct_message_candidate.dart';
 import '../application/guild_member_admin_controller.dart';
@@ -52,6 +53,7 @@ import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
+import 'widgets/active_now_column.dart';
 import 'widgets/member_profile_card.dart';
 import 'widgets/profile_card_route.dart';
 import 'widgets/member_sidebar.dart';
@@ -138,8 +140,8 @@ class FlucordShell extends StatelessWidget {
   /// never open one, such as the widget tests for a single pane.
   final MemberProfileController? memberProfileController;
 
-  /// The account's friend graph, or null on a transport that is never told
-  /// one — the demo workspace and the bot session.
+  /// The account's friend graph. Its surfaces show only while the session is
+  /// told one, which the demo workspace and the bot session never are.
   final FriendsController? friendsController;
 
   /// Owns the server-side search and the page the results panel is showing.
@@ -195,7 +197,12 @@ class FlucordShell extends StatelessWidget {
       listenable: connectionController,
       builder: (context, _) {
         return ListenableBuilder(
-          listenable: workspaceController,
+          // The friends controller too: whether its panel is open decides
+          // what the right column of the DM space shows.
+          listenable: Listenable.merge([
+            workspaceController,
+            friendsController,
+          ]),
           builder: (context, _) {
             final spaceId = workspaceController.selectedSpaceId!;
             final channelId = workspaceController.selectedChannelId;
@@ -222,6 +229,14 @@ class FlucordShell extends StatelessWidget {
             /// without it the rail hides its plus rather than opening a
             /// dialog whose every button would fail.
             final canManageServers = chatController.guildManagement != null;
+            // Friends live in the DM space only. Absent on a session that is
+            // never told a friend graph, such as the bot session and the demo
+            // workspace.
+            final friends =
+                space.isDirectMessages &&
+                    (friendsController?.isAvailable ?? false)
+                ? friendsController
+                : null;
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
@@ -396,6 +411,20 @@ class FlucordShell extends StatelessWidget {
                                   FlucordTheme.canvasInset -
                                   _sidePanelMaxWidth <
                               _conversationMinWidth;
+                      final friendsOpen = friends?.isPanelOpen ?? false;
+                      // While the friends panel is open, the right column
+                      // of the DM space is Active now, as on Discord's
+                      // Friends page. It needs the conversation to keep its
+                      // width beside it.
+                      final showActiveNow =
+                          friendsOpen &&
+                          sidePanel == null &&
+                          constraints.maxWidth -
+                                  _railWidth -
+                                  (showChannels ? _channelSidebarWidth : 0) -
+                                  FlucordTheme.canvasInset -
+                                  ActiveNowColumn.width >=
+                              _conversationMinWidth;
                       return Row(
                         children: [
                           // Kept across rebuilds that leave every pip where it
@@ -483,6 +512,8 @@ class FlucordShell extends StatelessWidget {
                                         .accountNotificationFlags,
                                     connectionController.mode,
                                     chatController.connectionStatus,
+                                    friends,
+                                    friendsOpen,
                                     canOpenSettings,
                                     chatController
                                         .scheduledEventsFor(spaceId)
@@ -497,7 +528,7 @@ class FlucordShell extends StatelessWidget {
                                   builder: (_) => NavigationTheme(
                                     child: ChannelSidebar(
                                       space: space,
-                                      friends: friendsController,
+                                      friends: friends,
                                       categories: categories,
                                       currentMember: currentMember,
                                       memberOf: _memberOf,
@@ -631,7 +662,10 @@ class FlucordShell extends StatelessWidget {
                                   ),
                                   if (sidePanel != null && !panelCovers)
                                     sidePanel,
-                                  if (showMembers && space.isDirectMessages)
+                                  if (friends != null && showActiveNow)
+                                    _activeNow(workspace, friends)
+                                  else if (showMembers &&
+                                      space.isDirectMessages)
                                     if (_recipientOf(workspace, channel)
                                         case final person?)
                                       MemberProfilePanel(
