@@ -221,21 +221,28 @@ final class ChatController extends ChangeNotifier {
     );
   }
 
-  /// Asks about the authors of a history page whose roles in the guild are not
-  /// known yet. A page names none, and a name's colour comes from them. Each
-  /// author is asked about once per session, so moving between channels sends
-  /// nothing new.
+  /// Asks about the people a history page names, authors and mentions alike,
+  /// whose standing in the guild is not known yet. A page says nothing of it,
+  /// and the nickname and the name's colour come from it. Each person is
+  /// asked about once per session, so moving between channels sends nothing
+  /// new.
   void _askAboutAuthors(ChannelHistory history) {
     final workspace = _workspace;
     final channel = workspace?.channelOrNull(history.channelId);
     if (workspace == null || channel == null || channel.isDirectMessage) return;
     final spaceId = channel.spaceId;
     final asked = _askedAuthors.putIfAbsent(spaceId, () => {});
+    final named = {
+      for (final message in history.messages) ...[
+        message.authorId,
+        ...message.mentionedMemberIds,
+      ],
+    };
     final unknown = [
-      for (final author in history.members)
-        if (workspace.memberOrNull(author.id)?.membershipIn(spaceId) == null &&
-            asked.add(author.id))
-          author.id,
+      for (final id in named)
+        if (workspace.memberOrNull(id)?.membershipIn(spaceId) == null &&
+            asked.add(id))
+          id,
     ];
     if (unknown.isEmpty) return;
     memberListRepository?.requestGuildMembers(

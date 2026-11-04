@@ -34,14 +34,12 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // The member-list handler needs READY and GUILD_CREATE for the channel
         // shape a list id is derived from, so it sees every dispatch rather
         // than only the roster event.
-        final members = _memberLists.accept(event.name, event.data);
-        if (members.isNotEmpty) _events.add(MembersUpsertedEvent(members));
+        _acceptMembers(_memberLists.accept(event.name, event.data));
         // A chunk answers opcode 8. The presence service already reads the
         // presences out of it; the members themselves are what makes somebody
         // mentionable who was not in READY at all.
         if (event.name == 'GUILD_MEMBERS_CHUNK') {
-          final chunked = _mapper.membersFromChunk(event.data);
-          if (chunked.isNotEmpty) _events.add(MembersUpsertedEvent(chunked));
+          _acceptMembers(_mapper.membersFromChunk(event.data));
         }
         _acceptPresence(event);
         // Read state hangs off READY and five ack dispatches, so it too sees
@@ -91,6 +89,14 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           _sharedDispatches.inOrder(_rehydrateWorkspace);
         }
     }
+  }
+
+  /// Members a roster or a chunk named. They are cached too, so the names
+  /// they carry are there on the next launch.
+  void _acceptMembers(List<Member> members) {
+    if (members.isEmpty) return;
+    _events.add(MembersUpsertedEvent(members));
+    unawaited(_cache.writeMembers(members));
   }
 
   /// A guild the account gained, or got back, once a workspace is on screen.
