@@ -1,10 +1,10 @@
 /// A member's standing in one guild, reduced to what permissions depend on,
 /// and when they joined, which the full profile shows.
 ///
-/// Kept apart from the display-facing member record because these fields have
-/// no visual meaning at all: they exist only to feed the clamps Discord applies
+/// Kept apart from the display-facing member record. Apart from [joinedAt],
+/// these fields are not drawn anywhere: they feed the clamps Discord applies
 /// after roles and overwrites have been resolved. A member with no record here
-/// is not "a member with no roles" — it is a member we were never told about,
+/// is not "a member with no roles". It is a member we were never told about,
 /// which callers must decide about themselves.
 final class GuildMembership {
   const GuildMembership({
