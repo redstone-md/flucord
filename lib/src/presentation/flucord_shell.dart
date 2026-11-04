@@ -228,9 +228,12 @@ class FlucordShell extends StatelessWidget {
             /// without it the rail hides its plus rather than opening a
             /// dialog whose every button would fail.
             final canManageServers = chatController.guildManagement != null;
-            // Absent on a session that is never told a friend graph, such as
-            // the bot session and the demo workspace.
-            final friends = (friendsController?.isAvailable ?? false)
+            // Friends live in the DM space only. Absent on a session that is
+            // never told a friend graph, such as the bot session and the demo
+            // workspace.
+            final friends =
+                space.isDirectMessages &&
+                    (friendsController?.isAvailable ?? false)
                 ? friendsController
                 : null;
             final channel = channelId == null
@@ -413,7 +416,6 @@ class FlucordShell extends StatelessWidget {
                       // Friends page. It needs the conversation to keep its
                       // width beside it.
                       final showActiveNow =
-                          space.isDirectMessages &&
                           friendsOpen &&
                           sidePanel == null &&
                           constraints.maxWidth -
