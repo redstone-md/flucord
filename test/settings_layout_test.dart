@@ -40,4 +40,34 @@ void main() {
     // The hint stays centred under the button.
     expect(tester.getCenter(find.text('Esc')).dx, button.center.dx);
   });
+
+  testWidgets('a large text size moves the body down, under the Esc hint', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const body = ValueKey('body');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(1280, 800),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: const SettingsLayout(
+            groups: [],
+            title: 'Voice & Video',
+            body: SizedBox.expand(key: body),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getRect(find.text('Esc')).bottom,
+      lessThanOrEqualTo(tester.getRect(find.byKey(body)).top),
+    );
+  });
 }

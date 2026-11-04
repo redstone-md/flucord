@@ -256,8 +256,10 @@ class _Card extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              height: 64,
+            // 64 high, or taller when a large text size makes the Esc hint
+            // taller: the hint must not run into the body.
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
               child: Padding(
                 // The close button keeps the same 16 from the top as from
                 // the side, and the title sits on the button's centre line.
@@ -329,11 +331,14 @@ class _CloseButton extends StatelessWidget {
     final hint = FlucordTextRole.caption.style.copyWith(
       color: surfaces.captionText,
     );
+    // The hint's line as drawn: it grows with the text size.
+    final hintLine =
+        MediaQuery.textScalerOf(context).scale(hint.fontSize!) * hint.height!;
     // As wide as the button, so the button's edge is the bar's edge. The
     // hint is wider than the button and centres under it.
     return SizedBox(
       width: FlucordIconButton.size,
-      height: FlucordIconButton.size + _hintGap + hint.fontSize! * hint.height!,
+      height: FlucordIconButton.size + _hintGap + hintLine,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
