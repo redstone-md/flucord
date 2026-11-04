@@ -21,7 +21,20 @@ Map<String, Object?> _ready() =>
             'global_name': 'Friend',
           },
         },
+        // A friend who shares no server or DM with the account, so the
+        // workspace holds no member record for them.
+        {
+          'id': _strangerId,
+          'type': 1,
+          'user': {
+            'id': _strangerId,
+            'username': 'faraway',
+            'global_name': 'Far Away',
+          },
+        },
       ];
+
+const _strangerId = '777777777777777777';
 
 final _friendsRow = find.byKey(const ValueKey('toggle-friends'));
 final _page = find.byKey(const ValueKey('friends-panel'));
@@ -90,6 +103,42 @@ void main() {
     expect(_page, findsNothing);
     expect(_selected(tester, _friendsRow), isFalse);
     expect(_selected(tester, _dmRow), isTrue);
+  }, ready: _ready());
+
+  testSession('a friend row opens the profile card beside the name', (
+    tester,
+    session,
+  ) async {
+    await _openDirectMessages(tester, session);
+    await tester.tap(_friendsRow);
+    await session.settle();
+    await tester.tap(find.byKey(const ValueKey('friends-tab-all')));
+    await session.settle();
+
+    for (final (id, name) in [
+      (SessionHarness.friendId, 'Friend'),
+      (_strangerId, 'Far Away'),
+    ]) {
+      final trigger = find.byKey(ValueKey('friend-profile-$id'));
+      await tester.tap(trigger);
+      await session.settle();
+
+      final card = find.byKey(const ValueKey('profile-card'));
+      expect(
+        find.descendant(of: card, matching: find.text(name)),
+        findsWidgets,
+      );
+      // Beside the avatar and name, top level with them.
+      expect(
+        tester.getTopLeft(card).dx,
+        greaterThanOrEqualTo(tester.getTopRight(trigger).dx),
+      );
+      expect(tester.getTopLeft(card).dy, tester.getTopLeft(trigger).dy);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await session.settle();
+      expect(card, findsNothing);
+    }
   }, ready: _ready());
 
   testSession(

@@ -30,6 +30,7 @@ import '../domain/discord_relationship.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
+import '../domain/monogram.dart';
 import '../domain/moderation_report.dart';
 import '../domain/voice_connection.dart';
 import '../domain/workspace_activity.dart';

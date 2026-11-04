@@ -597,6 +597,9 @@ extension _FlucordShellNavigation on FlucordShell {
     // a second copy would be a second thing to go stale.
     presenceOf: (userId) => workspace.memberOrNull(userId)?.presence,
     onMessage: (userId) => unawaited(_openDirectConversation(context, userId)),
+    onOpenProfile: (userId, anchor) => unawaited(
+      _openMemberCard(context, CommunitySpace.directMessagesId, userId, anchor),
+    ),
     inbox: InboxActivityButton(
       summary: InboxSummary.fromWorkspace(workspace),
       onPressed: () => unawaited(_openInbox(context)),
@@ -719,14 +722,14 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   /// Opens [userId]'s profile card beside [anchor]: a message author's name
-  /// or avatar, or a voice seat.
+  /// or avatar, a voice seat, or a friend's name.
   Future<void> _openMemberCard(
     BuildContext context,
     String spaceId,
     String userId,
     Rect anchor,
   ) async {
-    final member = chatController.workspace?.memberOrNull(userId);
+    final member = _memberOf(userId) ?? _friendAsMember(userId);
     if (member == null) return;
     await showProfileCard(
       context: context,
@@ -782,6 +785,28 @@ extension _FlucordShellNavigation on FlucordShell {
     return friends == null
         ? card()
         : ListenableBuilder(listenable: friends, builder: (_, _) => card());
+  }
+
+  /// A friend who shares no server or DM with the account, as the
+  /// relationship describes them. The workspace holds no record of them, and
+  /// the card fetches the rest of their profile itself.
+  Member? _friendAsMember(String userId) {
+    final user = friendsController?.all
+        .where((entry) => entry.user.id == userId)
+        .firstOrNull
+        ?.user;
+    if (user == null) return null;
+    return Member(
+      id: user.id,
+      displayName: user.displayName,
+      username: user.username,
+      initials: monogramOf(user.displayName),
+      role: 'Discord user',
+      presence: Presence.unknown,
+      // Discord's neutral grey: there is no server colour to take.
+      colorValue: 0xff4a4e50,
+      avatarUrl: user.avatarUrl,
+    );
   }
 
   /// Whether a friend request to [member] makes sense: not somebody already
