@@ -39,8 +39,11 @@ class _FriendsPanelState extends State<FriendsPanel> {
     super.initState();
     _username.addListener(_onTyped);
     // Read once when the panel opens. Discord serves a route for these, but
-    // it is not something to poll: a suggestion is not urgent.
-    unawaited(widget.controller.loadSuggestions());
+    // it is not something to poll: a suggestion is not urgent. After the
+    // frame, because loading notifies, and the shell listens to it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(widget.controller.loadSuggestions());
+    });
   }
 
   void _onTyped() {
