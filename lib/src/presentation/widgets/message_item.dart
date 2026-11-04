@@ -24,6 +24,7 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
 import 'destructive_confirmation.dart';
+import 'display_name.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
@@ -608,16 +609,16 @@ class _MessageItemState extends State<MessageItem> {
           Flexible(
             child: _opensAuthorProfile(
               key: const ValueKey('message-author-name'),
-              child: Text(
+              child: DisplayName(
                 widget.member.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: FlucordTextRole.heading.style.copyWith(
                   height:
                       MessageRowMetrics.nameRowHeight /
                       FlucordTextRole.heading.size,
-                  color: _nameColor(widget.member),
                 ),
+                nameStyle: widget.member.tags.nameStyle,
+                roleColor: _roleColorOf(widget.member),
+                inServer: !(_channel?.isDirectMessage ?? false),
               ),
             ),
           ),
@@ -658,16 +659,20 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
+  ConversationChannel? get _channel =>
+      widget.workspace.channelOrNull(widget.message.channelId);
+
+  /// The colour of [member]'s role here, or null for none.
+  int? _roleColorOf(Member member) => switch (_channel?.spaceId) {
+    final spaceId? => widget.workspace.nameColorOf(member, spaceId),
+    null => null,
+  };
+
   /// The colour of [member]'s role here, or null for the normal text colour.
-  Color? _nameColor(Member member) {
-    final spaceId = widget.workspace
-        .channelOrNull(widget.message.channelId)
-        ?.spaceId;
-    final value = spaceId == null
-        ? null
-        : widget.workspace.nameColorOf(member, spaceId);
-    return value == null ? null : Color(value);
-  }
+  Color? _nameColor(Member member) => switch (_roleColorOf(member)) {
+    final value? => Color(value),
+    null => null,
+  };
 
   /// Makes [child] a target for the pointer, or leaves it as it is when there
   /// is nothing to do. The label replaces what [child] would announce.
