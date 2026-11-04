@@ -490,10 +490,10 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
         color: color.withValues(alpha: 0.16),
         borderRadius: FlucordRadius.small,
       ),
-      child: Icon(
+      child: FlucordIcon(
         suggestion.kind == ComposerAutocompleteKind.role
-            ? Icons.alternate_email_rounded
-            : Icons.tag_rounded,
+            ? FlucordIcons.mention
+            : FlucordIcons.textChannel,
         size: 16,
         color: color,
       ),

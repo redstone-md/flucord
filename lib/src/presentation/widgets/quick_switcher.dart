@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../application/quick_switcher_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -103,7 +104,11 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, size: 28, color: context.surfaces.muted),
+            FlucordIcon(
+              FlucordIcons.noResults,
+              size: 28,
+              color: context.surfaces.muted,
+            ),
             const SizedBox(height: 8),
             const Text('No destinations found'),
             const SizedBox(height: 2),
@@ -237,7 +242,7 @@ class _SearchField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Where would you like to go?',
         semanticCounterText: '$resultCount destinations',
-        prefixIcon: const Icon(Icons.search, size: 20),
+        prefixIcon: const FlucordIcon(FlucordIcons.search, size: 20),
         suffixIcon: Padding(
           padding: const EdgeInsets.only(right: 10),
           child: Center(

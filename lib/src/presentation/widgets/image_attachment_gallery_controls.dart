@@ -8,7 +8,7 @@ class _GalleryNavigationButton extends StatelessWidget {
     super.key,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
 
@@ -34,7 +34,7 @@ class _GalleryNavigationButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(icon, size: 24),
+        icon: FlucordIcon(icon, size: 24),
       ),
     ),
   );

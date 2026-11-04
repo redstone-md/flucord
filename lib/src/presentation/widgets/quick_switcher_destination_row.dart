@@ -50,7 +50,11 @@ class _DestinationRow extends StatelessWidget {
               child: Row(
                 children: [
                   const SizedBox(width: 10),
-                  Icon(_kindIcon(destination.kind), size: 18, color: metadata),
+                  FlucordIcon(
+                    _kindIcon(destination.kind),
+                    size: 18,
+                    color: metadata,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -181,12 +185,12 @@ String _kindName(QuickSwitcherDestinationKind kind) => switch (kind) {
   QuickSwitcherDestinationKind.thread => 'Thread',
 };
 
-IconData _kindIcon(QuickSwitcherDestinationKind kind) => switch (kind) {
-  QuickSwitcherDestinationKind.guild => Icons.dns_rounded,
-  QuickSwitcherDestinationKind.directMessage => Icons.alternate_email_rounded,
-  QuickSwitcherDestinationKind.textChannel => Icons.tag_rounded,
-  QuickSwitcherDestinationKind.voiceChannel => Icons.volume_up_rounded,
-  QuickSwitcherDestinationKind.forumChannel => Icons.forum_outlined,
-  QuickSwitcherDestinationKind.mediaChannel => Icons.perm_media_outlined,
-  QuickSwitcherDestinationKind.thread => Icons.forum_rounded,
+FlucordIconData _kindIcon(QuickSwitcherDestinationKind kind) => switch (kind) {
+  QuickSwitcherDestinationKind.guild => FlucordIcons.server,
+  QuickSwitcherDestinationKind.directMessage => FlucordIcons.mention,
+  QuickSwitcherDestinationKind.textChannel => FlucordIcons.textChannel,
+  QuickSwitcherDestinationKind.voiceChannel => FlucordIcons.voiceChannel,
+  QuickSwitcherDestinationKind.forumChannel => FlucordIcons.forum,
+  QuickSwitcherDestinationKind.mediaChannel => FlucordIcons.mediaChannel,
+  QuickSwitcherDestinationKind.thread => FlucordIcons.threads,
 };

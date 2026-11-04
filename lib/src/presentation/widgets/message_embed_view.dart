@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/message_embed.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -406,8 +407,8 @@ class _RemoteEmbedImage extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => ColoredBox(
         color: context.surfaces.surface,
-        child: Icon(
-          Icons.broken_image_outlined,
+        child: FlucordIcon(
+          FlucordIcons.brokenImage,
           size: 20,
           color: context.surfaces.muted,
         ),

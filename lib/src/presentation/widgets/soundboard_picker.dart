@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/soundboard_controller.dart';
 import '../../domain/soundboard.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -36,7 +37,7 @@ class SoundboardButton extends StatelessWidget {
           channelId: channelId,
         ),
       ),
-      icon: const Icon(Icons.music_note_outlined),
+      icon: const FlucordIcon(FlucordIcons.music),
     );
   }
 }

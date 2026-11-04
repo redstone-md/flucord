@@ -38,14 +38,14 @@ class _HistoryBoundary extends StatelessWidget {
                     key: const ValueKey('retry-older-messages'),
                     onPressed: onLoad,
                     tooltip: 'Retry older messages',
-                    icon: const Icon(Icons.refresh, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
                   ),
                 ],
               )
             : TextButton.icon(
                 key: const ValueKey('load-older-messages'),
                 onPressed: onLoad,
-                icon: const Icon(Icons.arrow_upward, size: 14),
+                icon: const FlucordIcon(FlucordIcons.jumpUp, size: 14),
                 label: const Text(
                   'Load older messages',
                   style: TextStyle(fontSize: FlucordType.caption),
@@ -68,8 +68,8 @@ class _ChannelStart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            channel.isThread ? Icons.forum_outlined : Icons.tag,
+          FlucordIcon(
+            channel.isThread ? FlucordIcons.threads : FlucordIcons.textChannel,
             size: 28,
             color: context.surfaces.muted,
           ),
@@ -109,8 +109,8 @@ class _MessageEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              hasQuery ? Icons.search_off : Icons.forum_outlined,
+            FlucordIcon(
+              hasQuery ? FlucordIcons.noResults : FlucordIcons.chat,
               size: 30,
               color: context.surfaces.muted,
             ),

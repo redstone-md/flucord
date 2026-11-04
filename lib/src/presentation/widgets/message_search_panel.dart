@@ -5,6 +5,7 @@ import '../../application/message_search_grammar.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/message_search.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -134,12 +135,12 @@ class MessageSearchPanel extends StatelessWidget {
             for (final sort in MessageSearchSort.values)
               PopupMenuItem(value: sort, child: Text(_sortLabel(sort))),
           ],
-          icon: const Icon(Icons.sort, size: 18),
+          icon: const FlucordIcon(FlucordIcons.sort, size: 18),
         ),
         IconButton(
           key: const ValueKey('close-search-panel'),
           onPressed: onClose,
-          icon: const Icon(Icons.close, size: 18),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 18),
           tooltip: 'Close search results',
         ),
         const SizedBox(width: 4),
@@ -174,7 +175,7 @@ class MessageSearchPanel extends StatelessWidget {
         );
       case MessageSearchStatus.failed:
         return _SearchPanelState(
-          icon: Icons.error_outline,
+          icon: FlucordIcons.error,
           title: 'Search unavailable',
           detail: 'The server could not answer that search.',
           action: TextButton(
@@ -185,7 +186,7 @@ class MessageSearchPanel extends StatelessWidget {
         );
       case MessageSearchStatus.idle:
         return const _SearchPanelState(
-          icon: Icons.search,
+          icon: FlucordIcons.search,
           title: 'Search this conversation',
           detail:
               'Filter with from:, mentions:, has:, in:, '
@@ -195,7 +196,7 @@ class MessageSearchPanel extends StatelessWidget {
         final results = controller.results;
         if (results == null || results.isEmpty) {
           return const _SearchPanelState(
-            icon: Icons.search_off,
+            icon: FlucordIcons.noResults,
             title: 'No results found',
             detail: 'Try a different word, or drop one of the filters.',
           );

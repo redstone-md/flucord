@@ -8,9 +8,12 @@ import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/presentation/widgets/expression_favorite_star.dart';
 import 'package:flucord/src/presentation/widgets/gif_picker.dart';
 import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   group('the controller', () {
@@ -139,7 +142,7 @@ void main() {
 
       await _pumpStar(tester, controller, onPressed: () async => true);
 
-      expect(find.byIcon(Icons.star_border), findsNothing);
+      expect(findFlucordIcon(FlucordIcons.favourite), findsNothing);
     });
 
     testWidgets('a refusal says why the star did nothing', (tester) async {
@@ -164,7 +167,7 @@ void main() {
       expect(find.byKey(const ValueKey('favorite-refused')), findsNothing);
     });
 
-    testWidgets('a starred item is drawn filled', (tester) async {
+    testWidgets('a starred item is drawn in gold', (tester) async {
       final controller = ExpressionFavoritesController(() => _FakeStore());
       addTearDown(controller.dispose);
 
@@ -175,7 +178,10 @@ void main() {
         onPressed: () async => true,
       );
 
-      expect(find.byIcon(Icons.star), findsOneWidget);
+      final star = tester.widget<FlucordIcon>(
+        findFlucordIcon(FlucordIcons.favourite),
+      );
+      expect(star.color, Colors.amber);
     });
   });
 

@@ -252,6 +252,67 @@ abstract final class FlucordIcons {
   );
   static const caughtUp = FlucordIconData(HugeIcons.strokeRoundedMailOpen01);
   static const summary = FlucordIconData(HugeIcons.strokeRoundedSparkles);
+
+  // Messages and pickers (FLUCORD-84).
+  static const chevronLeft = FlucordIconData(
+    HugeIcons.strokeRoundedArrowLeft01,
+    matchTextDirection: true,
+  );
+  static const jumpUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp02);
+  static const jumpDown = FlucordIconData(HugeIcons.strokeRoundedArrowDown02);
+  static const joined = FlucordIconData(
+    HugeIcons.strokeRoundedLogin01,
+    matchTextDirection: true,
+  );
+  static const minus = FlucordIconData(HugeIcons.strokeRoundedMinusSign);
+  static const noResults = FlucordIconData(HugeIcons.strokeRoundedSearchRemove);
+  static const findPerson = FlucordIconData(
+    HugeIcons.strokeRoundedUserSearch01,
+  );
+  static const mediaChannel = FlucordIconData(HugeIcons.strokeRoundedAlbum02);
+  static const sort = FlucordIconData(HugeIcons.strokeRoundedSortByDown02);
+  static const attachment = FlucordIconData(
+    HugeIcons.strokeRoundedAttachment01,
+  );
+  static const dateBefore = FlucordIconData(HugeIcons.strokeRoundedCalendar03);
+  static const dateAfter = FlucordIconData(HugeIcons.strokeRoundedClock01);
+  static const pending = FlucordIconData(HugeIcons.strokeRoundedHourglass);
+  static const file = FlucordIconData(HugeIcons.strokeRoundedFile01);
+  static const videoFile = FlucordIconData(HugeIcons.strokeRoundedFileVideo);
+  static const brokenImage = FlucordIconData(
+    HugeIcons.strokeRoundedImageNotFound01,
+  );
+  static const play = FlucordIconData(HugeIcons.strokeRoundedPlay);
+  static const pause = FlucordIconData(HugeIcons.strokeRoundedPause);
+  static const volume = FlucordIconData(HugeIcons.strokeRoundedVolumeHigh);
+  static const volumeOff = FlucordIconData(HugeIcons.strokeRoundedVolumeOff);
+  static const fullscreen = FlucordIconData(HugeIcons.strokeRoundedFullScreen);
+  static const exitFullscreen = FlucordIconData(
+    HugeIcons.strokeRoundedMinimizeScreen,
+  );
+  static const audio = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);
+  static const superReaction = FlucordIconData(HugeIcons.strokeRoundedSparkles);
+  static const favourite = FlucordIconData(HugeIcons.strokeRoundedStar);
+  // System messages.
+  static const boost = FlucordIconData(HugeIcons.strokeRoundedFlash);
+  static const stage = FlucordIconData(HugeIcons.strokeRoundedPodcast);
+  static const stop = FlucordIconData(HugeIcons.strokeRoundedStopCircle);
+  static const alertMode = FlucordIconData(HugeIcons.strokeRoundedShieldAlert);
+  static const alertModeOff = FlucordIconData(HugeIcons.strokeRoundedShieldOff);
+  static const reportOff = FlucordIconData(HugeIcons.strokeRoundedFlagOff);
+  // Emoji picker categories.
+  static const recent = FlucordIconData(HugeIcons.strokeRoundedHistory);
+  static const emojiAnimals = FlucordIconData(HugeIcons.strokeRoundedPawPrint);
+  static const emojiFood = FlucordIconData(HugeIcons.strokeRoundedRestaurant01);
+  static const emojiTravel = FlucordIconData(
+    HugeIcons.strokeRoundedAirplaneTakeOff01,
+  );
+  static const emojiActivities = FlucordIconData(
+    HugeIcons.strokeRoundedPartyPopper,
+  );
+  static const emojiObjects = FlucordIconData(HugeIcons.strokeRoundedBulb);
+  static const emojiSymbols = FlucordIconData(HugeIcons.strokeRoundedFavourite);
+  static const emojiFlags = FlucordIconData(HugeIcons.strokeRoundedFlag02);
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

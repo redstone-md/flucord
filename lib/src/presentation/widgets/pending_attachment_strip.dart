@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -63,10 +64,8 @@ class _PendingAttachmentTile extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(
-          attachment.isSpoiler
-              ? Icons.visibility_off_outlined
-              : Icons.insert_drive_file_outlined,
+        FlucordIcon(
+          attachment.isSpoiler ? FlucordIcons.hidden : FlucordIcons.file,
           size: 18,
           color: context.surfaces.muted,
         ),
@@ -83,10 +82,8 @@ class _PendingAttachmentTile extends StatelessWidget {
           IconButton(
             key: ValueKey('toggle-spoiler-${attachment.path}'),
             onPressed: onToggleSpoiler,
-            icon: Icon(
-              attachment.isSpoiler
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
+            icon: FlucordIcon(
+              attachment.isSpoiler ? FlucordIcons.hidden : FlucordIcons.visible,
               size: 15,
             ),
             tooltip: attachment.isSpoiler
@@ -95,7 +92,7 @@ class _PendingAttachmentTile extends StatelessWidget {
           ),
         IconButton(
           onPressed: onRemove,
-          icon: const Icon(Icons.close, size: 15),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 15),
           tooltip: 'Remove attachment',
         ),
       ],
