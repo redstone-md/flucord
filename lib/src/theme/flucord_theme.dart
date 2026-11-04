@@ -8,7 +8,7 @@ import 'flucord_type.dart';
 
 abstract final class FlucordTheme {
   // WCAG AA: 4.5:1 for text, 3:1 for icons and focus rings.
-  static const _textContrast = 4.5;
+  static const textContrast = 4.5;
   static const _nonTextContrast = 3.0;
   static const _focusRingWidth = 2.0;
 
@@ -116,12 +116,26 @@ abstract final class FlucordTheme {
     required Color text,
     required List<Color> backgrounds,
     required double ratio,
+  }) => towardText(
+    base,
+    text: text,
+    backgrounds: backgrounds,
+    reads: (shown, background) => contrast(shown, background) >= ratio,
+  );
+
+  /// The smallest move from [base] toward [text] for which [reads] holds on
+  /// every one of [backgrounds], or [text] when nothing does. For a colour
+  /// drawn with others around it, such as a name with an outline, where
+  /// contrast alone does not say whether it reads.
+  static Color towardText(
+    Color base, {
+    required Color text,
+    required Iterable<Color> backgrounds,
+    required bool Function(Color shown, Color background) reads,
   }) {
     for (var step = 0; step <= _readableSteps; step++) {
       final candidate = Color.lerp(base, text, step / _readableSteps)!;
-      if (backgrounds.every((b) => _contrast(candidate, b) >= ratio)) {
-        return candidate;
-      }
+      if (backgrounds.every((b) => reads(candidate, b))) return candidate;
     }
     return text;
   }
@@ -132,7 +146,7 @@ abstract final class FlucordTheme {
   ///
   /// A theme file may give a colour alpha, so [foreground] is measured as it
   /// shows: mixed with [background].
-  static double _contrast(Color foreground, Color background) {
+  static double contrast(Color foreground, Color background) {
     final shown = Color.alphaBlend(foreground, background).computeLuminance();
     final under = background.computeLuminance();
     return (max(shown, under) + 0.05) / (min(shown, under) + 0.05);
@@ -170,7 +184,7 @@ abstract final class FlucordTheme {
       base,
       text: text,
       backgrounds: backgrounds,
-      ratio: _textContrast,
+      ratio: textContrast,
     );
     final errorText = readableText(danger);
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
@@ -537,4 +551,7 @@ extension FlucordFills on FlucordSurfaceTheme {
 
   /// The accent at 18%, behind accent text: the APP tag beside a bot's name.
   Color get brandTint => brand.withValues(alpha: 0.18);
+
+  /// Every fill a piece of text can end up on.
+  List<Color> get backgrounds => [rail, canvas, surface, raised, inset, control];
 }

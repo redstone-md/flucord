@@ -6,7 +6,8 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _red = 0xffff0000;
+// Light enough to read on every dark surface, so it is drawn as given.
+const _red = 0xffff9999;
 
 const _freez = Member(
   id: '100000000000000002',

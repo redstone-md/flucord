@@ -21,7 +21,8 @@ const _twilight = Nameplate(
   palette: NameplatePalette.cobalt,
 );
 
-const _red = 0xffff0000;
+// Light enough to read on every dark surface, so it is drawn as given.
+const _red = 0xffff9999;
 const _blue = 0xff0000ff;
 
 Member _person(String id, {MemberTags tags = MemberTags.none}) => Member(
@@ -381,7 +382,7 @@ void main() {
     ) async {
       await _pumpName(
         tester,
-        const NameStyle(colors: [_red], fontId: 11, effectId: 3),
+        const NameStyle(colors: [_red], fontId: 11, effectId: 8),
       );
 
       expect(_drawnColorOf(tester), Colors.white);

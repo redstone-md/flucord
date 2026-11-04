@@ -6,7 +6,8 @@ import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
 const _messageId = '900000000000000031';
-const _red = Color(0xffff0000);
+// Light enough to read on every dark surface, so it is drawn as given.
+const _red = Color(0xffff9999);
 
 Map<String, Object?> _ready() => SessionHarness.defaultReady()
   ..['users'] = [
@@ -23,7 +24,7 @@ Map<String, Object?> _ready() => SessionHarness.defaultReady()
         },
       },
       'display_name_styles': {
-        'colors': [0xff0000],
+        'colors': [0xff9999],
         'font_id': 11,
         'effect_id': 1,
       },
