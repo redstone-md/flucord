@@ -51,6 +51,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   final StreamController<UserProfile> _updates = StreamController.broadcast();
 
   UserProfile? _current;
+  OtherUserProfile? _published;
 
   /// The effect catalogue, read once per session by the first profile that
   /// wears an effect.
@@ -62,17 +63,24 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   @override
   Stream<UserProfile> get updates => _updates.stream;
 
-  /// Reads the user object, then the profile for the theme colours, which
-  /// the user object does not carry.
+  @override
+  OtherUserProfile? get published => _published;
+
+  /// Reads the user object, then the published profile once, for the theme
+  /// colours the user object does not carry and for [published].
+  ///
+  /// The published profile is extra: when its read fails, such as on a rate
+  /// limit, the editor still loads, without a theme or collectibles.
   @override
   Future<UserProfile?> load() async {
     final profile = readProfile(await _transport.readCurrentUser());
     if (profile == null) return _current;
-    final published = await _transport.readUserProfile(profile.userId);
-    final metadata = _object(published?['user_profile']) ?? const {};
-    return _publish(
-      profile.withThemeColors(_themeColors(metadata['theme_colors'])),
-    );
+    try {
+      _published = await loadProfileOf(profile.userId);
+    } on Object {
+      _published = null;
+    }
+    return _publish(profile.withThemeColors(_published?.themeColors));
   }
 
   @override

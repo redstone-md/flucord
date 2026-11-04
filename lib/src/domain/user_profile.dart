@@ -493,6 +493,11 @@ abstract interface class UserProfileRepository {
 
   Stream<UserProfile> get updates;
 
+  /// The account's own profile as other people see it, with its
+  /// collectibles, from the last [load]. Null before it, or where that read
+  /// failed.
+  OtherUserProfile? get published;
+
   Future<UserProfile?> load();
 
   /// Applies [patch] and returns the profile the server echoed back.

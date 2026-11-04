@@ -207,6 +207,11 @@ final class _FakeProfileRepository implements UserProfileRepository {
   );
 
   @override
+
+  OtherUserProfile? get published => null;
+
+
+  @override
   UserProfile? get current => null;
 
   @override

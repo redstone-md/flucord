@@ -281,7 +281,48 @@ void main() {
     },
     routes: _ownProfileRoutes(),
   );
+
+  testSession(
+    'each profile editor load reads the published profile once',
+    (tester, session) async {
+      await _openProfileEditor(tester, session);
+
+      int reads(String path) => session.transport.requests
+          .where(
+            (request) => request.method == 'GET' && request.uri.path == path,
+          )
+          .length;
+      // One profile read for each load of the user object, not two.
+      expect(reads(_ownProfilePath), reads('/api/v9/users/@me'));
+    },
+    routes: _ownProfileRoutes(themeColors: _lightTheme),
+  );
+
+  testSession(
+    'a rate limit on the published profile still opens the editor',
+    (tester, session) async {
+      await _openProfileEditor(tester, session);
+
+      expect(_key('user-profile-error'), findsNothing);
+      expect(_key('profile-display-name'), findsOneWidget);
+      expect(_gradientIn(tester, _cardTheme), isNull);
+    },
+    routes: (transport) {
+      _ownProfileRoutes()(transport);
+      transport.on(
+        'GET',
+        _ownProfilePath,
+        (_) => jsonResponse({
+          'message': 'You are being rate limited.',
+          'retry_after': 60,
+          'global': false,
+        }, statusCode: 429),
+      );
+    },
+  );
 }
+
+const _ownProfilePath = '/api/v9/users/${SessionHarness.currentUserId}/profile';
 
 /// The account's own user object and profile, and a profile edit that
 /// echoes what it was sent.
@@ -293,7 +334,7 @@ void Function(FakeDiscordTransport) _ownProfileRoutes({
     ..on('GET', '/api/v9/users/@me', (_) => jsonResponse(me))
     ..on(
       'GET',
-      '/api/v9/users/${SessionHarness.currentUserId}/profile',
+      _ownProfilePath,
       (_) => jsonResponse({
         'user': me,
         'user_profile': {'theme_colors': ?themeColors},

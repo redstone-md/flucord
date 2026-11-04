@@ -425,6 +425,9 @@ final class _FakeRepository implements UserProfileRepository {
 
   // Null until the first load lands, the same as the real repository.
   @override
+  OtherUserProfile? get published => null;
+
+  @override
   UserProfile? get current => _loaded ? _current : null;
 
   @override
