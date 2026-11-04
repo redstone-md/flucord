@@ -103,7 +103,11 @@ final class DiscordDesktopBootstrap {
     // must not resolve recipients against the previous session's users.
     users
       ..clear()
-      ..addAll(ready['users']);
+      ..addAll(ready['users'])
+      // The table leaves out the account, and `merged_members` names the
+      // account by id like anybody else. Without it the account's own roles,
+      // which every permission check starts from, would be dropped.
+      ..addAll([ready['user']]);
     // The same applies to guild state: a replayed READY is the authoritative
     // list, so a guild the account left while disconnected must not survive.
     _guilds.clear();

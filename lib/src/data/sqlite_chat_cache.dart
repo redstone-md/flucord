@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/guild_membership.dart';
 import 'chat_model_json.dart';
 import 'message_snapshot_codec.dart';
 import 'sqlite_chat_schema.dart';
@@ -114,9 +115,16 @@ final class SqliteChatCache
     final channels = await _database.query('channels', orderBy: 'sort_index');
     final categories = await _database.query('categories', orderBy: 'position');
     final roles = await _database.query('roles', orderBy: 'position DESC');
+    final currentMemberId = metadata.single['value']! as String;
+    // The shell holds the account's own member and nobody else: a reconnect
+    // compares the account's standing in each server against it. See ADR-0011.
     final members = withHistory
         ? await _database.query('members')
-        : const <Map<String, Object?>>[];
+        : await _database.query(
+            'members',
+            where: 'id = ?',
+            whereArgs: [currentMemberId],
+          );
     final messages = <Map<String, Object?>>[];
     if (withHistory) {
       // Per channel, newest first, so a limit keeps each channel's newest
@@ -148,7 +156,7 @@ final class SqliteChatCache
       messages: messages.map(_messageFromRow).toList(),
       emojis: emojis,
       stickers: stickers,
-      currentMemberId: metadata.single['value']! as String,
+      currentMemberId: currentMemberId,
     );
   }
 
@@ -531,9 +539,63 @@ final class SqliteChatCache
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+      for (final roleId in diff.removedRoleIds) {
+        writes.delete('roles', where: 'id = ?', whereArgs: [roleId]);
+      }
+      for (final role in diff.roles) {
+        writes.insert(
+          'roles',
+          _roleToRow(role),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
       await writes.commit(noResult: true);
+
+      for (final MapEntry(key: spaceId, value: emojis)
+          in diff.emojisBySpace.entries) {
+        await SqliteGuildEmojiStore(
+          _database,
+        ).replaceForSpaceIn(transaction, spaceId, emojis);
+      }
+      for (final MapEntry(key: spaceId, value: stickers)
+          in diff.stickersBySpace.entries) {
+        await SqliteGuildStickerStore(
+          _database,
+        ).replaceForSpaceIn(transaction, spaceId, stickers);
+      }
+      await _writeOwnMemberships(transaction, diff.ownMemberships);
     }),
   );
+
+  /// Lays [memberships] over the account's own member row. Only its spaces
+  /// and memberships change; the rest of the row is the next full load's.
+  Future<void> _writeOwnMemberships(
+    Transaction transaction,
+    Map<String, GuildMembership> memberships,
+  ) async {
+    if (memberships.isEmpty) return;
+    final rows = await transaction.rawQuery(
+      'SELECT members.* FROM members JOIN metadata '
+      "ON metadata.key = 'current_member_id' AND members.id = metadata.value",
+    );
+    if (rows.isEmpty) return;
+    final account = _memberFromRow(rows.single);
+    await transaction.update(
+      'members',
+      {
+        'space_ids_json': ChatModelJson.strings({
+          ...account.spaceIds,
+          ...memberships.keys,
+        }),
+        'memberships_json': ChatModelJson.memberships({
+          ...account.membershipsBySpace,
+          ...memberships,
+        }),
+      },
+      where: 'id = ?',
+      whereArgs: [account.id],
+    );
+  }
 
   /// Rewrites the members that named [spaceId] without it.
   ///
