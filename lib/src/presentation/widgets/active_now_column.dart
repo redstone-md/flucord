@@ -116,7 +116,7 @@ class _ActiveFriendCard extends StatelessWidget {
     final main = friend.doing.firstOrNull;
     final elapsed = ActivityElapsed.since(main?.timestamps, now);
     // A rich presence gets its own block, and the time moves there.
-    final rich = main?.details == null ? null : main;
+    final rich = main != null && main.isRichPresence ? main : null;
     final summary = ActivitySummary.of(friend.doing, inVoice: room != null);
     final card = Container(
       padding: const EdgeInsets.all(12),
@@ -170,15 +170,7 @@ class _ActiveFriendCard extends StatelessWidget {
           ),
           if (rich != null) ...[
             const _CardDivider(),
-            _Block(
-              art: ArtTile(
-                url: rich.assets?.largeImageUrl,
-                monogram: monogramOf(rich.name),
-                color: surfaces.inset,
-              ),
-              title: rich.details!,
-              caption: [?rich.state, ?elapsed].join(' · '),
-            ),
+            _richBlock(rich, elapsed, surfaces),
           ],
           if (room != null) ...[
             const _CardDivider(),
@@ -218,6 +210,29 @@ class _ActiveFriendCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The block of a rich presence: its art, the details, then the state with
+/// the time. With no details the state is the title.
+_Block _richBlock(
+  UserActivity rich,
+  String? elapsed,
+  FlucordSurfaceTheme surfaces,
+) {
+  final (title, state) = switch (rich) {
+    UserActivity(:final details?, :final state) => (details, state),
+    UserActivity(:final state?) => (state, null),
+    UserActivity(:final name) => (name, null),
+  };
+  return _Block(
+    art: ArtTile(
+      url: rich.assets?.largeImageUrl,
+      monogram: monogramOf(rich.name),
+      color: surfaces.inset,
+    ),
+    title: title,
+    caption: [?state, ?elapsed].join(' · '),
+  );
 }
 
 /// The thin line between a card's top and one of its blocks.
