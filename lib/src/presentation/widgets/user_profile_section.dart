@@ -2,14 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/user_profile_controller.dart';
 import '../../data/discord/discord_cdn.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/user_profile.dart';
-import '../../theme/flucord_radius.dart';
-import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import '../profile_image_picker.dart';
-import 'remote_identity_image.dart';
+import 'profile_card.dart';
+import 'profile_card_data.dart';
 import 'user_profile_controls.dart';
 
 /// The account's own profile, as Discord's "Profiles" screen edits it.
@@ -18,15 +20,22 @@ import 'user_profile_controls.dart';
 /// profile write is a single PATCH the server normalises and can reject, so the
 /// form collects a draft and commits it once. That is also why the save bar
 /// only appears when something is actually different.
+///
+/// Beside the form, [ProfileCard.preview] draws the draft the way other people
+/// will see it once it is saved.
 class UserProfileSection extends StatefulWidget {
   const UserProfileSection({
     required this.controller,
     this.imagePicker = const NativeProfileImagePicker(),
+    this.presence,
     super.key,
   });
 
   final UserProfileController controller;
   final ProfileImagePicker imagePicker;
+
+  /// The account's status for the preview's dot. Null draws no dot.
+  final UserPresence? presence;
 
   @override
   State<UserProfileSection> createState() => _UserProfileSectionState();
@@ -86,7 +95,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
     if (!controller.isSupported) {
       return const ProfileNotice(
         key: ValueKey('user-profile-unavailable'),
-        icon: Icons.cloud_off_outlined,
+        icon: FlucordIcons.offline,
         message:
             'Connect a Discord account to edit its profile. The demo and bot '
             'transports have no profile behind them.',
@@ -107,7 +116,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const ProfileNotice(
-                  icon: Icons.error_outline,
+                  icon: FlucordIcons.error,
                   message: 'Discord did not return your profile.',
                 ),
                 const SizedBox(height: 12),
@@ -119,23 +128,59 @@ class _UserProfileSectionState extends State<UserProfileSection> {
               ],
             );
     }
+    final avatarUrl = _image(
+      controller.pendingAvatar,
+      () => DiscordCdn.userAvatar(profile.userId, profile.avatarHash),
+    );
+    final preview = ProfileCardData.ownProfile(
+      profile,
+      displayName: controller.displayName,
+      pronouns: controller.pronouns,
+      bio: controller.bio,
+      accentColor: controller.accentColor,
+      avatarUrl: avatarUrl,
+      bannerUrl: _image(
+        controller.pendingBanner,
+        () => DiscordCdn.userBanner(profile.userId, profile.bannerHash),
+      ),
+      presence: widget.presence,
+    );
     return Column(
       key: const ValueKey('settings-section-profile'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const ProfilePreviewHeader(title: 'Profile'),
-        ProfilePreviewCard(
-          profile: profile,
-          pendingAvatar: controller.pendingAvatar,
-          pendingBanner: controller.pendingBanner,
-          accentColor: controller.accentColor,
-          displayName: controller.displayName,
-          onPickAvatar: () => _pick(controller.editAvatar),
-          onRemoveAvatar: profile.avatarHash == null
+        ProfileFormWithPreview(
+          form: _form(context, profile, avatarUrl, preview.monogram),
+          preview: ProfileCard.preview(data: preview),
+        ),
+      ],
+    );
+  }
+
+  Widget _form(
+    BuildContext context,
+    UserProfile profile,
+    String? avatarUrl,
+    String monogram,
+  ) {
+    final controller = widget.controller;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfileAvatarRow(
+          url: avatarUrl,
+          monogram: monogram,
+          onPick: () => _pick(controller.editAvatar),
+          onRemove: profile.avatarHash == null
               ? null
               : () => controller.editAvatar(null),
-          onPickBanner: () => _pick(controller.editBanner),
-          onRemoveBanner: profile.bannerHash == null
+        ),
+        const SizedBox(height: 16),
+        ProfileImageButtons(
+          label: 'banner',
+          onPick: () => _pick(controller.editBanner),
+          onRemove: profile.bannerHash == null
               ? null
               : () => controller.editBanner(null),
         ),
@@ -152,21 +197,33 @@ class _UserProfileSectionState extends State<UserProfileSection> {
             ),
           ),
         const SizedBox(height: 20),
-        ProfileField(
-          label: 'Display name',
-          hint: profile.username,
-          helper: 'Shown instead of your username. Leave empty to use it.',
-          maxLength: 32,
-          controller: _displayName,
-          fieldKey: const ValueKey('profile-display-name'),
-          onChanged: controller.editDisplayName,
-        ),
-        ProfileField(
-          label: 'Pronouns',
-          maxLength: 40,
-          controller: _pronouns,
-          fieldKey: const ValueKey('profile-pronouns'),
-          onChanged: controller.editPronouns,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ProfileField(
+                label: 'Display name',
+                hint: profile.username,
+                helper:
+                    'Shown instead of your username. Leave empty to use it.',
+                maxLength: 32,
+                controller: _displayName,
+                fieldKey: const ValueKey('profile-display-name'),
+                onChanged: controller.editDisplayName,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ProfileField(
+                label: 'Pronouns',
+                hint: 'Add your pronouns',
+                maxLength: 40,
+                controller: _pronouns,
+                fieldKey: const ValueKey('profile-pronouns'),
+                onChanged: controller.editPronouns,
+              ),
+            ),
+          ],
         ),
         ProfileField(
           label: 'About me',
@@ -224,159 +281,6 @@ class _UserProfileSectionState extends State<UserProfileSection> {
         setState(() => _pickerError = 'That image could not be read.');
       }
     }
-  }
-}
-
-/// Avatar, banner and name, drawn the way other people will see them.
-class ProfilePreviewCard extends StatelessWidget {
-  const ProfilePreviewCard({
-    required this.profile,
-    required this.pendingAvatar,
-    required this.pendingBanner,
-    required this.accentColor,
-    required this.displayName,
-    required this.onPickAvatar,
-    required this.onRemoveAvatar,
-    required this.onPickBanner,
-    required this.onRemoveBanner,
-    super.key,
-  });
-
-  final UserProfile profile;
-  final ProfileImage pendingAvatar;
-  final ProfileImage pendingBanner;
-  final int? accentColor;
-  final String displayName;
-  final VoidCallback onPickAvatar;
-  final VoidCallback? onRemoveAvatar;
-  final VoidCallback onPickBanner;
-  final VoidCallback? onRemoveBanner;
-
-  @override
-  Widget build(BuildContext context) {
-    final banner = _image(
-      pendingBanner,
-      () => DiscordCdn.userBanner(profile.userId, profile.bannerHash),
-    );
-    final avatar = _image(
-      pendingAvatar,
-      () => DiscordCdn.userAvatar(profile.userId, profile.avatarHash),
-    );
-    final accent = accentColor == null
-        ? context.surfaces.raised
-        : Color(0xff000000 | accentColor!);
-    return Container(
-      key: const ValueKey('profile-preview-card'),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: context.surfaces.raised,
-        borderRadius: FlucordRadius.medium,
-        border: Border.all(color: context.surfaces.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 106,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                RemoteIdentityImage(
-                  url: banner,
-                  fallback: ColoredBox(color: accent),
-                ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: ProfileImageActions(
-                    label: 'banner',
-                    onPick: onPickBanner,
-                    onRemove: onRemoveBanner,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Transform.translate(
-                  offset: const Offset(0, -26),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      ProfileAvatarButton(
-                        url: avatar,
-                        initial: profile.effectiveName,
-                        onPick: onPickAvatar,
-                        onRemove: onRemoveAvatar,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                displayName.isEmpty
-                                    ? profile.username
-                                    : displayName,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: FlucordType.title,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                profile.hasLegacyDiscriminator
-                                    ? '${profile.username}#'
-                                          '${profile.discriminator}'
-                                    : profile.username,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: context.surfaces.muted,
-                                  fontSize: FlucordType.caption,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (profile.pronouns.isNotEmpty)
-                  Transform.translate(
-                    offset: const Offset(0, -18),
-                    child: Text(
-                      profile.pronouns,
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: FlucordType.caption,
-                      ),
-                    ),
-                  ),
-                if (profile.bio.isNotEmpty)
-                  Transform.translate(
-                    offset: const Offset(0, -12),
-                    child: Text(
-                      profile.bio,
-                      style: const TextStyle(
-                        fontSize: FlucordType.caption,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   /// A staged data URI wins over the stored hash, so the preview shows what is

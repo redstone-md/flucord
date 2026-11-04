@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../application/self_video_controller.dart';
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
@@ -202,15 +203,13 @@ class _VoiceChannelPreview extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.podcasts, size: 30, color: context.surfaces.muted),
-          const SizedBox(height: 10),
-          Text(
-            channelName,
-            style: const TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w700,
-            ),
+          FlucordIcon(
+            FlucordIcons.voiceChannel,
+            size: 30,
+            color: context.surfaces.muted,
           ),
+          const SizedBox(height: 10),
+          Text(channelName, style: FlucordTextRole.heading.style),
           const SizedBox(height: 6),
           Text(
             seated.isEmpty
@@ -246,7 +245,7 @@ class _VoiceChannelPreview extends StatelessWidget {
           FilledButton.icon(
             key: const ValueKey('voice-channel-join'),
             onPressed: isBusy ? null : onJoin,
-            icon: const Icon(Icons.call, size: 16),
+            icon: const FlucordIcon(FlucordIcons.call, size: 16),
             label: const Text('Join voice channel'),
           ),
         ],
@@ -364,10 +363,7 @@ class _VoiceStage extends StatelessWidget {
                   channelName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.body,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.heading.style,
                 ),
               ),
               ?soundboard,
@@ -413,6 +409,13 @@ class _VoiceStage extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (voiceRoomOffersConnectionRetry(controller))
+                      TextButton(
+                        key: const ValueKey('voice-room-retry-connection'),
+                        onPressed: () =>
+                            unawaited(controller.retryConnection()),
+                        child: const Text('Try again'),
+                      ),
                     // Offered here because the alternative was leaving the
                     // channel and coming back, which is not an obvious way to
                     // ask a client to look for a headset again.
@@ -522,9 +525,9 @@ class _VoiceToolbar extends StatelessWidget {
             tooltip: 'Disconnect',
             style: IconButton.styleFrom(
               backgroundColor: context.surfaces.danger,
-              foregroundColor: Colors.white,
+              foregroundColor: FlucordFixedColors.onFill,
             ),
-            icon: const Icon(Icons.call_end),
+            icon: const FlucordIcon(FlucordIcons.hangUp),
           ),
         ],
       ),
@@ -543,6 +546,6 @@ class _VoiceToolbar extends StatelessWidget {
               : Theme.of(context).colorScheme.onSurface,
           side: BorderSide(color: context.surfaces.border),
         ),
-        icon: Icon(control.icon),
+        icon: FlucordIcon(control.icon),
       );
 }

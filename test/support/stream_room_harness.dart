@@ -297,7 +297,7 @@ const streamRoomCall = ConversationChannel(
   name: 'Jack',
   topic: 'Direct message with Jack',
   kind: ChannelKind.text,
-  recipientId: 'friend-1',
+  recipientIds: ['friend-1'],
 );
 
 /// The server voice room the tests walk into: the same room, with a guild.

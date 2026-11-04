@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../application/self_presence_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/presence_repository.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'presence_indicator.dart';
 import 'flucord_dialog.dart';
+import 'flucord_menu.dart';
 
 /// What a status row can ask for beyond picking one of the four statuses.
 enum _StatusMenuAction { custom, clearCustom }
@@ -36,27 +38,33 @@ class SelfStatusMenu extends StatelessWidget {
       onSelected: (value) => _select(context, value),
       itemBuilder: (context) => [
         for (final status in Presence.selectable)
-          PopupMenuItem<Object>(
+          FlucordMenuItem<Object>(
             key: ValueKey('self-status-${status.name}'),
             value: status,
-            child: _StatusRow(
-              status: status,
-              selected: status == controller.chosenStatus,
+            label: status.label,
+            leading: PresenceIndicator(
+              presence: UserPresence(status: status),
+              size: 12,
+              borderColor: Colors.transparent,
+              borderWidth: 0,
             ),
+            trailing: status == controller.chosenStatus
+                ? const FlucordIcon(FlucordIcons.check)
+                : null,
           ),
-        const PopupMenuDivider(),
-        PopupMenuItem<Object>(
+        const FlucordMenuDivider(),
+        FlucordMenuItem<Object>(
           key: const ValueKey('self-status-custom'),
           value: _StatusMenuAction.custom,
-          child: Text(
-            custom == null ? 'Set a custom status' : 'Edit custom status',
-          ),
+          icon: FlucordIcons.emoji,
+          label: custom == null ? 'Set a custom status' : 'Edit custom status',
         ),
         if (custom != null)
-          const PopupMenuItem<Object>(
+          const FlucordMenuItem<Object>(
             key: ValueKey('self-status-clear-custom'),
             value: _StatusMenuAction.clearCustom,
-            child: Text('Clear custom status'),
+            icon: FlucordIcons.clear,
+            label: 'Clear custom status',
           ),
       ],
       child: child,
@@ -86,28 +94,6 @@ class SelfStatusMenu extends StatelessWidget {
       expiry: result.expiry,
     );
   }
-}
-
-class _StatusRow extends StatelessWidget {
-  const _StatusRow({required this.status, required this.selected});
-
-  final Presence status;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      PresenceIndicator(
-        presence: UserPresence(status: status),
-        size: 12,
-        borderColor: Colors.transparent,
-        borderWidth: 0,
-      ),
-      const SizedBox(width: 10),
-      Expanded(child: Text(status.label)),
-      if (selected) const Icon(Icons.check, size: 16),
-    ],
-  );
 }
 
 /// What the custom-status dialog hands back.
@@ -216,23 +202,16 @@ class _CustomStatusDialogState extends State<CustomStatusDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('custom-status-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('custom-status-save'),
-        onPressed: () => Navigator.of(context).pop(
-          CustomStatusDraft(
-            text: _text.text.trim(),
-            emojiName: _emoji.text.trim(),
-            expiry: _expiry,
-          ),
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('custom-status-save'),
+      label: 'Save',
+      onPressed: () => Navigator.of(context).pop(
+        CustomStatusDraft(
+          text: _text.text.trim(),
+          emojiName: _emoji.text.trim(),
+          expiry: _expiry,
         ),
-        child: const Text('Save'),
       ),
-    ],
+    ),
   );
 }

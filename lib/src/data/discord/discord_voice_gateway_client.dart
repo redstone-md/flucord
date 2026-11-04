@@ -17,6 +17,7 @@ import '../../domain/video_encoder.dart';
 import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 import 'discord_voice_websocket.dart';
+import 'voice_reconnect_backoff.dart';
 import '../../app_log.dart';
 import '../../monotonic_clock.dart';
 
@@ -92,6 +93,7 @@ final class DiscordVoiceGatewayClient
     bool carriesVideo = false,
     String? streamKey,
     Duration Function()? now,
+    VoiceReconnectBackoff? reconnectBackoff,
   }) : _protocol = DiscordVoiceGatewayProtocol(
          credentials: credentials,
          maxDaveProtocolVersion: maxDaveProtocolVersion,
@@ -112,7 +114,8 @@ final class DiscordVoiceGatewayClient
        _socketConnector =
            socketConnector ?? const IoDiscordVoiceSocketConnector(),
        _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport(),
-       _now = now ?? monotonicNow {
+       _now = now ?? monotonicNow,
+       _reconnectBackoff = reconnectBackoff ?? VoiceReconnectBackoff() {
     _mediaTransport = DiscordVoiceMediaTransport(
       incomingFrames: audioPackets,
       encryptDave: encryptDaveAudioFrame,
@@ -209,6 +212,7 @@ final class DiscordVoiceGatewayClient
   /// The clock the connection measures time on: the round trip, the
   /// recovery and the sender-side keyframe gate all read it.
   final Duration Function() _now;
+  final VoiceReconnectBackoff _reconnectBackoff;
 
   /// How long the last heartbeat took to be acknowledged, once one has been.
   Duration? _roundTrip;
@@ -283,6 +287,7 @@ final class DiscordVoiceGatewayClient
   Future<void> connect() async {
     _closing = false;
     _failed = false;
+    _reconnectBackoff.reset();
     await _open();
   }
 
@@ -412,7 +417,7 @@ final class DiscordVoiceGatewayClient
         if (event is VoiceUserDisconnectedEvent) {
           _recovery.forgetSender(event.userId);
         }
-        if (!_events.isClosed) _events.add(event);
+        _publish(event);
       case DiscordVoiceGatewayDiscoverUdp():
         unawaited(_discoverUdp(action));
       case DiscordVoiceGatewayTransportReady(:final session):
@@ -871,7 +876,18 @@ final class DiscordVoiceGatewayClient
 
   void _scheduleReconnect({Object? error}) {
     if (_closing || _failed || _reconnectTimer?.isActive == true) return;
-    _diagnose('reconnecting', error);
+    final delay = _reconnectBackoff.next();
+    if (delay == null) {
+      _fail(
+        StateError(
+          'Discord voice did not come back after '
+          '${_reconnectBackoff.maxAttempts} attempts'
+          '${error == null ? '' : ': $error'}',
+        ),
+      );
+      return;
+    }
+    _diagnose('reconnecting in ${delay.inMilliseconds} ms', error);
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
@@ -895,7 +911,7 @@ final class DiscordVoiceGatewayClient
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
     _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
-    _reconnectTimer = Timer(const Duration(seconds: 2), _open);
+    _reconnectTimer = Timer(delay, _open);
   }
 
   void _fail(Object error) {
@@ -963,10 +979,19 @@ final class DiscordVoiceGatewayClient
     _transportCipher = cipher;
   }
 
-  void _emitStatus(VoiceConnectionStatus status, {Object? error}) {
-    if (!_events.isClosed) {
-      _events.add(VoiceSignalingStatusEvent(status, error: error));
+  void _emitStatus(VoiceConnectionStatus status, {Object? error}) =>
+      _publish(VoiceSignalingStatusEvent(status, error: error));
+
+  void _publish(VoiceSignalingEvent event) {
+    // Ready comes from a session description after an identify, or from a
+    // RESUMED. Either way the connection is back, and its next outage gets
+    // every attempt again.
+    if (event case VoiceSignalingStatusEvent(
+      status: VoiceConnectionStatus.ready,
+    )) {
+      _reconnectBackoff.reset();
     }
+    if (!_events.isClosed) _events.add(event);
   }
 
   @override

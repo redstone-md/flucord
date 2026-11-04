@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_repository.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -26,22 +27,22 @@ final class ConnectionBanner extends StatelessWidget {
     // transport shows its workspace before its first READY. Neither is
     // connected yet, so the banner stays up, but only one of them lost anything.
     RepositoryConnectionStatus.connecting => _Bar(
-      icon: Icons.sync,
+      icon: FlucordIcons.syncing,
       message: 'Connecting to Discord...',
       background: context.surfaces.warning,
-      foreground: Colors.black,
+      foreground: FlucordFixedColors.onLightFill,
     ),
     RepositoryConnectionStatus.reconnecting => _Bar(
-      icon: Icons.sync,
+      icon: FlucordIcons.syncing,
       message: 'Connection lost. Reconnecting...',
       background: context.surfaces.warning,
-      foreground: Colors.black,
+      foreground: FlucordFixedColors.onLightFill,
     ),
     RepositoryConnectionStatus.offline => _Bar(
-      icon: Icons.cloud_off,
+      icon: FlucordIcons.offline,
       message: 'Not connected to Discord. New messages will not arrive.',
       background: context.surfaces.danger,
-      foreground: Colors.white,
+      foreground: FlucordFixedColors.onFill,
       onRetry: onRetry,
     ),
   };
@@ -56,7 +57,7 @@ final class _Bar extends StatelessWidget {
     this.onRetry,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String message;
   final Color background;
   final Color foreground;
@@ -75,7 +76,7 @@ final class _Bar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 14, color: foreground),
+              FlucordIcon(icon, size: 14, color: foreground),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
@@ -98,10 +99,7 @@ final class _Bar extends StatelessWidget {
                     minimumSize: const Size(0, 24),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    textStyle: FlucordTextRole.caption.strong,
                   ),
                   child: const Text('Retry'),
                 ),

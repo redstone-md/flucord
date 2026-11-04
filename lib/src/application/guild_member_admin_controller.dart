@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/chat_models.dart';
 import '../domain/guild_management.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/workspace_permissions.dart';
@@ -79,7 +78,7 @@ final class GuildMemberAdminController extends ChangeNotifier {
       !_busy && _assignable(role) && !role.isEveryone && !role.managed;
 
   bool _assignable(GuildRole role) =>
-      capabilities.canAssignRole(userId, _asCommunityRole(role));
+      capabilities.canAssignRole(userId, role.asCommunityRole);
 
   /// Adds one role. The other boxes are untouched: each has its own route.
   Future<bool> grantRole(GuildRole role, {String? reason}) async {
@@ -206,17 +205,6 @@ final class GuildMemberAdminController extends ChangeNotifier {
       _notify();
     }
   }
-
-  /// The role list a caller needs to answer the hierarchy question, which is
-  /// asked in `CommunityRole` terms: the workspace projection is what
-  /// [GuildAdminCapabilities.canAssignRole] computes against.
-  CommunityRole _asCommunityRole(GuildRole role) => CommunityRole(
-    id: role.id,
-    spaceId: role.guildId,
-    name: role.name,
-    position: role.position,
-    permissions: role.permissions,
-  );
 
   void _applyProfile({required List<String> roleIds}) {
     final profile = _profile;

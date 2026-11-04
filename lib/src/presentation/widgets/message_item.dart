@@ -2,6 +2,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_type.dart';
 import 'emoji_picker.dart';
 import 'message_context_menu.dart';
@@ -23,18 +24,25 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
 import 'destructive_confirmation.dart';
+import 'display_name.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
+import 'message_invite_cards.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
 import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
+import 'message_reply_line.dart';
+import 'message_row_metrics.dart';
 import 'message_sticker_view.dart';
+import 'popup_anchor.dart';
+import 'profile_card_route.dart';
 import 'message_timestamp.dart';
+import 'name_tags.dart';
 import 'reaction_details_dialog.dart';
 import 'streamer_mode_scope.dart';
 import 'user_settings_scope.dart';
@@ -127,9 +135,9 @@ class MessageItem extends StatefulWidget {
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
-  /// Opens the profile of the user with this id. Null where no profile can
-  /// show, which leaves the author's name and avatar as plain content.
-  final ValueChanged<String>? onOpenMemberProfile;
+  /// Opens the author's profile beside their name or avatar. Null where no
+  /// profile can show, which leaves both as plain content.
+  final OpenProfileCard? onOpenMemberProfile;
 
   /// Jumps to another message of this channel, by id.
   final ValueChanged<String>? onOpenMessage;
@@ -140,12 +148,15 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
-  /// The avatar's lane at the default font size. `12:59 PM` in the caption
-  /// size is 54 px wide in the bundled font.
-  static const _leadingLaneWidth = 60.0;
-
   bool _hovered = false;
+  bool _barHovered = false;
   bool _reactionPickerOpen = false;
+
+  /// The toolbar floats in the overlay. It reaches above the row, and a part
+  /// of a row outside its own bounds would get no clicks.
+  final OverlayPortalController _barPortal = OverlayPortalController(
+    debugLabel: 'message action bar',
+  );
 
   /// The text selected in this row now. Opening the menu takes focus, and that
   /// clears the selection, so the menu keeps its own copy.
@@ -176,7 +187,21 @@ class _MessageItemState extends State<MessageItem> {
     if (widget.isEditing) _focusEditField();
   }
 
-  void _redrawForFocus() => setState(() {});
+  void _redrawForFocus() => _updateBar(() {});
+
+  /// Applies [change], then shows or hides the toolbar to match. Never called
+  /// during a build, which the overlay does not allow.
+  void _updateBar(VoidCallback change) {
+    setState(change);
+    final wanted =
+        _hovered ||
+        _barHovered ||
+        _reactionPickerOpen ||
+        _rowFocus.hasPrimaryFocus ||
+        _barFocus.hasFocus;
+    if (wanted == _barPortal.isShowing) return;
+    wanted ? _barPortal.show() : _barPortal.hide();
+  }
 
   @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
@@ -254,6 +279,11 @@ class _MessageItemState extends State<MessageItem> {
     // through constructors: a change from another device tightens the list
     // without anybody rebuilding it by hand.
     final compact = UserSettingsScope.appearanceOf(context).packsDensely;
+    final groupGap = widget.grouped
+        ? 0.0
+        : compact
+        ? MessageRowMetrics.compactGroupGap
+        : MessageRowMetrics.groupGap;
     return Semantics(
       container: true,
       // The parts of the row stay their own nodes, so links, attachments and
@@ -266,117 +296,189 @@ class _MessageItemState extends State<MessageItem> {
       child: Focus(
         focusNode: _rowFocus,
         includeSemantics: false,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            // The right button reaches the same actions the hover bar carries.
-            // Without it half of them were only discoverable by hovering the
-            // exact right pixels, and copying an id or a link had nowhere to live.
-            onSecondaryTapDown: (details) =>
-                unawaited(_openContextMenu(context, details.globalPosition)),
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: _hovered
-                        ? context.surfaces.raised.withValues(alpha: 0.45)
-                        : Colors.transparent,
-                  ),
-                  // The bar must fit inside the row. A part of it outside the row
-                  // gets no clicks, and the pointer there hovers the next row.
-                  constraints: const BoxConstraints(
-                    minHeight: MessageActionBar.height,
-                  ),
-                  padding: EdgeInsets.fromLTRB(
-                    6,
-                    widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
-                    20,
-                    compact ? 4 : 5,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // The lane holds the avatar, or on a grouped row the
-                      // clock. It fits the widest clock, `12:59 PM`, and grows
-                      // with the font dial, so the clock never wraps.
-                      SizedBox(
-                        width: MediaQuery.textScalerOf(
-                          context,
-                        ).scale(_leadingLaneWidth),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: widget.grouped
-                              ? Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: MessageTimeLabel(
-                                    widget.message.sentAt,
-                                    style: TextStyle(
-                                      color: context.surfaces.muted,
-                                      fontSize: FlucordType.caption,
-                                    ),
-                                  ),
-                                )
-                              : _opensAuthorProfile(
-                                  key: const ValueKey('message-author-avatar'),
-                                  child: MemberAvatar(
-                                    member: widget.member,
-                                    size: 34,
-                                    spaceId: widget.workspace
-                                        .channelById(widget.message.channelId)
-                                        .spaceId,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: MessageMenuScope(
-                          onOpen: (position) =>
-                              unawaited(_openContextMenu(context, position)),
-                          onSelectionChanged: (content) =>
-                              _selectedText = content?.plainText ?? '',
-                          child: _content(context),
-                        ),
-                      ),
-                    ],
-                  ),
+        child: Padding(
+          padding: EdgeInsets.only(top: groupGap),
+          child: OverlayPortal.overlayChildLayoutBuilder(
+            controller: _barPortal,
+            overlayChildBuilder: _floatingBar,
+            child: MouseRegion(
+              onEnter: (_) => _updateBar(() => _hovered = true),
+              onExit: (_) => _updateBar(() => _hovered = false),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                // The right button reaches the same actions the hover bar
+                // carries. Without it half of them were only discoverable by
+                // hovering the exact right pixels, and copying an id or a
+                // link had nowhere to live.
+                onSecondaryTapDown: (details) => unawaited(
+                  _openContextMenu(context, details.globalPosition),
                 ),
-                if ((_hovered ||
-                        _reactionPickerOpen ||
-                        _rowFocus.hasPrimaryFocus ||
-                        _barFocus.hasFocus) &&
-                    !widget.isEditing)
-                  Positioned(
-                    right: 18,
-                    top: 0,
-                    child: Focus(
-                      focusNode: _barFocus,
-                      includeSemantics: false,
-                      child: _actionBar(context),
-                    ),
-                  ),
-                if (_rowFocus.hasPrimaryFocus)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        key: const ValueKey('message-focus-ring'),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: context.surfaces.focusRing,
-                            width: 2,
+                child: Stack(
+                  children: [
+                    _surface(context),
+                    if (_rowFocus.hasPrimaryFocus)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const ValueKey('message-focus-ring'),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: context.surfaces.focusRing,
+                                width: 2,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// The highlight that wraps the message. Hover and mention fill it, and
+  /// its padding is the same above and below, so the fill sits evenly.
+  Widget _surface(BuildContext context) {
+    final surfaces = context.surfaces;
+    final mentioned = widget.message.mentionsCurrentMember;
+    final block = mentioned
+        ? MessageRowMetrics.mentionBlock
+        : widget.grouped
+        ? MessageRowMetrics.followUpBlock
+        : MessageRowMetrics.block;
+    return Container(
+      key: ValueKey('message-surface-${widget.message.id}'),
+      // Both always set, even when they draw nothing: a box that came and
+      // went with the hover would rebuild the text and drop its selection.
+      color: mentioned
+          ? surfaces.brand.withValues(alpha: MessageRowMetrics.mentionAlpha)
+          : _hovered
+          ? surfaces.text.withValues(alpha: MessageRowMetrics.hoverAlpha)
+          : Colors.transparent,
+      foregroundDecoration: BoxDecoration(
+        border: mentioned
+            ? BorderDirectional(
+                start: BorderSide(
+                  color: surfaces.brand,
+                  width: MessageRowMetrics.mentionBarWidth,
+                ),
+              )
+            : null,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: MessageRowMetrics.inline,
+        vertical: block,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.message.reply case final reply?) ...[
+            _replyLine(context, reply),
+            const SizedBox(height: MessageRowMetrics.replyGap),
+          ],
+          _authorAndContent(context),
+        ],
+      ),
+    );
+  }
+
+  /// The avatar lane and, beside it, the name row and everything below.
+  Widget _authorAndContent(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(
+        width: MessageRowMetrics.avatarSize,
+        child: widget.grouped
+            ? _followUpTime(context)
+            : _opensAuthorProfile(
+                key: const ValueKey('message-author-avatar'),
+                child: MemberAvatar(
+                  member: widget.member,
+                  size: MessageRowMetrics.avatarSize,
+                  spaceId: widget.workspace
+                      .channelById(widget.message.channelId)
+                      .spaceId,
+                ),
+              ),
+      ),
+      const SizedBox(width: MessageRowMetrics.avatarGap),
+      Expanded(
+        child: MessageMenuScope(
+          onOpen: (position) => unawaited(_openContextMenu(context, position)),
+          onSelectionChanged: (content) =>
+              _selectedText = content?.plainText ?? '',
+          child: _content(context),
+        ),
+      ),
+    ],
+  );
+
+  /// A follow-up's clock, in the avatar's lane. It sits on the first line of
+  /// text, and may spill into the gaps beside the lane, since `12:59 PM` is
+  /// wider than the lane.
+  Widget _followUpTime(BuildContext context) {
+    return SizedBox(
+      height: FlucordTextRole.body.lineHeight,
+      child: OverflowBox(
+        maxWidth:
+            MessageRowMetrics.avatarSize + 2 * MessageRowMetrics.avatarGap,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: MessageTimeLabel(
+            widget.message.sentAt,
+            style: _captionStyle(context),
+          ),
+        ),
+      ),
+    );
+  }
+
+  TextStyle _captionStyle(BuildContext context) => FlucordTextRole.caption.style
+      .copyWith(color: context.surfaces.captionText);
+
+  /// The toolbar, over the right end of the highlight's top edge. It never
+  /// rises above the list the row scrolls in, so the topmost message keeps it
+  /// off the chat header.
+  Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) {
+    // A transform that flattens the row means it is not on screen.
+    if (widget.isEditing || layout.childPaintTransform.determinant() == 0) {
+      return const SizedBox.shrink();
+    }
+    final surface = MatrixUtils.transformRect(
+      layout.childPaintTransform,
+      Offset.zero & layout.childSize,
+    );
+    final top = surface.top - MessageRowMetrics.barRise;
+    return Positioned(
+      top: switch (_listTop()) {
+        final listTop? when listTop > top => listTop,
+        _ => top,
+      },
+      right:
+          layout.overlaySize.width - surface.right + MessageRowMetrics.inline,
+      child: MouseRegion(
+        onEnter: (_) => _updateBar(() => _barHovered = true),
+        onExit: (_) => _updateBar(() => _barHovered = false),
+        child: Focus(
+          focusNode: _barFocus,
+          includeSemantics: false,
+          child: _actionBar(context),
+        ),
+      ),
+    );
+  }
+
+  /// The top edge of the list this row scrolls in, in the overlay's space,
+  /// or null for a row in no list.
+  double? _listTop() {
+    final list = Scrollable.maybeOf(context)?.context.findRenderObject();
+    final overlay = Overlay.maybeOf(context)?.context.findRenderObject();
+    if (list is! RenderBox || overlay == null) return null;
+    return list.localToGlobal(Offset.zero, ancestor: overlay).dy;
   }
 
   /// What a screen reader says when the row takes focus: author, time, text.
@@ -396,15 +498,22 @@ class _MessageItemState extends State<MessageItem> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!widget.grouped) _authorLine(context),
-        if (message.reply case final reply?) _replyLine(context, reply),
         if (widget.isEditing)
           _editField(context)
         else if (message.body.isNotEmpty)
           MessageContentView(
             body: message.body,
+            textStyle: FlucordTextRole.body.style.copyWith(
+              color: context.surfaces.bodyText,
+            ),
             workspace: widget.workspace,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
+          ),
+        if (!widget.isEditing && message.body.isNotEmpty)
+          MessageInviteCards(
+            body: message.body,
+            sentByMe: widget.isCurrentUser,
           ),
         for (var index = 0; index < message.snapshots.length; index++)
           Padding(
@@ -421,13 +530,7 @@ class _MessageItemState extends State<MessageItem> {
             ),
           ),
         if (message.isEdited && !widget.isEditing)
-          Text(
-            '(edited)',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-            ),
-          ),
+          Text('(edited)', style: _captionStyle(context)),
         if (message.attachments.isNotEmpty)
           MessageAttachmentGallery(
             attachments: message.attachments,
@@ -437,7 +540,7 @@ class _MessageItemState extends State<MessageItem> {
         if (!message.suppressesEmbeds && display.rendersEmbeds)
           for (var index = 0; index < message.embeds.length; index++)
             Padding(
-              padding: const EdgeInsets.only(top: 7),
+              padding: const EdgeInsets.only(top: 8),
               child: MessageEmbedView(
                 key: ValueKey('message-${message.id}-embed-$index'),
                 embed: message.embeds[index],
@@ -496,73 +599,81 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
-  Widget _authorLine(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 3),
-    child: Row(
-      children: [
-        Flexible(
-          child: _opensAuthorProfile(
-            key: const ValueKey('message-author-name'),
-            child: Text(
-              widget.member.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: FlucordType.body,
-                fontWeight: FontWeight.w600,
-                color: _nameColor(widget.member),
+  /// The name and the time, on a row whose top meets the avatar's top.
+  Widget _authorLine(BuildContext context) {
+    final muted = context.surfaces.captionText;
+    return SizedBox(
+      height: MessageRowMetrics.nameRowHeight,
+      child: Row(
+        children: [
+          Flexible(
+            child: _opensAuthorProfile(
+              key: const ValueKey('message-author-name'),
+              child: DisplayName(
+                widget.member.displayName,
+                style: FlucordTextRole.heading.style.copyWith(
+                  height:
+                      MessageRowMetrics.nameRowHeight /
+                      FlucordTextRole.heading.size,
+                ),
+                nameStyle: widget.member.tags.nameStyle,
+                inServer: (_channel?.isDirectMessage ?? false)
+                    ? null
+                    : InServer(roleColor: _roleColorOf(widget.member)),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        MessageTimeLabel(
-          widget.message.sentAt,
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
+          NameTags(member: widget.member),
+          const SizedBox(width: 8),
+          MessageTimeLabel(
+            widget.message.sentAt,
+            style: _captionStyle(context),
           ),
-        ),
-        // The flags a reader cannot guess from the text: why nothing
-        // notified them, and why the machine just spoke.
-        if (widget.message.suppressesNotifications) ...[
-          const SizedBox(width: 4),
-          Tooltip(
-            message: 'Silent message',
-            child: Icon(
-              Icons.notifications_off_outlined,
-              key: const ValueKey('silent-message-marker'),
-              size: 11,
-              color: context.surfaces.muted,
+          // The flags a reader cannot guess from the text: why nothing
+          // notified them, and why the machine just spoke.
+          if (widget.message.suppressesNotifications) ...[
+            const SizedBox(width: 4),
+            Tooltip(
+              message: 'Silent message',
+              child: FlucordIcon(
+                FlucordIcons.silent,
+                key: const ValueKey('silent-message-marker'),
+                size: FlucordType.caption,
+                color: muted,
+              ),
             ),
-          ),
-        ],
-        if (widget.message.isTextToSpeech) ...[
-          const SizedBox(width: 4),
-          Tooltip(
-            message: 'Text-to-speech message',
-            child: Icon(
-              Icons.record_voice_over_outlined,
-              key: const ValueKey('text-to-speech-message-marker'),
-              size: 11,
-              color: context.surfaces.muted,
+          ],
+          if (widget.message.isTextToSpeech) ...[
+            const SizedBox(width: 4),
+            Tooltip(
+              message: 'Text-to-speech message',
+              child: FlucordIcon(
+                FlucordIcons.spoken,
+                key: const ValueKey('text-to-speech-message-marker'),
+                size: FlucordType.caption,
+                color: muted,
+              ),
             ),
-          ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
+
+  ConversationChannel? get _channel =>
+      widget.workspace.channelOrNull(widget.message.channelId);
+
+  /// The colour of [member]'s role here, or null for none.
+  int? _roleColorOf(Member member) => switch (_channel?.spaceId) {
+    final spaceId? => widget.workspace.nameColorOf(member, spaceId),
+    null => null,
+  };
 
   /// The colour of [member]'s role here, or null for the normal text colour.
-  Color? _nameColor(Member member) {
-    final spaceId = widget.workspace
-        .channelOrNull(widget.message.channelId)
-        ?.spaceId;
-    final value = spaceId == null
-        ? null
-        : widget.workspace.nameColorOf(member, spaceId);
-    return value == null ? null : Color(value);
-  }
+  Color? _nameColor(Member member) => switch (_roleColorOf(member)) {
+    final value? => Color(value),
+    null => null,
+  };
 
   /// Makes [child] a target for the pointer, or leaves it as it is when there
   /// is nothing to do. The label replaces what [child] would announce.
@@ -590,56 +701,46 @@ class _MessageItemState extends State<MessageItem> {
 
   Widget _opensAuthorProfile({required Key key, required Widget child}) {
     final open = widget.onOpenMemberProfile;
-    return _clickable(
-      key: key,
-      label: '${widget.member.displayName} profile',
-      onTap: open == null ? null : () => open(widget.message.authorId),
-      child: child,
+    return Builder(
+      builder: (context) => _clickable(
+        key: key,
+        label: '${widget.member.displayName} profile',
+        onTap: open == null
+            ? null
+            : () => open(widget.message.authorId, popupAnchorOf(context)),
+        child: child,
+      ),
     );
   }
 
+  /// The reply line: a spine in the avatar lane, curving into what the
+  /// message answers, which sits in the text column.
   Widget _replyLine(BuildContext context, MessageReply reply) {
-    final author = widget.workspace.memberOrNull(reply.authorId);
     final open = widget.onOpenMessage;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: _clickable(
-        key: const ValueKey('message-reply-preview'),
-        label: 'Go to the replied message',
-        onTap: open == null ? null : () => open(reply.messageId),
-        child: Row(
-          children: [
-            Icon(
-              Icons.subdirectory_arrow_right,
-              size: 13,
-              color: context.surfaces.muted,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              author?.displayName ?? 'Unknown user',
-              style: TextStyle(
-                fontSize: FlucordType.label,
-                fontWeight: FontWeight.w600,
-                color: author == null ? null : _nameColor(author),
-              ),
-            ),
-            const SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                reply.body.isEmpty
-                    ? 'Message unavailable'
-                    : messagePreviewText(context, reply.body, widget.workspace),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: context.surfaces.muted,
-                  fontSize: FlucordType.label,
-                ),
-              ),
-            ),
-          ],
+    final author = widget.workspace.memberOrNull(reply.authorId);
+    return Row(
+      children: [
+        const MessageReplySpine(
+          laneWidth: MessageRowMetrics.avatarSize + MessageRowMetrics.avatarGap,
+          avatarSize: MessageRowMetrics.avatarSize,
         ),
-      ),
+        Expanded(
+          child: _clickable(
+            key: const ValueKey('message-reply-preview'),
+            label: 'Go to the replied message',
+            onTap: open == null ? null : () => open(reply.messageId),
+            child: MessageReplyPreview(
+              reply: reply,
+              author: author,
+              workspace: widget.workspace,
+              nameColor: author == null ? null : _nameColor(author),
+              spaceId: widget.workspace
+                  .channelOrNull(widget.message.channelId)
+                  ?.spaceId,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -660,13 +761,7 @@ class _MessageItemState extends State<MessageItem> {
         ),
       ),
       const SizedBox(height: 4),
-      Text(
-        'Escape to cancel · Enter to save',
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-        ),
-      ),
+      Text('Escape to cancel · Enter to save', style: _captionStyle(context)),
     ],
   );
 
@@ -753,7 +848,7 @@ class _MessageItemState extends State<MessageItem> {
     onAddReaction: (emoji) =>
         unawaited(widget.onAddReaction(widget.message, emoji)),
     onReactionPickerToggled: (isOpen) {
-      if (mounted) setState(() => _reactionPickerOpen = isOpen);
+      if (mounted) _updateBar(() => _reactionPickerOpen = isOpen);
     },
     onShowReactionDetails: _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
@@ -769,6 +864,7 @@ class _MessageItemState extends State<MessageItem> {
         ? null
         : () => widget.onReport!(widget.message),
     onDelete: _confirmDelete,
+    onMore: (position) => unawaited(_openContextMenu(context, position)),
   );
 
   void _showReactionDetails(MessageReaction reaction) {

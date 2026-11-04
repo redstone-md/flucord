@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -28,17 +29,10 @@ class MessagePollView extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.poll_outlined, size: 17),
+              const FlucordIcon(FlucordIcons.poll, size: 17),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(
-                  poll.question,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
+                child: Text(poll.question, style: FlucordTextRole.label.strong),
               ),
             ],
           ),
@@ -152,19 +146,14 @@ class _PollAnswerRow extends StatelessWidget {
                       answer.text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: FlucordTextRole.caption.strong,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     '$percent%',
-                    style: TextStyle(
+                    style: FlucordTextRole.caption.strong.copyWith(
                       color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

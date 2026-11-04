@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import '../../domain/user_profile.dart';
+import 'discord_cdn.dart';
+import 'discord_mapper.dart';
 
 /// The REST surface a profile edit needs.
 abstract interface class DiscordUserProfileTransport {
@@ -140,6 +142,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
               asset: _text(decorationData['asset']),
               skuId: _nullableText(decorationData['sku_id']),
             ),
+      tags: DiscordMapper.tags(user),
       badges: [
         for (final badge in _objects(payload['badges']))
           if (_text(badge['id']).isNotEmpty)
@@ -157,6 +160,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
             ProfileConnection(
               type: _text(connection['type']),
               name: _text(connection['name']),
+              id: _text(connection['id']),
               verified: connection['verified'] == true,
             ),
       ],
@@ -177,6 +181,11 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
                   ? _text(friend['global_name'])
                   : _text(friend['username']),
               username: _nullableText(friend['username']),
+              avatarUrl: DiscordCdn.userAvatar(
+                _text(friend['id']),
+                _nullableText(friend['avatar']),
+                size: 32,
+              ),
             ),
       ],
     );

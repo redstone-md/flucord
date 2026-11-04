@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_social_activity_controller.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_friends_scope.dart';
@@ -38,6 +39,7 @@ class _ParticipantsDialog extends StatelessWidget {
   Widget build(BuildContext context) => FlucordDialog.frame(
     maxWidth: 380,
     maxHeight: 460,
+    actions: const [FlucordDialogCancel(label: 'Close')],
     child: AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -101,11 +103,11 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
     child: Row(
       children: [
-        Icon(
-          Icons.headset_mic_outlined,
+        FlucordIcon(
+          FlucordIcons.voiceCall,
           size: 20,
           color: connected ? context.surfaces.success : context.surfaces.muted,
         ),
@@ -114,13 +116,7 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Activity voice',
-                style: TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              Text('Activity voice', style: FlucordTextRole.label.strong),
               const SizedBox(height: 2),
               Text(
                 '$count participant${count == 1 ? '' : 's'}',
@@ -131,13 +127,6 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        IconButton(
-          key: const ValueKey('close-activity-voice-participants'),
-          tooltip: 'Close participants',
-          visualDensity: VisualDensity.compact,
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, size: 18),
         ),
       ],
     ),
@@ -197,10 +186,7 @@ class _ParticipantRow extends StatelessWidget {
                   currentUser ? 'You' : user.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -227,7 +213,11 @@ class _ParticipantRow extends StatelessWidget {
             ),
           ),
           if (speaking)
-            Icon(Icons.graphic_eq, color: context.surfaces.success, size: 20),
+            FlucordIcon(
+              FlucordIcons.speaking,
+              color: context.surfaces.success,
+              size: 20,
+            ),
           if (!currentUser) ...[
             const SizedBox(width: 4),
             if (pending)
@@ -249,12 +239,12 @@ class _ParticipantRow extends StatelessWidget {
                     : 'Mute ${user.displayName}',
                 visualDensity: VisualDensity.compact,
                 onPressed: onToggleMuted,
-                icon: Icon(
+                icon: FlucordIcon(
                   error != null
-                      ? Icons.refresh
+                      ? FlucordIcons.refresh
                       : locallyMuted
-                      ? Icons.volume_off_outlined
-                      : Icons.volume_up_outlined,
+                      ? FlucordIcons.volumeOff
+                      : FlucordIcons.volume,
                   size: 19,
                   color: locallyMuted
                       ? context.surfaces.accentIcon

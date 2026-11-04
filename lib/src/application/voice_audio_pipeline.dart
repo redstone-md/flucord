@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../app_log.dart';
@@ -363,7 +362,7 @@ final class VoiceAudioPipeline {
     try {
       final processing = _process(frame);
       if (processing != null) await processing;
-      final speech = _gate.accept(_rmsDbfs(frame));
+      final speech = _gate.accept(VoiceActivityGate.levelOf(frame));
       if (speech) {
         _setSpeaking(true);
         transport.sendOpusFrame(_encoder.encode(frame));
@@ -398,17 +397,6 @@ final class VoiceAudioPipeline {
     if (_isSpeaking == value) return;
     _isSpeaking = value;
     if (!_speaking.isClosed) _speaking.add(value);
-  }
-
-  /// The frame's loudness in dB relative to full scale; silence is
-  /// -infinity.
-  static double _rmsDbfs(Int16List frame) {
-    var energy = 0.0;
-    for (final sample in frame) {
-      energy += sample * sample;
-    }
-    final rms = math.sqrt(energy / frame.length) / 32768;
-    return 20 * math.log(rms) / math.ln10;
   }
 
   /// Runs [frame] through every stage that is on, in order: echo, noise,

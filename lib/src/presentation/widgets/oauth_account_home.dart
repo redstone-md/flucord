@@ -6,6 +6,7 @@ import '../../application/discord_social_dm_controller.dart';
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -13,6 +14,7 @@ import 'discord_add_friend_dialog.dart';
 import 'discord_activity_invite_strip.dart';
 import 'discord_friend_directory.dart';
 import 'discord_friends_scope.dart';
+import 'discord_relationship_avatar.dart';
 import 'discord_social_dm_navigation_scope.dart';
 import 'discord_social_dm_scope.dart';
 import 'discord_social_dm_view.dart';
@@ -21,6 +23,7 @@ import 'discord_social_sdk_scope.dart';
 import 'oauth_account_footer.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
+import 'sidebar_row_metrics.dart';
 
 class OAuthAccountSidebar extends StatelessWidget {
   const OAuthAccountSidebar({required this.account, super.key});
@@ -29,42 +32,51 @@ class OAuthAccountSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final socialSdk = DiscordSocialSdkScope.of(context);
     final dmController = DiscordSocialDmScope.of(context);
     final navigation = DiscordSocialDmNavigationScope.of(context);
+    final caption = FlucordTextRole.caption.style.copyWith(
+      color: surfaces.captionText,
+    );
     return Container(
       key: const ValueKey('oauth-account-sidebar'),
       width: 236,
       decoration: BoxDecoration(
-        color: context.surfaces.surface,
-        border: Border(right: BorderSide(color: context.surfaces.border)),
+        color: surfaces.surface,
+        border: Border(right: BorderSide(color: surfaces.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 58,
+            height: SidebarRowMetrics.headerHeight,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerStart,
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: context.surfaces.border),
-              ),
+              border: Border(bottom: BorderSide(color: surfaces.border)),
             ),
-            child: const Text(
-              'Direct Messages',
-              style: TextStyle(
-                fontSize: FlucordType.body,
-                fontWeight: FontWeight.w600,
+            child: Text(
+              'Direct messages',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: FlucordTextRole.heading.style.copyWith(
+                color: surfaces.text,
               ),
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(10, 12, 10, 16),
+              padding: const EdgeInsets.all(SidebarRowMetrics.listInset),
               children: [
-                _SidebarItem(
-                  icon: Icons.people_outline,
+                _SidebarRow(
+                  leading: FlucordIcon(
+                    FlucordIcons.friends,
+                    size: SidebarRowMetrics.iconSize,
+                    color: navigation.friendsSelected
+                        ? surfaces.text
+                        : surfaces.muted,
+                  ),
                   label: 'Friends',
                   detail:
                       socialSdk.state == DiscordSocialSdkControllerState.ready
@@ -73,25 +85,21 @@ class OAuthAccountSidebar extends StatelessWidget {
                   selected: navigation.friendsSelected,
                   onTap: navigation.showFriends,
                 ),
-                const SizedBox(height: 16),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    'DIRECT MESSAGES',
-                    style: TextStyle(
-                      color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(
+                    SidebarRowMetrics.rowPadding,
+                    16,
+                    SidebarRowMetrics.rowPadding,
+                    4,
                   ),
+                  child: Text('Direct messages', style: caption),
                 ),
-                const SizedBox(height: 8),
                 if (dmController.state == DiscordSocialDmLoadState.loading)
                   const Padding(
                     padding: EdgeInsets.all(12),
                     child: Center(
                       child: SizedBox.square(
-                        dimension: 18,
+                        dimension: SidebarRowMetrics.iconSize,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
@@ -99,22 +107,22 @@ class OAuthAccountSidebar extends StatelessWidget {
                 else if (dmController.state == DiscordSocialDmLoadState.ready &&
                     dmController.conversations.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'No recent conversations',
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: FlucordType.caption,
-                      ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: SidebarRowMetrics.rowPadding,
                     ),
+                    child: Text('No recent conversations', style: caption),
                   )
                 else
                   for (final conversation in dmController.conversations)
-                    _SidebarItem(
-                      key: ValueKey(
+                    _SidebarRow(
+                      rowKey: ValueKey(
                         'social-dm-conversation-${conversation.user.id}',
                       ),
-                      icon: Icons.person_outline,
+                      leading: DiscordRelationshipAvatar(
+                        user: conversation.user,
+                        size: SidebarRowMetrics.personAvatarSize,
+                        presenceBorderColor: surfaces.surface,
+                      ),
                       label: conversation.user.displayName,
                       detail: _presenceLabel(conversation.user.status),
                       selected:
@@ -170,16 +178,10 @@ class OAuthAccountHomeView extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.people_outline, size: 18),
+              const FlucordIcon(FlucordIcons.friends, size: 18),
               const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Friends',
-                  style: TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              Expanded(
+                child: Text('Friends', style: FlucordTextRole.label.strong),
               ),
               if (socialAvailable && friendsController != null) ...[
                 TextButton(
@@ -192,17 +194,14 @@ class OAuthAccountHomeView extends StatelessWidget {
                       : null,
                   style: TextButton.styleFrom(
                     foregroundColor: context.surfaces.success,
-                    textStyle: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    textStyle: FlucordTextRole.caption.strong,
                   ),
                   child: const Text('Add Friend'),
                 ),
                 const SizedBox(width: 10),
               ],
-              Icon(
-                socialReady ? Icons.people_outline : Icons.lock_outline,
+              FlucordIcon(
+                socialReady ? FlucordIcons.friends : FlucordIcons.lock,
                 size: 16,
                 color: socialReady
                     ? context.surfaces.success
@@ -303,17 +302,14 @@ class _AccountProfileCard extends StatelessWidget {
                             account.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.body,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: FlucordTextRole.heading.style,
                           ),
                         ),
                         if (account.isVerified)
                           Tooltip(
                             message: 'Verified Discord account',
-                            child: Icon(
-                              Icons.verified_outlined,
+                            child: FlucordIcon(
+                              FlucordIcons.verified,
                               size: 17,
                               color: context.surfaces.success,
                             ),
@@ -367,7 +363,7 @@ class _AccountProfileCard extends StatelessWidget {
                   url: account.avatarUrl,
                   fallback: ColoredBox(
                     color: context.surfaces.raised,
-                    child: const Icon(Icons.person_outline, size: 24),
+                    child: const FlucordIcon(FlucordIcons.person, size: 24),
                   ),
                 ),
               ),
@@ -379,59 +375,81 @@ class _AccountProfileCard extends StatelessWidget {
   }
 }
 
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.icon,
+/// One row of the account sidebar, sized like a DM row in the channel
+/// sidebar: 40 high, a 28 px avatar or a 16 px icon, the name in the label
+/// role and a caption line under it.
+class _SidebarRow extends StatelessWidget {
+  const _SidebarRow({
+    required this.leading,
     required this.label,
     required this.detail,
     this.selected = false,
     this.onTap,
-    super.key,
+    this.rowKey,
   });
 
-  final IconData icon;
+  final Widget leading;
   final String label;
   final String detail;
   final bool selected;
   final VoidCallback? onTap;
 
+  /// Names the row's tap target, which is what tests and the row's size go by.
+  final Key? rowKey;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? context.surfaces.raised : Colors.transparent,
-      borderRadius: FlucordRadius.small,
-      child: InkWell(
-        borderRadius: FlucordRadius.small,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: context.surfaces.muted),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: FlucordType.caption),
-                    ),
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: FlucordType.caption,
-                      ),
-                    ),
-                  ],
+    final surfaces = context.surfaces;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SidebarRowMetrics.rowGap),
+      child: Material(
+        color: selected ? surfaces.quietFill : Colors.transparent,
+        borderRadius: FlucordRadius.control,
+        child: InkWell(
+          key: rowKey,
+          borderRadius: FlucordRadius.control,
+          onTap: onTap,
+          child: Container(
+            height: SidebarRowMetrics.personRowHeight,
+            padding: const EdgeInsets.symmetric(
+              horizontal: SidebarRowMetrics.rowPadding,
+            ),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: SidebarRowMetrics.personAvatarSize,
+                  child: Center(child: leading),
                 ),
-              ),
-            ],
+                const SizedBox(width: SidebarRowMetrics.iconGap),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: FlucordTextRole.label.style.copyWith(
+                          color: selected ? surfaces.text : surfaces.muted,
+                          fontWeight: selected
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                        ),
+                      ),
+                      Text(
+                        detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: FlucordTextRole.caption.style.copyWith(
+                          color: surfaces.captionText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

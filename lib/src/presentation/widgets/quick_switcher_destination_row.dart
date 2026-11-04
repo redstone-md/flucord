@@ -17,10 +17,10 @@ class _DestinationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = selected
-        ? Colors.white
+        ? FlucordFixedColors.onFill
         : Theme.of(context).colorScheme.onSurface;
     final metadata = selected
-        ? Colors.white.withValues(alpha: 0.72)
+        ? FlucordFixedColors.onFill.withValues(alpha: 0.72)
         : context.surfaces.muted;
     final activity = [
       if (destination.unread) 'unread',
@@ -50,7 +50,11 @@ class _DestinationRow extends StatelessWidget {
               child: Row(
                 children: [
                   const SizedBox(width: 10),
-                  Icon(_kindIcon(destination.kind), size: 18, color: metadata),
+                  FlucordIcon(
+                    _kindIcon(destination.kind),
+                    size: 18,
+                    color: metadata,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -61,10 +65,8 @@ class _DestinationRow extends StatelessWidget {
                           destination.path,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: FlucordTextRole.label.strong.copyWith(
                             color: foreground,
-                            fontSize: FlucordType.label,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -90,7 +92,7 @@ class _DestinationRow extends StatelessWidget {
                     ),
                   if (destination.mentionCount > 0) ...[
                     const SizedBox(width: 8),
-                    MentionBadge(count: destination.mentionCount),
+                    CountBadge(count: destination.mentionCount),
                   ],
                   const SizedBox(width: 10),
                 ],
@@ -181,12 +183,12 @@ String _kindName(QuickSwitcherDestinationKind kind) => switch (kind) {
   QuickSwitcherDestinationKind.thread => 'Thread',
 };
 
-IconData _kindIcon(QuickSwitcherDestinationKind kind) => switch (kind) {
-  QuickSwitcherDestinationKind.guild => Icons.dns_rounded,
-  QuickSwitcherDestinationKind.directMessage => Icons.alternate_email_rounded,
-  QuickSwitcherDestinationKind.textChannel => Icons.tag_rounded,
-  QuickSwitcherDestinationKind.voiceChannel => Icons.volume_up_rounded,
-  QuickSwitcherDestinationKind.forumChannel => Icons.forum_outlined,
-  QuickSwitcherDestinationKind.mediaChannel => Icons.perm_media_outlined,
-  QuickSwitcherDestinationKind.thread => Icons.forum_rounded,
+FlucordIconData _kindIcon(QuickSwitcherDestinationKind kind) => switch (kind) {
+  QuickSwitcherDestinationKind.guild => FlucordIcons.server,
+  QuickSwitcherDestinationKind.directMessage => FlucordIcons.mention,
+  QuickSwitcherDestinationKind.textChannel => FlucordIcons.textChannel,
+  QuickSwitcherDestinationKind.voiceChannel => FlucordIcons.voiceChannel,
+  QuickSwitcherDestinationKind.forumChannel => FlucordIcons.forum,
+  QuickSwitcherDestinationKind.mediaChannel => FlucordIcons.mediaChannel,
+  QuickSwitcherDestinationKind.thread => FlucordIcons.threads,
 };

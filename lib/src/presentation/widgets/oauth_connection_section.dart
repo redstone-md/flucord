@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_account_connection_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -22,13 +23,7 @@ class OAuthConnectionSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Discord account',
-            style: TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text('Discord account', style: FlucordTextRole.label.strong),
           const SizedBox(height: 6),
           Text(
             'Connect your Discord account once to bring in your profile, servers, friends and direct messages.',
@@ -104,7 +99,7 @@ class _OAuthIdentityTile extends StatelessWidget {
                 onPressed: controller.canDisconnect
                     ? controller.disconnect
                     : null,
-                icon: const Icon(Icons.link_off_outlined, size: 17),
+                icon: const FlucordIcon(FlucordIcons.unlink, size: 17),
                 tooltip: 'Disconnect Discord',
               ),
             FilledButton.icon(
@@ -115,7 +110,7 @@ class _OAuthIdentityTile extends StatelessWidget {
                       dimension: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.open_in_new, size: 16),
+                  : const FlucordIcon(FlucordIcons.openExternal, size: 16),
               label: Text(
                 controller.isConnected ? 'Complete setup' : 'Connect Discord',
               ),
@@ -166,10 +161,8 @@ class _OAuthAvatar extends StatelessWidget {
           url: account?.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: Icon(
-              account == null
-                  ? Icons.person_outline
-                  : Icons.verified_user_outlined,
+            child: FlucordIcon(
+              account == null ? FlucordIcons.person : FlucordIcons.authorized,
               size: 18,
               color: color,
             ),
@@ -192,10 +185,8 @@ class _OAuthGuildDirectory extends StatelessWidget {
       children: [
         Text(
           'AUTHORIZED SERVERS · ${guilds.length}',
-          style: TextStyle(
+          style: FlucordTextRole.caption.strong.copyWith(
             color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
         ),
@@ -262,10 +253,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     child: Center(
                       child: Text(
                         _initial(guild.name),
-                        style: const TextStyle(
-                          fontSize: FlucordType.caption,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: FlucordTextRole.caption.strong,
                       ),
                     ),
                   ),
@@ -281,10 +269,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     guild.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.caption.strong,
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -302,8 +287,8 @@ class _OAuthGuildRow extends StatelessWidget {
             const SizedBox(width: 8),
             Tooltip(
               message: 'Messages from this server are not available here',
-              child: Icon(
-                Icons.lock_outline,
+              child: FlucordIcon(
+                FlucordIcons.lock,
                 size: 15,
                 color: context.surfaces.muted,
               ),

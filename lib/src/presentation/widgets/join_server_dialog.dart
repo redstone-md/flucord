@@ -10,6 +10,7 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
+import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 
 /// Discord's join-a-server dialog: an invite link or code in, a preview of
@@ -128,15 +129,13 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            key: const ValueKey('join-server-invite-field'),
+          FlucordTextField(
+            fieldKey: const ValueKey('join-server-invite-field'),
+            label: 'Invite link or code',
+            hintText: 'https://discord.gg/ or a code',
             controller: _controller,
             autofocus: true,
             enabled: !_joining,
-            decoration: const InputDecoration(
-              labelText: 'Invite link or code',
-              hintText: 'https://discord.gg/ or a code',
-            ),
             onChanged: (_) {
               // Any change to the text rebuilds: the submit button's action
               // reads the field, and a stale build would keep the button
@@ -165,8 +164,8 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
                   : Text(
                       _message ?? '',
                       key: const ValueKey('join-server-error'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        color: context.surfaces.errorText,
                       ),
                     ),
             ),
@@ -175,17 +174,11 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('join-server-submit'),
-        onPressed: _buttonAction,
-        child: Text(_buttonLabel),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('join-server-submit'),
+      label: _buttonLabel,
+      onPressed: _buttonAction,
+    ),
   );
 
   /// The one button resolves first and joins once the preview is on screen,
@@ -211,7 +204,7 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
     key: const ValueKey('join-server-preview'),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: context.surfaces.raised,
+      color: context.surfaces.inset,
       borderRadius: FlucordRadius.medium,
       border: Border.all(color: context.surfaces.border),
     ),
@@ -235,26 +228,23 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
                 _preview?.name ?? '',
                 key: const ValueKey('join-server-preview-name'),
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: FlucordType.body,
-                  fontWeight: FontWeight.w600,
+                style: FlucordTextRole.heading.style.copyWith(
+                  color: context.surfaces.text,
                 ),
               ),
               if (_preview?.approximateMemberCount case final count?)
                 Text(
                   '$count members',
-                  style: TextStyle(
+                  style: FlucordTextRole.caption.style.copyWith(
                     color: context.surfaces.muted,
-                    fontSize: FlucordType.caption,
                   ),
                 ),
               if (_alreadyInServer)
                 Text(
                   'You are already in this server.',
                   key: const ValueKey('join-server-already-joined'),
-                  style: TextStyle(
+                  style: FlucordTextRole.caption.style.copyWith(
                     color: context.surfaces.muted,
-                    fontSize: FlucordType.caption,
                   ),
                 ),
             ],
@@ -278,9 +268,9 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
       ),
       child: Text(
         name.trim().isEmpty ? '?' : name.trim().substring(0, 1).toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
+        style: FlucordTextRole.label.style.copyWith(
+          color: context.surfaces.text,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

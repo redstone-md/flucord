@@ -43,7 +43,7 @@ void main() {
             ),
           )
           .height,
-      28,
+      20,
     );
     expect(
       tester
@@ -72,6 +72,76 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('space-guild-1')));
     expect(selectedSpace, 'guild-1');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the rail is one even column of 40 px tiles', (tester) async {
+    await _pumpRail(tester, onAddServer: () {});
+
+    expect(tester.getSize(find.byKey(const ValueKey('server-rail'))).width, 64);
+    for (final key in [
+      'space-direct-messages',
+      'space-guild-1',
+      'space-guild-2',
+      'add-server',
+    ]) {
+      expect(
+        tester.getSize(find.byKey(ValueKey(key))),
+        const Size(40, 40),
+        reason: key,
+      );
+    }
+  });
+
+  testWidgets('the pill sits on the rail edge, centred on its tile', (
+    tester,
+  ) async {
+    await _pumpRail(tester);
+
+    final rail = tester.getRect(find.byKey(const ValueKey('server-rail')));
+    for (final id in [CommunitySpace.directMessagesId, 'guild-1']) {
+      final pill = tester.getRect(find.byKey(ValueKey('space-indicator-$id')));
+      final tile = tester.getRect(_tile(id));
+      expect(pill.left, rail.left, reason: id);
+      expect(pill.center.dy, tile.center.dy, reason: id);
+    }
+  });
+
+  testWidgets('the badge overlaps the same corner of every tile', (
+    tester,
+  ) async {
+    await _pumpRail(tester);
+
+    Offset badgeOffset(String id) {
+      final tile = tester.getRect(_tile(id));
+      final badge = tester.getRect(find.byKey(ValueKey('space-mention-$id')));
+      // The badge covers the tile's bottom right corner.
+      expect(badge.contains(tile.bottomRight - const Offset(1, 1)), isTrue);
+      return badge.bottomRight - tile.bottomRight;
+    }
+
+    expect(
+      badgeOffset(CommunitySpace.directMessagesId),
+      badgeOffset('guild-1'),
+    );
+  });
+
+  testWidgets('the badge is ringed in the rail colour', (tester) async {
+    await _pumpRail(tester);
+
+    final decoration =
+        tester
+                .widget<DecoratedBox>(
+                  find.descendant(
+                    of: find.byKey(const ValueKey('space-mention-guild-1')),
+                    matching: find.byType(DecoratedBox),
+                  ),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(
+      (decoration.border! as Border).top.color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.rail,
+    );
   });
 
   testWidgets('a muted space loses its pip but keeps its mentions', (
@@ -122,6 +192,35 @@ void main() {
   });
 }
 
+Future<void> _pumpRail(WidgetTester tester, {VoidCallback? onAddServer}) =>
+    tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: ServerRail(
+            spaces: _workspace.spaces,
+            activity: _workspace.activityBySpace(),
+            selectedSpaceId: CommunitySpace.directMessagesId,
+            onSelectSpace: (_) {},
+            onToggleTheme: () {},
+            onOpenConnections: () {},
+            onAddServer: onAddServer,
+            sessionMode: SessionMode.discord,
+            isDark: true,
+          ),
+        ),
+      ),
+    );
+
+/// The tap target of a space's tile. The DM tile has a key of its own.
+Finder _tile(String spaceId) => find.byKey(
+  ValueKey(
+    spaceId == CommunitySpace.directMessagesId
+        ? 'space-direct-messages'
+        : 'space-$spaceId',
+  ),
+);
+
 String _badgeText(WidgetTester tester, String spaceId) {
   final badge = find.byKey(ValueKey('space-mention-$spaceId'));
   return tester
@@ -152,7 +251,7 @@ final _workspace = ChatWorkspace(
       name: 'Jack',
       topic: '',
       kind: ChannelKind.text,
-      recipientId: 'user-1',
+      recipientIds: ['user-1'],
       unread: true,
       mentionCount: 120,
     ),

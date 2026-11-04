@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/application/voice_overlay_controller.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
+import 'package:flucord/src/domain/flucord_palette.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -40,6 +42,27 @@ void main() {
       expect(picture.pixels.length, 220 * 68 * 4);
       // Something was actually drawn: an all-zero buffer is a blank rectangle.
       expect(picture.pixels.any((byte) => byte != 0), isTrue);
+    });
+
+    testWidgets('a speaker who talks is marked in the palette success colour', (
+      tester,
+    ) async {
+      final picture = await tester.runAsync(
+        () => paintOverlay(const [
+          OverlaySpeaker(name: 'Mira', isSpeaking: true),
+        ]),
+      );
+
+      // The middle of the first row's dot: 18 in, half a 28 px row below
+      // the 6 px top padding.
+      final at = (20 * picture!.width + 18) * 4;
+      final success = Color(FlucordPalette.dark.success);
+      expect(picture.pixels.sublist(at, at + 4), [
+        (success.b * 255).round(),
+        (success.g * 255).round(),
+        (success.r * 255).round(),
+        255,
+      ]);
     });
   });
 

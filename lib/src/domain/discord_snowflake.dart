@@ -42,6 +42,15 @@ abstract final class DiscordSnowflake {
       (BigInt.parse(_canonical(snowflake)) >> _timestampShift).toInt() +
       epochMillis;
 
+  /// When [snowflake] was minted, or null for an id that carries no time.
+  /// A user's id says when their account was made.
+  static DateTime? createdAt(String snowflake) => isZero(snowflake)
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(
+          timestampMillis(snowflake),
+          isUtc: true,
+        );
+
   /// The lowest snowflake Discord could mint at [millis].
   ///
   /// The DM sort store promotes a message request's timestamp into snowflake

@@ -144,7 +144,7 @@ final class QuickSwitcherCatalog {
     ChatWorkspace workspace,
     ConversationChannel channel,
   ) {
-    final recipientId = channel.recipientId;
+    final recipientId = channel.soleRecipientId;
     if (recipientId == null) return channel.name;
     return workspace.memberOrNull(recipientId)?.displayName ?? channel.name;
   }

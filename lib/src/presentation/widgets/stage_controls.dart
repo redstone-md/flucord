@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/stage_controller.dart';
 import '../../domain/stage_channel.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -37,8 +38,8 @@ class StageControls extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            controller.isLive ? Icons.campaign : Icons.campaign_outlined,
+          FlucordIcon(
+            controller.isLive ? FlucordIcons.stage : FlucordIcons.stage,
             size: 17,
             color: controller.isLive
                 ? context.surfaces.accentIcon
@@ -59,10 +60,7 @@ class StageControls extends StatelessWidget {
                   key: const ValueKey('stage-topic'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
                 Text(
                   _roleLabel(role),
@@ -80,8 +78,8 @@ class StageControls extends StatelessWidget {
               padding: const EdgeInsets.only(right: 6),
               child: Tooltip(
                 message: 'Discord did not accept that.',
-                child: Icon(
-                  Icons.error_outline,
+                child: FlucordIcon(
+                  FlucordIcons.error,
                   key: const ValueKey('stage-error'),
                   size: 15,
                   color: Theme.of(context).colorScheme.error,
@@ -109,7 +107,7 @@ class StageControls extends StatelessWidget {
                 onPressed: controller.isBusy
                     ? null
                     : () => unawaited(_startStage(context)),
-                icon: const Icon(Icons.campaign, size: 15),
+                icon: const FlucordIcon(FlucordIcons.stage, size: 15),
                 label: const Text('Start stage'),
               ),
             ]
@@ -121,7 +119,7 @@ class StageControls extends StatelessWidget {
         FilledButton.tonalIcon(
           key: const ValueKey('stage-request'),
           onPressed: busy ? null : () => unawaited(controller.requestToSpeak()),
-          icon: const Icon(Icons.pan_tool_alt_outlined, size: 15),
+          icon: const FlucordIcon(FlucordIcons.raiseHand, size: 15),
           label: const Text('Request to speak'),
         ),
       ],
@@ -142,7 +140,7 @@ class StageControls extends StatelessWidget {
         FilledButton.icon(
           key: const ValueKey('stage-accept'),
           onPressed: busy ? null : () => unawaited(controller.takeStage()),
-          icon: const Icon(Icons.mic_none, size: 15),
+          icon: const FlucordIcon(FlucordIcons.mic, size: 15),
           label: const Text('Speak'),
         ),
       ],
@@ -150,7 +148,7 @@ class StageControls extends StatelessWidget {
         TextButton.icon(
           key: const ValueKey('stage-step-down'),
           onPressed: busy ? null : () => unawaited(controller.leaveStage()),
-          icon: const Icon(Icons.mic_off_outlined, size: 15),
+          icon: const FlucordIcon(FlucordIcons.micOff, size: 15),
           label: const Text('Move to audience'),
         ),
       ],
@@ -191,7 +189,11 @@ class _ModeratorMenu extends StatelessWidget {
       key: const ValueKey('stage-moderator-menu'),
       tooltip: 'Manage stage',
       enabled: !controller.isBusy,
-      icon: Icon(Icons.more_vert, size: 17, color: context.surfaces.muted),
+      icon: FlucordIcon(
+        FlucordIcons.more,
+        size: 17,
+        color: context.surfaces.muted,
+      ),
       onSelected: (action) => unawaited(_run(context, action)),
       itemBuilder: (context) => const [
         PopupMenuItem(
@@ -263,37 +265,30 @@ class _StageTopicDialogState extends State<StageTopicDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => FlucordDialog(
-    key: const ValueKey('stage-topic-dialog'),
-    title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
-    content: TextField(
-      key: const ValueKey('stage-topic-field'),
-      controller: _topic,
-      autofocus: true,
-      maxLength: 120,
-      decoration: const InputDecoration(
-        labelText: 'Topic',
-        helperText: 'What this stage is about.',
-      ),
-      onSubmitted: (_) => _submit(),
-    ),
-    actions: [
-      TextButton(
-        key: const ValueKey('stage-topic-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      ListenableBuilder(
-        listenable: _topic,
-        builder: (context, _) => FilledButton(
-          key: const ValueKey('stage-topic-confirm'),
-          // Discord requires a topic; an empty one comes back as a 400 with
-          // nothing on screen to explain it.
-          onPressed: _topic.text.trim().isEmpty ? null : _submit,
-          child: Text(widget.isStarting ? 'Start' : 'Save'),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _topic,
+    builder: (context, _) => FlucordDialog(
+      key: const ValueKey('stage-topic-dialog'),
+      title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
+      content: TextField(
+        key: const ValueKey('stage-topic-field'),
+        controller: _topic,
+        autofocus: true,
+        maxLength: 120,
+        decoration: const InputDecoration(
+          labelText: 'Topic',
+          helperText: 'What this stage is about.',
         ),
+        onSubmitted: (_) => _submit(),
       ),
-    ],
+      confirm: FlucordDialogConfirm(
+        key: const ValueKey('stage-topic-confirm'),
+        label: widget.isStarting ? 'Start' : 'Save',
+        // Discord requires a topic; an empty one comes back as a 400 with
+        // nothing on screen to explain it.
+        onPressed: _topic.text.trim().isEmpty ? null : _submit,
+      ),
+    ),
   );
 
   void _submit() {

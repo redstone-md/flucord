@@ -329,10 +329,10 @@ void main() {
       await session.settleUntilDecoded(() => newChannel.evaluate().isNotEmpty);
       await session.settle();
 
-      // Bold is how the row shows that it has an unread message.
+      // A heavier name is how the row shows that it has an unread message.
       expect(
         tester.widget<Text>(newChannel).style?.fontWeight,
-        FontWeight.w600,
+        FontWeight.w500,
       );
     },
   );

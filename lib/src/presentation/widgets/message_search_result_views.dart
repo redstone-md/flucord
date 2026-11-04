@@ -38,9 +38,7 @@ class _HitGroupView extends StatelessWidget {
                 child: Text(
                   channelName == null ? 'Unknown channel' : '#$channelName',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
+                  style: FlucordTextRole.caption.strong.copyWith(
                     color: context.surfaces.muted,
                   ),
                 ),
@@ -124,7 +122,7 @@ class _SearchMessageRow extends StatelessWidget {
           else
             const SizedBox.square(
               dimension: 26,
-              child: Icon(Icons.person_outline, size: 16),
+              child: FlucordIcon(FlucordIcons.person, size: 16),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -137,9 +135,7 @@ class _SearchMessageRow extends StatelessWidget {
                       child: Text(
                         author?.displayName ?? 'Unknown user',
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: FlucordType.caption,
-                          fontWeight: FontWeight.w600,
+                        style: FlucordTextRole.caption.strong.copyWith(
                           color: isHit ? null : muted,
                         ),
                       ),
@@ -222,7 +218,7 @@ class _SearchPager extends StatelessWidget {
             onPressed: pageIndex == 0
                 ? null
                 : () => onSelectPage(pageIndex - 1),
-            icon: const Icon(Icons.chevron_left, size: 18),
+            icon: const FlucordIcon(FlucordIcons.chevronLeft, size: 18),
             tooltip: 'Previous page',
           ),
           Text(
@@ -234,7 +230,7 @@ class _SearchPager extends StatelessWidget {
             onPressed: pageIndex >= pageCount - 1
                 ? null
                 : () => onSelectPage(pageIndex + 1),
-            icon: const Icon(Icons.chevron_right, size: 18),
+            icon: const FlucordIcon(FlucordIcons.chevronRight, size: 18),
             tooltip: 'Next page',
           ),
         ],
@@ -254,7 +250,7 @@ class _IndexingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _SearchPanelState(
     key: const ValueKey('search-indexing'),
-    icon: Icons.hourglass_top,
+    icon: FlucordIcons.pending,
     title: 'Still indexing',
     detail:
         'Discord has not finished indexing these messages yet. '
@@ -278,7 +274,11 @@ class _PartialIndexNotice extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
     child: Row(
       children: [
-        Icon(Icons.hourglass_bottom, size: 14, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.pending,
+          size: 14,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -324,7 +324,7 @@ class _SearchPanelState extends StatelessWidget {
     super.key,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final String? detail;
   final Widget? action;
@@ -336,15 +336,12 @@ class _SearchPanelState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 26, color: context.surfaces.muted),
+          FlucordIcon(icon, size: 26, color: context.surfaces.muted),
           const SizedBox(height: 10),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
+            style: FlucordTextRole.label.strong,
           ),
           if (detail case final text?) ...[
             const SizedBox(height: 6),

@@ -25,7 +25,9 @@ final class ConversationChannel {
     this.defaultAutoArchiveDurationMinutes,
     this.defaultSortOrder,
     this.defaultForumLayout,
-    this.recipientId,
+    this.recipientIds = const [],
+    this.isGroupDirectMessage = false,
+    this.iconUrl,
     this.isMessageRequest = false,
     this.messageRequestedAt,
     this.unread = false,
@@ -63,7 +65,20 @@ final class ConversationChannel {
   final int? defaultAutoArchiveDurationMinutes;
   final ForumSortOrder? defaultSortOrder;
   final ForumLayout? defaultForumLayout;
-  final String? recipientId;
+
+  /// Who this DM is with, never this account. Empty outside the DM list.
+  ///
+  /// A one-to-one DM has exactly one. A group DM may have any number, even
+  /// one or none once the others have left.
+  final List<String> recipientIds;
+
+  /// A group DM (Discord's type 3), whatever its recipient count. A group
+  /// keeps its name, picture and membership when only one other person is
+  /// left in it, so the count cannot decide this.
+  final bool isGroupDirectMessage;
+
+  /// A group DM's own picture, or null for the group avatar.
+  final String? iconUrl;
 
   /// A direct message the account has not answered yet, so it belongs in the
   /// message-request folder rather than the DM list.
@@ -112,7 +127,14 @@ final class ConversationChannel {
   /// editor offers a fixed list plus Auto; the id is whatever it accepts.
   final String? rtcRegion;
 
-  bool get isDirectMessage => recipientId != null;
+  /// Whether this is a DM, one-to-one or group: a channel in the DM list.
+  bool get isDirectMessage => spaceId == CommunitySpace.directMessagesId;
+
+  /// The one person a one-to-one DM is with, or null for anything else.
+  String? get soleRecipientId =>
+      isDirectMessage && !isGroupDirectMessage && recipientIds.length == 1
+      ? recipientIds.single
+      : null;
 
   /// The guild this channel belongs to, or null outside a server.
   ///
@@ -228,7 +250,9 @@ final class ConversationChannel {
         this.defaultAutoArchiveDurationMinutes,
     defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
     defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
-    recipientId: recipientId,
+    recipientIds: recipientIds,
+    isGroupDirectMessage: isGroupDirectMessage,
+    iconUrl: iconUrl,
     isMessageRequest: isMessageRequest ?? this.isMessageRequest,
     messageRequestedAt:
         identical(messageRequestedAt, _keepMessageRequestTimestamp)

@@ -339,18 +339,21 @@ final class UserActivity {
           secrets != null ||
           state != null);
 
-  /// The single line Discord shows under a name for this activity.
-  ///
-  /// `status_display_type` picks which of the three strings is promoted; a
-  /// custom status has no verb at all and reads as the user wrote it.
-  String get summary {
-    if (type == ActivityType.customStatus) return state ?? '';
+  /// What the activity is about, without the verb: the name, or the string
+  /// `status_display_type` promotes in its place.
+  String get subject {
     final promoted = switch (statusDisplayType) {
       StatusDisplayType.state => state,
       StatusDisplayType.details => details,
       StatusDisplayType.name => null,
     };
-    final subject = (promoted == null || promoted.isEmpty) ? name : promoted;
+    return (promoted == null || promoted.isEmpty) ? name : promoted;
+  }
+
+  /// The activity as a phrase, such as "Playing Dota 2". A custom status has
+  /// no verb at all and reads as the user wrote it.
+  String get summary {
+    if (type == ActivityType.customStatus) return state ?? '';
     final verb = type.verb;
     return verb.isEmpty ? subject : '$verb $subject';
   }

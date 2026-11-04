@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -62,104 +63,77 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => FlucordDialog.frame(
-    maxWidth: 440,
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FlucordDialogHeader(
-            title: 'Create thread',
-            icon: Icons.forum_outlined,
-            onClose: _isCreating ? null : () => Navigator.pop(context),
+  Widget build(BuildContext context) => FlucordDialog(
+    title: const Text('Create thread'),
+    cancelEnabled: !_isCreating,
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-thread-confirm'),
+      label: _isCreating ? 'Creating' : 'Create thread',
+      onPressed: _isCreating ? null : _submit,
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: const ValueKey('thread-name'),
+          controller: _nameController,
+          autofocus: true,
+          enabled: !_isCreating,
+          maxLength: 100,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
+          onSubmitted: (_) {
+            if (!_isCreating) _submit();
+          },
+          decoration: const InputDecoration(
+            labelText: 'Thread name',
+            hintText: 'New discussion',
           ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('thread-name'),
-            controller: _nameController,
-            autofocus: true,
-            enabled: !_isCreating,
-            maxLength: 100,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) {
-              if (!_isCreating) _submit();
-            },
-            decoration: const InputDecoration(
-              labelText: 'Thread name',
-              hintText: 'New discussion',
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'AUTO-ARCHIVE',
+          style: FlucordTextRole.caption.strong.copyWith(
+            color: context.surfaces.muted,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'AUTO-ARCHIVE',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<int>(
-              key: const ValueKey('thread-auto-archive'),
-              segments: const [
-                ButtonSegment(value: 60, label: Text('1 hour')),
-                ButtonSegment(value: 1440, label: Text('24 hours')),
-                ButtonSegment(value: 4320, label: Text('3 days')),
-                ButtonSegment(value: 10080, label: Text('1 week')),
-              ],
-              selected: {_autoArchiveDurationMinutes},
-              showSelectedIcon: false,
-              onSelectionChanged: _isCreating
-                  ? null
-                  : (selection) => setState(
-                      () => _autoArchiveDurationMinutes = selection.single,
-                    ),
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                padding: WidgetStatePropertyAll(
-                  EdgeInsets.symmetric(horizontal: 8),
-                ),
-                textStyle: WidgetStatePropertyAll(
-                  TextStyle(fontSize: FlucordType.caption),
-                ),
-              ),
-            ),
-          ),
-          if (_error case final error?) ...[
-            const SizedBox(height: 12),
-            _DialogError(message: error),
-          ],
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _isCreating ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                key: const ValueKey('create-thread-confirm'),
-                onPressed: _isCreating ? null : _submit,
-                icon: _isCreating
-                    ? const SizedBox.square(
-                        dimension: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.forum_outlined, size: 16),
-                label: const Text('Create thread'),
-              ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<int>(
+            key: const ValueKey('thread-auto-archive'),
+            segments: const [
+              ButtonSegment(value: 60, label: Text('1 hour')),
+              ButtonSegment(value: 1440, label: Text('24 hours')),
+              ButtonSegment(value: 4320, label: Text('3 days')),
+              ButtonSegment(value: 10080, label: Text('1 week')),
             ],
+            selected: {_autoArchiveDurationMinutes},
+            showSelectedIcon: false,
+            onSelectionChanged: _isCreating
+                ? null
+                : (selection) => setState(
+                    () => _autoArchiveDurationMinutes = selection.single,
+                  ),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              padding: WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 8),
+              ),
+              textStyle: WidgetStatePropertyAll(
+                TextStyle(fontSize: FlucordType.caption),
+              ),
+            ),
           ),
+        ),
+        if (_error case final error?) ...[
+          const SizedBox(height: 12),
+          _DialogError(message: error),
         ],
-      ),
+      ],
     ),
   );
 }
@@ -172,8 +146,8 @@ class _DialogError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Icon(
-        Icons.error_outline,
+      FlucordIcon(
+        FlucordIcons.error,
         size: 15,
         color: Theme.of(context).colorScheme.error,
       ),

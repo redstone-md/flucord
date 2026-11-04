@@ -285,17 +285,14 @@ final class ChatWorkspace {
 
   CommunitySpace? spaceOrNull(String id) => _spaceById[id];
 
+  /// The roles [member] holds in [spaceId] that the workspace knows.
+  HeldRoles heldRolesOf(Member member, String spaceId) =>
+      HeldRoles.of(member, spaceId, roleOrNull);
+
   /// The colour [member]'s name has in [spaceId]: that of their highest role
   /// with a colour. Null when no role gives one, and in a space with no roles.
-  int? nameColorOf(Member member, String spaceId) {
-    CommunityRole? top;
-    for (final roleId in member.membershipIn(spaceId)?.roleIds ?? const []) {
-      final role = roleOrNull(roleId);
-      if (role?.colorValue == null) continue;
-      if (top == null || role!.position > top.position) top = role;
-    }
-    return top?.colorValue;
-  }
+  int? nameColorOf(Member member, String spaceId) =>
+      heldRolesOf(member, spaceId).nameColor;
 
   ChannelCategory? categoryOrNull(String id) => _categoryById[id];
 
@@ -361,7 +358,7 @@ final class ChatWorkspace {
         .toSet();
     final directMemberIds = <String>{
       currentMemberId,
-      for (final channel in directChannels) ?channel.recipientId,
+      for (final channel in directChannels) ...channel.recipientIds,
       for (final channelId in directChannelIds)
         for (final message in cached.messagesFor(channelId)) message.authorId,
     };
@@ -534,6 +531,15 @@ final class ChatWorkspace {
     return identical(next, members) ? this : _copy(members: next);
   }
 
+  /// Sets a known member's username and tags. Answers this same workspace
+  /// when the member is unknown or nothing changed.
+  ChatWorkspace withMemberIdentity(String memberId, MemberIdentity identity) {
+    final member = memberOrNull(memberId);
+    if (member == null) return this;
+    final next = member.withIdentity(identity);
+    return identical(next, member) ? this : upsertMember(next);
+  }
+
   /// Folds a batch of members in with one pass over the member table.
   ///
   /// A member-list page carries up to a hundred members at once; upserting
@@ -560,8 +566,21 @@ final class ChatWorkspace {
       ? [...spaces, space]
       : [
           for (final existing in spaces)
-            existing.id == space.id ? space : existing,
+            existing.id == space.id
+                ? space.keepingSummaryOf(existing)
+                : existing,
         ];
+
+  /// A changed role keeps its place in the list; a new one goes last.
+  ChatWorkspace upsertRole(CommunityRole role) =>
+      copyWith(roles: _withChanged(roles, [role], (role) => role.id));
+
+  /// The members who held the role keep its id, as Discord's own records do
+  /// until each member next changes. Name colours and permissions skip an id
+  /// with no role.
+  ChatWorkspace removeRole(String roleId) => roleOrNull(roleId) == null
+      ? this
+      : copyWith(roles: roles.where((role) => role.id != roleId).toList());
 
   ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(
     categories: [
@@ -644,7 +663,8 @@ final class ChatWorkspace {
 
   /// Folds one [diff] in, with one pass over each list.
   ///
-  /// Servers and channels end where [removeGuild], [removeChannel],
+  /// A removed server takes its roles, emoji and stickers along. Servers and
+  /// channels end where [removeGuild], [removeChannel],
   /// [upsertSpace] and [upsertChannel] would put them, one item at a time. Those
   /// copy the whole list for each item, which stalls the screen on a reconnect
   /// that changes thousands of channels. A changed category keeps its place in
@@ -684,11 +704,19 @@ final class ChatWorkspace {
         diff.categories,
         (category) => category.id,
       ),
-      roles: removedSpaces.isEmpty
-          ? null
-          : roles
-                .where((role) => !removedSpaces.contains(role.spaceId))
-                .toList(),
+      roles: _diffRoles(diff),
+      emojis: _replacingSpaces(
+        emojis,
+        removedSpaces,
+        diff.emojisBySpace,
+        (emoji) => emoji.spaceId,
+      ),
+      stickers: _replacingSpaces(
+        stickers,
+        removedSpaces,
+        diff.stickersBySpace,
+        (sticker) => sticker.spaceId,
+      ),
       members: removedSpaces.isEmpty
           ? null
           : [
@@ -702,7 +730,56 @@ final class ChatWorkspace {
         for (final channel in channels)
           if (diff.removes(channel)) channel.id,
       }),
-    ).upsertMembers(diff.members);
+    ).upsertMembers(diff.members)._withOwnMemberships(diff.ownMemberships);
+  }
+
+  /// [roles] after [diff], or null when it changes none.
+  List<CommunityRole>? _diffRoles(WorkspaceDiff diff) {
+    final removedSpaces = diff.removedSpaceIds;
+    final removedRoles = diff.removedRoleIds;
+    if (removedSpaces.isEmpty && removedRoles.isEmpty && diff.roles.isEmpty) {
+      return null;
+    }
+    return _withChanged(
+      roles.where(
+        (role) =>
+            !removedSpaces.contains(role.spaceId) &&
+            !removedRoles.contains(role.id),
+      ),
+      diff.roles,
+      (role) => role.id,
+    );
+  }
+
+  /// [items] without those of [removedSpaces], and with the items of each
+  /// server in [replacements] swapped for its new ones. Null when neither
+  /// names a server.
+  static List<T>? _replacingSpaces<T>(
+    List<T> items,
+    Set<String> removedSpaces,
+    Map<String, List<T>> replacements,
+    String Function(T item) spaceOf,
+  ) {
+    if (removedSpaces.isEmpty && replacements.isEmpty) return null;
+    return [
+      for (final item in items)
+        if (!removedSpaces.contains(spaceOf(item)) &&
+            !replacements.containsKey(spaceOf(item)))
+          item,
+      for (final replaced in replacements.values) ...replaced,
+    ];
+  }
+
+  /// The account with [memberships] laid over its standing in each server.
+  ChatWorkspace _withOwnMemberships(Map<String, GuildMembership> memberships) {
+    final account = memberOrNull(currentMemberId);
+    if (memberships.isEmpty || account == null) return this;
+    return upsertMember(
+      account.copyWith(
+        spaceIds: {...account.spaceIds, ...memberships.keys},
+        membershipsBySpace: {...account.membershipsBySpace, ...memberships},
+      ),
+    );
   }
 
   /// [kept] with each item of [changed] in place of its earlier copy, so an
@@ -865,7 +942,6 @@ final class ChatWorkspace {
     if (previous == null) return incoming;
     return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
       avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
       avatarUrlsBySpace: {
         ...previous.avatarUrlsBySpace,
@@ -882,6 +958,8 @@ final class ChatWorkspace {
       // offline; letting that erase a presence the gateway already reported
       // would blank out every activity the moment the member is re-mapped.
       presenceDetail: incoming.presenceDetail ?? previous.presenceDetail,
+      tags: incoming.tags.over(previous.tags),
+      username: incoming.username ?? previous.username,
     );
   }
 }

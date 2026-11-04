@@ -6,6 +6,7 @@ import '../application/channel_sidebar_order.dart';
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
+import '../application/active_friends.dart';
 import '../application/friends_controller.dart';
 import '../domain/direct_message_candidate.dart';
 import '../application/guild_member_admin_controller.dart';
@@ -25,9 +26,12 @@ import '../application/voice_controller.dart';
 import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
+import '../domain/composer_draft.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/discord_relationship.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
+import '../domain/monogram.dart';
 import '../domain/moderation_report.dart';
 import '../domain/voice_connection.dart';
 import '../domain/workspace_activity.dart';
@@ -35,6 +39,8 @@ import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
 import 'conversation_pane.dart';
 import 'shell_keyboard.dart';
+import '../theme/flucord_radius.dart';
+import '../theme/flucord_theme.dart';
 import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
@@ -44,20 +50,26 @@ import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/disconnected_workspace_view.dart';
+import 'widgets/friends_panel.dart';
 import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
-import 'widgets/member_profile_popover.dart';
+import 'widgets/active_now_column.dart';
+import 'widgets/member_profile_card.dart';
+import 'widgets/profile_card.dart';
+import 'widgets/profile_card_route.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_search_panel.dart';
+import 'widgets/navigation_theme.dart';
 import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/leave_server_dialog.dart';
 import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/rail_tile.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
@@ -65,6 +77,7 @@ import 'widgets/voice_connection_bar.dart';
 
 part 'flucord_shell_navigation.dart';
 part 'flucord_shell_conversation.dart';
+part 'flucord_shell_canvas.dart';
 
 /// The workspace chrome: the rail, the channel sidebar, the member and search
 /// panels, and the conversation pane in the middle.
@@ -79,7 +92,6 @@ part 'flucord_shell_conversation.dart';
 /// window frame), so the sidebar and the account panel show at every window
 /// size the app allows.
 const double _channelSidebarMinWidth = 640;
-const double _railWidth = 72;
 const double _channelSidebarWidth = 236;
 
 /// The widest side panel, the search results.
@@ -132,8 +144,8 @@ class FlucordShell extends StatelessWidget {
   /// never open one, such as the widget tests for a single pane.
   final MemberProfileController? memberProfileController;
 
-  /// The account's friend graph, or null on a transport that is never told
-  /// one — the demo workspace and the bot session.
+  /// The account's friend graph. Its surfaces show only while the session is
+  /// told one, which the demo workspace and the bot session never are.
   final FriendsController? friendsController;
 
   /// Owns the server-side search and the page the results panel is showing.
@@ -189,7 +201,12 @@ class FlucordShell extends StatelessWidget {
       listenable: connectionController,
       builder: (context, _) {
         return ListenableBuilder(
-          listenable: workspaceController,
+          // The friends controller too: whether its panel is open decides
+          // what the right column of the DM space shows.
+          listenable: Listenable.merge([
+            workspaceController,
+            friendsController,
+          ]),
           builder: (context, _) {
             final spaceId = workspaceController.selectedSpaceId!;
             final channelId = workspaceController.selectedChannelId;
@@ -211,12 +228,19 @@ class FlucordShell extends StatelessWidget {
             final administration = permissions.administrationOf(spaceId);
             final canOpenSettings =
                 !space.isDirectMessages && _canOpenSettings(administration);
-            final canReport = chatController.moderation != null;
 
             /// Joining, creating and leaving need the guild-management plane;
             /// without it the rail hides its plus rather than opening a
             /// dialog whose every button would fail.
             final canManageServers = chatController.guildManagement != null;
+            // Friends live in the DM space only. Absent on a session that is
+            // never told a friend graph, such as the bot session and the demo
+            // workspace.
+            final friends =
+                space.isDirectMessages &&
+                    (friendsController?.isAvailable ?? false)
+                ? friendsController
+                : null;
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
@@ -259,7 +283,8 @@ class FlucordShell extends StatelessWidget {
                           !showSearchPanel;
                       final showMembers =
                           membersFit &&
-                          !space.isDirectMessages &&
+                          (!space.isDirectMessages ||
+                              channel?.soleRecipientId != null) &&
                           workspaceController.showMembers &&
                           !showPins &&
                           !showThreads &&
@@ -385,9 +410,23 @@ class FlucordShell extends StatelessWidget {
                       final panelCovers =
                           sidePanel != null &&
                           constraints.maxWidth -
-                                  _railWidth -
+                                  RailMetrics.width -
                                   (showChannels ? _channelSidebarWidth : 0) -
+                                  FlucordTheme.canvasInset -
                                   _sidePanelMaxWidth <
+                              _conversationMinWidth;
+                      // The Friends page takes the conversation's place,
+                      // and the conversation's side panels go with it.
+                      final friendsOpen = friends?.isPanelOpen ?? false;
+                      // Its right column is Active now, as on Discord, when
+                      // the window still leaves the page its minimum width.
+                      final showActiveNow =
+                          friendsOpen &&
+                          constraints.maxWidth -
+                                  RailMetrics.width -
+                                  (showChannels ? _channelSidebarWidth : 0) -
+                                  FlucordTheme.canvasInset -
+                                  ActiveNowColumn.width >=
                               _conversationMinWidth;
                       return Row(
                         children: [
@@ -406,22 +445,29 @@ class FlucordShell extends StatelessWidget {
                               connectionController.mode,
                               themeMode,
                             ],
-                            builder: (_) => ServerRail(
-                              spaces: workspace.spaces,
-                              activity: activityBySpaceId,
-                              selectedSpaceId: spaceId,
-                              onSelectSpace: _selectSpace,
-                              onToggleTheme: onToggleTheme,
-                              onOpenConnections: () =>
-                                  _openConnections(context),
-                              onAddServer: canManageServers
-                                  ? () => unawaited(_addServer(context))
-                                  : null,
-                              onOpenSpaceMenu: (spaceId, position) => unawaited(
-                                _openSpaceMenu(context, spaceId, position),
+                            builder: (_) => NavigationTheme(
+                              child: ServerRail(
+                                spaces: workspace.spaces,
+                                activity: activityBySpaceId,
+                                selectedSpaceId: spaceId,
+                                onSelectSpace: _selectSpace,
+                                onToggleTheme: onToggleTheme,
+                                onOpenConnections: () =>
+                                    _openConnections(context),
+                                onAddServer: canManageServers
+                                    ? () => unawaited(_addServer(context))
+                                    : null,
+                                onOpenSpaceMenu: (spaceId, position) =>
+                                    unawaited(
+                                      _openSpaceMenu(
+                                        context,
+                                        spaceId,
+                                        position,
+                                      ),
+                                    ),
+                                sessionMode: connectionController.mode,
+                                isDark: themeMode == ThemeMode.dark,
                               ),
-                              sessionMode: connectionController.mode,
-                              isDark: themeMode == ThemeMode.dark,
                             ),
                           ),
                           if (showChannels)
@@ -434,6 +480,12 @@ class FlucordShell extends StatelessWidget {
                               listenable: voiceController,
                               builder: (_, _) {
                                 final seats = voiceController.seatedByChannel;
+                                final speaking = {
+                                  for (final participant
+                                      in voiceController.participants)
+                                    if (participant.isSpeaking)
+                                      participant.userId,
+                                };
                                 final categories = workspace.categoriesFor(
                                   spaceId,
                                 );
@@ -452,6 +504,7 @@ class FlucordShell extends StatelessWidget {
                                       seats: seats,
                                     ),
                                     seats,
+                                    speaking,
                                     channelId,
                                     workspaceController.collapsedCategoryIds,
                                     // Not the whole snapshot: each ack makes a new
@@ -462,6 +515,8 @@ class FlucordShell extends StatelessWidget {
                                         .accountNotificationFlags,
                                     connectionController.mode,
                                     chatController.connectionStatus,
+                                    friends,
+                                    friendsOpen,
                                     canOpenSettings,
                                     chatController
                                         .scheduledEventsFor(spaceId)
@@ -473,147 +528,193 @@ class FlucordShell extends StatelessWidget {
                                       spaceId,
                                     ),
                                   ],
-                                  builder: (_) => ChannelSidebar(
-                                    space: space,
-                                    friends: friendsController,
-                                    categories: categories,
-                                    currentMember: currentMember,
-                                    memberOf: _memberOf,
-                                    channelOf: _channelOf,
-                                    seatedByChannel: seats,
-                                    // Discord opens a profile from these rows with
-                                    // either mouse button. Ours were labels.
-                                    onOpenMemberProfile: (userId) => unawaited(
-                                      _openMemberCard(context, spaceId, userId),
-                                    ),
-                                    // A voice connection outlives the room view, so
-                                    // leaving it has to stay reachable from wherever
-                                    // the user has navigated to since.
-                                    voiceConnectionBar: VoiceConnectionBar(
-                                      controller: voiceController,
-                                      camera: selfVideoController,
-                                      channelNameFor: (id) =>
-                                          _channelOf(id)?.name,
-                                      serverNameFor: _serverNameOf,
-                                      onOpenChannel: _openVoiceRoom,
-                                    ),
-                                    channels: channels,
-                                    selectedChannelId: channelId,
-                                    collapsedCategoryIds: workspaceController
-                                        .collapsedCategoryIds,
-                                    onToggleCategory:
-                                        workspaceController.toggleCategory,
-                                    onNewDirectMessage: () =>
-                                        _openDirectMessage(context),
-                                    onAcceptMessageRequest: (channelId) =>
-                                        unawaited(
-                                          chatController.acceptMessageRequest(
-                                            channelId,
-                                          ),
-                                        ),
-                                    onDeclineMessageRequest: (channelId) =>
-                                        unawaited(
-                                          chatController.declineMessageRequest(
-                                            channelId,
-                                          ),
-                                        ),
-                                    scheduledEventCount: chatController
-                                        .scheduledEventsFor(space.id)
-                                        .length,
-                                    isLoadingScheduledEvents: chatController
-                                        .isLoadingScheduledEvents(space.id),
-                                    scheduledEventsError: chatController
-                                        .scheduledEventsError(space.id),
-                                    onOpenEvents: () =>
-                                        _openScheduledEvents(context, space),
-                                    onOpenServerSettings: canOpenSettings
-                                        ? () => unawaited(
-                                            _openGuildSettings(
+                                  builder: (_) => NavigationTheme(
+                                    child: ChannelSidebar(
+                                      space: space,
+                                      friends: friends,
+                                      categories: categories,
+                                      currentMember: currentMember,
+                                      memberOf: _memberOf,
+                                      channelOf: _channelOf,
+                                      seatedByChannel: seats,
+                                      speakingUserIds: speaking,
+                                      // Discord opens a profile from these rows with
+                                      // either mouse button. Ours were labels.
+                                      onOpenMemberProfile: (userId, anchor) =>
+                                          unawaited(
+                                            _openMemberCard(
                                               context,
-                                              space,
-                                              administration,
+                                              spaceId,
+                                              userId,
+                                              anchor,
                                             ),
-                                          )
-                                        : null,
-                                    onLeaveServer: canManageServers
-                                        ? () => unawaited(
-                                            _leaveServer(context, space),
-                                          )
-                                        : null,
-                                    onReportServer: () =>
-                                        unawaited(_reportSpace(context, space)),
-                                    onSelectChannel: _selectChannel,
-                                    readState: chatController.readState,
-                                    onNotificationRequest: (request, target) =>
-                                        _applyNotificationRequest(
-                                          request,
-                                          space: space,
-                                          channel: target,
-                                        ),
-                                    sessionMode: connectionController.mode,
-                                    connectionStatus:
-                                        chatController.connectionStatus,
+                                          ),
+                                      // A voice connection outlives the room view, so
+                                      // leaving it has to stay reachable from wherever
+                                      // the user has navigated to since.
+                                      voiceConnectionBar: VoiceConnectionBar(
+                                        controller: voiceController,
+                                        camera: selfVideoController,
+                                        channelNameFor: (id) =>
+                                            _channelOf(id)?.name,
+                                        serverNameFor: _serverNameOf,
+                                        onOpenChannel: _openVoiceRoom,
+                                      ),
+                                      channels: channels,
+                                      // On the Friends page no DM is open.
+                                      selectedChannelId: friendsOpen
+                                          ? null
+                                          : channelId,
+                                      collapsedCategoryIds: workspaceController
+                                          .collapsedCategoryIds,
+                                      onToggleCategory:
+                                          workspaceController.toggleCategory,
+                                      onNewDirectMessage: () =>
+                                          _openDirectMessage(context),
+                                      onAcceptMessageRequest: (channelId) =>
+                                          unawaited(
+                                            chatController.acceptMessageRequest(
+                                              channelId,
+                                            ),
+                                          ),
+                                      onDeclineMessageRequest: (channelId) =>
+                                          unawaited(
+                                            chatController
+                                                .declineMessageRequest(
+                                                  channelId,
+                                                ),
+                                          ),
+                                      scheduledEventCount: chatController
+                                          .scheduledEventsFor(space.id)
+                                          .length,
+                                      isLoadingScheduledEvents: chatController
+                                          .isLoadingScheduledEvents(space.id),
+                                      scheduledEventsError: chatController
+                                          .scheduledEventsError(space.id),
+                                      onOpenEvents: () =>
+                                          _openScheduledEvents(context, space),
+                                      onOpenServerSettings: canOpenSettings
+                                          ? () => unawaited(
+                                              _openGuildSettings(
+                                                context,
+                                                space,
+                                                administration,
+                                              ),
+                                            )
+                                          : null,
+                                      onLeaveServer: canManageServers
+                                          ? () => unawaited(
+                                              _leaveServer(context, space),
+                                            )
+                                          : null,
+                                      onReportServer: () => unawaited(
+                                        _reportSpace(context, space),
+                                      ),
+                                      onSelectChannel: _selectChannel,
+                                      readState: chatController.readState,
+                                      onNotificationRequest:
+                                          (request, target) =>
+                                              _applyNotificationRequest(
+                                                request,
+                                                space: space,
+                                                channel: target,
+                                              ),
+                                      sessionMode: connectionController.mode,
+                                      connectionStatus:
+                                          chatController.connectionStatus,
+                                    ),
                                   ),
                                 );
                               },
                             ),
                           Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Offstage(
-                                  offstage: panelCovers,
-                                  child: channel == null
-                                      ? DirectMessagesEmptyView(
-                                          onNewMessage: () =>
-                                              _openDirectMessage(context),
-                                        )
-                                      : _conversationPane(
-                                          context: context,
-                                          workspace: workspace,
-                                          capabilities: permissions
-                                              .capabilitiesIn(channel),
-                                          channel: channel,
-                                          channels: channels,
-                                          space: space,
-                                          showChannels: showChannels,
-                                          membersFit: membersFit,
-                                          showMembers: showMembers,
-                                          showPins: showPins,
-                                          showThreads: showThreads,
-                                          allowThreadPanel: allowThreadPanel,
-                                          canSearch: canSearch,
+                            child: _CanvasCard(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Offstage(
+                                          offstage: panelCovers || friendsOpen,
+                                          child: channel == null
+                                              ? DirectMessagesEmptyView(
+                                                  onNewMessage: () =>
+                                                      _openDirectMessage(
+                                                        context,
+                                                      ),
+                                                )
+                                              : _conversationPane(
+                                                  context: context,
+                                                  workspace: workspace,
+                                                  capabilities: permissions
+                                                      .capabilitiesIn(channel),
+                                                  channel: channel,
+                                                  channels: channels,
+                                                  space: space,
+                                                  showChannels: showChannels,
+                                                  membersFit: membersFit,
+                                                  showMembers: showMembers,
+                                                  showPins: showPins,
+                                                  showThreads: showThreads,
+                                                  allowThreadPanel:
+                                                      allowThreadPanel,
+                                                  canSearch: canSearch,
+                                                ),
                                         ),
-                                ),
-                                if (panelCovers) sidePanel,
-                              ],
+                                        if (friends != null && friendsOpen)
+                                          _friendsPage(
+                                            context,
+                                            workspace,
+                                            friends,
+                                          )
+                                        else if (panelCovers)
+                                          sidePanel,
+                                      ],
+                                    ),
+                                  ),
+                                  if (friends != null && friendsOpen) ...[
+                                    if (showActiveNow)
+                                      _activeNow(workspace, friends),
+                                  ] else ...[
+                                    if (sidePanel != null && !panelCovers)
+                                      sidePanel,
+                                    if (showMembers && space.isDirectMessages)
+                                      if (_recipientOf(workspace, channel)
+                                          case final person?)
+                                        MemberProfilePanel(
+                                          person: person,
+                                          spaces: workspace.spaces,
+                                        )
+                                      else
+                                        const SizedBox.shrink()
+                                    else if (showMembers)
+                                      // A member's "In voice" line follows the
+                                      // seats.
+                                      _onSeats(
+                                        (seated) => MemberSidebar(
+                                          seatedByChannel: seated,
+                                          heldRolesOf: (member) => workspace
+                                              .heldRolesOf(member, spaceId),
+                                          members: workspace.members,
+                                          spaceId: spaceId,
+                                          channelId: channel?.id,
+                                          memberList: memberListController,
+                                          roles: workspace.roles,
+                                          cardFor: (member, close) =>
+                                              _memberCard(
+                                                context,
+                                                member: member,
+                                                spaceId: spaceId,
+                                                close: close,
+                                              ),
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
-                          if (sidePanel != null && !panelCovers) sidePanel,
-                          if (showMembers)
-                            MemberSidebar(
-                              members: workspace.members,
-                              spaceId: spaceId,
-                              channelId: channel?.id,
-                              memberList: memberListController,
-                              roles: workspace.roles,
-                              profile: memberProfileController,
-                              currentMemberId: workspace.currentMemberId,
-                              onMessage: (member) => unawaited(
-                                _openDirectConversation(context, member.id),
-                              ),
-                              onReport: canReport
-                                  ? (member) => unawaited(
-                                      _reportMember(context, member),
-                                    )
-                                  : null,
-                              onBlock: canReport
-                                  ? (member) =>
-                                        unawaited(_blockMember(context, member))
-                                  : null,
-                              moderationBuilder: (member) =>
-                                  _memberAdminController(spaceId, member.id),
-                            ),
                         ],
                       );
                     },

@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
+import '../../domain/discord_rgb.dart';
 import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'remote_identity_image.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
+import 'profile_card.dart';
+import 'user_settings_controls.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
 const profileAccentSwatches = <int>[
@@ -28,26 +34,11 @@ class ProfilePreviewHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: FlucordType.title,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
+    child: SettingsSectionHeader(
+      title: title,
+      subtitle:
           'How your account looks to everyone else. Changes are saved '
           'together.',
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-          ),
-        ),
-      ],
     ),
   );
 }
@@ -81,16 +72,7 @@ class ProfileField extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
+        FlucordFieldLabel(label),
         TextField(
           key: fieldKey,
           controller: controller,
@@ -119,67 +101,97 @@ class ProfileField extends StatelessWidget {
   );
 }
 
-/// The round avatar, with the controls that replace or clear it.
-class ProfileAvatarButton extends StatelessWidget {
-  const ProfileAvatarButton({
+/// The form on the left and the live preview in a 300 px column on the
+/// right. Where the two do not fit side by side, the preview goes under the
+/// form.
+class ProfileFormWithPreview extends StatelessWidget {
+  const ProfileFormWithPreview({
+    required this.form,
+    required this.preview,
+    super.key,
+  });
+
+  /// The narrowest width that still fits the form beside the preview.
+  static const besideWidth = 680.0;
+  static const _gap = 32.0;
+
+  final Widget form;
+  final Widget preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final column = Column(
+      key: const ValueKey('profile-preview'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Preview',
+          style: FlucordTextRole.caption.style.copyWith(
+            color: context.surfaces.captionText,
+          ),
+        ),
+        const SizedBox(height: 8),
+        preview,
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < besideWidth
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [form, const SizedBox(height: _gap), column],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: form),
+                const SizedBox(width: _gap),
+                SizedBox(width: ProfileCard.width, child: column),
+              ],
+            ),
+    );
+  }
+}
+
+/// The avatar as it is now, with the buttons that replace or remove it.
+class ProfileAvatarRow extends StatelessWidget {
+  const ProfileAvatarRow({
     required this.url,
-    required this.initial,
+    required this.monogram,
     required this.onPick,
     required this.onRemove,
     super.key,
   });
 
+  static const _size = 80.0;
+
   final String? url;
-  final String initial;
+
+  /// What stands in where there is no avatar.
+  final String monogram;
   final VoidCallback onPick;
   final VoidCallback? onRemove;
 
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) => Row(
     children: [
-      Container(
-        width: 76,
-        height: 76,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: context.surfaces.canvas,
-          border: Border.all(color: context.surfaces.raised, width: 5),
-        ),
-        child: RemoteIdentityImage(
-          url: url,
-          fallback: Center(
-            child: Text(
-              initial.isEmpty ? '?' : initial.characters.first.toUpperCase(),
-              style: const TextStyle(
-                fontSize: FlucordType.display,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+      ClipOval(
+        child: SizedBox.square(
+          dimension: _size,
+          child: ProfileAvatarImage(url: url, monogram: monogram),
         ),
       ),
-      Positioned(
-        right: 0,
-        bottom: 0,
-        child: ProfileImageActions(
-          label: 'avatar',
-          compact: true,
-          onPick: onPick,
-          onRemove: onRemove,
-        ),
-      ),
+      const SizedBox(width: 16),
+      ProfileImageButtons(label: 'avatar', onPick: onPick, onRemove: onRemove),
     ],
   );
 }
 
-/// Replace and remove, for one image.
-class ProfileImageActions extends StatelessWidget {
-  const ProfileImageActions({
+/// "Change" and "Remove" for one profile image.
+class ProfileImageButtons extends StatelessWidget {
+  const ProfileImageButtons({
     required this.label,
     required this.onPick,
     required this.onRemove,
-    this.compact = false,
     super.key,
   });
 
@@ -188,69 +200,26 @@ class ProfileImageActions extends StatelessWidget {
 
   /// Null when there is nothing stored to remove.
   final VoidCallback? onRemove;
-  final bool compact;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
     children: [
-      _Button(
-        buttonKey: ValueKey('profile-pick-$label'),
-        tooltip: 'Change $label',
-        icon: Icons.edit_outlined,
-        compact: compact,
+      FlucordButton(
+        key: ValueKey('profile-pick-$label'),
+        label: 'Change $label',
         onPressed: onPick,
       ),
-      if (onRemove != null) ...[
-        const SizedBox(width: 4),
-        _Button(
-          buttonKey: ValueKey('profile-remove-$label'),
-          tooltip: 'Remove $label',
-          icon: Icons.close,
-          compact: compact,
-          onPressed: onRemove!,
+      if (onRemove case final remove?)
+        FlucordButton(
+          key: ValueKey('profile-remove-$label'),
+          label: 'Remove $label',
+          kind: FlucordButtonKind.ghost,
+          onPressed: remove,
         ),
-      ],
     ],
   );
-}
-
-class _Button extends StatelessWidget {
-  const _Button({
-    required this.buttonKey,
-    required this.tooltip,
-    required this.icon,
-    required this.compact,
-    required this.onPressed,
-  });
-
-  final Key buttonKey;
-  final String tooltip;
-  final IconData icon;
-  final bool compact;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = compact ? 24.0 : 28.0;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const CircleBorder(),
-        child: InkWell(
-          key: buttonKey,
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(icon, size: compact ? 13 : 15, color: Colors.white),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// The banner colour behind the profile, or none at all.
@@ -269,16 +238,7 @@ class ProfileAccentPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        'ACCENT COLOUR',
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-        ),
-      ),
-      const SizedBox(height: 8),
+      const FlucordFieldLabel('Accent colour'),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -287,8 +247,8 @@ class ProfileAccentPicker extends StatelessWidget {
             swatchKey: const ValueKey('profile-accent-none'),
             selected: value == null,
             onPressed: () => onChanged(null),
-            child: Icon(
-              Icons.format_color_reset_outlined,
+            child: FlucordIcon(
+              FlucordIcons.noColour,
               size: 15,
               color: context.surfaces.muted,
             ),
@@ -297,7 +257,7 @@ class ProfileAccentPicker extends StatelessWidget {
             _Swatch(
               swatchKey: ValueKey('profile-accent-${swatch.toRadixString(16)}'),
               selected: value == swatch,
-              colour: Color(0xff000000 | swatch),
+              colour: Color(DiscordRgb(swatch).opaque),
               onPressed: () => onChanged(swatch),
             ),
         ],
@@ -464,14 +424,14 @@ class ProfileSaveBar extends StatelessWidget {
 class ProfileNotice extends StatelessWidget {
   const ProfileNotice({required this.icon, required this.message, super.key});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String message;
 
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 18, color: context.surfaces.muted),
+      FlucordIcon(icon, size: 18, color: context.surfaces.muted),
       const SizedBox(width: 10),
       Expanded(
         child: Text(

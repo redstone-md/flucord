@@ -58,6 +58,7 @@ final class InvitePreview {
     this.description,
     this.channelName,
     this.approximateMemberCount,
+    this.approximatePresenceCount,
     this.bannerUrl,
   });
 
@@ -81,6 +82,9 @@ final class InvitePreview {
   /// How many members the server reports, or null when not reported.
   final int? approximateMemberCount;
 
+  /// How many members are online, or null when not reported.
+  final int? approximatePresenceCount;
+
   /// The server's banner URL, or null when it has none.
   final String? bannerUrl;
 }
@@ -101,6 +105,12 @@ final class GuildAccessException implements Exception {
   final GuildAccessRefusal refusal;
 
   final String message;
+
+  /// Whether Discord answered about the invite itself, which a later ask
+  /// would answer the same way.
+  bool get isAboutTheInvite =>
+      refusal == GuildAccessRefusal.invalid ||
+      refusal == GuildAccessRefusal.expired;
 
   @override
   String toString() => message;

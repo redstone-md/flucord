@@ -37,6 +37,21 @@ void main() {
     expect(media.microphoneEnabled, isTrue);
   });
 
+  test('leave ends the room even when the microphone will not stop', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+    media.failMicrophoneStop = true;
+    await controller.disconnect();
+
+    expect(controller.isConnected, isFalse);
+    expect(controller.connectionStatus, VoiceConnectionStatus.disconnected);
+    expect(controller.error, isA<StateError>());
+  });
+
   test('deafening also mutes, and undeafening leaves the mute alone', () async {
     final media = _FakeVoiceMediaService();
     final controller = VoiceController(media);
@@ -905,6 +920,35 @@ void main() {
     },
   );
 
+  test(
+    'seats fires on a roster change, and not on a speaking change',
+    () async {
+      final signaling = _FakeVoiceSignalingService();
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(_state('user-1'));
+      await _flushEvents();
+      var seatChanges = 0;
+      controller.seats.addListener(() => seatChanges++);
+
+      signaling.emit(
+        const VoiceSpeakingEvent(userId: 'user-1', ssrc: 9, speakingFlags: 1),
+      );
+      await _flushEvents();
+      expect(seatChanges, 0);
+
+      signaling.roster['voice-1'] = [_state('user-1')];
+      signaling.changeSeats();
+      await _flushEvents();
+      expect(seatChanges, 1);
+    },
+  );
+
   test('a participant the roster no longer seats leaves the room', () async {
     final signaling = _FakeVoiceSignalingService();
     final controller = VoiceController(
@@ -956,6 +1000,121 @@ void main() {
       controller.participants.map((participant) => participant.userId),
       contains('self-1'),
     );
+  });
+
+  group('the input meter', () {
+    test('opens the microphone outside a call and reads its level', () async {
+      final media = _FakeVoiceMediaService();
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+
+      final levels = <double>[];
+      final reading = controller.inputLevels.listen(levels.add);
+      await _flushEvents();
+      expect(media.startedInputs, ['mic-1']);
+      expect(media.microphoneEnabled, isTrue);
+
+      media.addPcm(_quiet);
+      await _flushEvents();
+      expect(levels.single, closeTo(-53, 0.1));
+
+      await reading.cancel();
+      await _flushEvents();
+      expect(media.microphoneStopped, isTrue);
+    });
+
+    test('opens no microphone once the controller is gone', () async {
+      final media = _FakeVoiceMediaService()..initializing = Completer();
+      final controller = VoiceController(media);
+
+      controller.inputLevels.listen((_) {});
+      await _flushEvents();
+      controller.dispose();
+      media.initializing!.complete();
+      await _flushEvents();
+
+      expect(media.startedInputs, isEmpty);
+    });
+
+    test('leaves the microphone to a call when it closes', () async {
+      final media = _FakeVoiceMediaService();
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+      final reading = controller.inputLevels.listen((_) {});
+      await _flushEvents();
+      // The call's microphone is already open: the meter reads it as it is.
+      expect(media.startedInputs, ['mic-1']);
+
+      await reading.cancel();
+      await _flushEvents();
+      expect(media.microphoneStopped, isFalse);
+    });
+
+    test('keeps the microphone open when a call ends under it', () async {
+      final media = _FakeVoiceMediaService();
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+      await controller.toggleMute();
+
+      final reading = controller.inputLevels.listen((_) {});
+      await _flushEvents();
+      await controller.disconnect();
+      expect(media.microphoneStopped, isFalse);
+      expect(
+        media.microphoneEnabled,
+        isTrue,
+        reason: 'the mute belonged to the call',
+      );
+
+      await reading.cancel();
+      await _flushEvents();
+      expect(media.microphoneStopped, isTrue);
+    });
+
+    test('reads a newly picked microphone', () async {
+      final media = _FakeVoiceMediaService();
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+
+      final reading = controller.inputLevels.listen((_) {});
+      addTearDown(reading.cancel);
+      await _flushEvents();
+      await controller.selectInput('mic-2');
+      expect(media.startedInputs, ['mic-1', 'mic-2']);
+    });
+
+    test('a muted call reads as silence', () async {
+      final media = _FakeVoiceMediaService();
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+      final levels = <double>[];
+      final reading = controller.inputLevels.listen(levels.add);
+      addTearDown(reading.cancel);
+      media.addPcm(_quiet);
+      await _flushEvents();
+      await controller.toggleMute();
+      expect(levels.last, double.negativeInfinity);
+    });
+
+    test('a microphone that will not open arrives as an error', () async {
+      final media = _FakeVoiceMediaService()..failMicrophone = true;
+      final controller = VoiceController(media);
+      addTearDown(controller.dispose);
+
+      final errors = <Object>[];
+      final reading = controller.inputLevels.listen(
+        (_) {},
+        onError: errors.add,
+      );
+      addTearDown(reading.cancel);
+      await _flushEvents();
+      expect(errors, [isA<StateError>()]);
+    });
   });
 }
 
@@ -1082,7 +1241,11 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   final List<String?> startedInputs = [];
   bool failMicrophone = false;
   bool failMicrophoneToggle = false;
+  bool failMicrophoneStop = false;
   bool microphoneEnabled = true;
+
+  /// Set to hold [initialize] until it completes.
+  Completer<void>? initializing;
   bool microphoneStopped = false;
   String? selectedOutput;
 
@@ -1094,7 +1257,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async => initializing?.future;
 
   @override
   Future<List<VoiceDevice>> enumerateDevices() async => const [
@@ -1140,6 +1303,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
 
   @override
   Future<void> stopMicrophone() async {
+    if (failMicrophoneStop) throw StateError('device is gone');
     microphoneStopped = true;
     _operations?.add('microphone:stop');
   }

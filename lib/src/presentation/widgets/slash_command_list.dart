@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -50,7 +51,7 @@ class SlashCommandList extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: FlucordRadius.medium,
+        borderRadius: FlucordRadius.overlay,
         border: Border.all(color: context.surfaces.border),
       ),
       child: _body(context),
@@ -139,13 +140,7 @@ class _CommandRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          Text(
-            '/${command.name}',
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text('/${command.name}', style: FlucordTextRole.label.strong),
           if (command.description.isNotEmpty) ...[
             const SizedBox(width: 10),
             Expanded(
@@ -162,7 +157,11 @@ class _CommandRow extends StatelessWidget {
           ] else
             const Spacer(),
           if (command.hasRequiredInputs)
-            Icon(Icons.edit_outlined, size: 13, color: context.surfaces.muted),
+            FlucordIcon(
+              FlucordIcons.edit,
+              size: 13,
+              color: context.surfaces.muted,
+            ),
         ],
       ),
     ),
@@ -253,17 +252,10 @@ class _SlashCommandOptionsDialogState extends State<SlashCommandOptionsDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('slash-options-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('slash-options-run'),
-        onPressed: _isComplete ? _submit : null,
-        child: const Text('Run'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('slash-options-run'),
+      label: 'Run',
+      onPressed: _isComplete ? _submit : null,
+    ),
   );
 }

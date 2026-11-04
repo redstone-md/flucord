@@ -43,7 +43,7 @@ void main() {
                       leaveRequested++;
                       confirmed = await showLeaveServerConfirmation(
                         context,
-                        serverName: 'The Forge',
+                        space: workspace.spaces.single,
                       );
                     },
                   ),
@@ -61,11 +61,23 @@ void main() {
     expect(find.byKey(const ValueKey('leave-server-dialog')), findsOneWidget);
     expect(find.text('Leave The Forge?'), findsOneWidget);
     expect(leaveRequested, 1);
+    // A card under the words shows the server being left, by its tile and
+    // its name.
+    final card = find.byKey(const ValueKey('leave-server-card'));
+    expect(
+      find.descendant(of: card, matching: find.text('TF')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: card, matching: find.text('The Forge')),
+      findsOneWidget,
+    );
 
     // Cancelling leaves the server where it is.
     await tester.tap(
-      find.byWidgetPredicate(
-        (widget) => widget is TextButton && widget.child is Text,
+      find.descendant(
+        of: find.byKey(const ValueKey('leave-server-dialog')),
+        matching: find.text('Cancel'),
       ),
     );
     await tester.pumpAndSettle();

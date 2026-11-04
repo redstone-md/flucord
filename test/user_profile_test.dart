@@ -86,6 +86,7 @@ void main() {
             'id': '333333333333333333',
             'username': 'roman',
             'global_name': 'Roman Vale',
+            'avatar': 'rhash',
           },
         ],
       })!;
@@ -109,6 +110,11 @@ void main() {
       expect(profile.mutualServers[1].id, '999');
       expect(profile.mutualFriends.single.displayName, 'Roman Vale');
       expect(profile.mutualFriends.single.username, 'roman');
+      expect(
+        profile.mutualFriends.single.avatarUrl,
+        'https://cdn.discordapp.com/avatars/333333333333333333/rhash.webp'
+        '?size=32',
+      );
     });
 
     test('a redacted or bare profile falls back per field', () {
@@ -128,6 +134,26 @@ void main() {
       expect(profile.connections, isEmpty);
       expect(profile.mutualServers, isEmpty);
       expect(profile.mutualFriends, isEmpty);
+    });
+
+    test('a connection links to its page where the service has one', () {
+      final profile = DiscordUserProfileRepository.readOtherProfile(const {
+        'user': {'id': '222222222222222222'},
+        'connected_accounts': [
+          {'type': 'github', 'id': '456', 'name': 'mira'},
+          {'type': 'steam', 'id': '76561198000000000', 'name': 'Mira'},
+          {'type': 'battlenet', 'id': '789', 'name': 'mira#2112'},
+        ],
+      })!;
+
+      expect(
+        profile.connections.map((connection) => connection.link?.toString()),
+        [
+          'https://github.com/mira',
+          'https://steamcommunity.com/profiles/76561198000000000',
+          null,
+        ],
+      );
     });
 
     test('a payload with no user is refused', () {

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/app_authorisation_controller.dart';
 import '../../domain/app_authorisation.dart';
 import '../../theme/flucord_radius.dart';
@@ -286,7 +288,7 @@ class _InvitationCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   application?.name ?? 'This app',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: FlucordTextRole.label.strong,
                 ),
               ),
             ],
@@ -410,8 +412,8 @@ class _GuildChoice extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              FlucordIcon(
+                selected ? FlucordIcons.radioOn : FlucordIcons.radioOff,
                 size: 16,
                 color: selected
                     ? Theme.of(context).colorScheme.primary
@@ -421,9 +423,7 @@ class _GuildChoice extends StatelessWidget {
               Expanded(
                 child: Text(
                   guild.name,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w600 : null,
-                  ),
+                  style: selected ? FlucordTextRole.label.strong : null,
                 ),
               ),
             ],
@@ -465,10 +465,7 @@ class _GrantRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  grant.name,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+                Text(grant.name, style: FlucordTextRole.label.strong),
                 if (grant.description.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 1),

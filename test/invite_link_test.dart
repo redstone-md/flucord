@@ -54,4 +54,22 @@ void main() {
       );
     });
   });
+
+  group('InviteLink.codesIn', () {
+    test('finds each invite in message text once, in order', () {
+      expect(
+        InviteLink.codesIn(
+          'join https://discord.gg/aurora, or discord.com/invite/forge. '
+          'again: <https://discord.gg/aurora>',
+        ),
+        ['aurora', 'forge'],
+      );
+    });
+
+    test('finds nothing in text without an invite', () {
+      expect(InviteLink.codesIn('aurora at https://example.com/x'), isEmpty);
+      expect(InviteLink.codesIn('https://discord.com/channels/1/2'), isEmpty);
+      expect(InviteLink.codesIn('https://notdiscord.gg/aurora'), isEmpty);
+    });
+  });
 }

@@ -285,7 +285,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
       color: context.surfaces.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.surfaces.border),
-        borderRadius: FlucordRadius.small,
+        borderRadius: FlucordRadius.overlay,
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
@@ -304,10 +304,8 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
                       ComposerAutocompleteTrigger.emoji => 'EMOJI',
                       _ => 'MEMBERS AND ROLES',
                     },
-                    style: TextStyle(
+                    style: FlucordTextRole.caption.strong.copyWith(
                       color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -391,10 +389,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                               ? ':${suggestion.label}:'
                               : '$prefix${suggestion.label}',
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: FlucordType.caption,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: FlucordTextRole.caption.strong,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -471,10 +466,8 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
               child: Center(
                 child: Text(
                   suggestion.initials ?? '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w700,
+                  style: FlucordTextRole.caption.strong.copyWith(
+                    color: FlucordFixedColors.onFill,
                   ),
                 ),
               ),
@@ -490,10 +483,10 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
         color: color.withValues(alpha: 0.16),
         borderRadius: FlucordRadius.small,
       ),
-      child: Icon(
+      child: FlucordIcon(
         suggestion.kind == ComposerAutocompleteKind.role
-            ? Icons.alternate_email_rounded
-            : Icons.tag_rounded,
+            ? FlucordIcons.mention
+            : FlucordIcons.textChannel,
         size: 16,
         color: color,
       ),

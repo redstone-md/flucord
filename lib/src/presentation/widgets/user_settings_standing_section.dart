@@ -82,7 +82,7 @@ class _AccountStandingSectionState extends State<AccountStandingSection> {
         child: Text(
           standing.username,
           key: const ValueKey('standing-username'),
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: FlucordTextRole.label.strong,
         ),
       ),
     if (standing.isClear)
@@ -170,7 +170,7 @@ class _RecordGroup extends StatelessWidget {
                       // is left as a record with no words rather than given
                       // wording this client invented.
                       record.title.isEmpty ? 'Recorded action' : record.title,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: FlucordTextRole.label.strong,
                     ),
                     if (record.subtitle.isNotEmpty)
                       Padding(
@@ -285,13 +285,7 @@ class _SuspensionNotice extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'This account is suspended',
-          style: TextStyle(
-            fontSize: FlucordType.label,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text('This account is suspended', style: FlucordTextRole.label.strong),
         if (suspension.reason.isNotEmpty) ...[
           const SizedBox(height: 4),
           // Verbatim: the wording is the only thing an appeal can be written

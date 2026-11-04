@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
@@ -53,24 +54,21 @@ class PinnedMessagesPanel extends StatelessWidget {
             child: Row(
               children: [
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Pinned messages',
-                    style: TextStyle(
-                      fontSize: FlucordType.label,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.label.strong,
                   ),
                 ),
                 IconButton(
                   onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh, size: 18),
+                  icon: const FlucordIcon(FlucordIcons.refresh, size: 18),
                   tooltip: 'Refresh pins',
                 ),
                 IconButton(
                   key: const ValueKey('close-pins-panel'),
                   onPressed: onClose,
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: const FlucordIcon(FlucordIcons.clear, size: 18),
                   tooltip: 'Close pinned messages',
                 ),
                 const SizedBox(width: 4),
@@ -90,7 +88,7 @@ class PinnedMessagesPanel extends StatelessWidget {
     }
     if (error != null && history == null) {
       return _PanelState(
-        icon: Icons.error_outline,
+        icon: FlucordIcons.error,
         title: 'Pins unavailable',
         action: TextButton(onPressed: onRefresh, child: const Text('Retry')),
       );
@@ -98,7 +96,7 @@ class PinnedMessagesPanel extends StatelessWidget {
     final messages = history?.messages ?? const <ChatMessage>[];
     if (messages.isEmpty) {
       return const _PanelState(
-        icon: Icons.push_pin_outlined,
+        icon: FlucordIcons.pin,
         title: 'No pinned messages',
       );
     }
@@ -155,7 +153,7 @@ class _PinnedMessageRow extends StatelessWidget {
           if (member == null)
             const SizedBox.square(
               dimension: 30,
-              child: Icon(Icons.person_outline, size: 18),
+              child: FlucordIcon(FlucordIcons.person, size: 18),
             ),
           const SizedBox(width: 9),
           Expanded(
@@ -164,10 +162,7 @@ class _PinnedMessageRow extends StatelessWidget {
               children: [
                 Text(
                   member?.displayName ?? 'Unknown user',
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 if (message.body.isNotEmpty) ...[
                   const SizedBox(height: 4),
@@ -220,7 +215,7 @@ class _PinnedMessageRow extends StatelessWidget {
           ),
           IconButton(
             onPressed: () => onUnpin(message),
-            icon: const Icon(Icons.push_pin_outlined, size: 16),
+            icon: const FlucordIcon(FlucordIcons.pin, size: 16),
             tooltip: 'Unpin message',
           ),
         ],
@@ -232,7 +227,7 @@ class _PinnedMessageRow extends StatelessWidget {
 class _PanelState extends StatelessWidget {
   const _PanelState({required this.icon, required this.title, this.action});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final Widget? action;
 
@@ -241,7 +236,7 @@ class _PanelState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 26, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 10),
         Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,

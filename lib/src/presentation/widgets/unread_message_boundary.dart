@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -21,10 +22,8 @@ class UnreadMessageBoundary extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             'NEW',
-            style: TextStyle(
+            style: FlucordTextRole.caption.strong.copyWith(
               color: context.surfaces.mention,
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -61,19 +60,13 @@ class JumpToPresentButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.arrow_downward,
+              FlucordIcon(
+                FlucordIcons.jumpDown,
                 size: 15,
                 color: context.surfaces.muted,
               ),
               const SizedBox(width: 5),
-              const Text(
-                'Jump to present',
-                style: TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Jump to present', style: FlucordTextRole.caption.strong),
             ],
           ),
         ),
@@ -105,19 +98,13 @@ class JumpToUnreadButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.arrow_upward,
+              FlucordIcon(
+                FlucordIcons.jumpUp,
                 size: 15,
                 color: context.surfaces.mention,
               ),
               const SizedBox(width: 5),
-              Text(
-                'Jump to unread',
-                style: TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Jump to unread', style: FlucordTextRole.caption.strong),
             ],
           ),
         ),

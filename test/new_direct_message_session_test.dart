@@ -1,7 +1,10 @@
+import 'package:flucord/src/presentation/widgets/direct_message_views.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_discord_wire.dart';
+import 'support/flucord_icon_finder.dart';
 import 'support/session_harness.dart';
 
 const _annId = '100000000000000011';
@@ -82,6 +85,19 @@ void main() {
         await session.settle();
         expect(_person(_annId), findsOneWidget);
         expect(_person(_boId), findsNothing);
+        final dialog = find.byType(DirectMessageDialog);
+        expect(
+          find.descendant(of: dialog, matching: find.byType(Icon)),
+          findsNothing,
+          reason: 'the dialog draws its icons from the shared set',
+        );
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: findFlucordIcon(FlucordIcons.search),
+          ),
+          findsOneWidget,
+        );
 
         await tester.tap(_person(_annId));
         await session.settle();

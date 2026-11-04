@@ -154,6 +154,9 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Set<String>> _askedAuthors = {};
   String? _activeChannelId;
   String? _guildAccessError;
+
+  /// Invite previews asked for by messages, per code, for this session.
+  final Map<String, Future<InvitePreview>> _invitePreviews = {};
   bool _isApplicationActive = true;
   ChatMessage? _lastSentMessage;
 
@@ -342,6 +345,7 @@ final class ChatController extends ChangeNotifier {
     _drafts = MemoryComposerDraftStore();
     _archivedThreadState.clear();
     _askedAuthors.clear();
+    _invitePreviews.clear();
     _clearTyping();
     // Presences still held belong to the last account.
     _presenceFold?.cancel();
@@ -544,9 +548,11 @@ final class ChatController extends ChangeNotifier {
     if (value.isEmpty || _workspace == null) return null;
     try {
       final conversation = await _repository.openDirectConversation(value);
-      _workspace = _workspace!
-          .upsertSpace(const CommunitySpace.directMessages())
-          .upsertMember(conversation.recipient)
+      _workspace = conversation.recipients
+          .fold(
+            _workspace!.upsertSpace(const CommunitySpace.directMessages()),
+            (workspace, recipient) => workspace.upsertMember(recipient),
+          )
           .upsertChannel(conversation.channel);
       notifyListeners();
       return conversation.channel.id;

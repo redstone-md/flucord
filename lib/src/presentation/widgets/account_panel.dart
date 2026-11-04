@@ -1,16 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../application/connection_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
+import 'flucord_icon_button.dart';
 import 'streamer_mode_scope.dart';
 import 'self_presence_scope.dart';
 import 'self_status_menu.dart';
+import 'user_settings_dialog.dart';
+import 'user_settings_scope.dart';
+import 'voice_control.dart';
+import 'voice_scope.dart';
 
+/// The account's own corner at the foot of the channel sidebar: who is signed
+/// in, their status, and the mute, deafen and settings buttons.
 class AccountPanel extends StatelessWidget {
   const AccountPanel({
     required this.member,
@@ -23,22 +33,30 @@ class AccountPanel extends StatelessWidget {
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
 
+  /// The panel's height at the default text size. Larger text grows it.
+  static const height = 52.0;
+
+  static const _buttonSize = 28.0;
+
   @override
   Widget build(BuildContext context) {
     final presence = SelfPresenceScope.maybeOf(context);
+    final voice = VoiceScope.maybeOf(context);
+    final settings = UserSettingsScope.maybeOf(context);
+    final broadcasting = presence?.isAvailable ?? false;
     final (status, color, tooltip) = _connectionLabels(context);
     // The account's own row is composed locally, so the panel prefers what
     // this client is broadcasting over whatever the member table last cached.
-    final self = presence?.isAvailable ?? false
+    final self = broadcasting
         ? presence!.userPresence
         : member.presenceOrCoarse;
-    final custom = self.customStatus;
+    final custom = ActivitySummary.of([?self.customStatus]);
     final identity = Row(
       children: [
         MemberAvatar(
           member: member.withPresence(self),
           size: 32,
-          presenceBorderColor: context.surfaces.inset,
+          presenceBorderColor: context.surfaces.rail,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -56,31 +74,32 @@ class AccountPanel extends StatelessWidget {
                 key: const ValueKey('account-panel-name'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
+                style: FlucordTextRole.label.style.copyWith(
+                  color: context.surfaces.text,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 1),
-              if (custom != null)
-                ActivitySummaryLine(
-                  key: const ValueKey('account-custom-status'),
-                  activity: custom,
-                )
-              else
-                Text(
-                  presence?.isAvailable ?? false
-                      ? self.displayStatus.label
-                      : status,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: presence?.isAvailable ?? false
-                        ? context.surfaces.muted
-                        : color,
-                    fontSize: FlucordType.caption,
-                  ),
-                ),
+              // The connection's state rides on the status line: the panel
+              // has no mark of its own for it.
+              Tooltip(
+                message: tooltip,
+                child: custom != null
+                    ? ActivitySummaryLine(
+                        key: const ValueKey('account-custom-status'),
+                        summary: custom,
+                        color: context.surfaces.captionText,
+                      )
+                    : Text(
+                        broadcasting ? self.displayStatus.label : status,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: FlucordTextRole.caption.style.copyWith(
+                          color: broadcasting
+                              ? context.surfaces.captionText
+                              : color,
+                        ),
+                      ),
+              ),
             ],
           ),
         ),
@@ -88,10 +107,9 @@ class AccountPanel extends StatelessWidget {
     );
     return Container(
       key: const ValueKey('account-panel'),
-      height: 56,
+      constraints: const BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: context.surfaces.inset,
         border: Border(top: BorderSide(color: context.surfaces.border)),
       ),
       child: Row(
@@ -101,10 +119,31 @@ class AccountPanel extends StatelessWidget {
                 ? identity
                 : SelfStatusMenu(controller: presence, child: identity),
           ),
-          Tooltip(
-            message: tooltip,
-            child: Icon(Icons.sensors, size: 17, color: color),
-          ),
+          if (voice != null) ...[
+            FlucordIconButton.control(
+              key: const ValueKey('account-mute'),
+              control: VoiceControl.mute(voice),
+              dimension: _buttonSize,
+            ),
+            FlucordIconButton.control(
+              key: const ValueKey('account-deafen'),
+              control: VoiceControl.deafen(voice),
+              dimension: _buttonSize,
+            ),
+          ],
+          if (settings != null)
+            FlucordIconButton(
+              key: const ValueKey('account-settings'),
+              tooltip: 'User settings',
+              icon: FlucordIcons.settings,
+              dimension: _buttonSize,
+              onPressed: () => unawaited(
+                UserSettingsDialog.showFromScopes(
+                  context,
+                  controller: settings,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -114,7 +153,7 @@ class AccountPanel extends StatelessWidget {
       switch (sessionMode) {
         SessionMode.disconnected => (
           'Disconnected',
-          context.surfaces.muted,
+          context.surfaces.captionText,
           'Not connected to Discord',
         ),
         SessionMode.demo => (
@@ -140,7 +179,7 @@ class AccountPanel extends StatelessWidget {
           ),
           RepositoryConnectionStatus.offline => (
             'Offline',
-            context.surfaces.muted,
+            context.surfaces.captionText,
             'Not connected to Discord',
           ),
         },

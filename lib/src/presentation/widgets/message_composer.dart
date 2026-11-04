@@ -9,6 +9,7 @@ import '../../application/send_failure.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -21,11 +22,14 @@ import '../../application/slash_command_controller.dart';
 import 'accessibility_dials.dart';
 import 'accessibility_scope.dart';
 import 'emoji_picker.dart';
+import 'flucord_icon_button.dart';
+import 'flucord_menu.dart';
 import 'gif_picker.dart';
 import 'slash_command_list.dart';
 import 'spell_check_scope.dart';
 import 'native_voice_message_player.dart';
 import 'pending_attachment_strip.dart';
+import 'recessed_field.dart';
 import 'remote_identity_image.dart';
 import 'sticker_picker.dart';
 
@@ -152,6 +156,25 @@ class MessageComposer extends StatefulWidget {
 /// keyboard works from outside this widget.
 class MessageComposerState extends State<MessageComposer>
     with _ComposerAutocompleteStateMixin, _VoiceMessageComposerStateMixin {
+  /// The room between the box and the chat card's edges.
+  static const _gutter = 16.0;
+
+  /// The empty box's height. It grows with its text.
+  static const _height = 44.0;
+
+  /// Above and below one line of text, so one line makes [_height].
+  static final _textInset = (_height - FlucordTextRole.body.lineHeight) / 2;
+
+  /// From the box's edge to the first and last button.
+  static const _buttonInset = 8.0;
+  static const _buttonGap = 4.0;
+
+  /// The button slots keep the buttons' own height, so [_height] holds.
+  static const _buttonRow = BoxConstraints(
+    minWidth: FlucordIconButton.size,
+    minHeight: FlucordIconButton.size,
+  );
+
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
@@ -382,20 +405,19 @@ class MessageComposerState extends State<MessageComposer>
   /// One line of small text above the field.
   Widget _composerNotice({
     required Key key,
-    required IconData icon,
+    required FlucordIconData icon,
     required String text,
   }) => Padding(
     key: key,
     padding: const EdgeInsets.only(left: 14, bottom: 4),
     child: Row(
       children: [
-        Icon(icon, size: 13, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 13, color: context.surfaces.muted),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: FlucordType.caption,
+            style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.muted,
             ),
           ),
@@ -406,7 +428,7 @@ class MessageComposerState extends State<MessageComposer>
 
   Widget _slowmodeNotice(Duration remaining) => _composerNotice(
     key: const ValueKey('composer-slowmode-countdown'),
-    icon: Icons.timer_outlined,
+    icon: FlucordIcons.slowmode,
     text: sendingTooFast(_slowmodeLabel(remaining)),
   );
 
@@ -629,7 +651,7 @@ class MessageComposerState extends State<MessageComposer>
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.all(_gutter),
       color: context.surfaces.canvas,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -648,7 +670,7 @@ class MessageComposerState extends State<MessageComposer>
           if (_suppressNotifications)
             _composerNotice(
               key: const ValueKey('composer-silent-notice'),
-              icon: Icons.notifications_off_outlined,
+              icon: FlucordIcons.silent,
               text: 'This message will send without notifications.',
             ),
           if (widget.replyTo != null) _replyBar(context),
@@ -709,86 +731,95 @@ class MessageComposerState extends State<MessageComposer>
                       });
                     }
                   },
-                  decoration: InputDecoration(
-                    hintText:
-                        'Message ${widget.channelHintPrefix}${widget.channelName}',
-                    // In a narrow composer a wrapped hint is what makes the box
-                    // tall, and that takes the height from the timeline.
-                    hintMaxLines: 1,
-                    contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
-                    // Square top corners under the reply bar, so the two read
-                    // as one surface. Null elsewhere keeps the theme's rounded
-                    // field.
-                    enabledBorder: widget.replyTo == null
-                        ? null
-                        : const OutlineInputBorder(
-                            borderRadius: BorderRadius.vertical(
-                              bottom: FlucordRadius.mediumCorner,
-                            ),
-                            borderSide: BorderSide.none,
-                          ),
-                    focusedBorder: widget.replyTo == null
-                        ? null
-                        : OutlineInputBorder(
-                            borderRadius: const BorderRadius.vertical(
-                              bottom: FlucordRadius.mediumCorner,
-                            ),
-                            borderSide: BorderSide(
-                              color: context.surfaces.focusRing,
-                              width: 2,
-                            ),
-                          ),
-                    prefixIcon: _composerMenu(),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        EmojiPickerButton(
-                          spaceName: widget.spaceName,
-                          emojiSections: widget.emojiSections,
-                          onSelected: _insertText,
-                          favorites: widget.expressionFavorites,
+                  style: FlucordTextRole.body.style.copyWith(
+                    color: context.surfaces.text,
+                  ),
+                  decoration:
+                      recessedFieldDecoration(
+                        context,
+                        // Square top corners under the reply bar, so the two
+                        // read as one surface.
+                        borderRadius: widget.replyTo == null
+                            ? FlucordRadius.medium
+                            : const BorderRadius.vertical(
+                                bottom: FlucordRadius.mediumCorner,
+                              ),
+                      ).copyWith(
+                        hintText:
+                            'Message ${widget.channelHintPrefix}${widget.channelName}',
+                        hintStyle: FlucordTextRole.body.style.copyWith(
+                          color: context.surfaces.captionText,
                         ),
-                        if (widget.gifPicker case final picker?)
-                          ListenableBuilder(
-                            listenable: picker,
-                            builder: (_, _) => GifPickerButton(
-                              controller: picker,
+                        // In a narrow composer a wrapped hint is what makes
+                        // the box tall, and that takes the height from the
+                        // timeline.
+                        hintMaxLines: 1,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: _textInset,
+                        ),
+                        prefixIcon: Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            start: _buttonInset,
+                            end: _buttonGap,
+                          ),
+                          child: _composerMenu(),
+                        ),
+                        prefixIconConstraints: _buttonRow,
+                        suffixIconConstraints: _buttonRow,
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: _buttonGap,
+                          children: [
+                            EmojiPickerButton(
+                              spaceName: widget.spaceName,
+                              emojiSections: widget.emojiSections,
+                              onSelected: _insertText,
                               favorites: widget.expressionFavorites,
-                              // A GIF is sent as its link, which is what
-                              // Discord's own client posts: the embed comes
-                              // from the url, not from an upload.
-                              onSelected: _sendGif,
+                              dimension: FlucordIconButton.size,
+                              iconSize: FlucordIconButton.iconSize,
                             ),
-                          ),
-                        StickerPickerButton(
-                          sections: widget.stickerSections,
-                          isSending: widget.isSending || _isHeldBySlowmode,
-                          onSend: widget.onSendStickers,
-                          favorites: widget.expressionFavorites,
-                        ),
-                        // The two send buttons share one key, so a disabled
-                        // send updates in place; only the spinner and the
-                        // recorder cross-fade.
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 130),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeOut,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: ScaleTransition(
-                                  scale: Tween<double>(
-                                    begin: 0.9,
-                                    end: 1.0,
-                                  ).animate(animation),
-                                  child: child,
+                            if (widget.gifPicker case final picker?)
+                              ListenableBuilder(
+                                listenable: picker,
+                                builder: (_, _) => GifPickerButton(
+                                  controller: picker,
+                                  favorites: widget.expressionFavorites,
+                                  // A GIF is sent as its link, which is what
+                                  // Discord's own client posts: the embed comes
+                                  // from the url, not from an upload.
+                                  onSelected: _sendGif,
                                 ),
                               ),
-                          child: _trailingAction(),
+                            StickerPickerButton(
+                              sections: widget.stickerSections,
+                              isSending: widget.isSending || _isHeldBySlowmode,
+                              onSend: widget.onSendStickers,
+                              favorites: widget.expressionFavorites,
+                            ),
+                            // The two send buttons share one key, so a disabled
+                            // send updates in place; only the spinner and the
+                            // recorder cross-fade.
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 130),
+                              switchInCurve: Curves.easeOut,
+                              switchOutCurve: Curves.easeOut,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.9,
+                                        end: 1.0,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: _trailingAction(),
+                            ),
+                            const SizedBox(width: _buttonInset - _buttonGap),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
                 ),
               ),
             ),
@@ -830,8 +861,7 @@ class MessageComposerState extends State<MessageComposer>
       children: [
         Text(
           '$_charactersRemaining',
-          style: TextStyle(
-            fontSize: FlucordType.caption,
+          style: FlucordTextRole.caption.style.copyWith(
             color: _isOverCharacterLimit
                 ? Theme.of(context).colorScheme.error
                 : context.surfaces.muted,
@@ -841,8 +871,7 @@ class MessageComposerState extends State<MessageComposer>
           const SizedBox(width: 5),
           Text(
             'Your message is above the limit.',
-            style: TextStyle(
-              fontSize: FlucordType.caption,
+            style: FlucordTextRole.caption.style.copyWith(
               color: Theme.of(context).colorScheme.error,
             ),
           ),
@@ -859,9 +888,10 @@ class MessageComposerState extends State<MessageComposer>
     key: const ValueKey('composer-menu'),
     enabled: !widget.isSending,
     tooltip: 'More options',
-    icon: Icon(
-      widget.canAttachFiles ? Icons.add_circle_outline : Icons.more_horiz,
-      size: 20,
+    style: FlucordIconButton.squareStyle,
+    iconSize: FlucordIconButton.iconSize,
+    icon: FlucordIcon(
+      widget.canAttachFiles ? FlucordIcons.attach : FlucordIcons.more,
     ),
     onSelected: (action) => switch (action) {
       _ComposerMenuAction.attach => unawaited(_pickAttachments()),
@@ -872,37 +902,33 @@ class MessageComposerState extends State<MessageComposer>
     },
     itemBuilder: (_) => [
       if (widget.canAttachFiles)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('add-attachment'),
           value: _ComposerMenuAction.attach,
-          child: _ComposerMenuRow(
-            icon: Icons.upload_file_outlined,
-            label: 'Add attachment',
-          ),
+          icon: FlucordIcons.upload,
+          label: 'Add attachment',
         ),
-      PopupMenuItem(
+      FlucordMenuItem(
         key: const ValueKey('create-poll'),
         value: _ComposerMenuAction.poll,
         // A poll is a message, so slowmode holds it like the rest.
         enabled: !_isHeldBySlowmode,
-        child: const _ComposerMenuRow(
-          icon: Icons.poll_outlined,
-          label: 'Create poll',
-        ),
+        icon: FlucordIcons.poll,
+        label: 'Create poll',
       ),
-      PopupMenuItem(
-        key: const ValueKey('send-silently'),
-        value: _ComposerMenuAction.silent,
-        child: _suppressNotifications
-            ? const _ComposerMenuRow(
-                icon: Icons.notifications_outlined,
-                label: 'Send with notifications',
-              )
-            : const _ComposerMenuRow(
-                icon: Icons.notifications_off_outlined,
-                label: 'Send silently',
-              ),
-      ),
+      _suppressNotifications
+          ? const FlucordMenuItem(
+              key: ValueKey('send-silently'),
+              value: _ComposerMenuAction.silent,
+              icon: FlucordIcons.notifications,
+              label: 'Send with notifications',
+            )
+          : const FlucordMenuItem(
+              key: ValueKey('send-silently'),
+              value: _ComposerMenuAction.silent,
+              icon: FlucordIcons.silent,
+              label: 'Send silently',
+            ),
     ],
   );
 
@@ -911,64 +937,52 @@ class MessageComposerState extends State<MessageComposer>
     if (widget.isSending) {
       return const SizedBox.square(
         key: ValueKey('send-progress'),
-        dimension: 48,
+        dimension: FlucordIconButton.size,
         child: Center(
           child: SizedBox.square(
-            dimension: 16,
+            dimension: FlucordIconButton.iconSize,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
       );
     }
     if (_canSend) {
-      return IconButton(
+      return FlucordIconButton(
         key: const ValueKey('send-message'),
-        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-        padding: EdgeInsets.zero,
         onPressed: _send,
-        icon: Icon(Icons.send, size: 19, color: context.surfaces.accentIcon),
+        icon: FlucordIcons.send,
+        color: context.surfaces.accentIcon,
         tooltip: 'Send message',
       );
     }
     // A message that is over the limit keeps its send button, greyed out
     // beside the red count, rather than swapping to the recorder: the user
     // typed words, and the honest answer is that they are too many.
-    if (_hasContent || _attachments.isNotEmpty) {
-      return const IconButton(
-        key: ValueKey('send-message'),
-        constraints: BoxConstraints.tightFor(width: 48, height: 48),
-        padding: EdgeInsets.zero,
-        onPressed: null,
-        icon: Icon(Icons.send, size: 19),
-        tooltip: 'Send message',
-      );
-    }
+    if (_hasContent || _attachments.isNotEmpty) return _disabledSend;
     if (widget.voiceMessageRecorder != null &&
         widget.onSendVoiceMessage != null) {
-      return IconButton(
+      return FlucordIconButton(
         key: const ValueKey('record-voice-message'),
-        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-        padding: EdgeInsets.zero,
         onPressed: _canRecordVoice ? _startVoiceRecording : null,
-        icon: const Icon(Icons.mic_none_rounded, size: 20),
+        icon: FlucordIcons.mic,
         tooltip: 'Record voice message',
       );
     }
-    return const IconButton(
-      key: ValueKey('send-message'),
-      constraints: BoxConstraints.tightFor(width: 48, height: 48),
-      padding: EdgeInsets.zero,
-      onPressed: null,
-      icon: Icon(Icons.send, size: 19),
-      tooltip: 'Send message',
-    );
+    return _disabledSend;
   }
+
+  static const _disabledSend = FlucordIconButton(
+    key: ValueKey('send-message'),
+    onPressed: null,
+    icon: FlucordIcons.send,
+    tooltip: 'Send message',
+  );
 
   Widget _replyBar(BuildContext context) => Container(
     height: 34,
     padding: const EdgeInsets.only(left: 12),
     decoration: BoxDecoration(
-      color: context.surfaces.surface,
+      color: context.surfaces.inset,
       border: Border(
         top: BorderSide(color: context.surfaces.border),
         left: BorderSide(color: context.surfaces.border),
@@ -980,23 +994,27 @@ class MessageComposerState extends State<MessageComposer>
     ),
     child: Row(
       children: [
-        Icon(Icons.reply, size: 14, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.reply,
+          size: 14,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             'Replying to ${widget.replyAuthor?.displayName ?? 'Unknown user'}',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w500,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: context.surfaces.bodyText,
             ),
           ),
         ),
-        IconButton(
+        FlucordIconButton(
           onPressed: widget.onCancelReply,
-          icon: const Icon(Icons.close, size: 16),
+          icon: FlucordIcons.clear,
           tooltip: 'Cancel reply',
         ),
+        const SizedBox(width: _buttonInset),
       ],
     ),
   );
@@ -1018,23 +1036,6 @@ final class _PasteAction extends Action<PasteTextIntent> {
 
 enum _ComposerMenuAction { attach, poll, silent }
 
-class _ComposerMenuRow extends StatelessWidget {
-  const _ComposerMenuRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 18),
-      const SizedBox(width: 10),
-      Text(label, style: const TextStyle(fontSize: FlucordType.label)),
-    ],
-  );
-}
-
 /// Stands in for the composer in a channel the account may read but not post
 /// in, which is what `SEND_MESSAGES` withheld actually looks like: Discord
 /// removes the input rather than letting a message be typed and refused.
@@ -1052,14 +1053,17 @@ class ReadOnlyChannelNotice extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(Icons.block_outlined, size: 17, color: context.surfaces.muted),
+        FlucordIcon(
+          FlucordIcons.readOnly,
+          size: FlucordIconButton.iconSize,
+          color: context.surfaces.muted,
+        ),
         const SizedBox(width: 9),
-        const Expanded(
+        Expanded(
           child: Text(
             'You do not have permission to send messages here.',
-            style: TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w500,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: context.surfaces.bodyText,
             ),
           ),
         ),

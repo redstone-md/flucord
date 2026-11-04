@@ -1,9 +1,10 @@
-/// A member's standing in one guild, reduced to what permissions depend on.
+/// A member's standing in one guild, reduced to what permissions depend on,
+/// and when they joined, which the full profile shows.
 ///
-/// Kept apart from the display-facing member record because these fields have
-/// no visual meaning at all: they exist only to feed the clamps Discord applies
+/// Kept apart from the display-facing member record. Apart from [joinedAt],
+/// these fields are not drawn anywhere: they feed the clamps Discord applies
 /// after roles and overwrites have been resolved. A member with no record here
-/// is not "a member with no roles" — it is a member we were never told about,
+/// is not "a member with no roles". It is a member we were never told about,
 /// which callers must decide about themselves.
 final class GuildMembership {
   const GuildMembership({
@@ -11,6 +12,7 @@ final class GuildMembership {
     this.flags = 0,
     this.isPending = false,
     this.timeoutUntil,
+    this.joinedAt,
   });
 
   /// Member flag `IS_GUEST`.
@@ -32,6 +34,9 @@ final class GuildMembership {
   /// `communication_disabled_until`. In the past, or null, means not timed out.
   final DateTime? timeoutUntil;
 
+  /// `joined_at`, or null when the payload did not carry it.
+  final DateTime? joinedAt;
+
   bool get isGuest => flags & guestFlag != 0;
 
   bool get isQuarantined => flags & quarantinedFlags != 0;
@@ -41,12 +46,26 @@ final class GuildMembership {
   /// would be reproducible in a test.
   bool isTimedOutAt(DateTime now) => timeoutUntil?.isAfter(now) ?? false;
 
+  /// This membership holding only the roles [exists] knows. Answers this same
+  /// membership when it keeps them all.
+  GuildMembership withRolesThat(bool Function(String roleId) exists) {
+    if (roleIds.every(exists)) return this;
+    return GuildMembership(
+      roleIds: roleIds.where(exists).toList(growable: false),
+      flags: flags,
+      isPending: isPending,
+      timeoutUntil: timeoutUntil,
+      joinedAt: joinedAt,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is GuildMembership &&
       other.flags == flags &&
       other.isPending == isPending &&
       other.timeoutUntil == timeoutUntil &&
+      other.joinedAt == joinedAt &&
       _sameRoles(other.roleIds);
 
   bool _sameRoles(List<String> other) {
@@ -58,6 +77,11 @@ final class GuildMembership {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(roleIds), flags, isPending, timeoutUntil);
+  int get hashCode => Object.hash(
+    Object.hashAll(roleIds),
+    flags,
+    isPending,
+    timeoutUntil,
+    joinedAt,
+  );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_type.dart';
 import '../profile_image_picker.dart';
 import 'flucord_dialog.dart';
@@ -217,7 +218,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
                   IconButton(
                     key: const ValueKey('event-cover-clear'),
                     tooltip: 'Remove cover',
-                    icon: const Icon(Icons.close, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.clear, size: 16),
                     onPressed: () => setState(() {
                       _coverImage = null;
                       _coverCleared = true;
@@ -247,17 +248,11 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
         ),
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('event-save'),
-        onPressed: _draft().isValid ? _save : null,
-        child: Text(_isEditing ? 'Save' : 'Create'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('event-save'),
+      label: _isEditing ? 'Save' : 'Create',
+      onPressed: _draft().isValid ? _save : null,
+    ),
   );
 
   List<ConversationChannel> get _channelForKind => [
@@ -403,7 +398,7 @@ class _WhenRow extends StatelessWidget {
         IconButton(
           key: ValueKey('${(fieldKey as ValueKey<String>).value}-clear'),
           tooltip: 'Clear',
-          icon: const Icon(Icons.close, size: 16),
+          icon: const FlucordIcon(FlucordIcons.clear, size: 16),
           onPressed: onClear,
         ),
     ],

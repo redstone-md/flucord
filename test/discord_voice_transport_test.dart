@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtcp_packet.dart';
@@ -15,16 +16,19 @@ import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_transport_cipher.dart';
 import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_websocket.dart';
+import 'package:flucord/src/data/discord/voice_reconnect_backoff.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
 part 'discord_voice_transport_handshake_cases.dart';
 part 'discord_voice_transport_recovery_cases.dart';
+part 'discord_voice_transport_reconnect_cases.dart';
 
 void main() {
   _handshakeCases();
   _feedbackCases();
   _recoveryCases();
+  _reconnectCases();
 
   group('Discord Voice Gateway v8', () {
     test('a screen share declares the stream it carries', () {
@@ -921,36 +925,44 @@ void main() {
 
     test(
       'a session Discord ended does not redial on unanswered heartbeats',
-      () async {
-        final socket = _FakeVoiceWebSocket();
-        final connector = _FakeVoiceSocketConnector(socket);
-        final client = DiscordVoiceGatewayClient(
-          credentials: _credentials,
-          maxDaveProtocolVersion: 0,
-          socketConnector: connector,
-          udpTransport: _FakeVoiceUdpTransport(),
-        );
-        addTearDown(client.close);
+      () {
+        fakeAsync((async) {
+          final socket = _FakeVoiceWebSocket();
+          final connector = _FakeVoiceSocketConnector(socket);
+          final client = DiscordVoiceGatewayClient(
+            credentials: _credentials,
+            maxDaveProtocolVersion: 0,
+            socketConnector: connector,
+            udpTransport: _FakeVoiceUdpTransport(),
+            now: () => Duration.zero,
+          );
 
-        await client.connect();
-        socket.addJson({
-          'op': 8,
-          'd': {'heartbeat_interval': 60},
+          unawaited(client.connect());
+          async.flushMicrotasks();
+          socket.addJson({
+            'op': 8,
+            'd': {'heartbeat_interval': 60},
+          });
+          async.flushMicrotasks();
+          unawaited(socket.closeFromServer(4006));
+          async.flushMicrotasks();
+
+          // The heartbeat timer keeps its interval against a socket that can
+          // deliver no acknowledgement, and its watchdog used to redial the
+          // dead token the protocol had just decided not to redial. A minute
+          // is past every heartbeat the watchdog needs and the redial after it.
+          async.elapse(const Duration(minutes: 1));
+
+          expect(connector.connectCount, 1);
+          expect(
+            socket.sent.where(
+              (frame) => jsonDecode(frame as String)['op'] == 0,
+            ),
+            hasLength(1),
+          );
+          unawaited(client.close());
+          async.flushMicrotasks();
         });
-        await _flushEvents();
-        await socket.closeFromServer(4006);
-        await _flushEvents();
-
-        // The heartbeat timer keeps its interval against a socket that can
-        // deliver no acknowledgement, and its watchdog used to redial the
-        // dead token the protocol had just decided not to redial.
-        await Future<void>.delayed(const Duration(milliseconds: 260));
-
-        expect(connector.connectCount, 1);
-        expect(
-          socket.sent.where((frame) => jsonDecode(frame as String)['op'] == 0),
-          hasLength(1),
-        );
       },
     );
 

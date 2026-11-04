@@ -5,22 +5,27 @@ import '../../application/connection_controller.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
-import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'server_menu.dart';
 import 'account_panel.dart';
 import 'activity_label.dart';
-import 'friends_panel.dart';
+import 'activity_views.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
-import 'mention_badge.dart';
+import 'nameplate_backdrop.dart';
+import 'count_badge.dart';
+import 'direct_message_views.dart';
+import 'display_name.dart';
+import 'flucord_icon_button.dart';
 import 'notification_settings_menu.dart';
-import 'theme_scope.dart';
-import 'user_settings_scope.dart';
+import 'popup_anchor.dart';
+import 'profile_card_route.dart';
+import 'sidebar_row_metrics.dart';
 
 part 'channel_sidebar_rows.dart';
 
@@ -63,6 +68,7 @@ class ChannelSidebar extends StatelessWidget {
     this.onReportServer,
     this.friends,
     this.seatedByChannel = const {},
+    this.speakingUserIds = const {},
     this.voiceConnectionBar,
     super.key,
   });
@@ -74,6 +80,10 @@ class ChannelSidebar extends StatelessWidget {
   /// it here rather than from the voice connection is what lets the sidebar
   /// answer for channels this client has never joined.
   final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
+
+  /// Who is speaking right now, by user id. Only known for the room this
+  /// client is in, so a seat elsewhere never shows the speaking ring.
+  final Set<String> speakingUserIds;
 
   /// The strip that keeps a live voice connection reachable, or null when
   /// there is none. Passed in rather than built here so the sidebar does not
@@ -87,7 +97,7 @@ class ChannelSidebar extends StatelessWidget {
 
   /// Opens somebody sitting in a voice channel. Absent on a surface with
   /// nowhere to show a profile.
-  final void Function(String userId)? onOpenMemberProfile;
+  final OpenProfileCard? onOpenMemberProfile;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
 
@@ -145,8 +155,8 @@ class ChannelSidebar extends StatelessWidget {
   /// flow and in the direct-messages space, which is nobody's server.
   final VoidCallback? onReportServer;
 
-  /// The friend graph, shown in place of the conversation list in direct
-  /// messages. Null on a transport that is never told one.
+  /// The friend graph. In direct messages it adds the Friends row, which
+  /// opens the Friends page. Null on a transport that is never told one.
   final FriendsController? friends;
 
   @override
@@ -161,35 +171,24 @@ class ChannelSidebar extends StatelessWidget {
       readState: _readState,
       channelOf: channelOf,
     );
-    // The account's dark-sidebar answer, read here so the flag from any
-    // device repaints the rail. It only applies to the built-in light
-    // palette: an installed theme is never overridden, its author picked
-    // the panel colours on purpose.
-    final darkSidebar =
-        UserSettingsScope.appearanceOf(context).drawsDarkSidebar &&
-        Theme.of(context).brightness == Brightness.light &&
-        ThemeScope.maybeOf(context) == null;
-    final content = Container(
+    return Container(
       key: const ValueKey('channel-sidebar'),
       width: 236,
-      decoration: BoxDecoration(
-        color: context.surfaces.rail,
-        border: Border(right: BorderSide(color: context.surfaces.border)),
-      ),
+      decoration: BoxDecoration(color: context.surfaces.rail),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // No line under the header: the rail side of the window has no
+          // dividers, only the canvas card has edges.
           Container(
-            height: 58,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: context.surfaces.border),
-              ),
+            height: _SidebarMetrics.headerHeight,
+            // The DM search lines up with the rows under it.
+            padding: EdgeInsets.symmetric(
+              horizontal: isDirect ? _SidebarMetrics.listInset : 16,
             ),
+            alignment: Alignment.centerLeft,
             child: isDirect
-                ? _directMessagesHeader(context)
+                ? _DirectMessageSearch(onPressed: onNewDirectMessage)
                 : _ServerHeader(
                     title: _spaceTitle(context),
                     onOpenSettings: onOpenServerSettings,
@@ -200,22 +199,29 @@ class ChannelSidebar extends StatelessWidget {
                         : _openSpaceNotifications,
                   ),
           ),
+          if (friends case final friends? when isDirect)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _SidebarMetrics.listInset,
+              ),
+              child: _SidebarNavRow(
+                key: const ValueKey('toggle-friends'),
+                icon: FlucordIcons.friends,
+                label: 'Friends',
+                selected: friends.isPanelOpen,
+                onPressed: friends.openPanel,
+              ),
+            ),
           Expanded(
-            child: isDirect && (friends?.isPanelOpen ?? false)
-                // The friend graph takes the whole pane rather than sitting
-                // above the conversations: both are long lists, and stacking
-                // them means neither can be read.
-                ? FriendsPanel(
-                    controller: friends!,
-                    // From the workspace, which the presence service already
-                    // keeps current; a second copy would be a second thing to
-                    // go stale.
-                    presenceOf: (userId) => memberOf(userId)?.presence,
-                  )
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-                    children: _navigationEntries(order),
-                  ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                _SidebarMetrics.listInset,
+                0,
+                _SidebarMetrics.listInset,
+                _SidebarMetrics.listInset,
+              ),
+              children: _navigationEntries(context, order),
+            ),
           ),
           // On a short window a tall bar scrolls, so the channels and the
           // account panel keep their place.
@@ -234,13 +240,6 @@ class ChannelSidebar extends StatelessWidget {
         ],
       ),
     );
-    if (!darkSidebar) return content;
-    // The whole rail repaints with the dark palette, so the rows keep a
-    // readable foreground instead of light-theme text on a dark ground.
-    return Theme(
-      data: FlucordTheme.fromPalette(FlucordPalette.dark),
-      child: content,
-    );
   }
 
   /// The space's name, with a mark when the whole space is muted. Takes all
@@ -251,62 +250,58 @@ class ChannelSidebar extends StatelessWidget {
         child: Text(
           space.name,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w600,
-            color: _spaceMuted
-                ? context.surfaces.muted
-                : Theme.of(context).colorScheme.onSurface,
+          style: FlucordTextRole.heading.style.copyWith(
+            color: _spaceMuted ? context.surfaces.muted : context.surfaces.text,
           ),
         ),
       ),
       if (_spaceMuted)
         Padding(
           key: const ValueKey('space-muted'),
-          padding: const EdgeInsets.only(right: 4),
-          child: Icon(
-            Icons.notifications_off_outlined,
-            size: 15,
+          padding: const EdgeInsetsDirectional.only(end: 4),
+          child: FlucordIcon(
+            FlucordIcons.silent,
+            size: _SidebarMetrics.iconSize,
             color: context.surfaces.muted,
           ),
         ),
     ],
   );
 
-  /// Direct messages have no server menu: their actions start a conversation
-  /// or swap the list, so they stay one click away.
-  Widget _directMessagesHeader(BuildContext context) => Row(
-    children: [
-      Expanded(child: _spaceTitle(context)),
-      if (friends case final friends?)
-        IconButton(
-          key: const ValueKey('toggle-friends'),
-          onPressed: friends.togglePanel,
-          icon: Icon(
-            friends.isPanelOpen
-                ? Icons.forum_outlined
-                : Icons.people_alt_outlined,
-            size: 18,
+  /// What sits beside the "Direct messages" label: the mark of a muted
+  /// space and the space's notification menu. Null when there is neither.
+  Widget? _directMessagesLabelTrailing(BuildContext context) {
+    final onRequest = onNotificationRequest;
+    if (!_spaceMuted && onRequest == null) return null;
+    final color = context.surfaces.captionText;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_spaceMuted)
+          FlucordIcon(
+            key: const ValueKey('space-muted'),
+            FlucordIcons.silent,
+            size: _SidebarMetrics.labelIconSize,
+            color: color,
           ),
-          tooltip: friends.isPanelOpen ? 'Conversations' : 'Friends',
-        ),
-      IconButton(
-        key: const ValueKey('new-direct-message'),
-        onPressed: onNewDirectMessage,
-        icon: const Icon(Icons.edit_square),
-        tooltip: 'New message',
-      ),
-      if (onNotificationRequest case final onRequest?)
-        PopupMenuButton<NotificationMenuRequest>(
-          key: const ValueKey('space-notification-menu'),
-          tooltip: 'Notification settings',
-          icon: const Icon(Icons.more_vert, size: 18),
-          padding: EdgeInsets.zero,
-          onSelected: (request) => onRequest(request, null),
-          itemBuilder: (context) => _spaceNotificationItems,
-        ),
-    ],
-  );
+        if (onRequest != null)
+          PopupMenuButton<NotificationMenuRequest>(
+            key: const ValueKey('space-notification-menu'),
+            tooltip: 'Notification settings',
+            iconSize: _SidebarMetrics.labelIconSize,
+            style: IconButton.styleFrom(
+              fixedSize: const Size.square(_SidebarMetrics.labelButtonSize),
+              minimumSize: const Size.square(_SidebarMetrics.labelButtonSize),
+              padding: EdgeInsets.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: FlucordIcon(FlucordIcons.more, color: color),
+            onSelected: (request) => onRequest(request, null),
+            itemBuilder: (context) => _spaceNotificationItems,
+          ),
+      ],
+    );
+  }
 
   List<PopupMenuEntry<NotificationMenuRequest>> get _spaceNotificationItems =>
       notificationMenuItems(
@@ -344,8 +339,11 @@ class ChannelSidebar extends StatelessWidget {
   bool _showsUnread(ConversationChannel channel) =>
       _readState.showsUnread(channel);
 
-  List<Widget> _navigationEntries(ChannelSidebarOrder order) {
-    if (space.isDirectMessages) return _directMessageEntries(order);
+  List<Widget> _navigationEntries(
+    BuildContext context,
+    ChannelSidebarOrder order,
+  ) {
+    if (space.isDirectMessages) return _directMessageEntries(context, order);
     if (order.categories.isEmpty) {
       return [..._eventEntries(), ..._uncategorizedEntries(order)];
     }
@@ -355,7 +353,6 @@ class ChannelSidebar extends StatelessWidget {
       if (uncategorized.isNotEmpty) ...[
         const _SectionLabel(label: 'Channels'),
         for (final channel in uncategorized) _rowFor(channel),
-        const SizedBox(height: 10),
       ],
       for (final category in order.categories)
         // A category whose every channel was filtered out is dropped whole.
@@ -379,7 +376,6 @@ class ChannelSidebar extends StatelessWidget {
             ],
           ),
       if (order.threads.isNotEmpty) ...[
-        const SizedBox(height: 10),
         const _SectionLabel(label: 'Active threads'),
         for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
@@ -392,10 +388,14 @@ class ChannelSidebar extends StatelessWidget {
   /// A request never sits in the main list. Discord hides it there until the
   /// account answers it, which is the whole point of the folder, so the split
   /// happens here rather than in whatever built the channel list.
-  List<Widget> _directMessageEntries(ChannelSidebarOrder order) {
+  List<Widget> _directMessageEntries(
+    BuildContext context,
+    ChannelSidebarOrder order,
+  ) {
     final requests = order.messageRequests;
     return [
       _DirectMessagesFolder(
+        labelTrailing: _directMessagesLabelTrailing(context),
         requests: requests,
         conversationRows: [
           for (final channel in order.conversations) _rowFor(channel),
@@ -405,12 +405,17 @@ class ChannelSidebar extends StatelessWidget {
     ];
   }
 
+  /// The person a one-to-one DM row shows, or null for a group or a channel.
+  Member? _recipientOf(ConversationChannel channel) =>
+      switch (channel.soleRecipientId) {
+        final id? => memberOf(id),
+        null => null,
+      };
+
   _MessageRequestRow _requestRowFor(ConversationChannel channel) =>
       _MessageRequestRow(
         channel: channel,
-        recipient: channel.recipientId == null
-            ? null
-            : memberOf(channel.recipientId!),
+        recipient: _recipientOf(channel),
         onPressed: () => onSelectChannel(channel.id),
         onAccept: onAcceptMessageRequest == null
             ? null
@@ -427,13 +432,15 @@ class ChannelSidebar extends StatelessWidget {
       return const [];
     }
     return [
-      GuildEventsSidebarButton(
-        count: scheduledEventCount,
-        isLoading: isLoadingScheduledEvents,
-        hasError: scheduledEventsError != null,
-        onPressed: onOpenEvents ?? () {},
+      Padding(
+        padding: const EdgeInsets.only(top: _SidebarMetrics.listInset),
+        child: GuildEventsSidebarButton(
+          count: scheduledEventCount,
+          isLoading: isLoadingScheduledEvents,
+          hasError: scheduledEventsError != null,
+          onPressed: onOpenEvents ?? () {},
+        ),
       ),
-      const SizedBox(height: 10),
     ];
   }
 
@@ -447,17 +454,14 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in text) _rowFor(channel),
       ],
       if (order.threads.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Active threads'),
         for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
       if (forums.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Forums'),
         for (final channel in forums) _rowFor(channel),
       ],
       if (voice.isNotEmpty) ...[
-        const SizedBox(height: 18),
         const _SectionLabel(label: 'Voice channels'),
         for (final channel in voice) ..._voiceEntry(channel),
       ],
@@ -476,6 +480,7 @@ class ChannelSidebar extends StatelessWidget {
         state: seat,
         member: memberOf(seat.userId),
         spaceId: space.id,
+        speaking: speakingUserIds.contains(seat.userId),
         indented: indented,
         onOpenProfile: onOpenMemberProfile,
       ),
@@ -485,9 +490,7 @@ class ChannelSidebar extends StatelessWidget {
       _ChannelRow(
         channel: channel,
         selected: channel.id == selectedChannelId,
-        recipient: channel.recipientId == null
-            ? null
-            : memberOf(channel.recipientId!),
+        recipient: _recipientOf(channel),
         indented: indented,
         muted: _isMuted(channel),
         showsUnread: _showsUnread(channel),

@@ -27,7 +27,11 @@ extension _FlucordShellConversation on FlucordShell {
     channel: channel,
     channels: channels,
     compact: !showChannels,
-    allowMemberPanel: membersFit && !space.isDirectMessages,
+    // A DM with one person has their profile there instead. A group DM has
+    // neither yet.
+    allowMemberPanel:
+        membersFit &&
+        (!space.isDirectMessages || channel.soleRecipientId != null),
     allowThreadPanel: allowThreadPanel,
     showMembers: showMembers,
     showPins: showPins,
@@ -39,8 +43,8 @@ extension _FlucordShellConversation on FlucordShell {
         ? (text) => _submitSearch(workspace, space, channel, text)
         : null,
     onOpenInbox: () => _openInbox(context),
-    onOpenMemberProfile: (userId) =>
-        unawaited(_openMemberCard(context, space.id, userId)),
+    onOpenMemberProfile: (userId, anchor) =>
+        unawaited(_openMemberCard(context, space.id, userId, anchor)),
   );
 
   /// Runs [text] against the server and opens the results panel.
@@ -91,4 +95,11 @@ extension _FlucordShellConversation on FlucordShell {
         if (permissions.can(DiscordPermissions.readMessageHistory, item)) item,
     ];
   }
+
+  /// The person a one-to-one DM is with, when the workspace knows them.
+  Member? _recipientOf(ChatWorkspace workspace, ConversationChannel? channel) =>
+      switch (channel?.soleRecipientId) {
+        final id? => workspace.memberOrNull(id),
+        null => null,
+      };
 }

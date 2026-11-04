@@ -115,14 +115,18 @@ void main() {
       await session.dispatch('CHANNEL_CREATE', _rawDirectMessage());
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      // The rail has the pip while the account is looking at another server.
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      // The rail shows it while the account is looking at another server. A
+      // DM message counts as a mention, as in Discord.
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
       await session.settle();
 
       expect(_channelRow(_newDmId), findsOneWidget);
-      expect(_rowWeight(tester, _newDmId, 'Stranger'), FontWeight.w600);
+      expect(_rowWeight(tester, _newDmId, 'Stranger'), FontWeight.w500);
     });
 
     testSession('a message right behind its new channel is not lost', (
@@ -139,7 +143,10 @@ void main() {
       );
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
     });
 
     testSession('a first DM with no CHANNEL_CREATE still shows', (
@@ -150,7 +157,10 @@ void main() {
 
       await session.dispatch('MESSAGE_CREATE', _strangerMessage());
 
-      expect(find.bySemanticsLabel('Direct Messages, unread'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Direct Messages, 1 mention'),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
       await session.settle();
       expect(_channelRow(_newDmId), findsOneWidget);
@@ -221,7 +231,7 @@ void main() {
         _dispatchedChannel(id: _randomId, name: 'renamed'),
       );
 
-      expect(_rowWeight(tester, _randomId, 'renamed'), FontWeight.w600);
+      expect(_rowWeight(tester, _randomId, 'renamed'), FontWeight.w500);
     });
 
     testSession(
@@ -425,7 +435,7 @@ void main() {
           tester.getTopLeft(_railButton(_guildId)).dy,
           lessThan(tester.getTopLeft(_railButton(_secondGuildId)).dy),
         );
-        expect(_rowWeight(tester, _randomId, 'random'), FontWeight.w600);
+        expect(_rowWeight(tester, _randomId, 'random'), FontWeight.w500);
       },
       ready: {
         ...SessionHarness.defaultReady(),
@@ -520,13 +530,11 @@ void main() {
           _rawMember(roles: [roleId]),
         );
 
-        expect(
-          find.descendant(
-            of: _memberRow(_strangerId),
-            matching: find.text('Moderator'),
-          ),
-          findsOneWidget,
-        );
+        // A member row has no role line, so the role shows on the profile.
+        await tester.tap(_memberRow(_strangerId));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Moderator'), findsOneWidget);
       },
       ready: {
         ...SessionHarness.defaultReady(),

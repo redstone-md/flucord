@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flucord/src/application/message_component_controller.dart';
 import 'package:flucord/src/domain/message_component.dart';
+import 'package:flucord/src/presentation/widgets/flucord_button.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flucord/src/presentation/widgets/message_component_row.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -315,7 +317,7 @@ void main() {
     expect(find.text('prefilled'), findsOne);
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const ValueKey('modal-submit')))
+          .widget<FlucordButton>(find.byKey(const ValueKey('modal-submit')))
           .onPressed,
       isNull,
     );
@@ -360,7 +362,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Form'), findsOne);
-    await tester.tap(find.byKey(const ValueKey('modal-cancel')));
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     expect(await result, isNull);

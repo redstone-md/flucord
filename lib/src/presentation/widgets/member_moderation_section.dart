@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/guild_member_admin_controller.dart';
 import '../../domain/guild_management.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
@@ -71,8 +72,8 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
-                Icon(
-                  Icons.error_outline,
+                FlucordIcon(
+                  FlucordIcons.error,
                   size: 14,
                   color: Theme.of(context).colorScheme.error,
                 ),
@@ -159,7 +160,7 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
               tooltip: 'Reset nickname',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.clear),
+              icon: const FlucordIcon(FlucordIcons.clear),
               onPressed: controller.isBusy
                   ? null
                   : () => unawaited(controller.setNickname('')),
@@ -169,7 +170,7 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
               tooltip: 'Save nickname',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.check),
+              icon: const FlucordIcon(FlucordIcons.check),
               onPressed: controller.isBusy
                   ? null
                   : () => unawaited(controller.setNickname(_nickname.text)),
@@ -316,10 +317,8 @@ class _BlockLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: TextStyle(
-      fontSize: FlucordType.caption,
+    style: FlucordTextRole.caption.strong.copyWith(
       letterSpacing: 0.5,
-      fontWeight: FontWeight.w700,
       color: context.surfaces.muted,
     ),
   );

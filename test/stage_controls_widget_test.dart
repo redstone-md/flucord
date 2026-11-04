@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flucord/src/application/stage_controller.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
+import 'package:flucord/src/presentation/widgets/flucord_button.dart';
 import 'package:flucord/src/presentation/widgets/stage_controls.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -209,7 +211,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Discord requires a topic, so an empty one cannot be submitted.
-    final confirm = tester.widget<FilledButton>(
+    final confirm = tester.widget<FlucordButton>(
       find.byKey(const ValueKey('stage-topic-confirm')),
     );
     expect(confirm.onPressed, isNull);
@@ -238,7 +240,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('stage-start')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('stage-topic-cancel')));
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     expect(repository.started, isEmpty);

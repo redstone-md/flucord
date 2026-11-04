@@ -1,3 +1,5 @@
+import 'package:flucord/src/presentation/widgets/chat_header.dart';
+import 'package:flucord/src/presentation/widgets/message_action_bar.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -246,15 +248,76 @@ void main() {
   );
 
   group('the hover bar', () {
-    testSession('stays inside a short row', (tester, session) async {
+    // It reaches over the row above, so the tests below click and cross the
+    // part that lies outside its own row.
+    testSession('floats over the top edge of the message, at its right', (
+      tester,
+      session,
+    ) async {
       await _openTwoRows(session);
       await _hover(tester, tester.getCenter(session.messageRow(_lowerId)));
 
-      final row = tester.getRect(session.messageRow(_lowerId));
-      final button = tester.getRect(_addReactionToLower);
+      final surface = tester.getRect(
+        find.byKey(const ValueKey('message-surface-$_lowerId')),
+      );
+      final bar = tester.getRect(find.byType(MessageActionBar));
 
-      expect(row.top, lessThanOrEqualTo(button.top));
-      expect(row.bottom, greaterThanOrEqualTo(button.bottom));
+      expect(bar.top, surface.top - 16);
+      expect(bar.bottom, greaterThan(surface.top));
+      expect(bar.right, surface.right - 16);
+    });
+
+    testSession('stays inside the message list over the topmost message', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      for (var index = 0; index < 30; index++) {
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          rawMessage(
+            id: '${900000000000000100 + index}',
+            channelId: SessionHarness.channelId,
+            guildId: SessionHarness.guildId,
+            authorId: index.isEven
+                ? SessionHarness.friendId
+                : SessionHarness.currentUserId,
+            content: 'line $index',
+          ),
+        );
+      }
+      final header = tester.getRect(find.byType(ChatHeader));
+      // The last row that starts above the list's top edge.
+      final top =
+          [
+            for (var index = 0; index < 30; index++)
+              session.messageRow('${900000000000000100 + index}'),
+          ].lastWhere(
+            (row) =>
+                row.evaluate().isNotEmpty &&
+                tester.getRect(row).top < header.bottom,
+          );
+      final scroll = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(
+                    const ValueKey('messages-${SessionHarness.channelId}'),
+                  ),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      // Puts the message's top edge on the list's top edge.
+      scroll.jumpTo(scroll.pixels - (header.bottom - tester.getRect(top).top));
+      await tester.pump();
+      expect(tester.getRect(top).top, closeTo(header.bottom, 1));
+
+      await _hover(tester, tester.getRect(top).center);
+
+      final bar = tester.getRect(find.byType(MessageActionBar));
+      expect(bar.top, greaterThanOrEqualTo(header.bottom));
     });
 
     testSession('answers a click on the top edge of a button', (

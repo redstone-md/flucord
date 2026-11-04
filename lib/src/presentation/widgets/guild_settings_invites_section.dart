@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
@@ -47,7 +49,7 @@ class GuildSettingsInvitesSection extends StatelessWidget {
           for (final invite in invites)
             GuildSettingsRow(
               key: ValueKey('guild-invite-${invite.code}'),
-              leading: const Icon(Icons.link, size: 16),
+              leading: const FlucordIcon(FlucordIcons.link, size: 16),
               title: invite.code,
               subtitle: _describe(invite),
               trailing: TextButton(
@@ -196,27 +198,21 @@ class _CreateInviteDialogState extends State<_CreateInviteDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('create-invite-confirm'),
-        onPressed: () => Navigator.of(context).pop(
-          _InviteChoice(
-            channelId: _channelId,
-            options: InviteOptions(
-              maxAgeSeconds: _maxAge,
-              maxUses: _maxUses,
-              temporary: _temporary,
-              unique: true,
-            ),
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-invite-confirm'),
+      label: 'Create',
+      onPressed: () => Navigator.of(context).pop(
+        _InviteChoice(
+          channelId: _channelId,
+          options: InviteOptions(
+            maxAgeSeconds: _maxAge,
+            maxUses: _maxUses,
+            temporary: _temporary,
+            unique: true,
           ),
         ),
-        child: const Text('Create'),
       ),
-    ],
+    ),
   );
 
   static String _expiryLabel(int seconds) => switch (seconds) {

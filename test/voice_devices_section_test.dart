@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/voice_processing.dart';
+import 'package:flucord/src/presentation/widgets/flucord_controls.dart';
 import 'package:flucord/src/presentation/widgets/voice_devices_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -47,6 +53,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.selectedOutputId, 'out-2');
+  });
+
+  testWidgets('the two device selects sit side by side', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpSection(tester, media: _FakeMedia());
+
+    final input = tester.getRect(
+      find.byKey(const ValueKey('voice-settings-input')),
+    );
+    final output = tester.getRect(
+      find.byKey(const ValueKey('voice-settings-output')),
+    );
+    expect(output.top, input.top);
+    expect(output.left, greaterThan(input.right));
   });
 
   testWidgets('a machine with no devices says so rather than offering a menu', (
@@ -84,12 +105,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(key));
+    await tester.tap(_toggle(key));
     await tester.pumpAndSettle();
 
     expect(controller.noiseSuppression, isTrue);
@@ -97,7 +123,7 @@ void main() {
       repository.saved,
       const VoiceProcessingSettings(noiseSuppression: true),
     );
-    expect(tester.widget<SwitchListTile>(find.byKey(key)).value, isTrue);
+    expect(tester.widget<FlucordToggle>(_toggle(key)).value, isTrue);
   });
 
   testWidgets('attenuation offers a switch and a level', (tester) async {
@@ -116,7 +142,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -125,7 +156,7 @@ void main() {
     expect(find.byKey(switchKey), findsOneWidget);
     expect(find.byKey(levelKey), findsNothing);
 
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(controller.attenuateApplications, isTrue);
     expect(repository.saved!.listening.attenuateApplications, isTrue);
@@ -144,7 +175,7 @@ void main() {
     expect(find.text('${(level * 100).round()}%'), findsOneWidget);
 
     // Switched off, the level goes away and the machine is released.
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
     expect(find.byKey(levelKey), findsNothing);
     expect(attenuation.calls, contains('release'));
@@ -160,9 +191,12 @@ void main() {
     );
   });
 
-  testWidgets('input sensitivity offers a switch and a slider', (tester) async {
+  testWidgets('input sensitivity is a mark on the live input meter', (
+    tester,
+  ) async {
     const switchKey = ValueKey('voice-settings-manual-sensitivity');
-    const sliderKey = ValueKey('voice-settings-input-sensitivity');
+    const meterKey = ValueKey('voice-settings-input-sensitivity');
+    const markKey = ValueKey('voice-input-meter-mark');
 
     final repository = MemoryVoiceProcessingRepository();
     final controller = VoiceController(
@@ -174,39 +208,68 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    // The automatic gate is the default: no slider until it is asked for.
-    expect(find.byKey(switchKey), findsOneWidget);
-    expect(find.byKey(sliderKey), findsNothing);
+    // The automatic gate is the default: the meter shows the level, with no
+    // mark until one is asked for.
+    expect(find.byKey(meterKey), findsOneWidget);
+    expect(find.byKey(markKey), findsNothing);
 
-    await tester.tap(find.byKey(switchKey));
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(sliderKey), findsOneWidget);
-    // The slider starts at the automatic threshold's midpoint.
-    final value = tester.widget<Slider>(find.byKey(sliderKey)).value;
-    expect(value, inExclusiveRange(-65, -30));
-    expect(controller.inputSensitivity, value);
+    expect(
+      find.text('The microphone opens when your voice passes the mark.'),
+      findsOneWidget,
+    );
+    // The mark starts at the midpoint of the gate's range, drawn where that
+    // level is on the meter's -80 to 0 dB scale.
+    final meter = tester.getRect(find.byKey(meterKey));
+    expect(
+      tester.getCenter(find.byKey(markKey)).dx,
+      closeTo(meter.left + meter.width * 32.5 / 80, 0.01),
+    );
+    expect(controller.inputSensitivity, -47.5);
+
+    await tester.drag(find.byKey(markKey), Offset(meter.width / 16, 0));
+    await tester.pumpAndSettle();
+    // A sixteenth of the 80 dB scale.
+    expect(controller.inputSensitivity, closeTo(-42.5, 0.01));
     expect(
       repository.saved!.inputSensitivity,
-      value,
+      controller.inputSensitivity,
       reason: 'the manual level is kept for the next session',
     );
 
-    // Back to automatic: the slider goes away and nothing is saved.
-    await tester.tap(find.byKey(switchKey));
+    // Back to automatic: the mark goes away and nothing is saved.
+    await tester.tap(_toggle(switchKey));
     await tester.pumpAndSettle();
-    expect(find.byKey(sliderKey), findsNothing);
+    expect(find.byKey(markKey), findsNothing);
+    expect(find.byKey(meterKey), findsOneWidget);
     expect(controller.inputSensitivity, isNull);
     expect(repository.saved!.inputSensitivity, isNull);
   });
 
-  testWidgets('the release delay offers the steps a key needs', (tester) async {
-    const key = ValueKey('voice-settings-release-delay');
+  testWidgets('the meter holds the microphone only while the section is open', (
+    tester,
+  ) async {
+    final media = _FakeMedia();
+    await pumpSection(tester, media: media);
+    expect(media.microphoneOpen, isTrue);
 
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(media.microphoneOpen, isFalse);
+  });
+
+  testWidgets('the release delay offers the steps a key needs', (tester) async {
     final repository = MemoryVoiceProcessingRepository();
     final controller = VoiceController(
       _FakeMedia(),
@@ -217,18 +280,58 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(key));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('100 ms').last);
+    // Every step is on screen at once, as a segmented group.
+    expect(find.text('Off'), findsOneWidget);
+    expect(find.text('1000 ms'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('voice-settings-release-delay-100')),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.pushToTalkReleaseDelayMs, 100);
     expect(repository.saved!.pushToTalkReleaseDelayMs, 100);
+  });
+
+  testWidgets('a saved delay between the steps shows as it is', (tester) async {
+    final controller = VoiceController(
+      _FakeMedia(),
+      audioCodecFactory: FakeVoiceOpusCodecFactory(),
+      processingRepository: MemoryVoiceProcessingRepository(
+        const VoiceProcessingSettings(pushToTalkReleaseDelayMs: 120),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadProcessingSettings();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    bool selected(int ms) => tester
+        .widget<FlucordTab>(
+          find.byKey(ValueKey('voice-settings-release-delay-$ms')),
+        )
+        .selected;
+    expect(controller.pushToTalkReleaseDelayMs, 120);
+    expect(selected(120), isTrue);
+    expect(selected(100), isFalse);
   });
 
   testWidgets('echo and gain are offered only with the machine stages', (
@@ -255,7 +358,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+        // Settings scrolls its page, as here.
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: VoiceDevicesSection(controller: controller),
+          ),
+        ),
       ),
     );
     await controller.loadProcessingSettings();
@@ -266,12 +374,12 @@ void main() {
     expect(find.byKey(echoKey), findsOneWidget);
     expect(find.byKey(gainKey), findsOneWidget);
     expect(
-      tester.widget<SwitchListTile>(find.byKey(echoKey)).value,
+      tester.widget<FlucordToggle>(_toggle(echoKey)).value,
       isTrue,
       reason: 'on by default',
     );
 
-    await tester.tap(find.byKey(echoKey));
+    await tester.tap(_toggle(echoKey));
     await tester.pumpAndSettle();
     expect(controller.echoCancellation, isFalse);
     expect(repository.saved!.echoCancellation, isFalse);
@@ -292,6 +400,10 @@ void main() {
   });
 }
 
+/// The on/off pill of the setting row keyed [key].
+Finder _toggle(Key key) =>
+    find.descendant(of: find.byKey(key), matching: find.byType(FlucordToggle));
+
 final class _RecordingAttenuation implements ApplicationAttenuation {
   final List<String> calls = [];
 
@@ -311,6 +423,7 @@ final class _RecordingAttenuation implements ApplicationAttenuation {
 
 final class _FakeMedia implements VoiceMediaService {
   bool failNext = false;
+  bool microphoneOpen = false;
   List<VoiceDevice> devices = const [
     VoiceDevice(id: 'mic-1', label: 'Webcam', kind: VoiceDeviceKind.audioInput),
     VoiceDevice(
@@ -342,7 +455,7 @@ final class _FakeMedia implements VoiceMediaService {
   Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
 
   @override
-  Future<void> startMicrophone(String? deviceId) async {}
+  Future<void> startMicrophone(String? deviceId) async => microphoneOpen = true;
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {}
@@ -351,7 +464,7 @@ final class _FakeMedia implements VoiceMediaService {
   Future<void> selectAudioOutput(String deviceId) async {}
 
   @override
-  Future<void> stopMicrophone() async {}
+  Future<void> stopMicrophone() async => microphoneOpen = false;
 
   @override
   Future<void> dispose() async {}

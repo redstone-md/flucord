@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';
@@ -93,7 +95,7 @@ class _GuildSettingsChannelsSectionState
     final manageable = controller.capabilities.canManageChannels;
     return GuildSettingsRow(
       key: ValueKey('guild-channel-${channel.id}'),
-      leading: Icon(_iconFor(channel.kind), size: 16),
+      leading: FlucordIcon(_iconFor(channel.kind), size: 16),
       title: channel.name,
       subtitle: channel.topic.isEmpty ? null : channel.topic,
       trailing: Row(
@@ -104,7 +106,7 @@ class _GuildSettingsChannelsSectionState
             tooltip: 'Move up',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.arrow_upward),
+            icon: const FlucordIcon(FlucordIcons.moveUp),
             onPressed: manageable && index > 0 && !controller.isBusy
                 ? () => _move(channels, index, -1)
                 : null,
@@ -114,7 +116,7 @@ class _GuildSettingsChannelsSectionState
             tooltip: 'Move down',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.arrow_downward),
+            icon: const FlucordIcon(FlucordIcons.moveDown),
             onPressed:
                 manageable && index < channels.length - 1 && !controller.isBusy
                 ? () => _move(channels, index, 1)
@@ -125,7 +127,7 @@ class _GuildSettingsChannelsSectionState
             tooltip: 'Edit channel',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.edit_outlined),
+            icon: const FlucordIcon(FlucordIcons.edit),
             onPressed: manageable
                 ? () => setState(() => _editingChannelId = channel.id)
                 : null,
@@ -135,7 +137,7 @@ class _GuildSettingsChannelsSectionState
             tooltip: 'Delete channel',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.delete_outline),
+            icon: const FlucordIcon(FlucordIcons.delete),
             onPressed: manageable && !controller.isBusy
                 ? () => unawaited(_confirmDelete(channel))
                 : null,
@@ -188,11 +190,11 @@ class _GuildSettingsChannelsSectionState
         parentId: channel.parentId,
       );
 
-  static IconData _iconFor(ChannelKind kind) => switch (kind) {
-    ChannelKind.voice => Icons.volume_up,
-    ChannelKind.forum => Icons.forum_outlined,
-    ChannelKind.media => Icons.perm_media_outlined,
-    ChannelKind.text => Icons.tag,
+  static FlucordIconData _iconFor(ChannelKind kind) => switch (kind) {
+    ChannelKind.voice => FlucordIcons.voiceChannel,
+    ChannelKind.forum => FlucordIcons.threads,
+    ChannelKind.media => FlucordIcons.image,
+    ChannelKind.text => FlucordIcons.textChannel,
   };
 
   Future<void> _create(BuildContext context) async {
@@ -632,12 +634,9 @@ class _OverwriteEditor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'PERMISSION OVERRIDES',
-          style: TextStyle(
-            fontSize: FlucordType.caption,
-            letterSpacing: 0.5,
-            fontWeight: FontWeight.w700,
-            color: context.surfaces.muted,
+          'Permission overrides',
+          style: FlucordTextRole.heading.style.copyWith(
+            color: context.surfaces.text,
           ),
         ),
         const SizedBox(height: 6),
@@ -653,10 +652,10 @@ class _OverwriteEditor extends StatelessWidget {
         for (final overwrite in entries)
           GuildSettingsRow(
             key: ValueKey('guild-overwrite-${overwrite.id}'),
-            leading: Icon(
+            leading: FlucordIcon(
               overwrite.kind == PermissionOverwriteKind.member
-                  ? Icons.person_outline
-                  : Icons.group_outlined,
+                  ? FlucordIcons.profile
+                  : FlucordIcons.members,
               size: 16,
             ),
             title: _nameOf(overwrite),
@@ -682,14 +681,14 @@ class _OverwriteEditor extends StatelessWidget {
             TextButton.icon(
               key: const ValueKey('guild-overwrite-add-role'),
               onPressed: roles.isEmpty ? null : () => _pickRole(context),
-              icon: const Icon(Icons.add, size: 16),
+              icon: const FlucordIcon(FlucordIcons.add, size: 16),
               label: const Text('Add role overwrite'),
             ),
             const SizedBox(width: 4),
             TextButton.icon(
               key: const ValueKey('guild-overwrite-add-member'),
               onPressed: members.isEmpty ? null : () => _pickMember(context),
-              icon: const Icon(Icons.add, size: 16),
+              icon: const FlucordIcon(FlucordIcons.add, size: 16),
               label: const Text('Add member overwrite'),
             ),
           ],
@@ -920,20 +919,14 @@ class _CreateChannelDialogState extends State<_CreateChannelDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('create-channel-confirm'),
-        onPressed: _name.text.trim().isEmpty
-            ? null
-            : () => Navigator.of(
-                context,
-              ).pop(GuildChannelDraft(type: _type, name: _name.text.trim())),
-        child: const Text('Create'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('create-channel-confirm'),
+      label: 'Create',
+      onPressed: _name.text.trim().isEmpty
+          ? null
+          : () => Navigator.of(
+              context,
+            ).pop(GuildChannelDraft(type: _type, name: _name.text.trim())),
+    ),
   );
 }

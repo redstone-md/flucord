@@ -4,6 +4,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'emoji_picker.dart';
@@ -30,6 +31,7 @@ class MessageActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onTogglePin,
     required this.onDelete,
+    required this.onMore,
     this.onResolveAlert,
     this.onReport,
     this.expressionFavorites,
@@ -37,8 +39,13 @@ class MessageActionBar extends StatelessWidget {
     super.key,
   });
 
-  /// As tall as the shortest message row, so the bar fits inside any row.
-  static const height = 24.0;
+  /// The side of one button.
+  static const buttonSize = 28.0;
+
+  static const _inset = 2.0;
+
+  /// The bar's height: one button and the inset around it.
+  static const height = buttonSize + 2 * _inset;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -57,6 +64,9 @@ class MessageActionBar extends StatelessWidget {
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
 
+  /// Opens the message menu, with every action, at this global position.
+  final ValueChanged<Offset> onMore;
+
   /// Acts on an AutoMod alert. Null on a transport that cannot, in which case
   /// the alert controls are not offered at all.
   final ValueChanged<AutoModAlertAction>? onResolveAlert;
@@ -73,11 +83,12 @@ class MessageActionBar extends StatelessWidget {
       message,
       currentMemberId: workspace.currentMemberId,
     );
-    final corners = FlucordRadius.small;
+    const corners = FlucordRadius.medium;
     return Container(
       height: height,
+      padding: const EdgeInsets.all(_inset),
       decoration: BoxDecoration(
-        color: context.surfaces.surface,
+        color: context.surfaces.raised,
         borderRadius: corners,
       ),
       // In the foreground, so the border takes no height from the buttons.
@@ -88,32 +99,32 @@ class MessageActionBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ?apps,
+          if (capabilities.addReactions) _reactionPicker(),
           if (capabilities.sendMessages)
             _ActionButton(
-              icon: Icons.reply_outlined,
+              icon: FlucordIcons.reply,
               tooltip: 'Reply',
               onPressed: onReply,
-            ),
-          if (capabilities.addReactions) _reactionPicker(),
-          if (message.reactions.isNotEmpty)
-            _ActionButton(
-              buttonKey: ValueKey('view-reactions-${message.id}'),
-              icon: Icons.people_alt_outlined,
-              tooltip: 'View reactions',
-              onPressed: () => onShowReactionDetails(message.reactions.first),
             ),
           if (capabilities.createPublicThreads)
             _ActionButton(
               buttonKey: ValueKey('create-thread-${message.id}'),
-              icon: Icons.forum_outlined,
+              icon: FlucordIcons.threads,
               tooltip: 'Create thread',
               onPressed: onCreateThread,
+            ),
+          ?apps,
+          if (message.reactions.isNotEmpty)
+            _ActionButton(
+              buttonKey: ValueKey('view-reactions-${message.id}'),
+              icon: FlucordIcons.members,
+              tooltip: 'View reactions',
+              onPressed: () => onShowReactionDetails(message.reactions.first),
             ),
           if (message.canForward)
             _ActionButton(
               buttonKey: ValueKey('forward-message-${message.id}'),
-              icon: Icons.forward_outlined,
+              icon: FlucordIcons.forward,
               tooltip: 'Forward',
               onPressed: onForward,
             ),
@@ -122,8 +133,8 @@ class MessageActionBar extends StatelessWidget {
             _ActionButton(
               buttonKey: ValueKey('suppress-embeds-${message.id}'),
               icon: message.suppressesEmbeds
-                  ? Icons.link_outlined
-                  : Icons.link_off_outlined,
+                  ? FlucordIcons.link
+                  : FlucordIcons.unlink,
               tooltip: message.suppressesEmbeds
                   ? 'Show embeds'
                   : 'Suppress embeds',
@@ -131,7 +142,7 @@ class MessageActionBar extends StatelessWidget {
             ),
           if (isCurrentUser && message.canEdit)
             _ActionButton(
-              icon: Icons.edit_outlined,
+              icon: FlucordIcons.edit,
               tooltip: 'Edit',
               onPressed: onEdit,
             ),
@@ -143,20 +154,20 @@ class MessageActionBar extends StatelessWidget {
               onResolveAlert != null) ...[
             _ActionButton(
               buttonKey: ValueKey('automod-alert-complete-${message.id}'),
-              icon: Icons.task_alt,
+              icon: FlucordIcons.done,
               tooltip: 'Mark handled',
               onPressed: () => onResolveAlert!(AutoModAlertAction.setCompleted),
             ),
             _ActionButton(
               buttonKey: ValueKey('automod-alert-reopen-${message.id}'),
-              icon: Icons.restart_alt,
+              icon: FlucordIcons.reopen,
               tooltip: 'Reopen',
               onPressed: () =>
                   onResolveAlert!(AutoModAlertAction.unsetCompleted),
             ),
             _ActionButton(
               buttonKey: ValueKey('automod-alert-delete-${message.id}'),
-              icon: Icons.delete_sweep_outlined,
+              icon: FlucordIcons.deleteFlagged,
               // Deletes what tripped the rule, not the alert. Spelled out
               // because the delete button beside it does the opposite.
               tooltip: 'Delete the flagged message',
@@ -165,7 +176,7 @@ class MessageActionBar extends StatelessWidget {
             ),
             _ActionButton(
               buttonKey: ValueKey('automod-alert-feedback-${message.id}'),
-              icon: Icons.thumb_down_alt_outlined,
+              icon: FlucordIcons.thumbsDown,
               tooltip: 'Report as wrong',
               onPressed: () =>
                   onResolveAlert!(AutoModAlertAction.submitFeedback),
@@ -176,23 +187,34 @@ class MessageActionBar extends StatelessWidget {
           if (onReport != null && !isCurrentUser)
             _ActionButton(
               buttonKey: ValueKey('report-message-${message.id}'),
-              icon: Icons.flag_outlined,
+              icon: FlucordIcons.report,
               tooltip: 'Report message',
               onPressed: onReport!,
             ),
           if (capabilities.pinMessages)
             _ActionButton(
-              icon: message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              icon: message.isPinned ? FlucordIcons.unpin : FlucordIcons.pin,
               tooltip: message.isPinned ? 'Unpin' : 'Pin',
               onPressed: onTogglePin,
             ),
           if (canModerate)
             _ActionButton(
-              icon: Icons.delete_outline,
+              icon: FlucordIcons.delete,
               tooltip: 'Delete',
               destructive: true,
               onPressed: onDelete,
             ),
+          Builder(
+            builder: (button) => _ActionButton(
+              buttonKey: ValueKey('message-more-${message.id}'),
+              icon: FlucordIcons.more,
+              tooltip: 'More',
+              onPressed: () {
+                final box = button.findRenderObject()! as RenderBox;
+                onMore(box.localToGlobal(box.size.bottomLeft(Offset.zero)));
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -206,7 +228,7 @@ class MessageActionBar extends StatelessWidget {
       spaceName: space.name,
       emojiSections: emojiSectionsFromWorkspace(workspace, channel.spaceId),
       purpose: EmojiPickerPurpose.reaction,
-      dimension: 36,
+      dimension: buttonSize,
       iconSize: 16,
       onMenuStateChanged: onReactionPickerToggled,
       onSelected: onAddReaction,
@@ -225,7 +247,7 @@ class _ActionButton extends StatelessWidget {
   });
 
   final Key? buttonKey;
-  final IconData icon;
+  final FlucordIconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final bool destructive;
@@ -234,16 +256,19 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     key: buttonKey,
     onPressed: onPressed,
-    icon: Icon(
+    icon: FlucordIcon(
       icon,
       size: 16,
-      color: destructive ? Theme.of(context).colorScheme.error : null,
+      color: destructive ? context.surfaces.danger : null,
     ),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
+    style: IconButton.styleFrom(
+      shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.control),
+    ),
     constraints: const BoxConstraints.tightFor(
-      width: 36,
-      height: MessageActionBar.height,
+      width: MessageActionBar.buttonSize,
+      height: MessageActionBar.buttonSize,
     ),
   );
 }

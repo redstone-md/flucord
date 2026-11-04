@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/reaction_repository.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
@@ -156,6 +157,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     final media = MediaQuery.sizeOf(context);
     return FlucordDialog.frame(
       insetPadding: const EdgeInsets.all(16),
+      actions: const [FlucordDialogCancel(label: 'Close')],
       child: SizedBox(
         width: math.min(540, media.width - 32),
         height: math.min(520, media.height - 32),
@@ -183,21 +185,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     child: Row(
       children: [
         const SizedBox(width: 16),
-        const Expanded(
-          child: Text(
-            'Reactions',
-            style: TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        Expanded(
+          child: Text('Reactions', style: FlucordTextRole.heading.style),
         ),
-        IconButton(
-          tooltip: 'Close',
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.close, size: 18),
-        ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 16),
       ],
     ),
   );
@@ -292,17 +283,14 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         ),
         Text(
           '${_selected.normalCount} normal',
-          style: const TextStyle(
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w600,
-          ),
+          style: FlucordTextRole.caption.strong,
         ),
         if (_selected.burstCount > 0)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.auto_awesome,
+              FlucordIcon(
+                FlucordIcons.superReaction,
                 size: 12,
                 color: context.surfaces.warning,
               ),
@@ -348,7 +336,11 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
           ),
         ),
         if (row.type == DiscordReactionType.burst) ...[
-          Icon(Icons.auto_awesome, size: 11, color: context.surfaces.warning),
+          FlucordIcon(
+            FlucordIcons.superReaction,
+            size: 11,
+            color: context.surfaces.warning,
+          ),
           const SizedBox(width: 4),
           const Text('Super', style: TextStyle(fontSize: FlucordType.caption)),
         ],
@@ -363,7 +355,11 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     ),
     child: Row(
       children: [
-        Icon(Icons.error_outline, size: 15, color: context.surfaces.errorText),
+        FlucordIcon(
+          FlucordIcons.error,
+          size: 15,
+          color: context.surfaces.errorText,
+        ),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(

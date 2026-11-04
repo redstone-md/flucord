@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../theme/flucord_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/theme_controller.dart';
@@ -77,13 +79,13 @@ class _ThemeSectionState extends State<ThemeSection> {
                     : () => unawaited(
                         Clipboard.setData(ClipboardData(text: _folder!)),
                       ),
-                icon: const Icon(Icons.copy, size: 16),
+                icon: const FlucordIcon(FlucordIcons.copy, size: 16),
               ),
               IconButton(
                 key: const ValueKey('theme-refresh'),
                 tooltip: 'Look for new themes',
                 onPressed: () => unawaited(controller.refresh()),
-                icon: const Icon(Icons.refresh, size: 18),
+                icon: const FlucordIcon(FlucordIcons.refresh, size: 18),
               ),
             ],
           ),
@@ -194,8 +196,8 @@ class _ThemeTile extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(
-                Icons.check_circle,
+              FlucordIcon(
+                FlucordIcons.checkCircle,
                 size: 18,
                 color: Theme.of(context).colorScheme.primary,
               ),

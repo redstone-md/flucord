@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../application/chat_controller.dart';
-import '../../theme/flucord_theme.dart';
 import 'create_server_dialog.dart';
+import 'flucord_button.dart';
 import 'join_server_dialog.dart';
 import 'flucord_dialog.dart';
 
@@ -18,7 +18,7 @@ Future<AddServerChoice> showAddServerChoice(BuildContext context) async {
     builder: (dialogContext) => FlucordDialog(
       key: const ValueKey('add-server-dialog'),
       title: const Text('Add a server'),
-      content: const SizedBox.shrink(),
+      description: 'Join a server with an invite, or start your own.',
       actions: const [
         _ChoiceButton(choice: AddServerChoice.join),
         _ChoiceButton(choice: AddServerChoice.create),
@@ -50,15 +50,11 @@ class _ChoiceButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isJoin = choice == AddServerChoice.join;
-    return FilledButton.tonalIcon(
+    return FlucordButton(
       key: ValueKey(isJoin ? 'add-server-join' : 'add-server-create'),
+      kind: isJoin ? FlucordButtonKind.secondary : FlucordButtonKind.primary,
+      label: isJoin ? 'Join a server' : 'Create a server',
       onPressed: () => Navigator.of(context).pop(choice),
-      icon: Icon(isJoin ? Icons.input : Icons.add_circle_outline, size: 18),
-      label: Text(isJoin ? 'Join a server' : 'Create a server'),
-      style: FilledButton.styleFrom(
-        backgroundColor: context.surfaces.raised,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-      ),
     );
   }
 }

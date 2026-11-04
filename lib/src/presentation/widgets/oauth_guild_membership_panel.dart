@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -141,10 +142,7 @@ class _LoadedMembership extends StatelessWidget {
                 membership.nickname ?? account.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FlucordTextRole.caption.strong,
               ),
               const SizedBox(height: 2),
               for (final detail in details)
@@ -219,7 +217,7 @@ class _MembershipAvatar extends StatelessWidget {
           url: avatarUrl ?? account.avatarUrl,
           fallback: ColoredBox(
             color: context.surfaces.raised,
-            child: const Icon(Icons.person_outline, size: 16),
+            child: const FlucordIcon(FlucordIcons.person, size: 16),
           ),
         ),
       ),

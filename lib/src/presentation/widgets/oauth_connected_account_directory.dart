@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/account_connections.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -23,10 +25,8 @@ class OAuthConnectedAccountDirectory extends StatelessWidget {
         if (showHeader) ...[
           Text(
             'CONNECTED ACCOUNTS · ${connections.length}',
-            style: TextStyle(
+            style: FlucordTextRole.caption.strong.copyWith(
               color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
           ),
@@ -72,7 +72,7 @@ class _ConnectedAccountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = _serviceName(connection.type);
+    final service = ConnectionService.nameOf(connection.type);
     final status = <String>[
       if (connection.verified) 'Verified',
       if (connection.isPublic) 'Visible',
@@ -95,7 +95,7 @@ class _ConnectedAccountRow extends StatelessWidget {
                 color: context.surfaces.raised,
                 borderRadius: FlucordRadius.medium,
               ),
-              child: Icon(
+              child: FlucordIcon(
                 _serviceIcon(connection.type),
                 size: 17,
                 color: connection.revoked
@@ -108,13 +108,7 @@ class _ConnectedAccountRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    service,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  Text(service, style: FlucordTextRole.caption.strong),
                   const SizedBox(height: 1),
                   Text(
                     connection.name,
@@ -131,8 +125,8 @@ class _ConnectedAccountRow extends StatelessWidget {
             if (connection.verified)
               Tooltip(
                 message: 'Verified connection',
-                child: Icon(
-                  Icons.verified_outlined,
+                child: FlucordIcon(
+                  FlucordIcons.verified,
                   size: 15,
                   color: context.surfaces.success,
                 ),
@@ -141,8 +135,8 @@ class _ConnectedAccountRow extends StatelessWidget {
               const SizedBox(width: 6),
               Tooltip(
                 message: 'Visible on Discord profile',
-                child: Icon(
-                  Icons.visibility_outlined,
+                child: FlucordIcon(
+                  FlucordIcons.visible,
                   size: 15,
                   color: context.surfaces.muted,
                 ),
@@ -155,31 +149,16 @@ class _ConnectedAccountRow extends StatelessWidget {
   }
 }
 
-String _serviceName(String type) => switch (type) {
-  'battlenet' => 'Battle.net',
-  'epicgames' => 'Epic Games',
-  'playstation' => 'PlayStation Network',
-  'riotgames' => 'Riot Games',
-  'twitter' => 'X / Twitter',
-  'youtube' => 'YouTube',
-  _ =>
-    type
-        .split(RegExp(r'[_-]+'))
-        .where((part) => part.isNotEmpty)
-        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' '),
-};
-
-IconData _serviceIcon(String type) => switch (type) {
-  'spotify' => Icons.graphic_eq,
+FlucordIconData _serviceIcon(String type) => switch (type) {
+  'spotify' => FlucordIcons.music,
   'steam' ||
   'playstation' ||
   'xbox' ||
   'epicgames' ||
-  'riotgames' => Icons.sports_esports_outlined,
-  'github' => Icons.code,
-  'youtube' || 'twitch' || 'tiktok' => Icons.play_circle_outline,
-  'paypal' => Icons.payments_outlined,
-  'domain' => Icons.language,
-  _ => Icons.link,
+  'riotgames' => FlucordIcons.game,
+  'github' => FlucordIcons.code,
+  'youtube' || 'twitch' || 'tiktok' => FlucordIcons.streaming,
+  'paypal' => FlucordIcons.payment,
+  'domain' => FlucordIcons.website,
+  _ => FlucordIcons.link,
 };

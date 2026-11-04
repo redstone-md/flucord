@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -277,7 +278,9 @@ class VoiceMessageControls extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(state.isPlaying ? Icons.pause : Icons.play_arrow),
+                : FlucordIcon(
+                    state.isPlaying ? FlucordIcons.pause : FlucordIcons.play,
+                  ),
           ),
           const SizedBox(width: 4),
           Expanded(
@@ -434,7 +437,10 @@ class _VoiceMessageError extends StatelessWidget {
     ),
     child: Row(
       children: [
-        Icon(Icons.graphic_eq, color: Theme.of(context).colorScheme.error),
+        FlucordIcon(
+          FlucordIcons.audio,
+          color: Theme.of(context).colorScheme.error,
+        ),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(

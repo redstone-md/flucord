@@ -1,34 +1,16 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
-import '../../theme/flucord_type.dart';
-import 'account_connections_scope.dart';
-import 'account_entitlements_scope.dart';
-import 'account_data_package_scope.dart';
-import 'app_authorisation_scope.dart';
-import 'auth_session_scope.dart';
-import 'account_standing_scope.dart';
 import 'remote_identity_image.dart';
 
-import 'accessibility_scope.dart';
 import 'activity_label.dart';
-import 'age_verification_scope.dart';
-import 'keybind_scope.dart';
-import 'mention_badge.dart';
-import 'stream_quality_scope.dart';
-import 'streamer_mode_scope.dart';
-import 'theme_scope.dart';
-import 'voice_scope.dart';
-import 'multi_factor_auth_scope.dart';
-import 'family_centre_scope.dart';
-import 'user_profile_scope.dart';
-import 'user_settings_dialog.dart';
-import 'user_settings_scope.dart';
+import 'count_badge.dart';
+import 'rail_tile.dart';
 
 class ServerRail extends StatelessWidget {
   const ServerRail({
@@ -77,14 +59,11 @@ class ServerRail extends StatelessWidget {
         .toList(growable: false);
     return Container(
       key: const ValueKey('server-rail'),
-      width: 72,
-      decoration: BoxDecoration(
-        color: context.surfaces.rail,
-        border: Border(right: BorderSide(color: context.surfaces.border)),
-      ),
+      width: RailMetrics.width,
+      decoration: BoxDecoration(color: context.surfaces.rail),
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: RailMetrics.gap),
           _HomeButton(
             selected: directSpace?.id == selectedSpaceId,
             activity: directSpace == null
@@ -94,15 +73,14 @@ class ServerRail extends StatelessWidget {
                 ? null
                 : () => onSelectSpace(directSpace.id),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Divider(height: 1, indent: 18, endIndent: 18),
-          ),
+          const RailDivider(),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              // Room for the badge that hangs below the last tile.
+              padding: const EdgeInsets.only(bottom: RailMetrics.gap),
               itemCount: guildSpaces.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) =>
+                  const SizedBox(height: RailMetrics.gap),
               itemBuilder: (context, index) {
                 final space = guildSpaces[index];
                 return _SpaceButton(
@@ -119,125 +97,47 @@ class ServerRail extends StatelessWidget {
           ),
           if (onAddServer != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: RailMetrics.gap),
               child: _AddServerButton(onPressed: onAddServer!),
             ),
           IconButton(
             key: const ValueKey('open-connections'),
             onPressed: onOpenConnections,
-            icon: Icon(
-              sessionMode == SessionMode.discord
-                  ? Icons.link
-                  : Icons.link_outlined,
+            icon: FlucordIcon(
+              FlucordIcons.link,
               color: sessionMode == SessionMode.discord
                   ? context.surfaces.accentIcon
                   : null,
             ),
             tooltip: 'Connections',
           ),
-          IconButton(
-            onPressed: onToggleTheme,
-            icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode),
-            tooltip: isDark ? 'Use light theme' : 'Use dark theme',
-          ),
-          // The settings controller is read from the scope rather than passed
-          // down: the gear belongs next to the other rail actions, and a host
-          // that installs no scope — the single-pane widget tests — has no
-          // account to show settings for anyway.
-          if (UserSettingsScope.maybeOf(context) case final settings?)
-            IconButton(
-              key: const ValueKey('open-user-settings'),
-              onPressed: () => unawaited(
-                UserSettingsDialog.show(
-                  context,
-                  controller: settings,
-                  profileController: UserProfileScope.maybeOf(context),
-                  standingController: AccountStandingScope.maybeOf(context),
-                  familyController: FamilyCentreScope.maybeOf(context),
-                  sessionController: AuthSessionScope.maybeOf(context),
-                  connectionsController: AccountConnectionsScope.maybeOf(
-                    context,
-                  ),
-                  entitlementsController: AccountEntitlementsScope.maybeOf(
-                    context,
-                  ),
-                  dataPackageController: AccountDataPackageScope.maybeOf(
-                    context,
-                  ),
-                  appAuthorisationController: AppAuthorisationScope.maybeOf(
-                    context,
-                  ),
-                  mfaController: MultiFactorAuthScope.maybeOf(context),
-                  ageController: AgeVerificationScope.maybeOf(context),
-                  keybindController: KeybindScope.maybeOf(context),
-                  streamerModeController: StreamerModeScope.maybeOf(context),
-                  accessibilityController: AccessibilityScope.maybeOf(context),
-                  streamQualityController: StreamQualityScope.maybeOf(context),
-                  themeController: ThemeScope.maybeOf(context),
-                  voiceController: VoiceScope.maybeOf(context),
-                ),
-              ),
-              icon: const Icon(Icons.settings_outlined),
-              tooltip: 'User settings',
-            ),
-          const SizedBox(height: 10),
+          RailThemeToggle(isDark: isDark, onPressed: onToggleTheme),
+          const SizedBox(height: RailMetrics.gap),
         ],
       ),
     );
   }
 }
 
-/// The green plus at the foot of the space list, Discord's own add-server
-/// entry. Styled as the inverse of a space button: green idle, deeper when
-/// hovered, the brand colour of joining.
-class _AddServerButton extends StatefulWidget {
+/// The add-server entry at the foot of the space list: an outlined tile, so
+/// it reads as an action rather than as one more server.
+class _AddServerButton extends StatelessWidget {
   const _AddServerButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
-  State<_AddServerButton> createState() => _AddServerButtonState();
-}
-
-class _AddServerButtonState extends State<_AddServerButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = _hovered;
-    final radius = BorderRadius.circular(active ? 14 : 22);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: const ValueKey('add-server'),
-          onTap: widget.onPressed,
-          borderRadius: radius,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: active
-                  ? context.surfaces.success
-                  : context.surfaces.success.withValues(alpha: 0.62),
-              borderRadius: radius,
-            ),
-            child: Icon(
-              Icons.add,
-              size: 22,
-              color: active ? Colors.white : context.surfaces.muted,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RailTile(
+    tileKey: const ValueKey('add-server'),
+    label: 'Add a server',
+    onPressed: onPressed,
+    activeColor: context.surfaces.control,
+    builder: (context, active) => FlucordIcon(
+      FlucordIcons.add,
+      size: RailMetrics.glyph,
+      color: active ? context.surfaces.text : context.surfaces.muted,
+    ),
+  );
 }
 
 class _HomeButton extends StatelessWidget {
@@ -252,19 +152,21 @@ class _HomeButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => _RailButton(
+  Widget build(BuildContext context) => _SpaceTile(
     spaceId: CommunitySpace.directMessagesId,
-    buttonKey: const ValueKey('space-direct-messages'),
+    tileKey: const ValueKey('space-direct-messages'),
+    name: onPressed == null ? 'Flucord' : 'Direct Messages',
     selected: selected,
     activity: activity,
     onPressed: onPressed,
-    tooltip: onPressed == null ? 'Flucord' : 'Direct Messages',
-    idleColor: context.surfaces.raised,
+    color: context.surfaces.raised,
     activeColor: context.surfaces.brand,
-    builder: (context, active) => Icon(
-      Icons.forum_rounded,
-      size: 21,
-      color: active ? Colors.white : context.surfaces.muted,
+    builder: (context, active) => FlucordIcon(
+      FlucordIcons.directMessages,
+      size: RailMetrics.glyph,
+      color: active
+          ? Theme.of(context).colorScheme.onPrimary
+          : context.surfaces.muted,
     ),
   );
 }
@@ -285,163 +187,81 @@ class _SpaceButton extends StatelessWidget {
   final ValueChanged<Offset>? onOpenMenu;
 
   @override
-  Widget build(BuildContext context) => _RailButton(
+  Widget build(BuildContext context) => _SpaceTile(
     spaceId: space.id,
-    buttonKey: ValueKey('space-${space.id}'),
+    tileKey: ValueKey('space-${space.id}'),
+    name: space.name,
     selected: selected,
     activity: activity,
     onPressed: onPressed,
     onOpenMenu: onOpenMenu,
-    tooltip: space.name,
-    idleColor: Color(space.colorValue).withValues(alpha: 0.62),
+    color: Color(space.colorValue).withValues(alpha: 0.62),
     activeColor: Color(space.colorValue),
     builder: (_, _) => RemoteIdentityImage(
       url: space.iconUrl,
       imageKey: ValueKey('space-icon-${space.id}'),
       animatesOnHover: true,
-      fallback: Center(
-        child: Text(
-          space.monogram,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+      fallback: RailMonogram(space.monogram),
     ),
   );
 }
 
-typedef _RailButtonBuilder = Widget Function(BuildContext context, bool active);
-
-class _RailButton extends StatefulWidget {
-  const _RailButton({
+/// A space on the rail: its pill shows whether it is open or unread, and its
+/// badge counts the mentions waiting there.
+class _SpaceTile extends StatelessWidget {
+  const _SpaceTile({
     required this.spaceId,
-    required this.buttonKey,
+    required this.tileKey,
+    required this.name,
     required this.selected,
     required this.activity,
     required this.onPressed,
-    required this.tooltip,
-    required this.idleColor,
+    required this.color,
     required this.activeColor,
     required this.builder,
     this.onOpenMenu,
   });
 
   final String spaceId;
-  final Key buttonKey;
+  final Key tileKey;
+  final String name;
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback? onPressed;
   final ValueChanged<Offset>? onOpenMenu;
-  final String tooltip;
-  final Color idleColor;
+  final Color color;
   final Color activeColor;
-  final _RailButtonBuilder builder;
+  final Widget Function(BuildContext context, bool active) builder;
 
   @override
-  State<_RailButton> createState() => _RailButtonState();
-}
-
-class _RailButtonState extends State<_RailButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = widget.selected || _hovered;
-    final radius = BorderRadius.circular(active ? 14 : 22);
-    final semanticsLabel = activityLabel(
-      widget.tooltip,
-      mentionCount: widget.activity.mentionCount,
-      muted: widget.activity.muted,
-      unread: widget.activity.hasUnread,
-    );
-    return Semantics(
-      key: ValueKey('space-semantics-${widget.spaceId}'),
-      label: semanticsLabel,
-      button: widget.onPressed != null,
-      enabled: widget.onPressed != null,
-      selected: widget.selected,
-      onTap: widget.onPressed,
-      excludeSemantics: true,
-      child: SizedBox(
-        height: 46,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (widget.selected || widget.activity.hasUnread)
-              Positioned(
-                left: 0,
-                child: SizedBox(
-                  key: ValueKey('space-indicator-${widget.spaceId}'),
-                  width: 3,
-                  height: widget.selected ? 28 : 8,
-                  child: ColoredBox(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-            Tooltip(
-              message: semanticsLabel,
-              excludeFromSemantics: true,
-              preferBelow: false,
-              child: MouseRegion(
-                onEnter: (_) {
-                  if (widget.onPressed != null) {
-                    setState(() => _hovered = true);
-                  }
-                },
-                onExit: (_) => setState(() => _hovered = false),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: radius,
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    key: widget.buttonKey,
-                    onTap: widget.onPressed,
-                    onSecondaryTapDown: widget.onOpenMenu == null
-                        ? null
-                        : (details) =>
-                              widget.onOpenMenu!(details.globalPosition),
-                    borderRadius: radius,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 140),
-                      curve: Curves.easeOut,
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: active ? widget.activeColor : widget.idleColor,
-                        borderRadius: radius,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      // A muted space keeps its icon but loses its emphasis;
-                      // the mention badge below still shows through at full
-                      // strength, because a mention outranks a mute.
-                      child: Opacity(
-                        opacity: widget.activity.muted && !active ? 0.45 : 1,
-                        child: widget.builder(context, active),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (widget.activity.mentionCount > 0)
-              Positioned(
-                right: 4,
-                bottom: 0,
-                // The rail-coloured ring keeps the badge readable where it
-                // overlaps the avatar's edge.
-                child: MentionBadge(
-                  key: ValueKey('space-mention-${widget.spaceId}'),
-                  count: widget.activity.mentionCount,
-                  borderColor: context.surfaces.rail,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RailTile(
+    key: ValueKey('space-semantics-$spaceId'),
+    tileKey: tileKey,
+    label: activityLabel(
+      name,
+      mentionCount: activity.mentionCount,
+      muted: activity.muted,
+      unread: activity.hasUnread,
+    ),
+    onPressed: onPressed,
+    onOpenMenu: onOpenMenu,
+    selected: selected,
+    pill: selected
+        ? RailPill.selected
+        : activity.hasUnread
+        ? RailPill.unread
+        : RailPill.none,
+    pillKey: ValueKey('space-indicator-$spaceId'),
+    color: color,
+    activeColor: activeColor,
+    dimmed: activity.muted,
+    badge: activity.mentionCount > 0
+        ? CountBadge(
+            key: ValueKey('space-mention-$spaceId'),
+            count: activity.mentionCount,
+            ring: context.surfaces.rail,
+          )
+        : null,
+    builder: builder,
+  );
 }

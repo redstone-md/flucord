@@ -3,33 +3,46 @@ import 'package:flutter/material.dart';
 import '../../application/inbox_catalog.dart';
 import '../../application/voice_channel_surface.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_icon_button.dart';
+import 'flucord_menu.dart';
 import 'inbox_dialog.dart';
+import 'recessed_field.dart';
 import 'voice_surface_switch.dart';
 
+/// The line at the top of the chat: the channel, its topic, the panel
+/// buttons, search and the inbox.
+///
+/// A DM passes the person's avatar as [leading], so the same header shows a
+/// person rather than a channel. Each action shows only when its callback is
+/// given, so a transport without it draws no dead button.
 class ChatHeader extends StatelessWidget {
   const ChatHeader({
     required this.channel,
-    required this.channels,
-    required this.query,
-    required this.showCompactPicker,
-    required this.showsMessages,
-    required this.voiceSurface,
-    required this.allowMemberPanel,
-    required this.allowThreadPanel,
-    required this.showMembers,
-    required this.showPins,
-    required this.showThreads,
-    required this.inboxSummary,
-    required this.onSelectChannel,
-    required this.onSelectVoiceSurface,
-    required this.onQueryChanged,
-    required this.onSubmitQuery,
-    required this.onToggleMembers,
-    required this.onTogglePins,
-    required this.onToggleThreads,
-    required this.onOpenInbox,
+    this.channels = const [],
+    this.query = '',
+    this.showCompactPicker = false,
+    this.showsMessages = true,
+    this.voiceSurface = VoiceChannelSurface.chat,
+    this.showMembers = false,
+    this.showPins = false,
+    this.showThreads = false,
+    this.inboxSummary = const InboxSummary(
+      unreadChannelCount: 0,
+      mentionCount: 0,
+    ),
+    this.onSelectChannel,
+    this.onSelectVoiceSurface,
+    this.onQueryChanged,
+    this.onSubmitQuery,
+    this.onToggleMembers,
+    this.onTogglePins,
+    this.onToggleThreads,
+    this.onOpenInbox,
+    this.leading,
     this.threadMembership,
     this.showVoiceSurfaces = false,
     this.isInCall = false,
@@ -38,10 +51,31 @@ class ChatHeader extends StatelessWidget {
     super.key,
   });
 
+  /// The header's height. Every column header in the app shares it.
+  static const height = 48.0;
+
+  /// What the header keeps for the channel's icon and name.
+  static const _minTitleWidth = 120.0;
+
+  static const _searchWidth = 200.0;
+
+  /// The room on either side of the line between the name and the topic.
+  static const _topicGap = 12.0;
+
+  /// A topic narrower than this says nothing, so it is left out.
+  static const _minTopicWidth = 48.0;
+
+  /// The room between two buttons.
+  static const _buttonGap = 4.0;
+
   final ConversationChannel channel;
   final List<ConversationChannel> channels;
   final String query;
   final bool showCompactPicker;
+
+  /// What stands before the name, such as a DM's avatar with its status
+  /// dot. Null draws the channel's icon.
+  final Widget? leading;
 
   /// Whether the pane below is currently showing a message timeline. Search and
   /// pins belong to that timeline, so a voice channel earns them only while its
@@ -57,15 +91,13 @@ class ChatHeader extends StatelessWidget {
   /// call button into a hang-up.
   final bool isInCall;
 
-  /// What the call button does right now — start, join, ring, or leave. It is
+  /// What the call button does right now: start, join, ring, or leave. It is
   /// the button's only label, so it also has to read well to a screen reader.
   final String? callLabel;
 
-  /// Null when the channel cannot be called — a guild channel, or a transport
+  /// Null when the channel cannot be called: a guild channel, or a transport
   /// with no call plane.
   final VoidCallback? onToggleCall;
-  final bool allowMemberPanel;
-  final bool allowThreadPanel;
   final bool showMembers;
   final bool showPins;
   final bool showThreads;
@@ -74,24 +106,28 @@ class ChatHeader extends StatelessWidget {
   /// Join/leave for a thread, or null when the channel is not one.
   final Widget? threadMembership;
 
-  final ValueChanged<String> onSelectChannel;
-  final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
-  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<String>? onSelectChannel;
+  final ValueChanged<VoiceChannelSurface>? onSelectVoiceSurface;
+
+  /// Filters the messages on screen. Null leaves the search field out.
+  final ValueChanged<String>? onQueryChanged;
 
   /// Runs the query against the server. Typing filters the messages already on
   /// screen, which is instant but only ever sees the page that is loaded;
   /// pressing enter asks Discord about the whole conversation. Null when the
   /// signed-in transport has no search plane to ask.
   final ValueChanged<String>? onSubmitQuery;
-  final VoidCallback onToggleMembers;
-  final VoidCallback onTogglePins;
-  final VoidCallback onToggleThreads;
-  final VoidCallback onOpenInbox;
+
+  /// Opens and closes the member list, or a DM's profile.
+  final VoidCallback? onToggleMembers;
+  final VoidCallback? onTogglePins;
+  final VoidCallback? onToggleThreads;
+  final VoidCallback? onOpenInbox;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 58,
+      height: height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: context.surfaces.canvas,
@@ -127,57 +163,104 @@ class ChatHeader extends StatelessWidget {
     );
   }
 
-  /// What the header keeps for the channel's icon and name.
-  static const _minTitleWidth = 120.0;
-
-  Widget _title(BuildContext context, {required bool showTopic}) => Row(
-    children: [
-      if (showCompactPicker)
-        PopupMenuButton<String>(
-          tooltip: 'Choose channel',
-          onSelected: onSelectChannel,
-          itemBuilder: (context) => [
-            for (final item in channels.where(
-              (item) => !item.isArchived || item.id == channel.id,
-            ))
-              PopupMenuItem(
-                value: item.id,
-                child: Text('${_channelLabel(item)} ${item.name}'),
+  Widget _title(BuildContext context, {required bool showTopic}) {
+    final surfaces = context.surfaces;
+    return Row(
+      children: [
+        if (showCompactPicker)
+          PopupMenuButton<String>(
+            tooltip: 'Choose channel',
+            onSelected: onSelectChannel,
+            iconSize: FlucordIconButton.iconSize,
+            style: FlucordIconButton.squareStyle,
+            itemBuilder: (context) => [
+              for (final item in channels.where(
+                (item) => !item.isArchived || item.id == channel.id,
+              ))
+                FlucordMenuItem(
+                  value: item.id,
+                  label: '${_channelLabel(item)} ${item.name}',
+                ),
+            ],
+            icon: const FlucordIcon(FlucordIcons.channels),
+          )
+        else
+          leading ??
+              FlucordIcon(
+                _channelIcon(channel),
+                size: FlucordIconButton.iconSize,
+                color: surfaces.muted,
               ),
-          ],
-          icon: const Icon(Icons.menu),
-        )
-      else
-        Icon(_channelIcon(channel), size: 20),
-      const SizedBox(width: 9),
-      Flexible(
-        fit: FlexFit.loose,
-        child: Text(
-          channel.name,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      if (showTopic) ...[
-        const SizedBox(width: 14),
-        Container(width: 1, height: 20, color: context.surfaces.border),
-        const SizedBox(width: 14),
+        const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            channel.topic,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-            ),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final nameStyle = FlucordTextRole.heading.style.copyWith(
+                color: surfaces.text,
+              );
+              final name = Text(
+                channel.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: nameStyle,
+              );
+              // The name comes first and is never cut for the topic: the
+              // topic shows only in the room the whole name leaves.
+              final topicRoom =
+                  box.maxWidth -
+                  _widthOf(context, channel.name, nameStyle) -
+                  2 * _topicGap -
+                  1;
+              if (!showTopic ||
+                  channel.topic.isEmpty ||
+                  topicRoom < _minTopicWidth) {
+                return Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: name,
+                );
+              }
+              return Row(
+                children: [
+                  name,
+                  const SizedBox(width: _topicGap),
+                  Container(
+                    key: const ValueKey('chat-header-divider'),
+                    width: 1,
+                    height: FlucordIconButton.iconSize,
+                    color: surfaces.border,
+                  ),
+                  const SizedBox(width: _topicGap),
+                  Expanded(
+                    child: Text(
+                      channel.topic,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FlucordTextRole.caption.style.copyWith(
+                        color: surfaces.captionText,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
-    ],
-  );
+    );
+  }
+
+  /// How wide [text] draws on one line in [style].
+  static double _widthOf(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
 
   Widget _controls(
     BuildContext context, {
@@ -187,25 +270,26 @@ class ChatHeader extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: [
       if (threadMembership case final membership?) ...[
-        const SizedBox(width: 4),
+        const SizedBox(width: _buttonGap),
         membership,
       ],
       if (onToggleCall != null) ...[
-        const SizedBox(width: 4),
-        IconButton(
+        const SizedBox(width: _buttonGap),
+        FlucordIconButton(
           key: const ValueKey('toggle-call'),
           onPressed: onToggleCall,
           tooltip: callLabel ?? 'Start call',
           color: isInCall ? context.surfaces.danger : null,
-          icon: Icon(isInCall ? Icons.call_end : Icons.call),
+          icon: isInCall ? FlucordIcons.hangUp : FlucordIcons.call,
         ),
       ],
-      if (showVoiceSurfaces) ...[
+      if (onSelectVoiceSurface case final onChanged?
+          when showVoiceSurfaces) ...[
         const SizedBox(width: 8),
         VoiceSurfaceSwitch(
           surface: voiceSurface,
           showLabels: showTopic,
-          onChanged: onSelectVoiceSurface,
+          onChanged: onChanged,
         ),
       ],
       // Everything past here scrolls rather than overflows. There are up to
@@ -220,56 +304,51 @@ class ChatHeader extends StatelessWidget {
           reverse: true,
           child: Row(
             children: [
-              if (showsMessages && showSearch)
-                SizedBox(
-                  width: 190,
-                  child: _SearchField(
-                    query: query,
-                    onChanged: onQueryChanged,
-                    onSubmitted: onSubmitQuery,
-                  ),
-                ),
-              const SizedBox(width: 4),
-              InboxActivityButton(
-                summary: inboxSummary,
-                onPressed: onOpenInbox,
-              ),
-              if (allowThreadPanel) ...[
-                const SizedBox(width: 4),
-                IconButton(
+              if (onToggleThreads != null) ...[
+                const SizedBox(width: _buttonGap),
+                FlucordIconButton(
                   key: const ValueKey('toggle-threads'),
                   onPressed: onToggleThreads,
-                  icon: Icon(
-                    showThreads ? Icons.forum : Icons.forum_outlined,
-                    size: 19,
-                  ),
+                  selected: showThreads,
+                  icon: FlucordIcons.threads,
                   tooltip: showThreads ? 'Close threads' : 'Threads',
                 ),
               ],
               // Pinning is absent from the voice text-chat permission set, so
               // the panel and its toggle stay out of a voice channel's chat.
-              if (showsMessages && channel.kind != ChannelKind.voice) ...[
-                const SizedBox(width: 4),
-                IconButton(
+              if (onTogglePins != null &&
+                  showsMessages &&
+                  channel.kind != ChannelKind.voice) ...[
+                const SizedBox(width: _buttonGap),
+                FlucordIconButton(
                   key: const ValueKey('toggle-pins'),
                   onPressed: onTogglePins,
-                  icon: Icon(
-                    showPins ? Icons.push_pin : Icons.push_pin_outlined,
-                    size: 19,
-                  ),
+                  selected: showPins,
+                  icon: FlucordIcons.pin,
                   tooltip: showPins
                       ? 'Close pinned messages'
                       : 'Pinned messages',
                 ),
               ],
-              if (allowMemberPanel) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('toggle-members'),
-                  onPressed: onToggleMembers,
-                  icon: Icon(showMembers ? Icons.group : Icons.group_outlined),
-                  tooltip: showMembers ? 'Hide members' : 'Show members',
+              if (onToggleMembers != null) ...[
+                const SizedBox(width: _buttonGap),
+                _membersToggle(),
+              ],
+              if (onQueryChanged case final onChanged?
+                  when showsMessages && showSearch) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: _searchWidth,
+                  child: _SearchField(
+                    query: query,
+                    onChanged: onChanged,
+                    onSubmitted: onSubmitQuery,
+                  ),
                 ),
+              ],
+              if (onOpenInbox case final onOpen?) ...[
+                const SizedBox(width: 8),
+                InboxActivityButton(summary: inboxSummary, onPressed: onOpen),
               ],
             ],
           ),
@@ -278,8 +357,27 @@ class ChatHeader extends StatelessWidget {
     ],
   );
 
+  /// The member list's button. A one-to-one DM has one person instead, so
+  /// there it opens their profile.
+  Widget _membersToggle() {
+    final person = channel.soleRecipientId != null;
+    return FlucordIconButton(
+      key: const ValueKey('toggle-members'),
+      onPressed: onToggleMembers,
+      selected: showMembers,
+      icon: person ? FlucordIcons.profile : FlucordIcons.members,
+      tooltip: switch ((person, showMembers)) {
+        (true, true) => 'Hide user profile',
+        (true, false) => 'Show user profile',
+        (false, true) => 'Hide members',
+        (false, false) => 'Show members',
+      },
+    );
+  }
+
   static String _channelLabel(ConversationChannel channel) {
     if (channel.isThread) return 'Post:';
+    if (channel.isGroupDirectMessage) return 'Group:';
     if (channel.isDirectMessage) return '@';
     return switch (channel.kind) {
       ChannelKind.text => '#',
@@ -289,24 +387,29 @@ class ChatHeader extends StatelessWidget {
     };
   }
 
-  static IconData _channelIcon(ConversationChannel channel) {
-    if (channel.isThread) return Icons.forum_outlined;
-    if (channel.isDirectMessage) return Icons.person_outline;
+  static FlucordIconData _channelIcon(ConversationChannel channel) {
+    if (channel.isThread) return FlucordIcons.threads;
+    if (channel.isGroupDirectMessage) return FlucordIcons.members;
+    if (channel.isDirectMessage) return FlucordIcons.person;
     return switch (channel.kind) {
-      ChannelKind.text => Icons.tag,
-      ChannelKind.voice => Icons.volume_up_outlined,
-      ChannelKind.forum => Icons.forum_outlined,
-      ChannelKind.media => Icons.perm_media_outlined,
+      ChannelKind.text => FlucordIcons.textChannel,
+      ChannelKind.voice => FlucordIcons.voiceChannel,
+      ChannelKind.forum => FlucordIcons.threads,
+      ChannelKind.media => FlucordIcons.image,
     };
   }
 }
 
+/// The header's search: a recessed field that filters the loaded messages as
+/// it is typed in, and asks the server on Enter.
 class _SearchField extends StatefulWidget {
   const _SearchField({
     required this.query,
     required this.onChanged,
     this.onSubmitted,
   });
+
+  static const _height = 28.0;
 
   final String query;
   final ValueChanged<String> onChanged;
@@ -341,29 +444,55 @@ class _SearchFieldState extends State<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    const iconBox = BoxConstraints.tightFor(
+      width: FlucordIconButton.size,
+      height: _SearchField._height,
+    );
     final field = TextField(
       key: const ValueKey('message-search'),
       controller: _controller,
-      onChanged: widget.onChanged,
+      onChanged: (value) {
+        widget.onChanged(value);
+        // The clear button shows only while there is text.
+        setState(() {});
+      },
       onSubmitted: widget.onSubmitted,
       textInputAction: TextInputAction.search,
-      style: const TextStyle(fontSize: FlucordType.caption),
-      decoration: InputDecoration(
-        hintText: 'Search',
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        suffixIcon: _controller.text.isEmpty
-            ? const Icon(Icons.search, size: 16)
-            : IconButton(
-                onPressed: () {
-                  _controller.clear();
-                  widget.onChanged('');
-                  setState(() {});
-                },
-                icon: const Icon(Icons.close, size: 15),
-                tooltip: 'Clear search',
-              ),
-      ),
+      textAlignVertical: TextAlignVertical.center,
+      style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+      decoration:
+          recessedFieldDecoration(
+            context,
+            borderRadius: FlucordRadius.control,
+          ).copyWith(
+            hintText: 'Search',
+            hintStyle: FlucordTextRole.label.style.copyWith(
+              color: surfaces.captionText,
+            ),
+            constraints: const BoxConstraints.tightFor(
+              height: _SearchField._height,
+            ),
+            contentPadding: EdgeInsets.zero,
+            prefixIcon: FlucordIcon(
+              FlucordIcons.search,
+              size: FlucordIconButton.iconSize,
+              color: surfaces.muted,
+            ),
+            prefixIconConstraints: iconBox,
+            suffixIconConstraints: iconBox,
+            suffixIcon: _controller.text.isEmpty
+                ? null
+                : FlucordIconButton(
+                    onPressed: () {
+                      _controller.clear();
+                      widget.onChanged('');
+                      setState(() {});
+                    },
+                    icon: FlucordIcons.clear,
+                    tooltip: 'Clear search',
+                  ),
+          ),
     );
     if (widget.onSubmitted == null) return field;
     return Tooltip(message: 'Press Enter to search the server', child: field);

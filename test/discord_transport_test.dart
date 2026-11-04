@@ -551,8 +551,11 @@ void main() {
     );
     final guildMember = workspace.memberById('user-1');
     expect(guildMember.displayName, 'Mira Ops');
-    expect(guildMember.roleFor('guild-1'), 'Operator');
-    expect(guildMember.colorValue, 0xff336699);
+    expect(
+      workspace.heldRolesOf(guildMember, 'guild-1').nameFor(guildMember),
+      'Operator',
+    );
+    expect(workspace.nameColorOf(guildMember, 'guild-1'), 0xff336699);
     expect(guildMember.avatarUrl, contains('/avatars/user-1/'));
     expect(
       guildMember.avatarUrlFor('guild-1'),
@@ -613,7 +616,7 @@ void main() {
     expect(workspace.spaces.single.kind, SpaceKind.directMessages);
     final channel = workspace.channels.single;
     expect(channel.name, 'Jack');
-    expect(channel.recipientId, '123456789012345678');
+    expect(channel.recipientIds, ['123456789012345678']);
     expect(channel.isDirectMessage, isTrue);
     expect(
       workspace.memberById('123456789012345678').avatarUrl,

@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/guild_membership.dart';
 import 'chat_model_json.dart';
 import 'message_snapshot_codec.dart';
 import 'sqlite_chat_schema.dart';
@@ -114,9 +115,16 @@ final class SqliteChatCache
     final channels = await _database.query('channels', orderBy: 'sort_index');
     final categories = await _database.query('categories', orderBy: 'position');
     final roles = await _database.query('roles', orderBy: 'position DESC');
+    final currentMemberId = metadata.single['value']! as String;
+    // The shell holds the account's own member and nobody else: a reconnect
+    // compares the account's standing in each server against it. See ADR-0011.
     final members = withHistory
         ? await _database.query('members')
-        : const <Map<String, Object?>>[];
+        : await _database.query(
+            'members',
+            where: 'id = ?',
+            whereArgs: [currentMemberId],
+          );
     final messages = <Map<String, Object?>>[];
     if (withHistory) {
       // Per channel, newest first, so a limit keeps each channel's newest
@@ -148,7 +156,7 @@ final class SqliteChatCache
       messages: messages.map(_messageFromRow).toList(),
       emojis: emojis,
       stickers: stickers,
-      currentMemberId: metadata.single['value']! as String,
+      currentMemberId: currentMemberId,
     );
   }
 
@@ -181,11 +189,7 @@ final class SqliteChatCache
         batch.insert('roles', _roleToRow(role));
       }
       for (final member in workspace.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       await batch.commit(noResult: true);
     });
@@ -285,11 +289,7 @@ final class SqliteChatCache
       }
       final batch = transaction.batch();
       for (final member in history.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       for (final message in history.messages) {
         batch.insert(
@@ -337,13 +337,7 @@ final class SqliteChatCache
     ChatMessage message,
     Member? member,
   ) async {
-    if (member != null) {
-      await transaction.insert(
-        'members',
-        _memberToRow(member),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
+    if (member != null) await _MemberUpsert(member).run(transaction);
     await transaction.insert(
       'messages',
       _messageToRow(message),
@@ -401,6 +395,25 @@ final class SqliteChatCache
   }
 
   @override
+  Future<void> writeRole(CommunityRole role) async {
+    _writes.add(
+      (transaction) => transaction.insert(
+        'roles',
+        _roleToRow(role),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteRole(String roleId) async {
+    _writes.add(
+      (transaction) =>
+          transaction.delete('roles', where: 'id = ?', whereArgs: [roleId]),
+    );
+  }
+
+  @override
   Future<void> writeGuild(JoinedGuild guild) => _writes.inTurn(() {
     return _database.transaction((transaction) async {
       await _putSpace(transaction, guild.space);
@@ -427,11 +440,7 @@ final class SqliteChatCache
         );
       }
       for (final member in guild.members) {
-        batch.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        _MemberUpsert(member).addTo(batch);
       }
       await batch.commit(noResult: true);
     });
@@ -530,9 +539,63 @@ final class SqliteChatCache
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+      for (final roleId in diff.removedRoleIds) {
+        writes.delete('roles', where: 'id = ?', whereArgs: [roleId]);
+      }
+      for (final role in diff.roles) {
+        writes.insert(
+          'roles',
+          _roleToRow(role),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
       await writes.commit(noResult: true);
+
+      for (final MapEntry(key: spaceId, value: emojis)
+          in diff.emojisBySpace.entries) {
+        await SqliteGuildEmojiStore(
+          _database,
+        ).replaceForSpaceIn(transaction, spaceId, emojis);
+      }
+      for (final MapEntry(key: spaceId, value: stickers)
+          in diff.stickersBySpace.entries) {
+        await SqliteGuildStickerStore(
+          _database,
+        ).replaceForSpaceIn(transaction, spaceId, stickers);
+      }
+      await _writeOwnMemberships(transaction, diff.ownMemberships);
     }),
   );
+
+  /// Lays [memberships] over the account's own member row. Only its spaces
+  /// and memberships change; the rest of the row is the next full load's.
+  Future<void> _writeOwnMemberships(
+    Transaction transaction,
+    Map<String, GuildMembership> memberships,
+  ) async {
+    if (memberships.isEmpty) return;
+    final rows = await transaction.rawQuery(
+      'SELECT members.* FROM members JOIN metadata '
+      "ON metadata.key = 'current_member_id' AND members.id = metadata.value",
+    );
+    if (rows.isEmpty) return;
+    final account = _memberFromRow(rows.single);
+    await transaction.update(
+      'members',
+      {
+        'space_ids_json': ChatModelJson.strings({
+          ...account.spaceIds,
+          ...memberships.keys,
+        }),
+        'memberships_json': ChatModelJson.memberships({
+          ...account.membershipsBySpace,
+          ...memberships,
+        }),
+      },
+      where: 'id = ?',
+      whereArgs: [account.id],
+    );
+  }
 
   /// Rewrites the members that named [spaceId] without it.
   ///
@@ -560,11 +623,7 @@ final class SqliteChatCache
         );
         continue;
       }
-      await transaction.insert(
-        'members',
-        _memberToRow(kept),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await _MemberUpsert(kept).run(transaction);
     }
   }
 
@@ -675,6 +734,7 @@ final class SqliteChatCache
     'position': role.position,
     'color_value': role.colorValue,
     'permissions': role.permissions?.toString(),
+    'hoist': role.hoist ? 1 : 0,
   };
 
   static Map<String, Object?> _categoryToRow(ChannelCategory category) => {
@@ -699,6 +759,7 @@ final class SqliteChatCache
     position: row['position']! as int,
     colorValue: row['color_value'] as int?,
     permissions: DiscordPermissions.tryParse(row['permissions']),
+    hoist: row['hoist'] == 1,
   );
 
   static Map<String, Object?> _channelToRow(
@@ -726,7 +787,11 @@ final class SqliteChatCache
     'default_auto_archive_duration': channel.defaultAutoArchiveDurationMinutes,
     'default_sort_order': channel.defaultSortOrder?.index,
     'default_forum_layout': channel.defaultForumLayout?.index,
-    'recipient_id': channel.recipientId,
+    'recipient_ids_json': ChatModelJson.strings(channel.recipientIds),
+    'is_group_dm': channel.isGroupDirectMessage ? 1 : 0,
+    'icon_url': channel.iconUrl,
+    'is_message_request': channel.isMessageRequest ? 1 : 0,
+    'message_requested_at': channel.messageRequestedAt?.toIso8601String(),
     'permission_overwrites_json': ChatModelJson.permissionOverwrites(
       channel.permissionOverwrites,
     ),
@@ -772,7 +837,16 @@ final class SqliteChatCache
         defaultForumLayout: row['default_forum_layout'] == null
             ? null
             : ForumLayout.values[row['default_forum_layout']! as int],
-        recipientId: row['recipient_id'] as String?,
+        recipientIds: ChatModelJson.stringListFrom(
+          row['recipient_ids_json']! as String,
+        ),
+        isGroupDirectMessage: row['is_group_dm'] == 1,
+        iconUrl: row['icon_url'] as String?,
+        isMessageRequest: row['is_message_request'] == 1,
+        messageRequestedAt: switch (row['message_requested_at']) {
+          final String requestedAt => DateTime.parse(requestedAt),
+          _ => null,
+        },
         permissionOverwrites: ChatModelJson.permissionOverwritesFrom(
           row['permission_overwrites_json'] as String?,
         ),
@@ -791,12 +865,28 @@ final class SqliteChatCache
     'presence': member.presence.index,
     'color_value': member.colorValue,
     'space_ids_json': ChatModelJson.strings(member.spaceIds),
-    'roles_by_space_json': ChatModelJson.stringMap(member.rolesBySpace),
     'avatar_url': member.avatarUrl,
     'avatar_urls_by_space_json': ChatModelJson.stringMap(
       member.avatarUrlsBySpace,
     ),
     'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
+    ..._tagsToRow(member.tags),
+    // A member mapped without a username keeps the stored one.
+    'username': ?member.username,
+  };
+
+  /// A part the payload left out is no column at all, so a write keeps the
+  /// stored one. So is a false bot flag: it may only mean the payload left
+  /// `bot` out, and an account never stops being a bot. A new row takes the
+  /// column's default of 0.
+  static Map<String, Object?> _tagsToRow(MemberTags tags) => {
+    if (tags.isBot) 'is_bot': 1,
+    if (tags.knows(TagPart.clanTag))
+      'clan_tag_json': ChatModelJson.clanTag(tags.clanTag),
+    if (tags.knows(TagPart.nameplate))
+      'nameplate_json': ChatModelJson.nameplate(tags.nameplate),
+    if (tags.knows(TagPart.nameStyle))
+      'name_style_json': ChatModelJson.nameStyle(tags.nameStyle),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -807,9 +897,6 @@ final class SqliteChatCache
     presence: Presence.values[row['presence']! as int],
     colorValue: row['color_value']! as int,
     spaceIds: ChatModelJson.stringsFrom(row['space_ids_json']! as String),
-    rolesBySpace: ChatModelJson.stringMapFrom(
-      row['roles_by_space_json']! as String,
-    ),
     avatarUrl: row['avatar_url'] as String?,
     avatarUrlsBySpace: ChatModelJson.stringMapFrom(
       row['avatar_urls_by_space_json']! as String,
@@ -817,6 +904,13 @@ final class SqliteChatCache
     membershipsBySpace: ChatModelJson.membershipsFrom(
       row['memberships_json'] as String?,
     ),
+    tags: MemberTags(
+      isBot: row['is_bot'] == 1,
+      clanTag: ChatModelJson.clanTagFrom(row['clan_tag_json'] as String?),
+      nameplate: ChatModelJson.nameplateFrom(row['nameplate_json'] as String?),
+      nameStyle: ChatModelJson.nameStyleFrom(row['name_style_json'] as String?),
+    ),
+    username: row['username'] as String?,
   );
 
   /// Every table is found by name, so a table added later cannot be missed.

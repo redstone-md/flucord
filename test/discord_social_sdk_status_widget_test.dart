@@ -14,8 +14,14 @@ import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/zoomed_app.dart';
 
 void main() {
@@ -31,6 +37,13 @@ void main() {
 
     expect(find.text('Discord Social SDK is not bundled'), findsOneWidget);
     expect(find.textContaining('not routed through Bot API'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('discord-social-sdk-status')),
+        matching: findFlucordIcon(FlucordIcons.packageMissing),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders native pending, online, and offline relationships', (
@@ -60,9 +73,9 @@ void main() {
       find.byKey(const ValueKey('discord-friend-directory')),
       findsOneWidget,
     );
-    expect(find.text('PENDING — 1'), findsOneWidget);
-    expect(find.text('ONLINE — 1'), findsOneWidget);
-    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.text('Pending 1'), findsOneWidget);
+    expect(find.text('Online 1'), findsOneWidget);
+    expect(find.text('Offline 1'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('discord-friend-online-1')),
       findsOneWidget,
@@ -71,7 +84,43 @@ void main() {
     expect(find.text('Native social access is linked'), findsNothing);
   });
 
-  testWidgets('under zoom a row above the middle opens its profile downward', (
+  testWidgets('a friend row is the shared 60 px row with the status glyph', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [
+        _relationship(
+          id: 'online-1',
+          name: 'Ada',
+          status: DiscordPresenceStatus.idle,
+        ),
+      ],
+    );
+    addTearDown(harness.dispose);
+
+    await _pumpAccountHome(tester, harness);
+
+    final row = find.byKey(const ValueKey('discord-friend-online-1'));
+    expect(tester.getSize(row).height, 60);
+    final avatar = find.descendant(
+      of: row,
+      matching: find.byType(DiscordRelationshipAvatar),
+    );
+    expect(tester.getSize(avatar), const Size.square(32));
+    // The same glyph member rows draw, so idle reads as a crescent here too.
+    final glyph = tester.widget<PresenceIndicator>(
+      find.descendant(of: avatar, matching: find.byType(PresenceIndicator)),
+    );
+    expect(glyph.presence.status, Presence.idle);
+    final name = tester.widget<Text>(
+      find.descendant(of: row, matching: find.text('Ada')),
+    );
+    expect(name.style?.fontSize, FlucordTextRole.label.size);
+    expect(name.style?.fontWeight, FontWeight.w500);
+  });
+
+  testWidgets('under zoom the profile opens level with its row', (
     tester,
   ) async {
     final harness = await _harnessFor(
@@ -80,13 +129,13 @@ void main() {
     );
     addTearDown(harness.dispose);
 
-    // 450 high at zoom 1.4 lays out 321 high, so the middle is at 160. The row
-    // is at 137 laid out and at 192 drawn, so it is above the middle unless the
-    // two are mixed up.
+    // 700 high at zoom 1.4 lays out 500 high, room for the card below the
+    // row. Laid-out and drawn positions differ by the zoom, so a card placed
+    // with the two mixed up lands away from the row.
     await _pumpAccountHome(
       tester,
       harness,
-      size: const Size(700, 450),
+      size: const Size(700, 700),
       builder: await zoomedAppBuilder(1.4),
     );
     final row = find.byKey(const ValueKey('discord-friend-online-1'));
@@ -94,10 +143,62 @@ void main() {
     await tester.tap(row);
     await tester.pumpAndSettle();
 
-    final profile = find.byKey(
-      const ValueKey('discord-friend-profile-popover'),
+    final profile = find.byKey(const ValueKey('profile-card'));
+    expect(tester.getTopLeft(profile).dy, moreOrLessEquals(rowTop, epsilon: 1));
+  });
+
+  testWidgets('an open profile follows the relationship as it changes', (
+    tester,
+  ) async {
+    final request = _relationship(
+      id: 'request-1',
+      name: 'Ada',
+      kind: DiscordRelationshipKind.incomingRequest,
     );
-    expect(tester.getTopLeft(profile).dy, greaterThanOrEqualTo(rowTop - 1));
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [request],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+
+    await tester.tap(find.text('Ada'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('profile-card-message')), findsNothing);
+
+    await harness.friends.updateRelationship(
+      request,
+      DiscordRelationshipAction.acceptRequest,
+    );
+    await tester.pumpAndSettle();
+
+    // A friend now, so the card offers the message field.
+    expect(find.byKey(const ValueKey('profile-card-message')), findsOneWidget);
+  });
+
+  testWidgets('a full profile closes when the relationship is gone', (
+    tester,
+  ) async {
+    final ada = _relationship(id: 'friend-1', name: 'Ada');
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [ada],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+    await tester.tap(find.text('Ada'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-card-avatar')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('full-profile')), findsOneWidget);
+
+    await harness.friends.updateRelationship(
+      ada,
+      DiscordRelationshipAction.removeFriend,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('full-profile')), findsNothing);
   });
 
   testWidgets('keeps linked-package authorization distinct from loading', (
@@ -200,41 +301,36 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsOneWidget,
-    );
-    expect(find.text('@ada.dev'), findsOneWidget);
-    expect(find.text('Friend'), findsOneWidget);
-    expect(find.text('PLAYING'), findsOneWidget);
-    expect(
-      find.text('Night Circuit\nRanked match\nParty of 3'),
-      findsOneWidget,
-    );
-    expect(find.text('friend-1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-card')), findsOneWidget);
+    expect(find.text('ada.dev'), findsOneWidget);
+    final activity = find.byKey(const ValueKey('activity-card'));
+    for (final line in ['Playing', 'Night Circuit', 'Ranked match']) {
+      expect(
+        find.descendant(of: activity, matching: find.text(line)),
+        findsOne,
+      );
+    }
     expect(tester.takeException(), isNull);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
     await tester.pump();
 
+    await tester.tap(find.byKey(const ValueKey('profile-card-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('copy-friend-id')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(copiedId, 'friend-1');
 
-    final messageButton = find.byKey(const ValueKey('message-friend-profile'));
-    await tester.tap(messageButton);
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('profile-card-message')),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
     expect(harness.dmNavigation.selectedUserId, 'friend-1');
-    expect(
-      find.byKey(const ValueKey('discord-friend-profile-popover')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('profile-card')), findsNothing);
   });
 
   testWidgets('accepts an incoming request from its native row actions', (
@@ -262,8 +358,8 @@ void main() {
       harness.gateway.mutations.single.action,
       DiscordRelationshipAction.acceptRequest,
     );
-    expect(find.text('PENDING — 1'), findsNothing);
-    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.text('Pending 1'), findsNothing);
+    expect(find.text('Offline 1'), findsOneWidget);
   });
 
   testWidgets('confirms removal before mutating a native friendship', (

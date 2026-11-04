@@ -31,18 +31,24 @@ mixin _DiscordGuildAccess {
       if (preview != null) return preview;
       throw _invalidInvite();
     } on DiscordApiException catch (error) {
+      // Only a 404 is an answer about the invite. Anything else, such as a
+      // server fault, says nothing about it and may work on the next try.
+      if (error.statusCode != 404) {
+        throw const GuildAccessException(
+          refusal: GuildAccessRefusal.unknown,
+          message: 'Discord could not check this invite. Try again.',
+        );
+      }
       // The preview card names the refusal the same words the join does,
       // so an expired invite reads as expired before the click, not after.
-      if (error.statusCode == 404) {
-        final code = error.responsePayload?['code'];
-        final expired =
-            code == 1007 || error.message.toLowerCase().contains('expired');
-        if (expired) {
-          throw const GuildAccessException(
-            refusal: GuildAccessRefusal.expired,
-            message: 'This invite has expired.',
-          );
-        }
+      final code = error.responsePayload?['code'];
+      final expired =
+          code == 1007 || error.message.toLowerCase().contains('expired');
+      if (expired) {
+        throw const GuildAccessException(
+          refusal: GuildAccessRefusal.expired,
+          message: 'This invite has expired.',
+        );
       }
       throw _invalidInvite();
     }
@@ -118,7 +124,7 @@ mixin _DiscordGuildAccess {
       '/guilds/${_segment(guildId)}/channels',
     );
     final roles = await _rest.getList('/guilds/${_segment(guildId)}/roles');
-    final membership = await _readOwnMembership(guildId, roles);
+    final membership = await _readOwnMembership(guildId);
     return DiscordGuildAdminMapper.joinedGuild(
       guild: guild,
       channels: channels,
@@ -128,15 +134,12 @@ mixin _DiscordGuildAccess {
     );
   }
 
-  Future<Member?> _readOwnMembership(
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) async {
+  Future<Member?> _readOwnMembership(String guildId) async {
     try {
       final member = await _rest.getObject(
         '/guilds/${_segment(guildId)}/members/@me',
       );
-      return _mapper.guildMember(member, guildId, roles);
+      return _mapper.guildMember(member, guildId);
     } on DiscordApiException {
       return null;
     }

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_expression_errors.dart';
@@ -84,7 +86,7 @@ class _GuildSettingsExpressionsSectionState
             for (final emoji in controller.emoji)
               GuildSettingsRow(
                 key: ValueKey('guild-expression-emoji-${emoji.id}'),
-                leading: const Icon(Icons.emoji_emotions, size: 16),
+                leading: const FlucordIcon(FlucordIcons.emoji, size: 16),
                 title: ':${emoji.name}:',
                 subtitle: emoji.animated ? 'Animated' : null,
                 trailing: _DeleteButton(
@@ -106,7 +108,7 @@ class _GuildSettingsExpressionsSectionState
             for (final sticker in controller.stickers)
               GuildSettingsRow(
                 key: ValueKey('guild-expression-sticker-${sticker.id}'),
-                leading: const Icon(Icons.sticky_note_2_outlined, size: 16),
+                leading: const FlucordIcon(FlucordIcons.expressions, size: 16),
                 title: sticker.name,
                 subtitle: _stickerFormatLabel(sticker),
                 trailing: _DeleteButton(
@@ -128,7 +130,7 @@ class _GuildSettingsExpressionsSectionState
             for (final sound in controller.sounds)
               GuildSettingsRow(
                 key: ValueKey('guild-expression-sound-${sound.id}'),
-                leading: const Icon(Icons.music_note_outlined, size: 16),
+                leading: const FlucordIcon(FlucordIcons.music, size: 16),
                 title: sound.name,
                 subtitle: 'Volume ${(sound.volume * 100).round()}%',
                 trailing: _DeleteButton(
@@ -228,15 +230,12 @@ class _ExpressionGroup extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
-        heading.toUpperCase(),
-        style: TextStyle(
-          fontSize: FlucordType.caption,
-          letterSpacing: 0.5,
-          fontWeight: FontWeight.w700,
-          color: context.surfaces.muted,
+        heading,
+        style: FlucordTextRole.heading.style.copyWith(
+          color: context.surfaces.text,
         ),
       ),
-      const SizedBox(height: 6),
+      const SizedBox(height: 8),
       if (rows.isEmpty)
         Padding(
           key: ValueKey(emptyKey),
@@ -312,17 +311,11 @@ class _NameDialogState extends State<_NameDialog> {
       autofocus: true,
       decoration: InputDecoration(hintText: widget.hint, isDense: true),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('guild-expression-name-confirm'),
-        onPressed: () => Navigator.of(context).pop(_name.text.trim()),
-        child: const Text('Upload'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('guild-expression-name-confirm'),
+      label: 'Upload',
+      onPressed: () => Navigator.of(context).pop(_name.text.trim()),
+    ),
   );
 }
 
@@ -377,18 +370,11 @@ class _SoundDialogState extends State<_SoundDialog> {
         ),
       ],
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('guild-expression-sound-name-confirm'),
-        onPressed: () => Navigator.of(
-          context,
-        ).pop((name: _name.text.trim(), volume: _volume)),
-        child: const Text('Upload'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('guild-expression-sound-name-confirm'),
+      label: 'Upload',
+      onPressed: () =>
+          Navigator.of(context).pop((name: _name.text.trim(), volume: _volume)),
+    ),
   );
 }

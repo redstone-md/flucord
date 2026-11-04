@@ -190,10 +190,8 @@ class _LinkCode extends StatelessWidget {
           SelectableText(
             code,
             key: const ValueKey('family-link-code'),
-            style: const TextStyle(
+            style: FlucordTextRole.title.style.copyWith(
               fontFamily: 'monospace',
-              fontWeight: FontWeight.w600,
-              fontSize: FlucordType.title,
             ),
           ),
           const SizedBox(height: 4),

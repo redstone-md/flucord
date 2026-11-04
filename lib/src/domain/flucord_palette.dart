@@ -15,7 +15,9 @@ final class FlucordPalette {
     required this.inset,
     required this.control,
     required this.text,
+    required this.bodyText,
     required this.muted,
+    required this.captionText,
     required this.border,
     required this.brand,
     required this.brandPressed,
@@ -50,8 +52,16 @@ final class FlucordPalette {
   /// A control's own background.
   final int control;
 
+  /// Text has four tiers, brightest first: [text] for titles and names,
+  /// [bodyText] for message text, [muted] for secondary text, and
+  /// [captionText] for captions and placeholders.
   final int text;
+  final int bodyText;
   final int muted;
+  final int captionText;
+
+  /// Lines between areas. May carry alpha, so it lightens whatever is under
+  /// it by the same step.
   final int border;
 
   final int brand;
@@ -62,25 +72,28 @@ final class FlucordPalette {
   final int danger;
   final int offline;
 
-  /// Discord's dark scheme, which is what Flucord shipped before themes.
+  /// Neutral cool greys a few percent apart, with one violet accent. Red
+  /// marks danger and unread counts, green marks voice and online.
   static const dark = FlucordPalette(
     isDark: true,
-    rail: 0xff1e1f22,
-    canvas: 0xff313338,
-    surface: 0xff2b2d31,
-    raised: 0xff3f4147,
-    inset: 0xff232428,
-    control: 0xff383a40,
-    text: 0xfff2f3f5,
-    muted: 0xff949ba4,
-    border: 0xff3f4147,
-    brand: 0xff5865f2,
-    brandPressed: 0xff4752c4,
-    success: 0xff23a55a,
-    warning: 0xfff0b232,
-    mention: 0xfff23f42,
-    danger: 0xffda373c,
-    offline: 0xff80848e,
+    rail: 0xff08090a,
+    canvas: 0xff111113,
+    surface: 0xff111113,
+    raised: 0xff1b1b1e,
+    inset: 0xff0c0c0e,
+    control: 0xff1b1b1e,
+    text: 0xffeeeef0,
+    bodyText: 0xffc8c8ce,
+    muted: 0xff8e8e96,
+    captionText: 0xff616168,
+    border: 0x12ffffff,
+    brand: 0xff8b7cf6,
+    brandPressed: 0xff7a6ae6,
+    success: 0xff46a758,
+    warning: 0xffe2a336,
+    mention: 0xffe5484d,
+    danger: 0xffe5484d,
+    offline: 0xff6f6e77,
   );
 
   static const light = FlucordPalette(
@@ -92,15 +105,20 @@ final class FlucordPalette {
     inset: 0xffebedef,
     control: 0xffebedef,
     text: 0xff313338,
+    // The light theme keeps its two tiers until it gets its own design.
+    bodyText: 0xff313338,
     muted: 0xff5c5e66,
+    captionText: 0xff5c5e66,
     border: 0xffd7d9dc,
     brand: 0xff5865f2,
     brandPressed: 0xff4752c4,
-    success: 0xff23a55a,
-    warning: 0xfff0b232,
+    // The status colours are darker than Discord's light ones, so a status
+    // dot reaches 3:1 on every light surface, the darkest included.
+    success: 0xff1f9250,
+    warning: 0xffa9760c,
     mention: 0xfff23f42,
     danger: 0xffda373c,
-    offline: 0xff80848e,
+    offline: 0xff7c808b,
   );
 
   FlucordPalette copyWith({
@@ -112,7 +130,9 @@ final class FlucordPalette {
     int? inset,
     int? control,
     int? text,
+    int? bodyText,
     int? muted,
+    int? captionText,
     int? border,
     int? brand,
     int? brandPressed,
@@ -130,7 +150,9 @@ final class FlucordPalette {
     inset: inset ?? this.inset,
     control: control ?? this.control,
     text: text ?? this.text,
+    bodyText: bodyText ?? this.bodyText,
     muted: muted ?? this.muted,
+    captionText: captionText ?? this.captionText,
     border: border ?? this.border,
     brand: brand ?? this.brand,
     brandPressed: brandPressed ?? this.brandPressed,
@@ -150,7 +172,9 @@ final class FlucordPalette {
     'inset': inset,
     'control': control,
     'text': text,
+    'body_text': bodyText,
     'muted': muted,
+    'caption_text': captionText,
     'border': border,
     'brand': brand,
     'brand_pressed': brandPressed,
@@ -209,7 +233,9 @@ final class FlucordPalette {
       inset: read('inset', (p) => p.inset),
       control: read('control', (p) => p.control),
       text: read('text', (p) => p.text),
+      bodyText: read('body_text', (p) => p.bodyText),
       muted: read('muted', (p) => p.muted),
+      captionText: read('caption_text', (p) => p.captionText),
       border: read('border', (p) => p.border),
       brand: read('brand', (p) => p.brand),
       brandPressed: read('brand_pressed', (p) => p.brandPressed),

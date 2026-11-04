@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/voice_channel_surface.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -41,7 +42,7 @@ class VoiceSurfaceSwitch extends StatelessWidget {
             _SurfaceSegment(
               value: VoiceChannelSurface.room,
               selected: surface == VoiceChannelSurface.room,
-              icon: Icons.volume_up_outlined,
+              icon: FlucordIcons.voiceChannel,
               label: 'Voice',
               tooltip: 'Voice room',
               showLabel: showLabels,
@@ -51,7 +52,7 @@ class VoiceSurfaceSwitch extends StatelessWidget {
             _SurfaceSegment(
               value: VoiceChannelSurface.chat,
               selected: surface == VoiceChannelSurface.chat,
-              icon: Icons.chat_bubble_outline,
+              icon: FlucordIcons.chat,
               label: 'Chat',
               tooltip: 'Channel chat',
               showLabel: showLabels,
@@ -77,7 +78,7 @@ class _SurfaceSegment extends StatelessWidget {
 
   final VoiceChannelSurface value;
   final bool selected;
-  final IconData icon;
+  final FlucordIconData icon;
   final String label;
   final String tooltip;
   final bool showLabel;
@@ -112,17 +113,13 @@ class _SurfaceSegment extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, size: 15, color: foreground),
+                    FlucordIcon(icon, size: 15, color: foreground),
                     if (showLabel) ...[
                       const SizedBox(width: 6),
                       Text(
                         label,
-                        style: TextStyle(
+                        style: FlucordTextRole.caption.strong.copyWith(
                           color: foreground,
-                          fontSize: FlucordType.caption,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
                         ),
                       ),
                     ],

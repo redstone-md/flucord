@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../attachment_download_controller.dart';
@@ -73,8 +74,8 @@ class AttachmentDownloadButton extends StatelessWidget {
   };
 
   Widget _icon(BuildContext context) => switch (controller.phase) {
-    AttachmentDownloadPhase.idle => const Icon(
-      Icons.download_outlined,
+    AttachmentDownloadPhase.idle => const FlucordIcon(
+      FlucordIcons.download,
       size: 17,
     ),
     AttachmentDownloadPhase.downloading => SizedBox.square(
@@ -84,13 +85,13 @@ class AttachmentDownloadButton extends StatelessWidget {
         strokeWidth: 2,
       ),
     ),
-    AttachmentDownloadPhase.saved => Icon(
-      Icons.check_rounded,
+    AttachmentDownloadPhase.saved => FlucordIcon(
+      FlucordIcons.check,
       size: 17,
       color: context.surfaces.success,
     ),
-    AttachmentDownloadPhase.failed => Icon(
-      Icons.refresh_rounded,
+    AttachmentDownloadPhase.failed => FlucordIcon(
+      FlucordIcons.refresh,
       size: 17,
       color: Theme.of(context).colorScheme.error,
     ),

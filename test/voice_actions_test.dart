@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 
+import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
 void main() {
@@ -39,7 +42,7 @@ void main() {
 
       expect(room.media.microphoneOn, isFalse);
       expect(room.signaling.frames.last.selfMute, isTrue);
-      expect(find.byIcon(Icons.mic_off), findsOneWidget);
+      expect(findFlucordIcon(FlucordIcons.micOff), findsOneWidget);
     });
 
     testWidgets('a press and release behind a long action stay muted', (
@@ -182,7 +185,7 @@ void main() {
     await tester.pump();
 
     // The new choice shows at once and reaches Discord when its turn comes.
-    expect(find.byIcon(Icons.mic_off), findsOneWidget);
+    expect(findFlucordIcon(FlucordIcons.micOff), findsOneWidget);
     await finish(tester, room);
     expect(room.signaling.frames.last.selfMute, isTrue);
     expect(room.media.microphoneOn, isFalse);

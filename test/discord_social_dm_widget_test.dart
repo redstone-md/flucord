@@ -16,8 +16,15 @@ import 'package:flucord/src/presentation/widgets/discord_friends_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
+import 'package:flucord/src/presentation/widgets/flucord_icon_button.dart';
+import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
 import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets('opens sidebar history and sends from the native composer', (
@@ -48,7 +55,9 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<IconButton>(find.byKey(const ValueKey('social-dm-send')))
+          .widget<FlucordIconButton>(
+            find.byKey(const ValueKey('social-dm-send')),
+          )
           .onPressed,
       isNotNull,
     );
@@ -181,10 +190,193 @@ void main() {
 
     expect(harness.gateway.showingChat, [true, false, true, false]);
   });
+
+  testWidgets('the native DM list uses the shared person rows', (tester) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness);
+
+    final sidebar = find.byKey(const ValueKey('oauth-account-sidebar'));
+    // The header names the list as a heading; the group label repeats it.
+    final heading = find.descendant(
+      of: sidebar,
+      matching: find.text('Direct messages'),
+    );
+    expect(heading, findsNWidgets(2));
+    final title = tester.widget<Text>(heading.first).style!;
+    expect(title.fontSize, FlucordTextRole.heading.size);
+    expect(title.fontWeight, FontWeight.w500);
+    expect(
+      find.descendant(
+        of: sidebar,
+        matching: findFlucordIcon(FlucordIcons.friends),
+      ),
+      findsOneWidget,
+    );
+
+    final row = find.byKey(const ValueKey('social-dm-conversation-friend-1'));
+    expect(tester.getSize(row).height, 40);
+    expect(
+      tester.getSize(
+        find.descendant(
+          of: row,
+          matching: find.byType(DiscordRelationshipAvatar),
+        ),
+      ),
+      const Size.square(28),
+    );
+    TextStyle name() => tester
+        .widget<Text>(find.descendant(of: row, matching: find.text('Ada')))
+        .style!;
+    expect(name().color, _surfaces.muted);
+    expect(name().fontWeight, FontWeight.w400);
+
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    expect(name().color, _surfaces.text);
+    expect(name().fontWeight, FontWeight.w500);
+    final surface = tester.widget<Material>(
+      find.ancestor(of: row, matching: find.byType(Material)).first,
+    );
+    expect(surface.color, _surfaces.text.withValues(alpha: 0.06));
+    expect(surface.borderRadius, FlucordRadius.control);
+    expect(
+      find.descendant(
+        of: find.descendant(of: sidebar, matching: find.byType(ListView)),
+        matching: find.byType(Icon),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('the native DM header offers only what the SDK can do', (
+    tester,
+  ) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness, size: const Size(1280, 720));
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const ValueKey('social-dm-header'));
+    Finder inHeader(Finder matching) =>
+        find.descendant(of: header, matching: matching);
+    expect(inHeader(find.byType(FlucordIconButton)), findsOneWidget);
+    expect(inHeader(find.byTooltip('Hide user profile')), findsOneWidget);
+    expect(inHeader(find.byTooltip('Start call')), findsNothing);
+    expect(inHeader(find.byType(TextField)), findsNothing);
+  });
+
+  testWidgets('the profile panel shows who the DM is with', (tester) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness, size: const Size(1280, 720));
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final panel = find.byKey(const ValueKey('dm-profile-panel'));
+    Finder inPanel(Finder matching) =>
+        find.descendant(of: panel, matching: matching);
+    final view = tester.getRect(
+      find.byKey(const ValueKey('social-dm-view-friend-1')),
+    );
+    expect(tester.getRect(panel).width, 240);
+    expect(tester.getRect(panel).right, view.right);
+    expect(
+      tester.getSize(inPanel(find.byType(DiscordRelationshipAvatar))),
+      const Size.square(64),
+    );
+    final name = tester.widget<Text>(inPanel(find.text('Ada'))).style!;
+    expect(name.fontSize, FlucordTextRole.title.size);
+    expect(name.color, _surfaces.text);
+    final username = tester
+        .widget<Text>(inPanel(find.text('ada.lovelace')))
+        .style!;
+    expect(username.color, _surfaces.muted);
+    expect(inPanel(find.text('Online')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide user profile'));
+    await tester.pumpAndSettle();
+
+    expect(panel, findsNothing);
+    expect(find.byTooltip('Show user profile'), findsOneWidget);
+  });
+
+  testWidgets('a native DM reads like a server channel', (tester) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness);
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final view = find.byKey(const ValueKey('social-dm-view-friend-1'));
+    expect(
+      find.descendant(of: view, matching: find.byType(Icon)),
+      findsNothing,
+      reason: 'every icon comes from the shared set',
+    );
+
+    final header = find.byKey(const ValueKey('social-dm-header'));
+    expect(tester.getSize(header).height, 48);
+    expect(
+      tester.getSize(
+        find.descendant(
+          of: header,
+          matching: find.byType(DiscordRelationshipAvatar),
+        ),
+      ),
+      const Size.square(24),
+    );
+    final title = tester
+        .widget<Text>(find.descendant(of: header, matching: find.text('Ada')))
+        .style!;
+    expect(title.fontSize, FlucordTextRole.heading.size);
+    expect(title.fontWeight, FontWeight.w500);
+
+    final message = find.byKey(const ValueKey('social-dm-message-message-1'));
+    expect(
+      tester.getSize(
+        find.descendant(
+          of: message,
+          matching: find.byKey(const ValueKey('social-dm-avatar-message-1')),
+        ),
+      ),
+      const Size.square(40),
+    );
+    final body = tester
+        .widget<SelectableText>(
+          find.descendant(of: message, matching: find.byType(SelectableText)),
+        )
+        .style!;
+    expect(body.fontSize, FlucordTextRole.body.size);
+    expect(body.color, _surfaces.bodyText);
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('social-dm-composer'))).height,
+      44,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('social-dm-send'))),
+      const Size.square(28),
+    );
+  });
 }
 
-Future<void> _pumpWorkspace(WidgetTester tester, _DmHarness harness) async {
-  await tester.binding.setSurfaceSize(const Size(900, 720));
+final _surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+
+Future<void> _pumpWorkspace(
+  WidgetTester tester,
+  _DmHarness harness, {
+  Size size = const Size(900, 720),
+}) async {
+  await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final account = DiscordOAuthAccount(
     id: 'current',
@@ -434,6 +626,7 @@ final class _SocialDmGateway
     user: DiscordRelationshipUser(
       id: 'friend-1',
       displayName: 'Ada',
+      username: 'ada.lovelace',
       status: DiscordPresenceStatus.online,
     ),
     kind: DiscordRelationshipKind.friend,

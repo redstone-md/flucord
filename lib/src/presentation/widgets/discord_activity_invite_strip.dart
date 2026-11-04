@@ -4,8 +4,10 @@ import '../../application/discord_social_activity_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_activity.dart';
 import '../../domain/discord_social_call.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'count_badge.dart';
 import 'discord_activity_voice_participants_dialog.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
@@ -81,10 +83,7 @@ class _IncomingInvite extends StatelessWidget {
                   '${sender.displayName} invited you to a Flucord activity',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -148,8 +147,8 @@ class _JoinedSession extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.headset_mic_outlined,
+          FlucordIcon(
+            FlucordIcons.voiceCall,
             size: 18,
             color: _statusColor(context, call),
           ),
@@ -162,10 +161,7 @@ class _JoinedSession extends StatelessWidget {
                   _title(call),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.caption.strong,
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -201,24 +197,34 @@ class _JoinedSession extends StatelessWidget {
               child: const Text('Join voice'),
             )
           else ...[
-            Badge(
-              label: Text('${call!.participantUserIds.length}'),
-              backgroundColor: context.surfaces.control,
-              textColor: Theme.of(context).colorScheme.onSurface,
-              child: _CallButton(
-                key: const ValueKey('show-activity-voice-participants'),
-                tooltip: 'Voice participants',
-                icon: Icons.group_outlined,
-                onPressed: () => showDiscordActivityVoiceParticipantsDialog(
-                  context,
-                  controller,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _CallButton(
+                  key: const ValueKey('show-activity-voice-participants'),
+                  tooltip: 'Voice participants',
+                  icon: FlucordIcons.members,
+                  onPressed: () => showDiscordActivityVoiceParticipantsDialog(
+                    context,
+                    controller,
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: CountBadge(
+                    count: call!.participantUserIds.length,
+                    ring: context.surfaces.inset,
+                    color: context.surfaces.control,
+                    textColor: context.surfaces.text,
+                  ),
+                ),
+              ],
             ),
             _CallButton(
               key: const ValueKey('toggle-activity-mute'),
               tooltip: call.selfMuted ? 'Unmute' : 'Mute',
-              icon: call.selfMuted ? Icons.mic_off : Icons.mic,
+              icon: call.selfMuted ? FlucordIcons.micOff : FlucordIcons.mic,
               active: call.selfMuted,
               onPressed: controller.toggleMuted,
             ),
@@ -226,15 +232,15 @@ class _JoinedSession extends StatelessWidget {
               key: const ValueKey('toggle-activity-deafen'),
               tooltip: call.selfDeafened ? 'Undeafen' : 'Deafen',
               icon: call.selfDeafened
-                  ? Icons.headset_off
-                  : Icons.headphones_outlined,
+                  ? FlucordIcons.headphonesOff
+                  : FlucordIcons.headphones,
               active: call.selfDeafened,
               onPressed: controller.toggleDeafened,
             ),
             _CallButton(
               key: const ValueKey('leave-activity-voice'),
               tooltip: 'Leave activity voice',
-              icon: Icons.call_end,
+              icon: FlucordIcons.hangUp,
               color: context.surfaces.danger,
               onPressed: controller.leaveVoice,
             ),
@@ -245,7 +251,7 @@ class _JoinedSession extends StatelessWidget {
               tooltip: 'Dismiss lobby notice',
               visualDensity: VisualDensity.compact,
               onPressed: controller.clearSessionNotice,
-              icon: const Icon(Icons.close, size: 16),
+              icon: const FlucordIcon(FlucordIcons.clear, size: 16),
             ),
         ],
       ),
@@ -289,7 +295,7 @@ class _CallButton extends StatelessWidget {
   });
 
   final String tooltip;
-  final IconData icon;
+  final FlucordIconData icon;
   final VoidCallback onPressed;
   final bool active;
   final Color? color;
@@ -300,6 +306,6 @@ class _CallButton extends StatelessWidget {
     visualDensity: VisualDensity.compact,
     color: color ?? (active ? context.surfaces.accentIcon : null),
     onPressed: onPressed,
-    icon: Icon(icon, size: 18),
+    icon: FlucordIcon(icon, size: 18),
   );
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
@@ -32,10 +34,15 @@ class MemberRosterView extends StatefulWidget {
     super.key,
   });
 
-  /// Fixed per-row extent. The range arithmetic converts pixels straight into
-  /// row indices, which only holds while every row is the same height, so a
-  /// header and a member row deliberately share one extent.
-  static const rowHeight = 48.0;
+  /// Per-row extent at the default font size. The range arithmetic converts
+  /// pixels straight into row indices, which only holds while every row is the
+  /// same height, so a header and a member row deliberately share one extent.
+  static const rowHeight = 40.0;
+
+  /// [rowHeight] grown with the font scale, so a row still holds its name and
+  /// activity line. Never below [rowHeight]: the avatar does not shrink.
+  static double rowExtentOf(BuildContext context) =>
+      max(rowHeight, MediaQuery.textScalerOf(context).scale(rowHeight));
 
   final GuildMemberList list;
   final Member? Function(String userId) memberOf;
@@ -70,8 +77,8 @@ class _MemberRosterViewState extends State<MemberRosterView> {
         onNotification: (notification) => _report(notification.metrics),
         child: ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          itemExtent: MemberRosterView.rowHeight,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          itemExtent: MemberRosterView.rowExtentOf(context),
           itemCount: rows.length,
           itemBuilder: (context, index) => _rowAt(rows, headers, index),
         ),
@@ -121,7 +128,7 @@ class _MemberRosterViewState extends State<MemberRosterView> {
       widget.onViewportChanged(
         scrollOffset: metrics.pixels,
         viewportHeight: metrics.viewportDimension,
-        rowHeight: MemberRosterView.rowHeight,
+        rowHeight: MemberRosterView.rowExtentOf(context),
       );
     }
     return false;
@@ -137,17 +144,17 @@ class MemberGroupLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Bottom-aligned: in the roster, a label shares the member rows' extent.
     return Align(
       alignment: Alignment.bottomLeft,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 0, 6, 7),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
         child: Text(
           '$label - $count',
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w600,
+          style: FlucordTextRole.caption.style.copyWith(
+            color: context.surfaces.captionText,
           ),
         ),
       ),
@@ -171,15 +178,15 @@ class MemberRosterPlaceholderRow extends StatelessWidget {
       label: 'Loading member',
       child: Padding(
         key: ValueKey('member-row-placeholder-$index'),
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Container(
                 height: 10,

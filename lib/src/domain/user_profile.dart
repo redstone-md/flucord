@@ -1,3 +1,6 @@
+import 'account_connections.dart';
+import 'chat_models.dart';
+
 /// The account's own profile, as it appears to everyone else.
 ///
 /// Distinct from [UserSettings], which is how this client behaves: a profile is
@@ -218,8 +221,8 @@ final class ProfileBadge {
 
 /// The avatar decoration somebody wears, as the profile route reports it.
 ///
-/// `asset` is a CDN path under `avatar-decoration-decoration`, which is the
-/// shape Discord's own client pastes onto the CDN root.
+/// `asset` names a file under the CDN's `avatar-decoration-presets`, as
+/// Discord's image reference gives it.
 final class ProfileDecoration {
   const ProfileDecoration({required this.asset, this.skuId});
 
@@ -238,28 +241,39 @@ final class ProfileDecoration {
 
 /// A third-party account shown on somebody's profile.
 ///
-/// Only what the profile route hands back: the connection's type and its
-/// public name. Whether it is verified is kept because the profile marks it.
+/// Only what the profile route hands back: the connection's type, the
+/// service's own id for the account, and its public name. Whether it is
+/// verified is kept because the profile marks it.
 final class ProfileConnection {
   const ProfileConnection({
     required this.type,
     required this.name,
+    this.id = '',
     this.verified = false,
   });
 
   final String type;
   final String name;
+
+  /// The service's id for the account. Empty when the payload had none.
+  final String id;
   final bool verified;
+
+  String get serviceName => ConnectionService.nameOf(type);
+
+  /// The account's page on the service, or null where there is none.
+  Uri? get link => ConnectionService.byType(type)?.pageOf(name: name, id: id);
 
   @override
   bool operator ==(Object other) =>
       other is ProfileConnection &&
       other.type == type &&
       other.name == name &&
+      other.id == id &&
       other.verified == verified;
 
   @override
-  int get hashCode => Object.hash(type, name, verified);
+  int get hashCode => Object.hash(type, name, id, verified);
 }
 
 /// A server both this account and the profile's user belong to.
@@ -282,13 +296,14 @@ final class MutualServer {
 
 /// A friend both this account and the profile's user share.
 ///
-/// Only enough of the user object to draw a row: the id, and whichever name
-/// Discord's response carries.
+/// Only enough of the user object to draw a face: the id, the avatar, and
+/// whichever name Discord's response carries.
 final class MutualFriend {
   const MutualFriend({
     required this.id,
     required this.displayName,
     this.username,
+    this.avatarUrl,
   });
 
   final String id;
@@ -296,16 +311,18 @@ final class MutualFriend {
 
   /// The handle, or null when the response carried none.
   final String? username;
+  final String? avatarUrl;
 
   @override
   bool operator ==(Object other) =>
       other is MutualFriend &&
       other.id == id &&
       other.displayName == displayName &&
-      other.username == username;
+      other.username == username &&
+      other.avatarUrl == avatarUrl;
 
   @override
-  int get hashCode => Object.hash(id, displayName, username);
+  int get hashCode => Object.hash(id, displayName, username, avatarUrl);
 }
 
 /// Somebody else's profile, as the other-user profile route reports it.
@@ -325,6 +342,7 @@ final class OtherUserProfile {
     this.bannerHash,
     this.accentColor,
     this.decoration,
+    this.tags,
     this.badges = const [],
     this.connections = const [],
     this.mutualServers = const [],
@@ -344,6 +362,10 @@ final class OtherUserProfile {
   final int? accentColor;
 
   final ProfileDecoration? decoration;
+
+  /// The tags the profile's user object carries, or null when it was not
+  /// read from one.
+  final MemberTags? tags;
   final List<ProfileBadge> badges;
   final List<ProfileConnection> connections;
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/attachment_download.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -220,8 +221,8 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.visibility_off_outlined,
+                  FlucordIcon(
+                    FlucordIcons.hidden,
                     size: 18,
                     color: context.surfaces.canvas,
                   ),
@@ -230,9 +231,8 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
                     child: Text(
                       'Spoiler',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: FlucordTextRole.label.strong.copyWith(
                         color: context.surfaces.canvas,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -373,8 +373,8 @@ class _FileAttachment extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.insert_drive_file_outlined,
+            FlucordIcon(
+              FlucordIcons.file,
               size: 22,
               color: context.surfaces.muted,
             ),
@@ -388,10 +388,7 @@ class _FileAttachment extends StatelessWidget {
                     attachment.fileName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.caption.strong,
                   ),
                   const SizedBox(height: 3),
                   Text(

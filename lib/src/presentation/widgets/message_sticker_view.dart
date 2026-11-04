@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -89,7 +90,7 @@ class _StickerFallback extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.emoji_emotions_outlined, color: context.surfaces.muted),
+            FlucordIcon(FlucordIcons.emoji, color: context.surfaces.muted),
             const SizedBox(height: 6),
             Text(
               name,

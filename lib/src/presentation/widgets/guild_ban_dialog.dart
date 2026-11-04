@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
-import 'destructive_confirmation.dart';
+import 'flucord_button.dart';
 import 'flucord_dialog.dart';
 
 /// Picks who to ban, for how much history, and why.
@@ -112,27 +112,22 @@ class _GuildBanDialogState extends State<GuildBanDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      DangerButton(
-        key: const ValueKey('ban-confirm'),
-        onPressed: _selected.isEmpty
-            ? null
-            : () => Navigator.of(context).pop(
-                BanRequest(
-                  userIds: _selected.toList(growable: false),
-                  deletion: _deletion,
-                  reason: _reason.text.trim().isEmpty
-                      ? null
-                      : _reason.text.trim(),
-                ),
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('ban-confirm'),
+      kind: FlucordButtonKind.danger,
+      onPressed: _selected.isEmpty
+          ? null
+          : () => Navigator.of(context).pop(
+              BanRequest(
+                userIds: _selected.toList(growable: false),
+                deletion: _deletion,
+                reason: _reason.text.trim().isEmpty
+                    ? null
+                    : _reason.text.trim(),
               ),
-        label: 'Ban',
-      ),
-    ],
+            ),
+      label: 'Ban',
+    ),
   );
 
   static String _deletionLabel(BanMessageDeletion deletion) =>

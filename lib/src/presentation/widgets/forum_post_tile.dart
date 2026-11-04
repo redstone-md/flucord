@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -150,20 +151,20 @@ class _ForumMediaPreview extends StatelessWidget {
             loadingBuilder: (context, child, progress) => progress == null
                 ? child
                 : const _MediaPlaceholder(
-                    icon: Icons.image_outlined,
+                    icon: FlucordIcons.image,
                     label: 'Loading preview',
                   ),
             errorBuilder: (_, _, _) => _MediaPlaceholder(
-              icon: Icons.broken_image_outlined,
+              icon: FlucordIcons.brokenImage,
               label: attachment!.fileName,
             ),
           )
         : _MediaPlaceholder(
             icon: attachment?.isVideo == true
-                ? Icons.play_circle_outline
+                ? FlucordIcons.videoFile
                 : attachment == null
-                ? Icons.perm_media_outlined
-                : Icons.insert_drive_file_outlined,
+                ? FlucordIcons.mediaChannel
+                : FlucordIcons.file,
             label: attachment?.fileName ?? 'No media preview',
           ),
   );
@@ -172,7 +173,7 @@ class _ForumMediaPreview extends StatelessWidget {
 class _MediaPlaceholder extends StatelessWidget {
   const _MediaPlaceholder({required this.icon, required this.label});
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String label;
 
   @override
@@ -184,7 +185,7 @@ class _MediaPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 24, color: context.surfaces.muted),
+            FlucordIcon(icon, size: 24, color: context.surfaces.muted),
             const SizedBox(height: 6),
             Text(
               label,
@@ -223,10 +224,10 @@ class _ForumPostDetails extends StatelessWidget {
     children: [
       Row(
         children: [
-          Icon(
+          FlucordIcon(
             parent.kind == ChannelKind.media
-                ? Icons.perm_media_outlined
-                : Icons.chat_bubble_outline,
+                ? FlucordIcons.mediaChannel
+                : FlucordIcons.forum,
             size: 16,
             color: context.surfaces.muted,
           ),
@@ -236,14 +237,15 @@ class _ForumPostDetails extends StatelessWidget {
               post.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: FlucordType.label,
-                fontWeight: FontWeight.w600,
-              ),
+              style: FlucordTextRole.label.strong,
             ),
           ),
           if (post.isLocked)
-            Icon(Icons.lock_outline, size: 14, color: context.surfaces.muted),
+            FlucordIcon(
+              FlucordIcons.lock,
+              size: 14,
+              color: context.surfaces.muted,
+            ),
         ],
       ),
       const SizedBox(height: 7),
@@ -304,10 +306,7 @@ class _PostTag extends StatelessWidget {
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        fontSize: FlucordType.caption,
-        fontWeight: FontWeight.w600,
-      ),
+      style: FlucordTextRole.caption.strong,
     ),
   );
 }

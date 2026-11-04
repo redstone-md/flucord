@@ -10,13 +10,17 @@ import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/navigation_memory.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'direct_message_views.dart';
+import 'member_avatar.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
+import 'profile_card_route.dart';
 import 'unread_message_boundary.dart';
 
 part 'message_list_states.dart';
@@ -129,8 +133,8 @@ class MessageList extends StatefulWidget {
   final ExternalLinkLauncher externalLinkLauncher;
   final ValueChanged<String> onSelectChannel;
 
-  /// Opens the profile of a message's author, by user id.
-  final ValueChanged<String>? onOpenMemberProfile;
+  /// Opens the profile of a message's author beside their name.
+  final OpenProfileCard? onOpenMemberProfile;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -721,13 +725,31 @@ class MessageListState extends State<MessageList>
         !widget.canLoadOlder &&
             !widget.isLoadingOlder &&
             widget.olderLoadError == null
-        ? _ChannelStart(channel: widget.channel)
+        ? _conversationStart()
         : _HistoryBoundary(
             isLoading: widget.isLoadingOlder,
             error: widget.olderLoadError,
             onLoad: widget.onLoadOlder,
           ),
   );
+
+  /// A DM starts on the person it is with; anything else on its name.
+  Widget _conversationStart() {
+    final recipientId = widget.channel.soleRecipientId;
+    final person = recipientId == null
+        ? null
+        : widget.workspace.memberOrNull(recipientId);
+    if (person == null) return _ChannelStart(channel: widget.channel);
+    return DirectMessageStart(
+      avatar: MemberAvatar(
+        member: person,
+        size: DirectMessageStart.avatarSize,
+        showPresence: false,
+      ),
+      name: person.displayName,
+      username: person.username,
+    );
+  }
 
   Widget _messageAt(List<ChatMessage> messages, int index) {
     final message = messages[index];

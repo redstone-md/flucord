@@ -9,11 +9,14 @@ import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/presentation/widgets/account_panel.dart';
 import 'package:flucord/src/presentation/widgets/activity_views.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
-import 'package:flucord/src/presentation/widgets/member_profile_popover.dart';
+import 'package:flucord/src/presentation/widgets/member_profile_card.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/self_presence_scope.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -57,7 +60,6 @@ Member _member(String id, String name, {UserPresence? presence}) => Member(
   presence: presence?.status ?? Presence.offline,
   colorValue: 0xff665f82,
   spaceIds: const {'guild-1'},
-  rolesBySpace: const {'guild-1': 'Engineer'},
   presenceDetail: presence,
 );
 
@@ -250,18 +252,21 @@ void main() {
   });
 
   group('activity views', () {
-    test('formats elapsed and remaining time the way Discord does', () {
-      expect(ActivityElapsed.format(const Duration(seconds: 5)), '00:05');
-      expect(
-        ActivityElapsed.format(const Duration(minutes: 2, seconds: 11)),
-        '02:11',
-      );
+    test('formats time in whole hours and minutes', () {
+      expect(ActivityElapsed.format(const Duration(minutes: 35)), '35 min');
+      expect(ActivityElapsed.format(const Duration(hours: 2)), '2 h');
       expect(
         ActivityElapsed.format(
-          const Duration(hours: 3, minutes: 4, seconds: 5),
+          const Duration(hours: 1, minutes: 20, seconds: 59),
         ),
-        '3:04:05',
+        '1 h 20 min',
       );
+      // Under a minute is no time worth reading yet.
+      expect(ActivityElapsed.format(const Duration(seconds: 59)), isNull);
+    });
+
+    test('a timing line counts up from the start or down to the end', () {
+      // Elapsed time reads bare, "1 h 20 min"; only a countdown says "left".
       expect(ActivityElapsed.line(null, _now), isNull);
       expect(ActivityElapsed.line(const ActivityTimestamps(), _now), isNull);
       expect(
@@ -269,35 +274,37 @@ void main() {
           ActivityTimestamps(startMs: _now.millisecondsSinceEpoch - 61000),
           _now,
         ),
-        '01:01 elapsed',
+        '1 min',
       );
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(
+            startMs: _now.millisecondsSinceEpoch - 61000,
             endMs: _now.millisecondsSinceEpoch + 61000,
             isCountDown: true,
           ),
           _now,
         ),
-        '01:01 left',
+        '1 min left',
       );
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(endMs: _now.millisecondsSinceEpoch + 61000),
           _now,
         ),
-        '01:01 left',
+        '1 min left',
       );
+      // The last seconds of a countdown say nothing rather than "0 min".
       expect(
         ActivityElapsed.line(
           ActivityTimestamps(
-            startMs: _now.millisecondsSinceEpoch - 1000,
+            startMs: _now.millisecondsSinceEpoch - 600000,
             endMs: _now.millisecondsSinceEpoch + 1000,
             isCountDown: true,
           ),
           _now,
         ),
-        '00:01 left',
+        isNull,
       );
     });
 
@@ -337,7 +344,7 @@ void main() {
                 name: 'A cup',
                 type: ActivityType.competing,
                 timestamps: ActivityTimestamps(
-                  startMs: _now.millisecondsSinceEpoch - 5000,
+                  startMs: _now.millisecondsSinceEpoch - 5 * 60000,
                 ),
               ),
               now: _now,
@@ -346,19 +353,129 @@ void main() {
         ),
       );
 
-      expect(find.text('00:05 elapsed'), findsOneWidget);
+      expect(find.text('5 min'), findsOneWidget);
       expect(find.byKey(const ValueKey('activity-large-image')), findsNothing);
+    });
+
+    testWidgets('the details and the time share one line beside a monogram', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivityCard(
+              activity: UserActivity(
+                name: 'Dota 2',
+                details: 'Ranked match',
+                timestamps: ActivityTimestamps(
+                  startMs: _now.millisecondsSinceEpoch - 80 * 60000,
+                ),
+              ),
+              now: _now,
+            ),
+          ),
+        ),
+      );
+
+      final card = find.byKey(const ValueKey('activity-card'));
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.text('Ranked match · 1 h 20 min'),
+        ),
+        findsOneWidget,
+      );
+      // No artwork, so the game's monogram stands in for it.
+      expect(find.descendant(of: card, matching: find.text('D2')), findsOne);
+      // The kind is a caption above the name, beside the art, not a header.
+      final art = tester.getRect(
+        find
+            .ancestor(of: find.text('D2'), matching: find.byType(ClipRRect))
+            .first,
+      );
+      final kind = tester.getRect(
+        find.descendant(of: card, matching: find.text('Playing')),
+      );
+      expect(kind.left, greaterThan(art.right));
+      expect(kind.top, greaterThanOrEqualTo(art.top));
+    });
+
+    testWidgets('the text beside the art sits in its middle by eye', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivityCard(
+              activity: UserActivity(
+                name: 'Dota 2',
+                details: 'Ranked match',
+                timestamps: ActivityTimestamps(
+                  startMs: _now.millisecondsSinceEpoch - 80 * 60000,
+                ),
+              ),
+              now: _now,
+            ),
+          ),
+        ),
+      );
+
+      final card = find.byKey(const ValueKey('activity-card'));
+      final art = tester.getRect(
+        find.descendant(of: card, matching: find.byType(ClipRRect)).first,
+      );
+      final kind = tester.getRect(
+        find.descendant(of: card, matching: find.text('Playing')),
+      );
+      final details = tester.getRect(
+        find.descendant(of: card, matching: find.textContaining('Ranked')),
+      );
+      final lift = FlucordType.opticalLift(
+        FlucordTextRole.caption,
+        FlucordTextRole.caption,
+      );
+      expect(
+        (kind.top + details.bottom) / 2,
+        closeTo(art.center.dy - lift, 0.01),
+      );
     });
 
     testWidgets('a unicode emoji renders beside the status text', (
       tester,
     ) async {
       await tester.pumpWidget(
-        _host(const Center(child: ActivitySummaryLine(activity: _custom))),
+        _host(
+          Center(
+            child: ActivitySummaryLine(
+              summary: ActivitySummary.of(const [_custom])!,
+            ),
+          ),
+        ),
       );
 
       expect(find.text('🛠'), findsOneWidget);
       expect(find.text('Heads down'), findsOneWidget);
+    });
+
+    testWidgets('a custom status still counts the other activities', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          Center(
+            child: ActivitySummaryLine(
+              summary: ActivitySummary.of(const [
+                _custom,
+                _game,
+                UserActivity(name: 'Spotify', type: ActivityType.listening),
+              ])!,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Heads down'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
     });
 
     testWidgets('a custom emoji with no text renders artwork alone', (
@@ -366,17 +483,19 @@ void main() {
     ) async {
       await tester.pumpWidget(
         _host(
-          const Center(
+          Center(
             child: ActivitySummaryLine(
-              activity: UserActivity(
-                name: 'Custom Status',
-                type: ActivityType.customStatus,
-                emoji: ActivityEmoji(
-                  name: 'shipit',
-                  id: '123456789012345678',
-                  imageUrl: 'https://cdn.example/emoji.webp',
+              summary: ActivitySummary.of(const [
+                UserActivity(
+                  name: 'Custom Status',
+                  type: ActivityType.customStatus,
+                  emoji: ActivityEmoji(
+                    name: 'shipit',
+                    id: '123456789012345678',
+                    imageUrl: 'https://cdn.example/emoji.webp',
+                  ),
                 ),
-              ),
+              ])!,
             ),
           ),
         ),

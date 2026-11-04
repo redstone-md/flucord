@@ -62,6 +62,53 @@ final class ChatModelJson {
     );
   }
 
+  static String? clanTag(ClanTag? value) => value == null
+      ? null
+      : jsonEncode({
+          'tag': value.tag,
+          'guild_id': value.guildId,
+          'badge_url': value.badgeUrl,
+        });
+
+  static ClanTag? clanTagFrom(String? source) {
+    if (source == null) return null;
+    final raw = jsonDecode(source);
+    if (raw is! Map) return null;
+    final tag = raw['tag'];
+    final guildId = raw['guild_id'];
+    if (tag is! String || guildId is! String) return null;
+    return ClanTag(
+      tag: tag,
+      guildId: guildId,
+      badgeUrl: raw['badge_url'] as String?,
+    );
+  }
+
+  static String? nameplate(Nameplate? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+
+  static Nameplate? nameplateFrom(String? source) =>
+      source == null ? null : Nameplate.fromJson(jsonDecode(source));
+
+  static String? nameStyle(NameStyle? value) => value == null
+      ? null
+      : jsonEncode({
+          'colors': value.colors,
+          'font_id': value.fontId,
+          'effect_id': value.effectId,
+        });
+
+  static NameStyle? nameStyleFrom(String? source) {
+    if (source == null) return null;
+    final raw = jsonDecode(source);
+    if (raw is! Map) return null;
+    return NameStyle(
+      colors: (raw['colors'] as List? ?? const []).whereType<int>().toList(),
+      fontId: raw['font_id'] as int?,
+      effectId: raw['effect_id'] as int?,
+    );
+  }
+
   static String reactions(List<MessageReaction> values) => jsonEncode([
     for (final value in values)
       {
@@ -162,6 +209,7 @@ final class ChatModelJson {
         'flags': entry.value.flags,
         'pending': entry.value.isPending,
         'timeout': entry.value.timeoutUntil?.toIso8601String(),
+        'joined': entry.value.joinedAt?.toIso8601String(),
       },
   });
 
@@ -180,6 +228,7 @@ final class ChatModelJson {
 
   static GuildMembership _membershipFrom(Map<String, Object?> raw) {
     final timeout = raw['timeout'] as String?;
+    final joined = raw['joined'] as String?;
     return GuildMembership(
       roleIds: (raw['roles'] as List? ?? const []).whereType<String>().toList(
         growable: false,
@@ -187,6 +236,7 @@ final class ChatModelJson {
       flags: raw['flags'] as int? ?? 0,
       isPending: raw['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+      joinedAt: joined == null ? null : DateTime.tryParse(joined),
     );
   }
 }

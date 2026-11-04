@@ -7,7 +7,8 @@ void main() {
   setUpAll(sqfliteFfiInit);
 
   test(
-    'the workspace shell carries navigation without message history',
+    'the workspace shell carries navigation and the account, without message '
+    'history or other members',
     () async {
       final cache = await _openCache();
       await cache.writeWorkspace(_workspace);
@@ -28,7 +29,7 @@ void main() {
       expect(shell.categories.map((category) => category.id), ['category-1']);
       expect(shell.roles.map((role) => role.id), ['role-1']);
       expect(shell.messages, isEmpty);
-      expect(shell.members, isEmpty);
+      expect(shell.members.map((member) => member.id), ['member-1']);
     },
   );
 
@@ -67,6 +68,15 @@ const _member = Member(
   id: 'member-1',
   displayName: 'Jack',
   initials: 'JK',
+  role: 'Operator',
+  presence: Presence.online,
+  colorValue: 0xff456b5a,
+);
+
+const _otherMember = Member(
+  id: 'member-2',
+  displayName: 'Mira',
+  initials: 'MI',
   role: 'Operator',
   presence: Presence.online,
   colorValue: 0xff456b5a,
@@ -119,7 +129,7 @@ final _workspace = ChatWorkspace(
       position: 1,
     ),
   ],
-  members: const [_member],
+  members: const [_member, _otherMember],
   messages: const [],
   currentMemberId: 'member-1',
 );

@@ -11,6 +11,13 @@ final class DiscordCdn {
   static String? guildBanner(String guildId, String? hash, {int size = 512}) =>
       _asset(['banners', guildId], hash, size: size);
 
+  /// A group DM's own picture.
+  static String? channelIcon(
+    String channelId,
+    String? hash, {
+    int size = 128,
+  }) => _asset(['channel-icons', channelId], hash, size: size);
+
   static String? userAvatar(String userId, String? hash, {int size = 128}) =>
       hash == null || hash.isEmpty
       ? defaultUserAvatar(userId)
@@ -25,6 +32,53 @@ final class DiscordCdn {
     String? hash, {
     int size = 128,
   }) => _asset(['app-icons', applicationId], hash, size: size);
+
+  /// The small badge of a server's tag, drawn beside a member's name.
+  static String? clanBadge(String guildId, String? hash, {int size = 32}) =>
+      _asset(['clan-badges', guildId], hash, size: size);
+
+  /// A profile badge's icon, by the hash the profile route gives with it.
+  static String? badgeIcon(String icon) =>
+      _named(icon, '/badge-icons/$icon.png');
+
+  /// The avatar decoration somebody wears. `passthrough` keeps an animated
+  /// one moving.
+  static String? avatarDecoration(String asset, {int size = 96}) => _named(
+    asset,
+    '/avatar-decoration-presets/$asset.png',
+    {'size': '$size', 'passthrough': 'true'},
+  );
+
+  /// The still picture of a nameplate, by its `asset` path, which ends in a
+  /// slash.
+  ///
+  /// Discord's image reference does not list it. The path is
+  /// `/assets/collectibles/{asset}static.png` in the reverse-engineered client
+  /// docs (discord-userdoccers, reference.mdx "CDN Formatting": valid names
+  /// are `img.png`, `static.png` and `asset.webm`, and `size` is ignored) and
+  /// in two maintained libraries: Pycord's `Asset._from_collectible` and
+  /// Kord's `DiscordCdn.staticNameplate`.
+  static String? nameplate(String asset) => _collectible(asset, 'static.png');
+
+  /// The moving nameplate, `asset.webm` beside the still picture (the same
+  /// sources as [nameplate]).
+  static String? movingNameplate(String asset) =>
+      _collectible(asset, 'asset.webm');
+
+  static String? _collectible(String asset, String file) => _named(
+    asset,
+    '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}$file',
+  );
+
+  /// [path] on the CDN, or null when [name], the part of it that names the
+  /// file, is empty.
+  static String? _named(
+    String name,
+    String path, [
+    Map<String, String>? query,
+  ]) => name.isEmpty
+      ? null
+      : Uri.https('cdn.discordapp.com', path, query).toString();
 
   static String? guildMemberAvatar(
     String guildId,

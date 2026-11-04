@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_component_controller.dart';
 import '../../domain/message_component.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_type.dart';
 import 'component_directory_picker.dart';
 import '../../theme/flucord_theme.dart';
@@ -139,7 +140,7 @@ class _Button extends StatelessWidget {
         Text(label),
         if (component.isLink) ...[
           const SizedBox(width: 4),
-          const Icon(Icons.open_in_new, size: 12),
+          const FlucordIcon(FlucordIcons.openExternal, size: 12),
         ],
       ],
     );
@@ -339,22 +340,14 @@ class _MessageModalDialogState extends State<MessageModalDialog> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('modal-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('modal-submit'),
-        onPressed: _isComplete
-            ? () => Navigator.of(context).pop({
-                for (final entry in _fields.entries)
-                  entry.key: entry.value.text,
-              })
-            : null,
-        child: const Text('Submit'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('modal-submit'),
+      label: 'Submit',
+      onPressed: _isComplete
+          ? () => Navigator.of(context).pop({
+              for (final entry in _fields.entries) entry.key: entry.value.text,
+            })
+          : null,
+    ),
   );
 }

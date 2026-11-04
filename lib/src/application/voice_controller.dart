@@ -7,10 +7,14 @@ import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
 import '../domain/voice_processing.dart';
+import 'microphone_level_source.dart';
+import 'voice_activity_gate.dart';
 import 'voice_audio_pipeline.dart';
+import 'voice_pcm_framer.dart';
 import '../app_log.dart';
 
 part 'voice_controller_devices.dart';
+part 'voice_controller_input_level.dart';
 part 'voice_controller_listening.dart';
 
 enum VoiceState { idle, loading, ready, failure }
@@ -18,7 +22,8 @@ enum VoiceState { idle, loading, ready, failure }
 typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
 typedef DirectCallServiceProvider = DirectCallService? Function();
 
-final class VoiceController extends ChangeNotifier {
+final class VoiceController extends ChangeNotifier
+    implements MicrophoneLevelSource {
   factory VoiceController(
     VoiceMediaService mediaService, {
     VoiceSignalingServiceProvider? signalingServiceProvider,
@@ -122,8 +127,17 @@ final class VoiceController extends ChangeNotifier {
   StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
   StreamSubscription<String>? _streamAudioEndedSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
+
+  /// The meter's readings, and the subscription that makes them: while it is
+  /// set, the meter holds the microphone.
+  late final StreamController<double> _inputLevels = StreamController.broadcast(
+    onListen: () => _startMeter(),
+    onCancel: () => _stopMeter(),
+  );
+  StreamSubscription<double>? _meterSubscription;
   VoiceSignalingService? _signalingService;
   StreamSubscription<void>? _seatedSubscription;
+  final _SeatsSignal _seats = _SeatsSignal();
   VoiceState _state = VoiceState.idle;
   VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
   List<VoiceDevice> _devices = const [];
@@ -251,6 +265,9 @@ final class VoiceController extends ChangeNotifier {
 
   Object? get error => _error;
 
+  @override
+  Stream<double> get inputLevels => _inputLevels.stream;
+
   /// Why the microphone could not be opened, or `null` when it is running.
   ///
   /// Separate from [error] because it is not a failure to join: the room is
@@ -289,6 +306,10 @@ final class VoiceController extends ChangeNotifier {
   /// view of every voice state instead.
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
       _signalingService?.seatedByChannel ?? const {};
+
+  /// Fires when [seatedByChannel] changes. The controller itself also fires
+  /// on every speaking change, so a list of people listens here instead.
+  Listenable get seats => _seats;
   bool get isTransportReady => _transportSession != null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
@@ -346,7 +367,8 @@ final class VoiceController extends ChangeNotifier {
   /// channel and back in is not an obvious way to ask for one, and it is what
   /// somebody had to do before.
   ///
-  /// In a Room it also opens the microphone again when that is what failed.
+  /// In a Room, or under an open input meter, it also opens the microphone
+  /// again when that is what failed.
   Future<void> retryDevices() => _enqueue(() async {
     // A second press waits behind the first, and has nothing left to retry.
     if (_state == VoiceState.failure) {
@@ -354,10 +376,31 @@ final class VoiceController extends ChangeNotifier {
       _deviceError = null;
       await initialize();
     }
-    if (_connectedChannelId != null &&
-        _microphoneError != null &&
-        _state == VoiceState.ready) {
+    if (_microphoneError == null || _state != VoiceState.ready) return;
+    if (_connectedChannelId != null) {
       await _openMicrophone();
+    } else if (_meterSubscription != null) {
+      await _openMeterMicrophone();
+    }
+  });
+
+  /// Joins the Room again after its connection failed.
+  ///
+  /// The same join the Room was entered with. A join into the channel the
+  /// session already wants, on a failed connection, makes the signaling
+  /// service leave and rejoin, and Discord answers that with a fresh voice
+  /// server.
+  Future<void> retryConnection() => _run(() async {
+    // A second press waits behind the first, which already rejoined.
+    if (_connectedChannelId == null ||
+        _connectionStatus != VoiceConnectionStatus.failure) {
+      return;
+    }
+    _connectionStatus = VoiceConnectionStatus.joining;
+    _logStatus('retrying', _connectionStatus);
+    if (!await _sendJoin()) {
+      _connectionStatus = VoiceConnectionStatus.disconnected;
+      _logStatus('join not sent', _connectionStatus);
     }
   });
 
@@ -542,16 +585,21 @@ final class VoiceController extends ChangeNotifier {
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
       await _leaveActiveSession();
-      await _mediaService.stopMicrophone();
-      _connectedGuildId = null;
-      _connectedChannelId = null;
-      _isCallSession = false;
-      _connectionStatus = VoiceConnectionStatus.disconnected;
-      _transportSession = null;
-      _clearParticipants();
-      _isMuted = false;
-      _isDeafened = false;
-      _isCameraOn = false;
+      // The room is left by now. A microphone that will not stop is kept as
+      // the error, and must not keep the controller in the room.
+      try {
+        await _releaseCallMicrophone();
+      } finally {
+        _connectedGuildId = null;
+        _connectedChannelId = null;
+        _isCallSession = false;
+        _connectionStatus = VoiceConnectionStatus.disconnected;
+        _transportSession = null;
+        _clearParticipants();
+        _isMuted = false;
+        _isDeafened = false;
+        _isCameraOn = false;
+      }
     });
   }
 
@@ -575,8 +623,12 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_seatedSubscription?.cancel());
     _seatedSubscription = service?.seatedChanges.listen((_) {
       _reconcileParticipants();
-      if (!_disposed) notifyListeners();
+      if (_disposed) return;
+      _seats.announce();
+      notifyListeners();
     });
+    // Another service holds another roster.
+    if (!_disposed) _seats.announce();
     _signalingSubscription = service?.voiceEvents.listen(
       _handleSignalingEvent,
       onDone: _handleSignalingDone,
@@ -995,8 +1047,11 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
+    _seats.dispose();
     unawaited(_camerasGone.close());
     unawaited(_pictureAsks.close());
+    unawaited(_meterSubscription?.cancel());
+    unawaited(_inputLevels.close());
     unawaited(_audioPipeline?.dispose());
     unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());
@@ -1006,4 +1061,9 @@ final class VoiceController extends ChangeNotifier {
   static VoiceSignalingService? _noSignaling() => null;
 
   static DirectCallService? _noCalls() => null;
+}
+
+/// Announces that who is seated in the voice channels changed.
+final class _SeatsSignal extends ChangeNotifier {
+  void announce() => notifyListeners();
 }

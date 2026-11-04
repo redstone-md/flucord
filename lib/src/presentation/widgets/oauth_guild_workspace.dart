@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'oauth_account_footer.dart';
@@ -126,10 +127,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
               guild?.name ?? 'Discord servers',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: FlucordType.body,
-                fontWeight: FontWeight.w600,
-              ),
+              style: FlucordTextRole.heading.style,
             ),
           ),
           Expanded(
@@ -138,18 +136,16 @@ class _OAuthGuildSidebar extends StatelessWidget {
               children: [
                 Text(
                   'CHANNELS',
-                  style: TextStyle(
+                  style: FlucordTextRole.caption.strong.copyWith(
                     color: context.surfaces.muted,
-                    fontSize: FlucordType.caption,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.lock_outline,
+                    FlucordIcon(
+                      FlucordIcons.lock,
                       size: 16,
                       color: context.surfaces.muted,
                     ),
@@ -172,10 +168,8 @@ class _OAuthGuildSidebar extends StatelessWidget {
                   const SizedBox(height: 24),
                   Text(
                     'YOUR SERVER PROFILE',
-                    style: TextStyle(
+                    style: FlucordTextRole.caption.strong.copyWith(
                       color: context.surfaces.muted,
-                      fontSize: FlucordType.caption,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -217,17 +211,18 @@ class _OAuthMessageBoundary extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.lock_outline, size: 18, color: context.surfaces.muted),
+              FlucordIcon(
+                FlucordIcons.lock,
+                size: 18,
+                color: context.surfaces.muted,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   guild?.name ?? 'Authorized servers',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: FlucordType.label,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.label.strong,
                 ),
               ),
               Text(
@@ -247,8 +242,8 @@ class _OAuthMessageBoundary extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    guild == null ? Icons.dns_outlined : Icons.lock_outline,
+                  FlucordIcon(
+                    guild == null ? FlucordIcons.server : FlucordIcons.lock,
                     size: 32,
                     color: context.surfaces.muted,
                   ),
@@ -258,7 +253,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                         ? 'No authorized servers'
                         : 'Messages unavailable for this server',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: FlucordTextRole.label.strong,
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -286,7 +281,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                   const SizedBox(height: 18),
                   OutlinedButton.icon(
                     onPressed: onOpenConnections,
-                    icon: const Icon(Icons.link, size: 16),
+                    icon: const FlucordIcon(FlucordIcons.link, size: 16),
                     label: const Text('Connections'),
                   ),
                 ],

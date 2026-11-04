@@ -36,14 +36,18 @@ void main() {
     );
 
     testSession(
-      'at 0.8 the interface reaches the window edge',
+      'at 0.8 the interface reaches the canvas edge',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
 
+        // The canvas card sits 8 px in from the window, drawn at 0.8 too.
+        final card = tester.getRect(find.byKey(const ValueKey('canvas-card')));
+        expect(card.bottom, closeTo(window.height - 8 * 0.8, 0.5));
+        expect(card.right, closeTo(window.width - 8 * 0.8, 0.5));
         final composer = tester.getRect(find.byType(MessageComposer));
-        expect(composer.bottom, closeTo(window.height, 0.5));
-        // The member list, 224 px wide, is drawn at 0.8 to its right.
-        expect(composer.right, closeTo(window.width - 224 * 0.8, 0.5));
+        expect(composer.bottom, closeTo(card.bottom, 0.5));
+        // The member list, 240 px wide, is drawn at 0.8 to its right.
+        expect(composer.right, closeTo(card.right - 240 * 0.8, 0.5));
       },
       size: window,
       accessibility: const AccessibilitySettings(zoom: 0.8),
@@ -63,7 +67,7 @@ void main() {
     ) async {
       final before = tester.getSize(find.byType(Scaffold).first).width;
 
-      await tester.tap(find.byKey(const ValueKey('open-user-settings')));
+      await tester.tap(find.byKey(const ValueKey('account-settings')));
       await session.settle();
       final navigation = find.byKey(
         const ValueKey('settings-nav-accessibility'),
@@ -267,7 +271,7 @@ void main() {
       testSession(
         'the user settings window stays on screen at $name',
         (tester, session) async {
-          await tester.tap(find.byKey(const ValueKey('open-user-settings')));
+          await tester.tap(find.byKey(const ValueKey('account-settings')));
           await session.settle();
 
           _expectInside(
@@ -414,8 +418,11 @@ void main() {
           final sidebar = tester.getRect(
             find.byKey(const ValueKey('channel-sidebar')),
           );
+          final card = tester.getRect(
+            find.byKey(const ValueKey('canvas-card')),
+          );
           expect(panel.left, closeTo(sidebar.right, 0.5));
-          expect(panel.right, closeTo(_smallestWindow.width, 0.5));
+          expect(panel.right, closeTo(card.right, 0.5));
           expect(find.byKey(const ValueKey('composer-menu')), findsNothing);
 
           await tester.tap(find.byKey(const ValueKey('close-pins-panel')));
@@ -435,7 +442,9 @@ void main() {
 /// platform with the thickest frame.
 const _smallestWindow = Size(924, 461);
 
-final _row = find.byKey(const ValueKey('message-900000000000000001'));
+/// The message's highlight, which takes the pointer. The gap above a new author
+/// is outside it.
+final _row = find.byKey(const ValueKey('message-surface-900000000000000001'));
 
 final _composerField = find.descendant(
   of: find.byType(MessageComposer),

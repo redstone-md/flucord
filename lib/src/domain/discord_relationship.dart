@@ -1,3 +1,6 @@
+import 'chat_models.dart';
+import 'monogram.dart';
+
 enum DiscordRelationshipKind {
   friend,
   incomingRequest,
@@ -7,7 +10,18 @@ enum DiscordRelationshipKind {
   unknown,
 }
 
-enum DiscordPresenceStatus { online, idle, doNotDisturb, offline, unknown }
+enum DiscordPresenceStatus {
+  online(Presence.online),
+  idle(Presence.idle),
+  doNotDisturb(Presence.doNotDisturb),
+  offline(Presence.offline),
+  unknown(Presence.unknown);
+
+  const DiscordPresenceStatus(this.presence);
+
+  /// The same status as the app's own, which the shared glyph draws.
+  final Presence presence;
+}
 
 enum DiscordRelationshipAction {
   acceptRequest,
@@ -99,6 +113,19 @@ final class DiscordRelationshipUser {
   final bool isProvisional;
   final DiscordRelationshipActivity? activity;
 
+  /// This person as the workspace draws a member it holds no row for: their
+  /// picture, or their monogram on the colour of their id.
+  Member get asMember => Member(
+    id: id,
+    displayName: displayName,
+    initials: monogramOf(displayName),
+    role: '',
+    presence: status.presence,
+    colorValue: monogramColorOf(id),
+    avatarUrl: avatarUrl,
+    username: username,
+  );
+
   static String? _optionalText(String? value) {
     final normalized = value?.trim();
     return normalized == null || normalized.isEmpty ? null : normalized;
@@ -120,11 +147,16 @@ final class DiscordRelationship {
     required this.user,
     required this.kind,
     this.isSpamRequest = false,
+    this.since,
   });
 
   final DiscordRelationshipUser user;
   final DiscordRelationshipKind kind;
   final bool isSpamRequest;
+
+  /// When the relationship took its kind, such as the day two people became
+  /// friends. Null when Discord did not say.
+  final DateTime? since;
 
   bool get isPending =>
       kind == DiscordRelationshipKind.incomingRequest ||
@@ -153,6 +185,8 @@ final class DiscordRelationship {
     _ => false,
   };
 
+  /// This relationship as [nextKind]. [since] belonged to the old kind, so
+  /// it is dropped until Discord says when the new one began.
   DiscordRelationship withKind(DiscordRelationshipKind nextKind) =>
       DiscordRelationship(
         user: user,

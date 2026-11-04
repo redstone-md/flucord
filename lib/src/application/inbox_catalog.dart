@@ -232,7 +232,7 @@ final class InboxCatalog {
         workspace.channels
             .where((channel) => channel.isMessageRequest)
             .map((channel) {
-              final recipientId = channel.recipientId;
+              final recipientId = channel.soleRecipientId;
               final recipient = recipientId == null
                   ? null
                   : workspace.memberOrNull(recipientId);

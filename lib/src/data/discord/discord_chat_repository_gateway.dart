@@ -75,27 +75,12 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
     final guildId = data['id'] as String?;
     if (guildId == null) return;
     if (data['emojis'] is List) unawaited(_handleGuildEmojis(data));
-    final roles = data['roles'];
-    if (roles is List) {
-      _rolesByGuild[guildId] = roles
-          .whereType<Map>()
-          .map((role) => role.cast<String, Object?>())
-          .toList(growable: false);
-    }
     final members = data['members'];
     if (members is List && !_events.isClosed) {
       for (final raw in members.whereType<Map>()) {
         final payload = raw.cast<String, Object?>();
         if (payload['user'] is! Map) continue;
-        _events.add(
-          MemberUpsertedEvent(
-            _mapper.guildMember(
-              payload,
-              guildId,
-              _rolesByGuild[guildId] ?? const [],
-            ),
-          ),
-        );
+        _events.add(MemberUpsertedEvent(_mapper.guildMember(payload, guildId)));
       }
     }
     final presences = data['presences'];

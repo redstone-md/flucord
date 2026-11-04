@@ -125,7 +125,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('message-forward-submit')));
     await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Forwarding'), findsOneWidget);
 
     completion.complete(false);
     await tester.pumpAndSettle();

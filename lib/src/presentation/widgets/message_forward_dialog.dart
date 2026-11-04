@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_forward_destination_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -71,6 +72,12 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       maxWidth: 520,
       maxHeight: math.min(560, availableHeight),
+      cancelEnabled: !_isSubmitting,
+      confirm: FlucordDialogConfirm(
+        key: const ValueKey('message-forward-submit'),
+        label: _isSubmitting ? 'Forwarding' : 'Forward',
+        onPressed: _selected == null || _isSubmitting ? null : _submit,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -79,8 +86,6 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
           Divider(height: 1, color: context.surfaces.border),
           Flexible(child: _destinationList(context)),
           if (_error case final error?) _errorLine(context, error),
-          Divider(height: 1, color: context.surfaces.border),
-          _actions(context),
         ],
       ),
     );
@@ -91,13 +96,7 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Forward message',
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text('Forward message', style: FlucordTextRole.heading.style),
         const SizedBox(height: 10),
         TextField(
           key: const ValueKey('message-forward-search'),
@@ -107,7 +106,7 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
           onChanged: _search,
           decoration: const InputDecoration(
             hintText: 'Search channels and conversations',
-            prefixIcon: Icon(Icons.search, size: 19),
+            prefixIcon: FlucordIcon(FlucordIcons.search, size: 19),
             isDense: true,
           ),
         ),
@@ -161,30 +160,6 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
         color: Theme.of(context).colorScheme.error,
         fontSize: FlucordType.caption,
       ),
-    ),
-  );
-
-  Widget _actions(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          key: const ValueKey('message-forward-submit'),
-          onPressed: _selected == null || _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Forward'),
-        ),
-      ],
     ),
   );
 
@@ -251,7 +226,7 @@ class _DestinationRow extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 10),
-            Icon(_icon, size: 18, color: context.surfaces.muted),
+            FlucordIcon(_icon, size: 18, color: context.surfaces.muted),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -262,10 +237,7 @@ class _DestinationRow extends StatelessWidget {
                     destination.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: FlucordType.label,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: FlucordTextRole.label.strong,
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -281,7 +253,11 @@ class _DestinationRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
+              FlucordIcon(
+                FlucordIcons.check,
+                size: 17,
+                color: context.surfaces.accentIcon,
+              ),
             const SizedBox(width: 10),
           ],
         ),
@@ -289,10 +265,10 @@ class _DestinationRow extends StatelessWidget {
     ),
   );
 
-  IconData get _icon => switch (destination.kind) {
-    MessageForwardDestinationKind.directMessage => Icons.alternate_email,
-    MessageForwardDestinationKind.textChannel => Icons.tag,
-    MessageForwardDestinationKind.voiceChannel => Icons.volume_up_outlined,
-    MessageForwardDestinationKind.thread => Icons.forum_outlined,
+  FlucordIconData get _icon => switch (destination.kind) {
+    MessageForwardDestinationKind.directMessage => FlucordIcons.mention,
+    MessageForwardDestinationKind.textChannel => FlucordIcons.textChannel,
+    MessageForwardDestinationKind.voiceChannel => FlucordIcons.voiceChannel,
+    MessageForwardDestinationKind.thread => FlucordIcons.threads,
   };
 }

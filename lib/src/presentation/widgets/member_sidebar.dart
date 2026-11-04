@@ -1,20 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../application/guild_member_admin_controller.dart';
 import '../../application/guild_member_list_controller.dart';
-import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
+import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
-import 'member_profile_popover.dart';
 import 'member_roster_view.dart';
+import 'display_name.dart';
+import 'name_tags.dart';
+import 'nameplate_backdrop.dart';
+import 'popup_anchor.dart';
+import 'profile_card_route.dart';
 
 /// The right-hand member panel.
 ///
@@ -27,39 +30,33 @@ class MemberSidebar extends StatefulWidget {
   const MemberSidebar({
     required this.members,
     required this.spaceId,
-    required this.currentMemberId,
-    required this.onMessage,
+    this.cardFor,
     this.channelId,
     this.memberList,
     this.roles = const <CommunityRole>[],
-    this.profile,
-    this.onReport,
-    this.onBlock,
-    this.moderationBuilder,
+    this.seatedByChannel = const {},
+    this.heldRolesOf,
     super.key,
   });
 
+  /// Who is seated in each voice channel, keyed by channel id. A member seated
+  /// in this space reads "In voice" when they are doing nothing else.
+  final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
+
+  /// The roles a member holds here, which colour their name, group them while
+  /// no roster has arrived, and name their role in the popover. Null on a host
+  /// with no roles to read.
+  final HeldRoles Function(Member member)? heldRolesOf;
+
+  /// Each list starts with a group label, which carries its own space above.
+  static const _listPadding = EdgeInsets.fromLTRB(8, 0, 8, 16);
+
   final List<Member> members;
   final String spaceId;
-  final String currentMemberId;
-  final ValueChanged<Member> onMessage;
 
-  /// Drives the full profile the anchored popover fetches. Null on a host
-  /// with no account behind it, which draws the identity block only.
-  final MemberProfileController? profile;
-
-  /// Opens the report flow for a member. Absent on transports with no
-  /// `/reporting` access, which is what keeps the button off the popover
-  /// instead of putting one there that fails.
-  final ValueChanged<Member>? onReport;
-
-  /// Blocks a member. Same reasoning as [onReport].
-  final ValueChanged<Member>? onBlock;
-
-  /// Builds the moderation controller for one member's popover, or null
-  /// where this host offers no moderation: no guild-administration plane, or
-  /// a surface outside a guild.
-  final GuildMemberAdminController? Function(Member member)? moderationBuilder;
+  /// Builds the profile card a row opens beside itself; `close` closes it.
+  /// Null opens nothing.
+  final Widget Function(Member member, VoidCallback close)? cardFor;
 
   /// Channel whose roster is shown. Member lists are subscribed per channel
   /// because visibility, not membership, decides who appears.
@@ -72,18 +69,16 @@ class MemberSidebar extends StatefulWidget {
 }
 
 class _MemberSidebarState extends State<MemberSidebar> {
-  final OverlayPortalController _overlayController = OverlayPortalController();
   final TextEditingController _search = TextEditingController();
-  final Map<String, LayerLink> _memberLinks = {};
   List<Member>? _indexedMembers;
   Map<String, Member> _membersById = const {};
-  Member? _selectedMember;
-  LayerLink? _selectedLink;
+  Map<String, List<VoiceParticipantStateEvent>>? _indexedSeats;
+  String? _seatedSpaceId;
+  Set<String> _seatedIds = const {};
 
-  /// The moderation controller of the popover that is open, if the host
-  /// offered one. Owned here, disposed when the popover closes.
-  GuildMemberAdminController? _moderation;
-  bool _openUp = false;
+  /// Whose card is open, and what closes it.
+  String? _openMemberId;
+  VoidCallback? _closeCard;
 
   /// The member search as typed. Blank restores the roster, which is what
   /// Discord does too: the results list is not a second roster to keep in
@@ -94,9 +89,13 @@ class _MemberSidebarState extends State<MemberSidebar> {
 
   @override
   void dispose() {
+    // A card left open would point at a row that is gone. Not during the
+    // build: closing pops a route.
+    if (_closeCard case final close?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => close());
+    }
     _searchDebounce?.cancel();
     _search.dispose();
-    _moderation?.dispose();
     widget.memberList
       ?..removeListener(_onRosterChanged)
       ..clear();
@@ -122,22 +121,14 @@ class _MemberSidebarState extends State<MemberSidebar> {
         oldWidget.memberList != widget.memberList) {
       _watchChannel();
     }
-    if (!identical(oldWidget.members, widget.members)) {
-      _memberLinks.removeWhere((id, _) => !_memberIndex.containsKey(id));
-    }
-    final selectedId = _selectedMember?.id;
-    if (oldWidget.spaceId != widget.spaceId ||
-        (selectedId != null &&
-            !widget.members.any((member) => member.id == selectedId))) {
-      if (_overlayController.isShowing) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _overlayController.hide();
-        });
-      }
-      _selectedMember = null;
-      _selectedLink = null;
-      _moderation?.dispose();
-      _moderation = null;
+    final openId = _openMemberId;
+    final close = _closeCard;
+    if (openId != null &&
+        close != null &&
+        (oldWidget.spaceId != widget.spaceId ||
+            !_memberIndex.containsKey(openId))) {
+      // Not during the build: closing pops a route.
+      WidgetsBinding.instance.addPostFrameCallback((_) => close());
     }
   }
 
@@ -154,39 +145,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
   Widget build(BuildContext context) {
     final roster = widget.memberList?.list;
     final searching = _searchQuery.trim().isNotEmpty;
-    return OverlayPortal(
-      controller: _overlayController,
-      overlayChildBuilder: _buildOverlay,
-      child: Container(
-        width: 224,
-        decoration: BoxDecoration(
-          color: context.surfaces.surface,
-          border: Border(left: BorderSide(color: context.surfaces.border)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: TextField(
-                key: const ValueKey('member-search'),
-                controller: _search,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  hintText: 'Search members',
-                ),
-                onChanged: _onSearchChanged,
-              ),
-            ),
-            Expanded(
-              child: searching
-                  ? _buildSearchResults()
-                  : roster != null && roster.isLoaded
-                  ? _buildRoster(roster)
-                  : _buildCachedMembers(_visibleMembers()),
-            ),
-          ],
-        ),
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: context.surfaces.surface,
+        border: Border(left: BorderSide(color: context.surfaces.border)),
+      ),
+      child: Column(
+        children: [
+          _MemberSearchHeader(controller: _search, onChanged: _onSearchChanged),
+          Expanded(
+            child: searching
+                ? _buildSearchResults()
+                : roster != null && roster.isLoaded
+                ? _buildRoster(roster)
+                : _buildCachedMembers(_visibleMembers()),
+          ),
+        ],
       ),
     );
   }
@@ -223,21 +198,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
     final results = _matchingMembers();
     if (results.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
-        children: const [
-          MemberGroupLabel(label: 'Members', count: 0),
-          SizedBox(height: 14),
+        padding: MemberSidebar._listPadding,
+        children: [
+          const MemberGroupLabel(label: 'Members', count: 0),
+          const SizedBox(height: 12),
           Center(
             child: Text(
               'Nobody by that name yet.',
-              style: TextStyle(fontSize: FlucordType.caption),
+              style: FlucordTextRole.caption.style.copyWith(
+                color: context.surfaces.muted,
+              ),
             ),
           ),
         ],
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      padding: MemberSidebar._listPadding,
       children: [
         MemberGroupLabel(label: 'Members', count: results.length),
         for (final member in results) _rowFor(member),
@@ -267,6 +244,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
     return _membersById;
   }
 
+  /// The ids of members seated in a voice channel of this space. Rebuilt
+  /// only when the seats or the space change: the seat map is replaced, not
+  /// edited, on every change.
+  Set<String> get _seatedHere {
+    final seats = widget.seatedByChannel;
+    if (!identical(_indexedSeats, seats) || _seatedSpaceId != widget.spaceId) {
+      _indexedSeats = seats;
+      _seatedSpaceId = widget.spaceId;
+      _seatedIds = {
+        for (final channel in seats.values)
+          for (final seat in channel)
+            if (seat.guildId == widget.spaceId) seat.userId,
+      };
+    }
+    return _seatedIds;
+  }
+
   Widget _buildRoster(GuildMemberList roster) {
     final membersById = _memberIndex;
     return MemberRosterView(
@@ -290,27 +284,41 @@ class _MemberSidebarState extends State<MemberSidebar> {
     );
   }
 
+  HeldRoles _rolesOf(Member member) =>
+      widget.heldRolesOf?.call(member) ?? HeldRoles.none;
+
   /// Grouping the cached member table locally, used until a roster arrives.
+  ///
+  /// As Discord does: an online member goes under their highest hoisted role,
+  /// the groups in the roles' order, and one with no hoisted role under
+  /// Online.
   Widget _buildCachedMembers(List<Member> visibleMembers) {
-    final online = visibleMembers
-        .where((member) => member.presence.isOnline)
-        .toList(growable: false);
     final offline = visibleMembers
         .where((member) => !member.presence.isOnline)
         .toList(growable: false);
-    final roleGroups = <String, List<Member>>{};
-    for (final member in online) {
-      roleGroups
-          .putIfAbsent(member.roleFor(widget.spaceId), () => [])
-          .add(member);
+    final roleGroups = <CommunityRole, List<Member>>{};
+    final ungrouped = <Member>[];
+    for (final member in visibleMembers) {
+      if (!member.presence.isOnline) continue;
+      final hoisted = _rolesOf(member).hoisted;
+      if (hoisted == null) {
+        ungrouped.add(member);
+      } else {
+        roleGroups.putIfAbsent(hoisted, () => []).add(member);
+      }
     }
+    final groups = roleGroups.entries.toList(growable: false)
+      ..sort((left, right) => CommunityRole.highestFirst(left.key, right.key));
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
+      padding: MemberSidebar._listPadding,
       children: [
-        for (final entry in roleGroups.entries) ...[
-          MemberGroupLabel(label: entry.key, count: entry.value.length),
-          for (final member in entry.value) _rowFor(member),
-          const SizedBox(height: 14),
+        for (final MapEntry(key: role, value: members) in groups) ...[
+          MemberGroupLabel(label: role.name, count: members.length),
+          for (final member in members) _rowFor(member),
+        ],
+        if (ungrouped.isNotEmpty) ...[
+          MemberGroupLabel(label: 'Online', count: ungrouped.length),
+          for (final member in ungrouped) _rowFor(member),
         ],
         if (offline.isNotEmpty) ...[
           MemberGroupLabel(label: 'Offline', count: offline.length),
@@ -320,197 +328,183 @@ class _MemberSidebarState extends State<MemberSidebar> {
     );
   }
 
-  Widget _rowFor(Member member) {
-    final link = _memberLinks.putIfAbsent(member.id, LayerLink.new);
-    return _MemberRow(
-      member: member,
-      role: member.roleFor(widget.spaceId),
-      spaceId: widget.spaceId,
-      link: link,
-      selected: member.id == _selectedMember?.id,
-      onPressed: (context) => _showMember(context, member, link),
+  Widget _rowFor(Member member) => _MemberRow(
+    member: member,
+    spaceId: widget.spaceId,
+    inVoice: _seatedHere.contains(member.id),
+    nameColor: _rolesOf(member).nameColor,
+    selected: member.id == _openMemberId,
+    onPressed: (context) => unawaited(_showMember(context, member)),
+  );
+
+  /// Opens [member]'s card beside the row at [rowContext].
+  Future<void> _showMember(BuildContext rowContext, Member member) async {
+    final cardFor = widget.cardFor;
+    if (cardFor == null) return;
+    setState(() => _openMemberId = member.id);
+    await showProfileCard(
+      context: rowContext,
+      anchor: popupAnchorOf(rowContext),
+      builder: (close) {
+        _closeCard = close;
+        return cardFor(member, close);
+      },
     );
+    _closeCard = null;
+    if (mounted) setState(() => _openMemberId = null);
   }
+}
 
-  Widget _buildOverlay(BuildContext context) {
-    final member = _selectedMember;
-    final link = _selectedLink;
-    if (member == null || link == null) return const SizedBox.shrink();
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _dismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: link,
-          showWhenUnlinked: false,
-          targetAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
-          followerAnchor: _openUp ? Alignment.bottomRight : Alignment.topRight,
-          offset: const Offset(-8, 0),
-          child: Focus(
-            autofocus: true,
-            onKeyEvent: (_, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.escape) {
-                _dismiss();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: MemberProfilePopover(
-              member: member,
-              spaceId: widget.spaceId,
-              profile: widget.profile,
-              canMessage: member.id != widget.currentMemberId,
-              moderation: _moderation,
-              onMessage: () {
-                _dismiss();
-                widget.onMessage(member);
-              },
-              // Neither is offered for the account itself: Discord has no
-              // "report yourself", and blocking yourself is a request the
-              // server refuses.
-              onReport:
-                  widget.onReport == null || member.id == widget.currentMemberId
-                  ? null
-                  : () {
-                      _dismiss();
-                      widget.onReport!(member);
-                    },
-              onBlock:
-                  widget.onBlock == null || member.id == widget.currentMemberId
-                  ? null
-                  : () {
-                      _dismiss();
-                      widget.onBlock!(member);
-                    },
-            ),
-          ),
-        ),
-      ],
+/// The 48 px header with the recessed "Search members" field.
+class _MemberSearchHeader extends StatelessWidget {
+  const _MemberSearchHeader({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+      borderRadius: FlucordRadius.control,
+      borderSide: BorderSide(color: color, width: width),
     );
-  }
-
-  void _showMember(BuildContext context, Member member, LayerLink link) {
-    final box = context.findRenderObject() as RenderBox?;
-    final centerY = box == null
-        ? 0.0
-        : box
-              .localToGlobal(
-                Offset(0, box.size.height / 2),
-                ancestor: Overlay.of(context).context.findRenderObject(),
-              )
-              .dy;
-    setState(() {
-      _selectedMember = member;
-      _selectedLink = link;
-      _moderation?.dispose();
-      _moderation = widget.moderationBuilder?.call(member);
-      _openUp = centerY > MediaQuery.sizeOf(context).height / 2;
-    });
-    // The fetch starts with the open rather than after it, so the sections
-    // arrive while the popover is already on screen.
-    final profile = widget.profile;
-    if (profile != null) unawaited(profile.open(member.id));
-    _overlayController.show();
-  }
-
-  void _dismiss() {
-    _overlayController.hide();
-    if (!mounted) return;
-    setState(() {
-      _selectedMember = null;
-      _selectedLink = null;
-      _moderation?.dispose();
-      _moderation = null;
-    });
+    final rest = outline(surfaces.border, 1);
+    return Container(
+      key: const ValueKey('member-list-header'),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: surfaces.border)),
+      ),
+      child: TextField(
+        key: const ValueKey('member-search'),
+        controller: controller,
+        onChanged: onChanged,
+        style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: surfaces.inset,
+          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+          prefixIcon: FlucordIcon(
+            FlucordIcons.search,
+            size: 16,
+            color: surfaces.captionText,
+          ),
+          prefixIconConstraints: const BoxConstraints.tightFor(width: 32),
+          hintText: 'Search members',
+          hintStyle: FlucordTextRole.caption.style.copyWith(
+            color: surfaces.captionText,
+          ),
+          border: rest,
+          enabledBorder: rest,
+          focusedBorder: outline(surfaces.focusRing, 2),
+        ),
+      ),
+    );
   }
 }
 
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
-    required this.role,
     required this.spaceId,
-    required this.link,
+    required this.inVoice,
+    required this.nameColor,
     required this.selected,
     required this.onPressed,
   });
 
   final Member member;
-  final String role;
   final String spaceId;
-  final LayerLink link;
+  final bool inVoice;
+
+  /// The member's role colour as a value, or null for the plain text colour.
+  final int? nameColor;
   final bool selected;
   final ValueChanged<BuildContext> onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final offline = !member.presence.isOnline;
-    // Discord replaces the role line with whatever the member is doing, so a
-    // row never carries both: the activity is the more current fact, and
-    // stacking the two would double every row's height.
-    final activity = member.presenceDetail?.primaryActivity;
-    return CompositedTransformTarget(
-      link: link,
-      child: Opacity(
-        opacity: offline ? 0.58 : 1,
-        child: Material(
-          color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: FlucordRadius.small,
-          child: Semantics(
-            button: true,
-            label: 'Open profile for ${member.displayName}',
-            child: InkWell(
-              key: ValueKey('member-row-${member.id}'),
-              onTap: () => onPressed(context),
-              // Discord opens the same card from the right button. A row that
-              // ignores it is a place where the mouse stops working.
-              onSecondaryTap: () => onPressed(context),
-              borderRadius: FlucordRadius.small,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                child: Row(
-                  children: [
-                    MemberAvatar(member: member, size: 32, spaceId: spaceId),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            member.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.caption,
-                              fontWeight: FontWeight.w600,
-                            ),
+    // No role line when there is nothing to show: the group label above
+    // already names the role. The name then sits in the middle of the row.
+    final summary = ActivitySummary.of(
+      member.presenceDetail?.activities ?? const [],
+      inVoice: inVoice,
+    );
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          MemberAvatar(
+            member: member,
+            size: 28,
+            spaceId: spaceId,
+            presenceBorderColor: surfaces.surface,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: NameplateText(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: DisplayName(
+                          member.displayName,
+                          style: FlucordTextRole.label.style.copyWith(
+                            color: surfaces.text,
                           ),
-                          const SizedBox(height: 2),
-                          if (activity != null)
-                            ActivitySummaryLine(
-                              key: ValueKey('member-activity-${member.id}'),
-                              activity: activity,
-                            )
-                          else
-                            Text(
-                              role,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: context.surfaces.muted,
-                                fontSize: FlucordType.caption,
-                              ),
-                            ),
-                        ],
+                          nameStyle: member.tags.nameStyle,
+                          inServer: InServer(roleColor: nameColor),
+                        ),
                       ),
+                      NameTags(member: member),
+                    ],
+                  ),
+                  if (summary != null)
+                    ActivitySummaryLine(
+                      key: ValueKey('member-activity-${member.id}'),
+                      summary: summary,
                     ),
-                  ],
-                ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Opacity(
+      opacity: offline ? 0.58 : 1,
+      child: Material(
+        color: selected ? surfaces.raised : Colors.transparent,
+        borderRadius: FlucordRadius.control,
+        child: Semantics(
+          button: true,
+          label: 'Open profile for ${member.displayName}',
+          child: InkWell(
+            key: ValueKey('member-row-${member.id}'),
+            onTap: () => onPressed(context),
+            // Discord opens the same card from the right button. A row that
+            // ignores it is a place where the mouse stops working.
+            onSecondaryTap: () => onPressed(context),
+            borderRadius: FlucordRadius.control,
+            child: SizedBox(
+              height: MemberRosterView.rowExtentOf(context),
+              child: WithNameplate(
+                nameplate: member.tags.nameplate,
+                placement: NameplatePlacement.memberList,
+                selected: selected,
+                child: content,
               ),
             ),
           ),

@@ -4,9 +4,11 @@ import 'discord_message_component_service.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';
+import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/guild_membership.dart';
 import '../../domain/message_search.dart';
+import '../../domain/monogram.dart';
 import '../../domain/permission_overwrite.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
@@ -22,26 +24,8 @@ part 'discord_sticker_mapper.dart';
 part 'discord_scheduled_event_mapper.dart';
 part 'discord_channel_mapper.dart';
 
-final class DiscordMappedDirectMessage {
-  const DiscordMappedDirectMessage({
-    required this.channel,
-    required this.recipient,
-  });
-
-  final ConversationChannel channel;
-  final Member recipient;
-}
-
 final class DiscordMapper {
   static const directMessagesSpaceId = CommunitySpace.directMessagesId;
-  static const _colors = [
-    0xff456b5a,
-    0xff765341,
-    0xff5f5b76,
-    0xff59636a,
-    0xff486b70,
-    0xff6f5967,
-  ];
 
   ChatWorkspace workspace({
     required Map<String, Object?> currentUser,
@@ -70,7 +54,9 @@ final class DiscordMapper {
       final mapped = directMessage(payload, currentUser['id']! as String);
       if (mapped == null) continue;
       channels.add(mapped.channel);
-      members[mapped.recipient.id] = mapped.recipient;
+      for (final recipient in mapped.recipients) {
+        members[recipient.id] = recipient;
+      }
     }
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
@@ -106,11 +92,7 @@ final class DiscordMapper {
         ),
       );
       for (final payload in membersByGuild[guildId] ?? const []) {
-        final mapped = guildMember(
-          payload,
-          guildId,
-          rolesByGuild[guildId] ?? const [],
-        );
+        final mapped = guildMember(payload, guildId);
         members[mapped.id] = _mergeMembers(members[mapped.id], mapped);
       }
     }
@@ -153,31 +135,43 @@ final class DiscordMapper {
     );
   }
 
-  DiscordMappedDirectMessage? directMessage(
+  /// A DM from Discord's private channel: a one-to-one DM (type 1) or a
+  /// group DM (type 3). Null for any other type, and for a one-to-one DM that
+  /// names nobody.
+  DirectConversation? directMessage(
     Map<String, Object?> payload,
     String currentUserId,
   ) {
-    if (payload['type'] != 1) return null;
+    final type = payload['type'];
+    if (type != 1 && type != 3) return null;
     final recipients = (payload['recipients'] as List? ?? const [])
         .whereType<Map>()
         .map((recipient) => recipient.cast<String, Object?>())
         .where((recipient) => recipient['id'] != currentUserId)
+        .map(
+          (recipient) => member(
+            recipient,
+            role: 'Direct message',
+            spaceIds: const {directMessagesSpaceId},
+          ),
+        )
         .toList(growable: false);
-    if (recipients.isEmpty) return null;
-    final recipient = member(
-      recipients.first,
-      role: 'Direct message',
-      spaceIds: const {directMessagesSpaceId},
-    );
-    return DiscordMappedDirectMessage(
-      recipient: recipient,
+    if (type == 1 && recipients.isEmpty) return null;
+    final id = payload['id']! as String;
+    final name = type == 1
+        ? recipients.first.displayName
+        : _groupName(payload['name'], recipients);
+    return DirectConversation(
+      recipients: recipients,
       channel: ConversationChannel(
-        id: payload['id']! as String,
+        id: id,
         spaceId: directMessagesSpaceId,
-        name: recipient.displayName,
-        topic: 'Direct message with ${recipient.displayName}',
+        name: name,
+        topic: type == 1 ? 'Direct message with $name' : '',
         kind: ChannelKind.text,
-        recipientId: recipient.id,
+        recipientIds: [for (final recipient in recipients) recipient.id],
+        isGroupDirectMessage: type == 3,
+        iconUrl: DiscordCdn.channelIcon(id, payload['icon'] as String?),
         isMessageRequest: payload['is_message_request'] as bool? ?? false,
         messageRequestedAt: _messageRequestTimestamp(
           payload['is_message_request_timestamp'],
@@ -185,6 +179,14 @@ final class DiscordMapper {
         lastMessageId: _lastMessageId(payload),
       ),
     );
+  }
+
+  /// A group DM's own name, or its recipients' names when it has none, the
+  /// way Discord titles an unnamed group.
+  static String _groupName(Object? name, List<Member> recipients) {
+    if (name is String && name.trim().isNotEmpty) return name;
+    if (recipients.isEmpty) return 'Unnamed group';
+    return recipients.map((recipient) => recipient.displayName).join(', ');
   }
 
   /// The request's own timestamp, promoted out of its ISO string. Discord
@@ -293,9 +295,13 @@ final class DiscordMapper {
     Map<String, Object?> guildMember,
     String guildId,
   ) {
-    final nickname = guildMember['nick'];
+    final nickname = switch (guildMember['nick']) {
+      final String nick when nick.isNotEmpty => nick,
+      _ => null,
+    };
     return mapped.copyWith(
-      displayName: nickname is String && nickname.isNotEmpty ? nickname : null,
+      displayName: nickname,
+      initials: nickname == null ? null : monogramOf(nickname),
       membershipsBySpace: {guildId: membership(guildMember)},
     );
   }
@@ -305,7 +311,6 @@ final class DiscordMapper {
     String role = 'Member',
     Presence presence = Presence.offline,
     Set<String> spaceIds = const {},
-    Map<String, String> rolesBySpace = const {},
     int? colorValue,
   }) {
     final username =
@@ -316,32 +321,86 @@ final class DiscordMapper {
     return Member(
       id: id,
       displayName: username,
-      initials: _monogram(username),
+      initials: monogramOf(username),
       role: role,
       presence: presence,
-      colorValue: colorValue ?? _colorFor(id),
+      colorValue: colorValue ?? monogramColorOf(id),
       spaceIds: spaceIds,
-      rolesBySpace: rolesBySpace,
       avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
+      tags: tags(payload),
+      username: _username(payload),
     );
   }
 
-  Member guildMember(
-    Map<String, Object?> payload,
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) {
+  /// The username and tags of a whole user, or null for a partial one that
+  /// names the user by id alone.
+  MemberIdentity? identity(Map<String, Object?> user) =>
+      switch (_username(user)) {
+        final username? => MemberIdentity(username: username, tags: tags(user)),
+        null => null,
+      };
+
+  static String? _username(Map<String, Object?> user) =>
+      switch (user['username']) {
+        final String username when username.isNotEmpty => username,
+        _ => null,
+      };
+
+  /// The tags on [user]. A user object without `primary_guild`,
+  /// `collectibles` or `display_name_styles` says nothing about that part;
+  /// one where it is null says there is none.
+  static MemberTags tags(Map<String, Object?> user) => MemberTags(
+    isBot: user['bot'] == true,
+    clanTag: _clanTag(user),
+    nameplate: _nameplate(user['collectibles']),
+    nameStyle: _nameStyle(user['display_name_styles']),
+    unsaid: {
+      if (!user.containsKey('primary_guild')) TagPart.clanTag,
+      if (!user.containsKey('collectibles')) TagPart.nameplate,
+      if (!user.containsKey('display_name_styles')) TagPart.nameStyle,
+    },
+  );
+
+  /// The nameplate in a user's `collectibles`. Collectibles without one say
+  /// the user has none.
+  static Nameplate? _nameplate(Object? collectibles) => collectibles is Map
+      ? Nameplate.fromJson(collectibles['nameplate'])
+      : null;
+
+  static NameStyle? _nameStyle(Object? styles) {
+    if (styles is! Map) return null;
+    return NameStyle(
+      colors: [
+        for (final color in styles['colors'] as List? ?? const [])
+          if (color is int) DiscordRgb(color).opaque,
+      ],
+      fontId: styles['font_id'] as int?,
+      effectId: styles['effect_id'] as int?,
+    );
+  }
+
+  /// The server tag [user] shows, or null when it shows none.
+  ///
+  /// Discord keeps a tag the user turned off, with `identity_enabled` false or
+  /// null. Such a tag is not drawn anywhere, so it is dropped here.
+  static ClanTag? _clanTag(Map<String, Object?> user) {
+    final clan = user['primary_guild'];
+    if (clan is! Map || clan['identity_enabled'] != true) return null;
+    final tag = clan['tag'];
+    final guildId = clan['identity_guild_id'];
+    if (tag is! String || tag.isEmpty || guildId is! String) return null;
+    return ClanTag(
+      tag: tag,
+      guildId: guildId,
+      badgeUrl: DiscordCdn.clanBadge(guildId, clan['badge'] as String?),
+    );
+  }
+
+  /// A guild member. Their roles are kept as ids in [GuildMembership]; the
+  /// name, place and colour of each role are read from the workspace, so a
+  /// role change shows on every member who holds it. See [HeldRoles].
+  Member guildMember(Map<String, Object?> payload, String guildId) {
     final user = (payload['user']! as Map).cast<String, Object?>();
-    final roleIds = (payload['roles'] as List? ?? const []).whereType<String>();
-    final matchingRoles =
-        roles.where((role) => roleIds.contains(role['id'])).toList()..sort(
-          (left, right) => (right['position'] as int? ?? 0).compareTo(
-            left['position'] as int? ?? 0,
-          ),
-        );
-    final topRole = matchingRoles.isEmpty ? null : matchingRoles.first;
-    final roleName = topRole?['name'] as String? ?? 'Member';
-    final roleColor = topRole?['color'] as int? ?? 0;
     final username =
         payload['nick'] as String? ??
         user['global_name'] as String? ??
@@ -356,21 +415,23 @@ final class DiscordMapper {
     return Member(
       id: id,
       displayName: username,
-      initials: _monogram(username),
-      role: roleName,
+      initials: monogramOf(username),
+      role: 'Member',
       presence: Presence.offline,
-      colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
+      colorValue: monogramColorOf(id),
       spaceIds: {guildId},
-      rolesBySpace: {guildId: roleName},
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
       membershipsBySpace: {guildId: membership(payload)},
+      tags: tags(user),
+      username: _username(user),
     );
   }
 
   /// The permission-relevant half of a guild member payload.
   GuildMembership membership(Map<String, Object?> payload) {
     final timeout = payload['communication_disabled_until'] as String?;
+    final joined = payload['joined_at'] as String?;
     return GuildMembership(
       roleIds: (payload['roles'] as List? ?? const [])
           .whereType<String>()
@@ -378,6 +439,7 @@ final class DiscordMapper {
       flags: payload['flags'] as int? ?? 0,
       isPending: payload['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+      joinedAt: joined == null ? null : DateTime.tryParse(joined),
     );
   }
 
@@ -396,6 +458,7 @@ final class DiscordMapper {
       name: payload['name'] as String? ?? 'unknown-role',
       position: payload['position'] as int? ?? 0,
       colorValue: rawColor == 0 ? null : 0xff000000 | rawColor,
+      hoist: payload['hoist'] == true,
       // Left null rather than zeroed when the field is absent: a role that
       // grants nothing and a role we were told nothing about lead to opposite
       // decisions once permissions are computed.
@@ -417,7 +480,6 @@ final class DiscordMapper {
     if (previous == null) return incoming;
     return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
       avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
       avatarUrlsBySpace: {
         ...previous.avatarUrlsBySpace,
@@ -430,6 +492,8 @@ final class DiscordMapper {
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
+      username: incoming.username ?? previous.username,
+      tags: incoming.tags.over(previous.tags),
     );
   }
 
@@ -450,13 +514,18 @@ final class DiscordMapper {
     return CommunitySpace(
       id: id,
       name: name,
-      monogram: _monogram(name),
-      colorValue: _colorFor(id),
+      monogram: monogramOf(name),
+      colorValue: monogramColorOf(id),
       iconUrl: DiscordCdn.guildIcon(id, icon),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
       premiumTier:
           (payload['premium_tier'] ?? core['premium_tier']) as int? ?? 0,
+      memberCount: (payload['member_count'] ?? core['member_count']) as int?,
+      joinedAt: switch (payload['joined_at'] ?? core['joined_at']) {
+        final String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 
@@ -464,25 +533,4 @@ final class DiscordMapper {
   /// joined server exactly like one the session was opened with.
   CommunitySpace spaceFromGuildPayload(Map<String, Object?> payload) =>
       _space(payload);
-
-  static String _monogram(String name) {
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .take(2)
-        .toList();
-    if (words.isEmpty) return '?';
-    return words
-        .map((word) => String.fromCharCode(word.runes.first).toUpperCase())
-        .join();
-  }
-
-  static int _colorFor(String id) {
-    var hash = 0;
-    for (final unit in id.codeUnits) {
-      hash = (hash * 31 + unit) & 0x7fffffff;
-    }
-    return _colors[hash % _colors.length];
-  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -198,7 +199,7 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
                     alignment: Alignment.centerLeft,
                     child: _GalleryNavigationButton(
                       key: const ValueKey('image-viewer-previous'),
-                      icon: Icons.chevron_left,
+                      icon: FlucordIcons.chevronLeft,
                       tooltip: 'Previous image · Left',
                       onPressed: _index > 0 ? () => _navigate(-1) : null,
                     ),
@@ -207,7 +208,7 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
                     alignment: Alignment.centerRight,
                     child: _GalleryNavigationButton(
                       key: const ValueKey('image-viewer-next'),
-                      icon: Icons.chevron_right,
+                      icon: FlucordIcons.chevronRight,
                       tooltip: 'Next image · Right',
                       onPressed: _index < widget.entries.length - 1
                           ? () => _navigate(1)
@@ -296,7 +297,7 @@ class _ViewerToolbar extends StatelessWidget {
         child: Row(
           children: [
             if (!veryCompact) ...[
-              const Icon(Icons.image_outlined, size: 18),
+              const FlucordIcon(FlucordIcons.image, size: 18),
               const SizedBox(width: 8),
             ],
             Expanded(
@@ -304,10 +305,7 @@ class _ViewerToolbar extends StatelessWidget {
                 attachment.fileName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: FlucordType.label,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: FlucordTextRole.label.strong,
               ),
             ),
             if (!compact && attachment.width != null) ...[
@@ -323,7 +321,7 @@ class _ViewerToolbar extends StatelessWidget {
             SizedBox(width: compact ? 4 : 12),
             _ToolbarButton(
               key: const ValueKey('image-viewer-zoom-out'),
-              icon: Icons.remove,
+              icon: FlucordIcons.minus,
               tooltip: 'Zoom out · Ctrl+-',
               onPressed: onZoomOut,
             ),
@@ -342,7 +340,7 @@ class _ViewerToolbar extends StatelessWidget {
             ),
             _ToolbarButton(
               key: const ValueKey('image-viewer-zoom-in'),
-              icon: Icons.add,
+              icon: FlucordIcons.add,
               tooltip: 'Zoom in · Ctrl++',
               onPressed: onZoomIn,
             ),
@@ -357,7 +355,7 @@ class _ViewerToolbar extends StatelessWidget {
             const SizedBox(width: 4),
             _ToolbarButton(
               key: const ValueKey('image-viewer-close'),
-              icon: Icons.close,
+              icon: FlucordIcons.clear,
               tooltip: 'Close · Esc',
               onPressed: onClose,
             ),
@@ -376,7 +374,7 @@ class _ToolbarButton extends StatelessWidget {
     super.key,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String tooltip;
   final VoidCallback onPressed;
 
@@ -387,7 +385,7 @@ class _ToolbarButton extends StatelessWidget {
     iconSize: 18,
     tooltip: tooltip,
     onPressed: onPressed,
-    icon: Icon(icon),
+    icon: FlucordIcon(icon),
   );
 }
 
@@ -418,8 +416,8 @@ class _NetworkViewerImage extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.broken_image_outlined,
+          FlucordIcon(
+            FlucordIcons.brokenImage,
             size: 36,
             color: context.surfaces.muted,
           ),

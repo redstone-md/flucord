@@ -65,6 +65,15 @@ final class UserPresence {
     return null;
   }
 
+  /// What they are doing. A custom status or a hang status is a mood, not an
+  /// activity, so neither counts.
+  List<UserActivity> get doing => [
+    for (final activity in activities)
+      if (activity.type != ActivityType.customStatus &&
+          activity.type != ActivityType.hangStatus)
+        activity,
+  ];
+
   /// The activity a member row summarises. R07 excludes `HANG_STATUS` from the
   /// primary slot, and a custom status loses to anything the user is doing.
   UserActivity? get primaryActivity {

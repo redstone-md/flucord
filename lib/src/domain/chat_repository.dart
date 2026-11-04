@@ -101,6 +101,20 @@ final class MembersUpsertedEvent extends ChatRepositoryEvent {
   final List<Member> members;
 }
 
+/// A user's username and tags, as a presence update carried them.
+///
+/// Kept apart from [MemberUpsertedEvent] because a presence's user has no
+/// guild standing: as a whole member it would erase the nickname and roles.
+final class MemberIdentityChangedEvent extends ChatRepositoryEvent {
+  const MemberIdentityChangedEvent({
+    required this.memberId,
+    required this.identity,
+  });
+
+  final String memberId;
+  final MemberIdentity identity;
+}
+
 final class MemberRemovedEvent extends ChatRepositoryEvent {
   const MemberRemovedEvent({required this.memberId, required this.spaceId});
 
@@ -183,6 +197,19 @@ final class SpaceUpsertedEvent extends ChatRepositoryEvent {
   const SpaceUpsertedEvent(this.space);
 
   final CommunitySpace space;
+}
+
+/// A server's role, new or changed. Name colours and permissions follow it.
+final class RoleUpsertedEvent extends ChatRepositoryEvent {
+  const RoleUpsertedEvent(this.role);
+
+  final CommunityRole role;
+}
+
+final class RoleDeletedEvent extends ChatRepositoryEvent {
+  const RoleDeletedEvent(this.roleId);
+
+  final String roleId;
 }
 
 final class GuildEmojisReplacedEvent extends ChatRepositoryEvent {

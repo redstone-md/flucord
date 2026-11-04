@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../domain/discord_session.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
@@ -30,26 +31,26 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.person_outline, size: 20),
+              const FlucordIcon(FlucordIcons.person, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   connected ? 'Discord chat' : 'Sign in to Discord',
-                  style: const TextStyle(
-                    fontSize: FlucordType.body,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: FlucordTextRole.heading.style,
                 ),
               ),
               if (connected)
-                const _StateLabel(label: 'Connected', color: Color(0xff3ba55d)),
+                _StateLabel(
+                  label: 'Connected',
+                  color: context.surfaces.success,
+                ),
             ],
           ),
           const SizedBox(height: 14),
           if (connected)
             FilledButton.icon(
               onPressed: controller.isBusy ? null : () => _signOut(context),
-              icon: const Icon(Icons.logout, size: 18),
+              icon: const FlucordIcon(FlucordIcons.logOut, size: 18),
               label: const Text('Sign out'),
             )
           else
@@ -138,13 +139,13 @@ final class _DisconnectedContent extends StatelessWidget {
         if (!controller.isBusy)
           FilledButton.icon(
             onPressed: controller.start,
-            icon: const Icon(Icons.qr_code_2, size: 19),
+            icon: const FlucordIcon(FlucordIcons.qrCode, size: 19),
             label: const Text('Sign in with QR code'),
           )
         else
           OutlinedButton.icon(
             onPressed: controller.cancel,
-            icon: const Icon(Icons.close, size: 18),
+            icon: const FlucordIcon(FlucordIcons.clear, size: 18),
             label: const Text('Cancel'),
           ),
       ],
@@ -183,13 +184,13 @@ final class _PendingIdentity extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.phone_android, size: 18),
+          const FlucordIcon(FlucordIcons.phone, size: 18),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               displayName,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: FlucordTextRole.label.strong,
             ),
           ),
         ],
@@ -208,7 +209,12 @@ final class _StateLabel extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(Icons.circle, size: 8, color: color),
+      SizedBox.square(
+        dimension: 8,
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+      ),
       const SizedBox(width: 6),
       Text(label, style: const TextStyle(fontSize: FlucordType.caption)),
     ],

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'application/chat_controller.dart';
 import 'application/voice_channel_surface.dart';
 import 'app_bootstrap.dart';
 import 'app_composition.dart';
@@ -13,6 +14,8 @@ import 'presentation/widgets/attachment_download_scope.dart';
 import 'presentation/widgets/chat_scope.dart';
 import 'presentation/widgets/guild_access_scope.dart';
 import 'presentation/widgets/join_server_dialog.dart';
+import 'presentation/widgets/media_kit_nameplate_videos.dart';
+import 'presentation/widgets/name_style_scope.dart';
 import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_desktop_login_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
@@ -119,7 +122,11 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _composition.accessibility,
           child: AccessibilityDials(
             controller: _composition.accessibility,
-            child: child!,
+            child: NameStyleScope(
+              videos: const MediaKitNameplateVideos(),
+              fonts: _composition.nameFonts,
+              child: child!,
+            ),
           ),
         ),
         home: SpellCheckScope(
@@ -213,6 +220,9 @@ class _FlucordAppState extends State<FlucordApp> {
                                                                 memberListController:
                                                                     _composition
                                                                         .memberList,
+                                                                friendsController:
+                                                                    _composition
+                                                                        .friends,
                                                                 memberProfileController:
                                                                     _composition
                                                                         .memberProfile,
@@ -280,6 +290,7 @@ class _FlucordAppState extends State<FlucordApp> {
     onOpenInvite: (context, code) => unawaited(
       showJoinServerDialog(context, chat: _composition.chat, code: code),
     ),
+    previewInvite: _composition.chat.cachedInvitePreview,
     onOpenMessageLink: (context, link) {
       // The workspace is read here rather than captured, because the shell
       // below may outlive a session that replaced it.

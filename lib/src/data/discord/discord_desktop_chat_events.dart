@@ -176,6 +176,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
             channelsByGuild: snapshot.channelsByGuild,
             rolesByGuild: snapshot.rolesByGuild,
             membersByGuild: snapshot.membersByGuild,
+            emojisByGuild: snapshot.emojisByGuild,
+            stickersByGuild: snapshot.stickersByGuild,
             directChannels: snapshot.directChannels,
             includeDirectMessagesSpace: true,
             currentUserRole: 'Discord user',
@@ -194,7 +196,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
-    _adoptPrivateChannels(fresh);
+    _adoptPrivateChannels(fresh, payloads: snapshot.directChannels);
   }
 
   /// What changed from [cached] to [fresh].
@@ -232,18 +234,96 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
             when existing == null || _channelChanged(channel, existing))
           channel,
     ],
-    // A direct message the account has never seen here needs its recipient
-    // row. A recipient who only changed their name keeps the cached row until
-    // the next full load: the shell carries no members to diff against, and
-    // decoding the whole cache per dispatch would cost more than the staleness
-    // does.
+    // A DM the account has never seen here needs its recipients' rows. A
+    // recipient who only changed their name keeps the cached row until the
+    // next full load: the shell carries no member but the account to diff
+    // against, and decoding the whole cache per dispatch would cost more than
+    // the staleness does.
     members: [
       for (final channel in fresh.channels)
-        if (channel.recipientId case final recipientId?
-            when cached.channelOrNull(channel.id) == null)
-          ?fresh.memberOrNull(recipientId),
+        if (cached.channelOrNull(channel.id) == null)
+          for (final recipientId in channel.recipientIds)
+            ?fresh.memberOrNull(recipientId),
     ],
+    removedRoleIds: {
+      for (final role in cached.roles)
+        if (fresh.roleOrNull(role.id) == null) role.id,
+    },
+    roles: [
+      for (final role in fresh.roles)
+        if (cached.roleOrNull(role.id) != role) role,
+    ],
+    ownMemberships: _ownMembershipChanges(cached: cached, fresh: fresh),
+    emojisBySpace: _changedPerSpace(
+      cached.emojis,
+      fresh.emojis,
+      spaceOf: (emoji) => emoji.spaceId,
+      signatureOf: (emoji) => [
+        emoji.id,
+        emoji.name,
+        emoji.animated,
+        emoji.available,
+        ?emoji.imageUrl,
+      ].join('|'),
+    ),
+    stickersBySpace: _changedPerSpace(
+      cached.stickers,
+      fresh.stickers,
+      spaceOf: (sticker) => sticker.spaceId,
+      signatureOf: (sticker) => [
+        sticker.id,
+        sticker.name,
+        sticker.available,
+        sticker.item.format.index,
+        sticker.item.url,
+        ?sticker.description,
+        ...sticker.tags,
+      ].join('|'),
+    ),
   );
+
+  /// The account's standing in each server where READY says something the
+  /// cache does not hold. The shell carries the account's own member for this;
+  /// see ADR-0011.
+  static Map<String, GuildMembership> _ownMembershipChanges({
+    required ChatWorkspace cached,
+    required ChatWorkspace fresh,
+  }) {
+    final before = cached.memberOrNull(cached.currentMemberId);
+    final after = fresh.memberOrNull(fresh.currentMemberId);
+    if (after == null) return const {};
+    return {
+      for (final MapEntry(key: spaceId, value: membership)
+          in after.membershipsBySpace.entries)
+        if (before?.membershipIn(spaceId) != membership) spaceId: membership,
+    };
+  }
+
+  /// Every server of [fresh] whose items differ from [cached], with all of its
+  /// items now. A server that is gone needs nothing here: its items go with it.
+  static Map<String, List<T>> _changedPerSpace<T>(
+    List<T> cached,
+    List<T> fresh, {
+    required String Function(T item) spaceOf,
+    required String Function(T item) signatureOf,
+  }) {
+    final before = <String, Set<String>>{};
+    for (final item in cached) {
+      before.putIfAbsent(spaceOf(item), () => {}).add(signatureOf(item));
+    }
+    final after = <String, List<T>>{};
+    for (final item in fresh) {
+      after.putIfAbsent(spaceOf(item), () => []).add(item);
+    }
+    final spaceIds = {...before.keys, ...after.keys};
+    return {
+      for (final spaceId in spaceIds)
+        if (!const SetEquality<String>().equals(before[spaceId] ?? const {}, {
+          ...?after[spaceId]?.map(signatureOf),
+        }))
+          spaceId: after[spaceId] ?? const [],
+    };
+  }
 
   /// [fresh] with the cached items this snapshot says nothing about, so the
   /// pass neither removes nor changes them.
@@ -258,10 +338,28 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   }) {
     final unavailable = snapshot.unavailableGuildIds;
     final keepPrivate = !snapshot.privateChannelsComplete;
+    bool inOutage<T>(T item, String Function(T item) spaceOf) =>
+        unavailable.contains(spaceOf(item));
     return fresh.copyWith(
       spaces: [
         ...fresh.spaces,
         ...cached.spaces.where((space) => unavailable.contains(space.id)),
+      ],
+      roles: [
+        ...fresh.roles,
+        ...cached.roles.where((role) => inOutage(role, (role) => role.spaceId)),
+      ],
+      emojis: [
+        ...fresh.emojis,
+        ...cached.emojis.where(
+          (emoji) => inOutage(emoji, (emoji) => emoji.spaceId),
+        ),
+      ],
+      stickers: [
+        ...fresh.stickers,
+        ...cached.stickers.where(
+          (sticker) => inOutage(sticker, (sticker) => sticker.spaceId),
+        ),
       ],
       categories: [
         ...fresh.categories,
@@ -307,7 +405,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     channel.isArchived,
     channel.isLocked,
     ?channel.lastMessageId,
-    ?channel.recipientId,
+    ...channel.recipientIds,
+    channel.isGroupDirectMessage,
+    ?channel.iconUrl,
+    channel.isMessageRequest,
     _overwriteSignature(channel.permissionOverwrites),
   ].join('|');
 

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
+import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_theme.dart';
 
 /// The star that sits on a GIF, sticker or emoji tile.
 ///
@@ -28,18 +30,26 @@ class ExpressionFavoriteStar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!controller.isSupported) return const SizedBox.shrink();
     return Material(
-      color: Colors.black.withValues(alpha: 0.45),
+      color: FlucordFixedColors.scrim,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: () => unawaited(_press(context)),
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: Icon(
-            isFavorite ? Icons.star : Icons.star_border,
-            size: 16,
-            color: isFavorite ? Colors.amber : Colors.white,
-            semanticLabel: isFavorite ? 'Unfavourite' : 'Favourite',
+          child: Semantics(
+            label: isFavorite ? 'Unfavourite' : 'Favourite',
+            child: isFavorite
+                ? FlucordIcon(
+                    FlucordIcons.favourited,
+                    size: 16,
+                    color: FlucordFixedColors.favourite,
+                  )
+                : const FlucordIcon(
+                    FlucordIcons.favourite,
+                    size: 16,
+                    color: FlucordFixedColors.onFill,
+                  ),
           ),
         ),
       ),

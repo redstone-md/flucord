@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -257,7 +258,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
         child: ClipRRect(
           borderRadius: FlucordRadius.small,
           child: ColoredBox(
-            color: Colors.black,
+            color: FlucordFixedColors.media,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -266,7 +267,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
                     controller: controller,
                     controls: NoVideoControls,
                     fit: BoxFit.contain,
-                    fill: Colors.black,
+                    fill: FlucordFixedColors.media,
                   ),
                 if (_error != null)
                   _InlineVideoError(onRetry: _initialize)
@@ -320,17 +321,17 @@ class InlineVideoControls extends StatelessWidget {
     return Container(
       key: const ValueKey('inline-video-controls'),
       height: 44,
-      color: Colors.black.withValues(alpha: 0.82),
+      color: FlucordFixedColors.mediaControls,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
           _controlButton(
-            icon: state.isPlaying ? Icons.pause : Icons.play_arrow,
+            icon: state.isPlaying ? FlucordIcons.pause : FlucordIcons.play,
             tooltip: state.isPlaying ? 'Pause' : 'Play',
             onPressed: onTogglePlayback,
           ),
           _controlButton(
-            icon: state.isMuted ? Icons.volume_off : Icons.volume_up,
+            icon: state.isMuted ? FlucordIcons.volumeOff : FlucordIcons.volume,
             tooltip: state.isMuted ? 'Unmute' : 'Mute',
             onPressed: onToggleMute,
           ),
@@ -338,8 +339,10 @@ class InlineVideoControls extends StatelessWidget {
             child: SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 activeTrackColor: context.surfaces.brand,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
+                inactiveTrackColor: FlucordFixedColors.onFill.withValues(
+                  alpha: 0.24,
+                ),
+                thumbColor: FlucordFixedColors.onFill,
                 overlayColor: context.surfaces.brand.withValues(alpha: 0.18),
                 trackHeight: 2,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
@@ -358,12 +361,14 @@ class InlineVideoControls extends StatelessWidget {
             '${_formatDuration(state.position)} / '
             '${_formatDuration(state.duration)}',
             style: const TextStyle(
-              color: Colors.white,
+              color: FlucordFixedColors.onFill,
               fontSize: FlucordType.caption,
             ),
           ),
           _controlButton(
-            icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            icon: isFullscreen
+                ? FlucordIcons.exitFullscreen
+                : FlucordIcons.fullscreen,
             tooltip: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
             onPressed: onFullscreen,
           ),
@@ -373,12 +378,12 @@ class InlineVideoControls extends StatelessWidget {
   }
 
   Widget _controlButton({
-    required IconData icon,
+    required FlucordIconData icon,
     required String tooltip,
     required VoidCallback onPressed,
   }) => IconButton(
     onPressed: onPressed,
-    icon: Icon(icon, size: 18, color: Colors.white),
+    icon: FlucordIcon(icon, size: 18, color: FlucordFixedColors.onFill),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
     constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -415,7 +420,7 @@ final class _FullscreenVideoPage extends StatelessWidget {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: FlucordFixedColors.media,
           body: Stack(
             fit: StackFit.expand,
             children: [
@@ -423,7 +428,7 @@ final class _FullscreenVideoPage extends StatelessWidget {
                 controller: controller,
                 controls: NoVideoControls,
                 fit: BoxFit.contain,
-                fill: Colors.black,
+                fill: FlucordFixedColors.media,
               ),
               ValueListenableBuilder<InlineVideoViewState>(
                 valueListenable: stateListenable,
@@ -457,7 +462,7 @@ final class _FullscreenVideoPage extends StatelessWidget {
                 child: SafeArea(
                   child: IconButton.filledTonal(
                     onPressed: close,
-                    icon: const Icon(Icons.close),
+                    icon: const FlucordIcon(FlucordIcons.clear),
                     tooltip: 'Exit fullscreen',
                   ),
                 ),
@@ -482,8 +487,8 @@ class _InlineVideoError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.video_file_outlined,
+          FlucordIcon(
+            FlucordIcons.videoFile,
             color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 8),

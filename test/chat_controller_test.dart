@@ -630,6 +630,64 @@ void main() {
       },
     );
 
+    group('on a transport with no read state, a new message', () {
+      Future<(ChatController, _EventRepository)> loaded() async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+        return (controller, repository);
+      }
+
+      MessageUpsertedEvent fromLena(
+        String channelId, {
+        bool mentionsEveryone = false,
+      }) => MessageUpsertedEvent(
+        message: ChatMessage(
+          id: 'from-lena',
+          channelId: channelId,
+          authorId: 'lena',
+          body: 'hey',
+          sentAt: DateTime.now(),
+          mentionsEveryone: mentionsEveryone,
+        ),
+        isNew: true,
+      );
+
+      test('to @everyone counts as a mention', () async {
+        final (controller, repository) = await loaded();
+
+        repository.emit(fromLena('forge-native', mentionsEveryone: true));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          controller.workspace!.channelById('forge-native').mentionCount,
+          1,
+        );
+      });
+
+      test('in a one-to-one DM counts as a mention', () async {
+        final (controller, repository) = await loaded();
+        repository.emit(
+          const ChannelUpsertedEvent(
+            ConversationChannel(
+              id: 'dm-lena',
+              spaceId: CommunitySpace.directMessagesId,
+              name: 'lena',
+              topic: '',
+              kind: ChannelKind.text,
+              recipientIds: ['lena'],
+            ),
+          ),
+        );
+
+        repository.emit(fromLena('dm-lena'));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.workspace!.channelById('dm-lena').mentionCount, 1);
+      });
+    });
+
     test('marks the active channel unread while the app is inactive', () async {
       final repository = _EventRepository();
       final controller = ChatController(repository);
@@ -712,10 +770,9 @@ void main() {
           controller.workspace!.spaceById(CommunitySpace.directMessagesId).kind,
           SpaceKind.directMessages,
         );
-        expect(
-          controller.workspace!.channelById(channelId!).recipientId,
-          isNotNull,
-        );
+        expect(controller.workspace!.channelById(channelId!).recipientIds, [
+          '123456789012345678',
+        ]);
       },
     );
 
@@ -740,7 +797,7 @@ void main() {
           name: 'Jack',
           topic: 'Direct message with Jack',
           kind: ChannelKind.text,
-          recipientId: 'dm-user',
+          recipientIds: ['dm-user'],
         );
 
         repository.emit(

@@ -8,7 +8,11 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/direct_message_views.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets(
@@ -62,35 +66,31 @@ void main() {
         ),
       );
 
-      expect(find.text('Direct Messages'), findsOneWidget);
+      expect(find.text('Direct messages'), findsOneWidget);
       expect(find.text('Jack'), findsOneWidget);
       expect(find.text('Flucord Bot'), findsOneWidget);
       expect(find.byKey(const ValueKey('server-rail')), findsOneWidget);
       expect(find.byKey(const ValueKey('channel-sidebar')), findsOneWidget);
       expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
-      expect(find.byIcon(Icons.tag), findsNothing);
+      expect(findFlucordIcon(FlucordIcons.textChannel), findsNothing);
 
       final guildButton = find.byKey(const ValueKey('space-guild-1'));
       final guildSurface = find.descendant(
         of: guildButton,
         matching: find.byType(AnimatedContainer),
       );
-      var decoration = tester
-          .widget<AnimatedContainer>(guildSurface)
-          .decoration!;
-      expect(
-        (decoration as BoxDecoration).borderRadius,
-        BorderRadius.circular(22),
-      );
+      BoxDecoration surface() =>
+          tester.widget<AnimatedContainer>(guildSurface).decoration!
+              as BoxDecoration;
+      final restingFill = surface().color;
+      expect(surface().borderRadius, FlucordRadius.large);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(guildButton));
       await tester.pump(const Duration(milliseconds: 160));
-      decoration = tester.widget<AnimatedContainer>(guildSurface).decoration!;
-      expect(
-        (decoration as BoxDecoration).borderRadius,
-        BorderRadius.circular(14),
-      );
+      // Hover lights the tile up but keeps its shape.
+      expect(surface().color, isNot(restingFill));
+      expect(surface().borderRadius, FlucordRadius.large);
       await mouse.removePointer();
 
       await tester.tap(find.byKey(const ValueKey('new-direct-message')));
@@ -100,6 +100,31 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('a DM start shows the username, muted, under the name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: const Scaffold(
+          body: DirectMessageStart(
+            avatar: SizedBox(),
+            name: 'Ada',
+            username: 'ada.lovelace',
+          ),
+        ),
+      ),
+    );
+
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+    final username = find.text('ada.lovelace');
+    expect(
+      tester.getRect(username).top,
+      greaterThanOrEqualTo(tester.getRect(find.text('Ada')).bottom),
+    );
+    expect(tester.widget<Text>(username).style!.color, surfaces.muted);
+  });
 
   testWidgets('empty direct inbox exposes one stable creation action', (
     tester,
@@ -115,6 +140,8 @@ void main() {
     );
 
     expect(find.text('No direct messages'), findsOneWidget);
+    expect(find.byType(Icon), findsNothing);
+    expect(findFlucordIcon(FlucordIcons.edit), findsOneWidget);
     await tester.tap(find.text('New message'));
     expect(opened, isTrue);
   });
@@ -137,7 +164,7 @@ final _workspace = ChatWorkspace(
       name: 'Jack',
       topic: 'Direct message with Jack',
       kind: ChannelKind.text,
-      recipientId: 'user-1',
+      recipientIds: ['user-1'],
     ),
   ],
   members: const [

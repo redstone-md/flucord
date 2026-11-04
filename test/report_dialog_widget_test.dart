@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/moderation_report.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/presentation/widgets/report_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 
 void main() {
   testWidgets('walks the server graph and submits', (tester) async {
@@ -17,6 +18,8 @@ void main() {
     expect(find.text('What is wrong?'), findsOneWidget);
     // No submit button on the root: the graph offers branches instead.
     expect(find.byKey(const ValueKey('report-primary-action')), findsNothing);
+    expect(find.byTooltip('Close'), findsNothing);
+    expect(find.byType(FlucordDialogCancel), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('report-choice-spam')));
     await tester.pumpAndSettle();

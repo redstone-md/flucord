@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/report_flow_controller.dart';
 import '../../domain/moderation_report.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'report_element_views.dart';
@@ -79,7 +80,7 @@ class _ReportDialogState extends State<ReportDialog> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.cloud_off, size: 28),
+        const FlucordIcon(FlucordIcons.offline, size: 28),
         const SizedBox(height: 12),
         const Text('The report form could not be loaded.'),
         const SizedBox(height: 12),
@@ -111,12 +112,12 @@ class _ReportDialogState extends State<ReportDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.check_circle_outline, size: 32),
+          const FlucordIcon(FlucordIcons.checkCircle, size: 32),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Thanks for the report.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: FlucordTextRole.label.strong,
           ),
           const SizedBox(height: 6),
           Text(
@@ -134,7 +135,7 @@ class _ReportDialogState extends State<ReportDialog> {
               onPressed: widget.controller.isBlocked
                   ? null
                   : () => unawaited(widget.controller.blockReportedUser()),
-              icon: const Icon(Icons.block, size: 16),
+              icon: const FlucordIcon(FlucordIcons.block, size: 16),
               label: Text(
                 widget.controller.isBlocked ? 'Blocked' : 'Also block them',
               ),
@@ -234,56 +235,42 @@ class _ReportDialogState extends State<ReportDialog> {
           IconButton(
             key: const ValueKey('report-back'),
             tooltip: 'Back',
-            icon: const Icon(Icons.arrow_back),
+            icon: const FlucordIcon(FlucordIcons.back),
             onPressed: widget.controller.goBack,
           ),
         Expanded(
           child: Text(
             node.header ?? 'Report',
-            style: const TextStyle(
-              fontSize: FlucordType.body,
-              fontWeight: FontWeight.w700,
-            ),
+            style: FlucordTextRole.heading.style,
           ),
-        ),
-        IconButton(
-          key: const ValueKey('report-close'),
-          tooltip: 'Close',
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).maybePop(),
         ),
       ],
     ),
   );
 
+  /// Cancel, and the node's own button when it has one that moves on.
   Widget _footer(
     BuildContext context,
     ReportNode node, {
     required bool submitting,
   }) {
     final button = node.button;
-    if (button == null ||
-        button.type == ReportButtonType.cancel ||
-        button.type == ReportButtonType.unknown) {
-      return const SizedBox(height: 12);
-    }
     final controller = widget.controller;
-    final isSubmit = button.type == ReportButtonType.submit;
+    final moves =
+        button != null &&
+        button.type != ReportButtonType.cancel &&
+        button.type != ReportButtonType.unknown;
+    final isSubmit = button?.type == ReportButtonType.submit;
     final enabled = !submitting && controller.canAdvance;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (submitting)
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+    return FlucordDialogFooter(
+      actions: [
+        if (submitting)
+          const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        FlucordDialogCancel(enabled: !submitting),
+        if (moves)
           FilledButton(
             key: const ValueKey('report-primary-action'),
             onPressed: enabled
@@ -293,8 +280,7 @@ class _ReportDialogState extends State<ReportDialog> {
                 : null,
             child: Text(isSubmit ? 'Submit report' : 'Next'),
           ),
-        ],
-      ),
+      ],
     );
   }
 }

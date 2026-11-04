@@ -1,3 +1,73 @@
+/// A service Discord links accounts with. Each value's name is the service's
+/// `type` on the wire.
+enum ConnectionService {
+  battlenet('Battle.net'),
+  bluesky('Bluesky', page: 'https://bsky.app/profile/', pageById: true),
+  domain('Domain', page: 'https://'),
+  ebay('eBay', page: 'https://www.ebay.com/usr/'),
+  epicgames('Epic Games'),
+  github('GitHub', page: 'https://github.com/'),
+  instagram('Instagram', page: 'https://www.instagram.com/'),
+  leagueoflegends('League of Legends'),
+  playstation('PlayStation Network'),
+  reddit('Reddit', page: 'https://www.reddit.com/user/'),
+  riotgames('Riot Games'),
+  roblox(
+    'Roblox',
+    page: 'https://www.roblox.com/users/',
+    pageById: true,
+    pageSuffix: '/profile',
+  ),
+  spotify('Spotify', page: 'https://open.spotify.com/user/', pageById: true),
+  steam('Steam', page: 'https://steamcommunity.com/profiles/', pageById: true),
+  tiktok('TikTok', page: 'https://www.tiktok.com/@'),
+  twitch('Twitch', page: 'https://www.twitch.tv/'),
+  twitter('X / Twitter', page: 'https://x.com/'),
+  youtube('YouTube', page: 'https://www.youtube.com/channel/', pageById: true);
+
+  const ConnectionService(
+    this.label, {
+    String? page,
+    bool pageById = false,
+    String pageSuffix = '',
+  }) : _page = page,
+       _pageById = pageById,
+       _pageSuffix = pageSuffix;
+
+  /// What the service calls itself.
+  final String label;
+
+  /// Where an account's page starts, or null for a service with no public
+  /// page, such as Battle.net.
+  final String? _page;
+
+  /// Whether the page is named by the account's id rather than its name.
+  final bool _pageById;
+  final String _pageSuffix;
+
+  static ConnectionService? byType(String type) => values.asNameMap()[type];
+
+  /// What to call the service Discord names [type]. A service not listed
+  /// here takes Discord's own identifier, capitalised, rather than wording
+  /// invented here.
+  static String nameOf(String type) =>
+      byType(type)?.label ??
+      type
+          .split(RegExp(r'[_-]+'))
+          .where((part) => part.isNotEmpty)
+          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+          .join(' ');
+
+  /// The account's page on the service, built the way Discord's client
+  /// builds it, or null where there is none.
+  Uri? pageOf({required String name, required String id}) {
+    final page = _page;
+    final part = _pageById ? id : name;
+    if (page == null || part.isEmpty) return null;
+    return Uri.tryParse('$page${Uri.encodeComponent(part)}$_pageSuffix');
+  }
+}
+
 /// One third-party account linked to this Discord account.
 ///
 /// The id is the third party's own id for the account, not a Discord
@@ -40,22 +110,7 @@ final class AccountConnection {
 
   bool get isPublic => visibility == 1;
 
-  /// What to call the service, falling back to Discord's own identifier
-  /// rather than to wording invented here.
-  String get serviceName => switch (type) {
-    'battlenet' => 'Battle.net',
-    'epicgames' => 'Epic Games',
-    'leagueoflegends' => 'League of Legends',
-    'playstation' => 'PlayStation Network',
-    'riotgames' => 'Riot Games',
-    'twitter' => 'X / Twitter',
-    _ =>
-      type
-          .split(RegExp(r'[_-]+'))
-          .where((part) => part.isNotEmpty)
-          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-          .join(' '),
-  };
+  String get serviceName => ConnectionService.nameOf(type);
 
   @override
   bool operator ==(Object other) =>

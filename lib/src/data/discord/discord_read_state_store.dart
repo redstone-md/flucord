@@ -1,3 +1,4 @@
+import '../../domain/chat_models.dart';
 import '../../domain/read_state.dart';
 import 'discord_account_roles.dart';
 import 'discord_mention_matcher.dart';
@@ -51,8 +52,9 @@ final class DiscordReadStateStore {
   /// Folds in a message the account has just received or sent.
   ///
   /// The account's own message moves the cursor, so it never reads as unread. A
-  /// message that mentions the account adds one to the count, unless the cursor
-  /// is already at or past it, which means somebody has read it. Returns true
+  /// message that counts as a mention (see
+  /// [GuildNotificationSettings.countsAsMention]) adds one to the count, unless
+  /// the cursor is already at or past it, which means somebody has read it. Returns true
   /// when anything changed, as [accept] does.
   ///
   /// This needs no answer from the server. If the server does send an ack or a
@@ -65,7 +67,7 @@ final class DiscordReadStateStore {
     final previous = channelState(channelId);
     final next = author is Map && author['id'] == _accountRoles.accountId
         ? previous.acknowledged(messageId)
-        : previous.isBehind(messageId) && _mentionsAccount(payload)
+        : previous.isBehind(messageId) && _countsAsMention(payload)
         ? previous.copyWith(mentionCount: previous.mentionCount + 1)
         : previous;
     if (identical(next, previous)) return false;
@@ -85,9 +87,24 @@ final class DiscordReadStateStore {
     );
   }
 
-  bool _mentionsAccount(Map<String, Object?> payload) =>
-      DiscordMentionMatcher.containsUser(payload, _accountRoles.accountId) ||
-      mentionsAccountRole(payload);
+  bool _countsAsMention(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    final space = settingsFor(
+      guildId is String ? guildId : CommunitySpace.directMessagesId,
+    );
+    return space.countsAsMention(
+      namesAccount:
+          DiscordMentionMatcher.containsUser(
+            payload,
+            _accountRoles.accountId,
+          ) ||
+          mentionsAccountRole(payload),
+      mentionsEveryone: payload['mention_everyone'] == true,
+      // A message with no guild is in a DM, one-to-one or group, and Discord
+      // counts every message from somebody else in either.
+      directMessage: guildId == null,
+    );
+  }
 
   /// Replaces one read state outright, for the optimistic half of an ACK.
   void put(ReadState state) => _readStates[state.key] = state;

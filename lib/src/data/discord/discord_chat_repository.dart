@@ -156,14 +156,12 @@ final class DiscordChatRepository
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   @override
   String? _currentMemberId;
-  final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(
         cache: _cache,
         mapper: _mapper,
         directMessages: _directMessages,
         currentMemberId: () => _currentMemberId,
-        rolesOf: (guildId) => _rolesByGuild[guildId] ?? const [],
         updatedMessage: (payload, held) => _mapper.message(
           payload,
           fallback: held,
@@ -184,13 +182,14 @@ final class DiscordChatRepository
       final channelsByGuild = <String, List<Map<String, Object?>>>{};
       final threadsByGuild = <String, List<Map<String, Object?>>>{};
       final membersByGuild = <String, List<Map<String, Object?>>>{};
+      final rolesByGuild = <String, List<Map<String, Object?>>>{};
       final emojisByGuild = <String, List<Map<String, Object?>>>{};
       final stickersByGuild = <String, List<Map<String, Object?>>>{};
       for (final guild in guilds) {
         final guildId = guild['id']! as String;
         channelsByGuild[guildId] = await _api.getGuildChannels(guildId);
         threadsByGuild[guildId] = await _api.getGuildActiveThreads(guildId);
-        _rolesByGuild[guildId] = await _api.getGuildRoles(guildId);
+        rolesByGuild[guildId] = await _api.getGuildRoles(guildId);
         membersByGuild[guildId] = await _guildMemberLoader.load(guildId);
         emojisByGuild[guildId] = await _api.getGuildEmojis(guildId);
         stickersByGuild[guildId] = await _api.getGuildStickers(guildId);
@@ -208,7 +207,7 @@ final class DiscordChatRepository
             channelsByGuild: channelsByGuild,
             threadsByGuild: threadsByGuild,
             membersByGuild: membersByGuild,
-            rolesByGuild: _rolesByGuild,
+            rolesByGuild: rolesByGuild,
             emojisByGuild: emojisByGuild,
             stickersByGuild: stickersByGuild,
             includeDirectMessagesSpace: true,

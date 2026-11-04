@@ -1,4 +1,5 @@
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +19,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('member-row-mira')));
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('message-member')));
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('profile-card-message')),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
@@ -31,11 +35,11 @@ void main() {
   ) async {
     await _openDemo(tester);
 
-    IconData? iconOf(String key) => tester
-        .widget<Icon>(
+    FlucordIconData iconOf(String key) => tester
+        .widget<FlucordIcon>(
           find.descendant(
             of: find.byKey(ValueKey(key)),
-            matching: find.byType(Icon),
+            matching: find.byType(FlucordIcon),
           ),
         )
         .icon;

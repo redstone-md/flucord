@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 
 void main() {
   testWidgets('exposes Inbox activity, tabs, dialog semantics, and dismissal', (
@@ -27,7 +28,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('close-inbox')));
+    expect(find.byTooltip('Close'), findsNothing);
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('inbox-dialog')), findsNothing);
@@ -55,7 +57,7 @@ void main() {
 
     expect(find.text('You are all caught up'), findsOneWidget);
     expect(find.byKey(const ValueKey('inbox-mark-all-read')), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('close-inbox')));
+    await tester.tap(find.byType(FlucordDialogCancel));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('inbox-mention-badge')), findsNothing);

@@ -2,11 +2,13 @@ import 'dart:ui' as ui;
 
 import 'package:flucord/src/data/discord/discord_user_settings_proto.dart';
 import 'package:flucord/src/data/proto/proto_message.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/chat_image_disk.dart';
 import 'support/fake_discord_wire.dart';
+import 'support/flucord_icon_finder.dart';
 import 'support/session_harness.dart';
 
 const _messageId = '900000000000000001';
@@ -226,10 +228,13 @@ void main() {
         'MESSAGE_CREATE',
         _messageWithEmbed({'image': _media(address, width: 300, height: 200)}),
       );
+      // Wait for the drawn frame, not just the request. The cache starts its
+      // save timer before it hands the file over, so only then can
+      // letTimersEnd run that timer out.
       await images.waitUntil(
         tester,
-        () => images.requestsFor(path).isNotEmpty,
-        'the still frame request',
+        () => _drawn(tester).image != null,
+        'the still frame',
       );
 
       expect(images.requestsFor(path).single.queryParameters['format'], 'png');
@@ -252,7 +257,7 @@ void main() {
     );
     await images.waitUntil(
       tester,
-      () => find.byIcon(Icons.broken_image_outlined).evaluate().isNotEmpty,
+      () => findFlucordIcon(FlucordIcons.brokenImage).evaluate().isNotEmpty,
       'the broken image icon',
     );
 

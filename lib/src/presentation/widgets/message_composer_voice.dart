@@ -260,7 +260,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
             tooltip: isRecording
                 ? 'Cancel voice recording'
                 : 'Discard voice message',
-            icon: const Icon(Icons.delete_outline_rounded, size: 20),
+            icon: const FlucordIcon(FlucordIcons.delete, size: 20),
           ),
           if (isRecording) ...[
             Container(
@@ -301,7 +301,11 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               message: hasPendingMessage
                   ? 'Voice message could not be sent'
                   : 'Voice recording failed',
-              child: Icon(Icons.error_outline, size: 17, color: errorColor),
+              child: FlucordIcon(
+                FlucordIcons.error,
+                size: 17,
+                color: errorColor,
+              ),
             ),
           ],
           const SizedBox(width: 4),
@@ -325,8 +329,8 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               tooltip: isRecording
                   ? 'Stop and send voice message'
                   : 'Retry voice message',
-              icon: Icon(
-                isRecording ? Icons.send_rounded : Icons.refresh_rounded,
+              icon: FlucordIcon(
+                isRecording ? FlucordIcons.send : FlucordIcons.refresh,
                 size: 20,
                 color: context.surfaces.accentIcon,
               ),

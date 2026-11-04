@@ -84,7 +84,7 @@ bool _rowIsBold(WidgetTester tester, String channelId, String name) {
       matching: find.text(name),
     ),
   );
-  return text.style!.fontWeight == FontWeight.w600;
+  return text.style!.fontWeight == FontWeight.w500;
 }
 
 /// Opens the server, which lands on its first channel, and brings the other

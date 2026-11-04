@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
+
 import '../../application/guild_settings_controller.dart';
 import '../../domain/discord_permissions.dart';
 import '../../domain/guild_management.dart';
@@ -90,7 +92,7 @@ class _GuildSettingsRolesSectionState extends State<GuildSettingsRolesSection> {
             tooltip: 'Move up',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.arrow_upward),
+            icon: const FlucordIcon(FlucordIcons.moveUp),
             onPressed: editable && index > 0 && !controller.isBusy
                 ? () => unawaited(controller.moveRole(role, offset: -1))
                 : null,
@@ -100,7 +102,7 @@ class _GuildSettingsRolesSectionState extends State<GuildSettingsRolesSection> {
             tooltip: 'Move down',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.arrow_downward),
+            icon: const FlucordIcon(FlucordIcons.moveDown),
             onPressed:
                 editable && index < roles.length - 1 && !controller.isBusy
                 ? () => unawaited(controller.moveRole(role, offset: 1))
@@ -111,7 +113,7 @@ class _GuildSettingsRolesSectionState extends State<GuildSettingsRolesSection> {
             tooltip: 'Edit role',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.edit_outlined),
+            icon: const FlucordIcon(FlucordIcons.edit),
             onPressed: editable
                 ? () => setState(() => _editingRoleId = role.id)
                 : null,
@@ -121,7 +123,7 @@ class _GuildSettingsRolesSectionState extends State<GuildSettingsRolesSection> {
             tooltip: 'Delete role',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.delete_outline),
+            icon: const FlucordIcon(FlucordIcons.delete),
             onPressed: controller.canDeleteRole(role) && !controller.isBusy
                 ? () => unawaited(_confirmDelete(role))
                 : null,
@@ -343,7 +345,7 @@ class _GuildRoleEditorState extends State<GuildRoleEditor> {
                 tooltip: 'Remove icon',
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.close),
+                icon: const FlucordIcon(FlucordIcons.clear),
                 onPressed: () => setState(() {
                   _icon = null;
                   _iconCleared = true;

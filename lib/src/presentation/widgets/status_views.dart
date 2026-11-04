@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
@@ -44,16 +45,13 @@ class FailedWorkspaceView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.warning_amber,
+            FlucordIcon(
+              FlucordIcons.warning,
               color: context.surfaces.warning,
               size: 30,
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Workspace did not open',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
+            Text('Workspace did not open', style: FlucordTextRole.label.strong),
             const SizedBox(height: 4),
             Text(
               'Your servers and messages could not be loaded.',
@@ -65,7 +63,7 @@ class FailedWorkspaceView extends StatelessWidget {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 17),
+              icon: const FlucordIcon(FlucordIcons.refresh, size: 17),
               label: const Text('Retry'),
             ),
           ],
@@ -100,16 +98,20 @@ class ChannelFailureView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.cloud_off, color: context.surfaces.warning, size: 28),
+          FlucordIcon(
+            FlucordIcons.offline,
+            color: context.surfaces.warning,
+            size: 28,
+          ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Message history unavailable',
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: FlucordTextRole.label.strong,
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 16),
+            icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
             label: const Text('Retry'),
           ),
         ],
@@ -130,12 +132,13 @@ class EmptyWorkspaceView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.dns_outlined, size: 30, color: context.surfaces.muted),
-            const SizedBox(height: 12),
-            const Text(
-              'No accessible servers',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            FlucordIcon(
+              FlucordIcons.server,
+              size: 30,
+              color: context.surfaces.muted,
             ),
+            const SizedBox(height: 12),
+            Text('No accessible servers', style: FlucordTextRole.label.strong),
             const SizedBox(height: 5),
             Text(
               'Install the bot in a server with channel access.',
@@ -147,7 +150,7 @@ class EmptyWorkspaceView extends StatelessWidget {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: onOpenConnections,
-              icon: const Icon(Icons.link, size: 16),
+              icon: const FlucordIcon(FlucordIcons.link, size: 16),
               label: const Text('Connections'),
             ),
           ],

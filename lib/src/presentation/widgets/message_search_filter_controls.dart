@@ -76,7 +76,7 @@ class MessageSearchFilterControls extends StatelessWidget {
   }) => PopupMenuButton<String>(
     key: ValueKey('search-filter-$filter'),
     tooltip: 'Filter by $label',
-    icon: const Icon(Icons.person_search_outlined, size: 17),
+    icon: const FlucordIcon(FlucordIcons.findPerson, size: 17),
     position: PopupMenuPosition.under,
     constraints: const BoxConstraints(maxHeight: 260),
     onSelected: (value) => _submit(
@@ -101,7 +101,7 @@ class MessageSearchFilterControls extends StatelessWidget {
   Widget _hasFilterButton(BuildContext context) => PopupMenuButton<String>(
     key: const ValueKey('search-filter-has'),
     tooltip: 'Filter by content',
-    icon: const Icon(Icons.attach_file, size: 17),
+    icon: const FlucordIcon(FlucordIcons.attachment, size: 17),
     position: PopupMenuPosition.under,
     onSelected: (value) => _submit(
       MessageSearchTokenEditor.withToken(query, filter: 'has', value: value),
@@ -119,7 +119,7 @@ class MessageSearchFilterControls extends StatelessWidget {
   Widget _channelFilterButton(BuildContext context) => PopupMenuButton<String>(
     key: const ValueKey('search-filter-in'),
     tooltip: 'Filter by channel',
-    icon: const Icon(Icons.tag, size: 17),
+    icon: const FlucordIcon(FlucordIcons.textChannel, size: 17),
     position: PopupMenuPosition.under,
     constraints: const BoxConstraints(maxHeight: 260),
     onSelected: (value) => _submit(
@@ -143,8 +143,8 @@ class MessageSearchFilterControls extends StatelessWidget {
   }) => IconButton(
     key: key,
     tooltip: 'Filter by date $label',
-    icon: Icon(
-      filter == 'before' ? Icons.calendar_today : Icons.update,
+    icon: FlucordIcon(
+      filter == 'before' ? FlucordIcons.dateBefore : FlucordIcons.dateAfter,
       size: 17,
     ),
     onPressed: () => _showDateDialog(context, filter: filter),
@@ -158,7 +158,7 @@ class MessageSearchFilterControls extends StatelessWidget {
         'Pinned',
         style: TextStyle(fontSize: FlucordType.caption),
       ),
-      avatar: const Icon(Icons.push_pin_outlined, size: 13),
+      avatar: const FlucordIcon(FlucordIcons.pin, size: 13),
       selected: selected,
       showCheckmark: false,
       onSelected: (_) => _submit(
@@ -273,17 +273,10 @@ class _DateFilterDialogState extends State<_DateFilterDialog> {
         ),
       ],
     ),
-    actions: [
-      TextButton(
-        key: ValueKey('search-date-cancel-${widget.filter}'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: ValueKey('search-date-apply-${widget.filter}'),
-        onPressed: _submit,
-        child: const Text('Apply'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: ValueKey('search-date-apply-${widget.filter}'),
+      label: 'Apply',
+      onPressed: _submit,
+    ),
   );
 }

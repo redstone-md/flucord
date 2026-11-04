@@ -19,21 +19,29 @@ final class FriendsController extends ChangeNotifier {
   DesktopRelationshipRepository? _repository;
   StreamSubscription<List<DiscordRelationship>>? _updates;
   bool _busy = false;
+  bool _loadingSuggestions = false;
   bool _refused = false;
   Object? _error;
   bool _disposed = false;
 
   bool _panelOpen = false;
 
-  /// Whether the friends surface is showing instead of the conversations.
+  /// Whether the Friends page is showing instead of a conversation.
   ///
   /// Kept here rather than in the sidebar because the sidebar is rebuilt
   /// whenever anything about the workspace changes, and a flag that resets on
   /// every incoming message is a flag nobody can keep switched on.
   bool get isPanelOpen => _panelOpen;
 
-  void togglePanel() {
-    _panelOpen = !_panelOpen;
+  /// Shows the Friends page. Pressing Friends while it shows keeps it.
+  void openPanel() => _setPanelOpen(true);
+
+  /// Leaves the Friends page, as opening a conversation does.
+  void closePanel() => _setPanelOpen(false);
+
+  void _setPanelOpen(bool open) {
+    if (_panelOpen == open) return;
+    _panelOpen = open;
     _notify();
   }
 
@@ -46,6 +54,21 @@ final class FriendsController extends ChangeNotifier {
   bool get lastRequestRefused => _refused;
 
   List<DiscordRelationship> get all => _bind()?.relationships ?? const [];
+
+  /// The account's relationship with [userId], or null for none.
+  DiscordRelationship? relationshipWith(String userId) =>
+      all.where((entry) => entry.user.id == userId).firstOrNull;
+
+  /// Whether a friend request to [userId] makes sense: not somebody already
+  /// a friend, already asked, or blocked.
+  bool canBefriend(String userId) =>
+      isAvailable &&
+      switch (relationshipWith(userId)?.kind) {
+        DiscordRelationshipKind.friend ||
+        DiscordRelationshipKind.outgoingRequest ||
+        DiscordRelationshipKind.blocked => false,
+        _ => true,
+      };
 
   /// People Discord thinks the account may know.
   ///
@@ -63,17 +86,19 @@ final class FriendsController extends ChangeNotifier {
   }
 
   /// Reads the suggestions again. Unlike the graph, Discord serves a route.
+  ///
+  /// A read, so it does not wait for [isBusy] or hold it: the panel asks
+  /// once when it opens, which can be while a request is on its way.
   Future<void> loadSuggestions() async {
     final repository = _bind();
-    if (repository == null || _busy) return;
-    _busy = true;
-    _notify();
+    if (repository == null || _loadingSuggestions) return;
+    _loadingSuggestions = true;
     try {
       await repository.loadFriendSuggestions();
     } on Object catch (error) {
       _error = error;
     } finally {
-      _busy = false;
+      _loadingSuggestions = false;
       _notify();
     }
   }

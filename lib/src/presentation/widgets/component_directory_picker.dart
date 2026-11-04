@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/message_component.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
@@ -35,19 +36,22 @@ abstract final class ComponentDirectory {
     required ChatWorkspace workspace,
     required String spaceId,
   }) => switch (component.type) {
-    5 => _members(workspace),
+    5 => _members(workspace, spaceId),
     6 => _roles(workspace, spaceId),
-    7 => [..._members(workspace), ..._roles(workspace, spaceId)],
+    7 => [..._members(workspace, spaceId), ..._roles(workspace, spaceId)],
     8 => _channels(workspace, spaceId),
     _ => const [],
   };
 
-  static List<DirectoryEntry> _members(ChatWorkspace workspace) => [
+  static List<DirectoryEntry> _members(
+    ChatWorkspace workspace,
+    String spaceId,
+  ) => [
     for (final member in workspace.members)
       DirectoryEntry(
         id: member.id,
         label: member.displayName,
-        detail: member.role,
+        detail: workspace.heldRolesOf(member, spaceId).nameFor(member),
       ),
   ];
 
@@ -159,7 +163,7 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
             onChanged: (value) => setState(() => _query = value),
             decoration: const InputDecoration(
               isDense: true,
-              prefixIcon: Icon(Icons.search, size: 18),
+              prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
               hintText: 'Search',
             ),
           ),
@@ -196,19 +200,12 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
         ],
       ),
     ),
-    actions: [
-      TextButton(
-        key: const ValueKey('directory-cancel'),
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const ValueKey('directory-confirm'),
-        onPressed: _chosen.isEmpty
-            ? null
-            : () => Navigator.of(context).pop(_chosen.toList(growable: false)),
-        child: const Text('Choose'),
-      ),
-    ],
+    confirm: FlucordDialogConfirm(
+      key: const ValueKey('directory-confirm'),
+      label: 'Choose',
+      onPressed: _chosen.isEmpty
+          ? null
+          : () => Navigator.of(context).pop(_chosen.toList(growable: false)),
+    ),
   );
 }

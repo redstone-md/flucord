@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import '../../application/inbox_catalog.dart';
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
-import 'mention_badge.dart';
+import 'count_badge.dart';
 import 'flucord_dialog.dart';
+import 'flucord_icon_button.dart';
 
 class InboxActivityButton extends StatelessWidget {
   const InboxActivityButton({
@@ -28,50 +30,51 @@ class InboxActivityButton extends StatelessWidget {
         : summary.hasUnread
         ? 'Inbox, unread messages'
         : 'Inbox';
+    // The badge hangs off the button's corner, cut out of the header by a
+    // ring in the header's colour.
     return Semantics(
       label: label,
       button: true,
       onTap: onPressed,
       excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        excludeFromSemantics: true,
-        child: SizedBox.square(
-          dimension: 40,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: IconButton(
-                  key: const ValueKey('open-inbox'),
-                  onPressed: onPressed,
-                  icon: const Icon(Icons.inbox_outlined, size: 19),
+      child: SizedBox.square(
+        dimension: FlucordIconButton.size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: FlucordIconButton(
+                key: const ValueKey('open-inbox'),
+                onPressed: onPressed,
+                icon: FlucordIcons.inbox,
+                tooltip: label,
+              ),
+            ),
+            if (summary.mentionCount > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: CountBadge(
+                  key: const ValueKey('inbox-mention-badge'),
+                  count: summary.mentionCount,
+                  ring: context.surfaces.canvas,
+                ),
+              )
+            else if (summary.hasUnread)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  key: const ValueKey('inbox-unread-indicator'),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: context.surfaces.text,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-              if (summary.mentionCount > 0)
-                Positioned(
-                  top: 3,
-                  right: 2,
-                  child: MentionBadge(
-                    key: const ValueKey('inbox-mention-badge'),
-                    count: summary.mentionCount,
-                  ),
-                )
-              else if (summary.hasUnread)
-                Positioned(
-                  top: 7,
-                  right: 6,
-                  child: Container(
-                    key: const ValueKey('inbox-unread-indicator'),
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -104,6 +107,7 @@ class InboxDialog extends StatelessWidget {
         key: const ValueKey('inbox-dialog'),
         alignment: Alignment.topRight,
         insetPadding: const EdgeInsets.fromLTRB(24, 64, 12, 24),
+        actions: const [FlucordDialogCancel(label: 'Close')],
         child: SizedBox(
           width: 480,
           height: math.min(680, availableHeight),
@@ -153,15 +157,7 @@ class _InboxHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const Expanded(
-            child: Text(
-              'Inbox',
-              style: TextStyle(
-                fontSize: FlucordType.title,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          Expanded(child: Text('Inbox', style: FlucordTextRole.title.style)),
           if (showMarkAllRead)
             TextButton(
               key: const ValueKey('inbox-mark-all-read'),
@@ -171,13 +167,6 @@ class _InboxHeader extends StatelessWidget {
                 style: TextStyle(fontSize: FlucordType.caption),
               ),
             ),
-          const SizedBox(width: 4),
-          IconButton(
-            key: const ValueKey('close-inbox'),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Close',
-            icon: const Icon(Icons.close, size: 18),
-          ),
         ],
       ),
     ),
@@ -197,10 +186,7 @@ class _InboxTabs extends StatelessWidget {
       child: TabBar(
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w600,
-        ),
+        labelStyle: FlucordTextRole.caption.strong,
         unselectedLabelColor: context.surfaces.muted,
         tabs: [
           Tab(text: 'Unreads  ${catalog.unread.length}'),
@@ -220,7 +206,7 @@ class _UnreadList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entries.isEmpty) {
       return const _InboxEmptyState(
-        icon: Icons.mark_email_read_outlined,
+        icon: FlucordIcons.caughtUp,
         title: 'You are all caught up',
         detail: 'New unread channels will appear here.',
       );
@@ -283,10 +269,7 @@ class _UnreadRow extends StatelessWidget {
                       entry.path,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.label,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: FlucordTextRole.label.strong,
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -299,7 +282,7 @@ class _UnreadRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18),
+              const FlucordIcon(FlucordIcons.chevronRight, size: 18),
             ],
           ),
         ),
@@ -318,7 +301,7 @@ class _MentionList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (groups.isEmpty) {
       return const _InboxEmptyState(
-        icon: Icons.alternate_email,
+        icon: FlucordIcons.mention,
         title: 'No recent mentions',
         detail: 'Messages that mention this bot will appear here.',
       );
@@ -374,10 +357,7 @@ class _MentionGroupSection extends StatelessWidget {
                       '${group.path}  •  $count mention${count == 1 ? '' : 's'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: FlucordTextRole.caption.strong,
                     ),
                   ),
                   TextButton(
@@ -444,10 +424,7 @@ class _MentionRow extends StatelessWidget {
                           child: Text(
                             entry.author.displayName,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: FlucordType.caption,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: FlucordTextRole.caption.strong,
                           ),
                         ),
                         Text(
@@ -464,10 +441,8 @@ class _MentionRow extends StatelessWidget {
                       entry.path,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: FlucordTextRole.caption.strong.copyWith(
                         color: context.surfaces.mention,
-                        fontSize: FlucordType.caption,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -508,7 +483,7 @@ class _InboxEmptyState extends StatelessWidget {
     required this.detail,
   });
 
-  final IconData icon;
+  final FlucordIconData icon;
   final String title;
   final String detail;
 
@@ -517,9 +492,9 @@ class _InboxEmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 30, color: context.surfaces.muted),
+        FlucordIcon(icon, size: 30, color: context.surfaces.muted),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(title, style: FlucordTextRole.label.strong),
         const SizedBox(height: 4),
         Text(
           detail,

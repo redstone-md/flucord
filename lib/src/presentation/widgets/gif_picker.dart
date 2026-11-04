@@ -6,10 +6,12 @@ import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/gif_picker.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'expression_favorite_star.dart';
+import 'flucord_icon_button.dart';
 
 /// The composer's GIF button, and the sheet it opens.
 class GifPickerButton extends StatelessWidget {
@@ -31,7 +33,7 @@ class GifPickerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!controller.isSupported) return const SizedBox.shrink();
-    return IconButton(
+    return FlucordIconButton(
       key: const ValueKey('gif-picker-open'),
       tooltip: 'GIF',
       onPressed: () => unawaited(
@@ -42,7 +44,7 @@ class GifPickerButton extends StatelessWidget {
           favorites: favorites,
         ),
       ),
-      icon: const Icon(Icons.gif_box_outlined),
+      icon: FlucordIcons.gif,
     );
   }
 }
@@ -128,7 +130,7 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
                   unawaited(widget.controller.searchNow(value)),
               decoration: const InputDecoration(
                 isDense: true,
-                prefixIcon: Icon(Icons.search, size: 18),
+                prefixIcon: FlucordIcon(FlucordIcons.search, size: 18),
                 hintText: 'Search Tenor',
               ),
             ),
@@ -323,7 +325,7 @@ class _TileFrame extends StatelessWidget {
             fit: BoxFit.cover,
             excludeFromSemantics: true,
             errorBuilder: (_, _, _) => const Center(
-              child: Icon(Icons.broken_image_outlined, size: 18),
+              child: FlucordIcon(FlucordIcons.brokenImage, size: 18),
             ),
           ),
         ),
@@ -359,17 +361,15 @@ class _CategoryTile extends StatelessWidget {
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.42),
+            decoration: const BoxDecoration(
+              color: FlucordFixedColors.pictureShade,
             ),
             child: Center(
               child: Text(
                 category.name,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: FlucordType.caption,
-                  fontWeight: FontWeight.w600,
+                style: FlucordTextRole.caption.strong.copyWith(
+                  color: FlucordFixedColors.onFill,
                 ),
               ),
             ),
