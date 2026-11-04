@@ -291,7 +291,7 @@ class _ConnectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final service = connectionServiceName(connection.type);
+    final service = connection.serviceName;
     final open = onOpen;
     return Material(
       key: ValueKey('profile-connection-${connection.type}'),

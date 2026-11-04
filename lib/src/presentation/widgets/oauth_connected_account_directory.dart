@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/account_connections.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
@@ -71,7 +72,7 @@ class _ConnectedAccountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = _serviceName(connection.type);
+    final service = ConnectionService.nameOf(connection.type);
     final status = <String>[
       if (connection.verified) 'Verified',
       if (connection.isPublic) 'Visible',
@@ -147,21 +148,6 @@ class _ConnectedAccountRow extends StatelessWidget {
     );
   }
 }
-
-String _serviceName(String type) => switch (type) {
-  'battlenet' => 'Battle.net',
-  'epicgames' => 'Epic Games',
-  'playstation' => 'PlayStation Network',
-  'riotgames' => 'Riot Games',
-  'twitter' => 'X / Twitter',
-  'youtube' => 'YouTube',
-  _ =>
-    type
-        .split(RegExp(r'[_-]+'))
-        .where((part) => part.isNotEmpty)
-        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' '),
-};
 
 FlucordIconData _serviceIcon(String type) => switch (type) {
   'spotify' => FlucordIcons.music,

@@ -1,3 +1,4 @@
+import 'account_connections.dart';
 import 'chat_models.dart';
 
 /// The account's own profile, as it appears to everyone else.
@@ -258,29 +259,10 @@ final class ProfileConnection {
   final String id;
   final bool verified;
 
-  /// The account's page on the service, built the way Discord's client
-  /// builds it. Null for a service with no public page, such as Battle.net.
-  Uri? get link => switch (type) {
-    'github' => _page('https://github.com/', name),
-    'twitter' => _page('https://x.com/', name),
-    'twitch' => _page('https://www.twitch.tv/', name),
-    'reddit' => _page('https://www.reddit.com/user/', name),
-    'instagram' => _page('https://www.instagram.com/', name),
-    'tiktok' => _page('https://www.tiktok.com/@', name),
-    'ebay' => _page('https://www.ebay.com/usr/', name),
-    'steam' => _page('https://steamcommunity.com/profiles/', id),
-    'youtube' => _page('https://www.youtube.com/channel/', id),
-    'spotify' => _page('https://open.spotify.com/user/', id),
-    'roblox' => _page('https://www.roblox.com/users/', id, '/profile'),
-    'bluesky' => _page('https://bsky.app/profile/', id),
-    'domain' => _page('https://', name),
-    _ => null,
-  };
+  String get serviceName => ConnectionService.nameOf(type);
 
-  static Uri? _page(String prefix, String part, [String suffix = '']) =>
-      part.isEmpty
-      ? null
-      : Uri.tryParse('$prefix${Uri.encodeComponent(part)}$suffix');
+  /// The account's page on the service, or null where there is none.
+  Uri? get link => ConnectionService.byType(type)?.pageOf(name: name, id: id);
 
   @override
   bool operator ==(Object other) =>

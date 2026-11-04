@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/discord/discord_cdn.dart';
-import '../../domain/account_connections.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/monogram.dart';
 import '../../domain/user_profile.dart';
