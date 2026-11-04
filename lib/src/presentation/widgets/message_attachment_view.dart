@@ -307,41 +307,39 @@ class _ImageAttachment extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Open image ${attachment.fileName}',
-      child: Tooltip(
-        message: 'Open image',
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            key: ValueKey('open-image-attachment-${attachment.id}'),
-            onTap: onOpen,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MessageAttachmentView.previewSize.width,
-                maxHeight: MessageAttachmentView.previewSize.height,
-              ),
-              child: AspectRatio(
-                aspectRatio: ratio,
-                child: ClipRRect(
-                  borderRadius: FlucordRadius.small,
-                  // A hairline on the clipped edge. Painted over the image, so
-                  // a light picture still reads against a light background.
-                  child: DecoratedBox(
-                    position: DecorationPosition.foreground,
-                    decoration: BoxDecoration(
-                      borderRadius: FlucordRadius.small,
-                      border: Border.all(
-                        color: Theme.of(context).brightness == Brightness.light
-                            ? Colors.black.withValues(alpha: 0.1)
-                            : Colors.white.withValues(alpha: 0.1),
-                      ),
+      // No tooltip: the click opens the image, and the label above says so.
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: ValueKey('open-image-attachment-${attachment.id}'),
+          onTap: onOpen,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MessageAttachmentView.previewSize.width,
+              maxHeight: MessageAttachmentView.previewSize.height,
+            ),
+            child: AspectRatio(
+              aspectRatio: ratio,
+              child: ClipRRect(
+                borderRadius: FlucordRadius.small,
+                // A hairline on the clipped edge. Painted over the image, so
+                // a light picture still reads against a light background.
+                child: DecoratedBox(
+                  position: DecorationPosition.foreground,
+                  decoration: BoxDecoration(
+                    borderRadius: FlucordRadius.small,
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Colors.black.withValues(alpha: 0.1)
+                          : Colors.white.withValues(alpha: 0.1),
                     ),
-                    child: Image(
-                      image: _previewImage(context, attachment, box),
-                      fit: BoxFit.cover,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, _, _) =>
-                          _FileAttachment(attachment: attachment),
-                    ),
+                  ),
+                  child: Image(
+                    image: _previewImage(context, attachment, box),
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                    errorBuilder: (_, _, _) =>
+                        _FileAttachment(attachment: attachment),
                   ),
                 ),
               ),
