@@ -577,6 +577,21 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
+  /// The friends doing something now. Rebuilt on the seats alone, since the
+  /// controller also fires on every speaking change.
+  Widget _activeNow(ChatWorkspace workspace, FriendsController friends) =>
+      ListenableBuilder(
+        listenable: voiceController.seats,
+        builder: (_, _) => ActiveNowColumn(
+          friends: activeFriends(
+            [for (final friend in friends.friends) friend.user.id],
+            workspace: workspace,
+            seatedByChannel: voiceController.seatedByChannel,
+          ),
+          onOpenRoom: (channel) => _openVoiceRoom(channel.id),
+        ),
+      );
+
   /// The name of the server [channelId] is in, or null for a call.
   String? _serverNameOf(String channelId) {
     final guildId = _channelOf(channelId)?.guildId;

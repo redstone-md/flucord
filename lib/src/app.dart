@@ -229,6 +229,9 @@ class _FlucordAppState extends State<FlucordApp> {
                                                                 directCallController:
                                                                     _composition
                                                                         .directCall,
+                                                                friendsController:
+                                                                    _composition
+                                                                        .friends,
                                                                 externalLinkLauncher:
                                                                     _composition
                                                                         .externalLinkLauncher,
