@@ -1,14 +1,20 @@
-/// A service Discord links accounts with. Each value's name is the service's
-/// `type` on the wire.
+/// A service Discord links accounts with. Each value's [type] is the
+/// service's `type` on the wire.
 enum ConnectionService {
+  amazonMusic('Amazon Music', type: 'amazon-music'),
   battlenet('Battle.net'),
   bluesky('Bluesky', page: 'https://bsky.app/profile/', pageById: true),
+  bungie('Bungie.net'),
+  crunchyroll('Crunchyroll'),
   domain('Domain', page: 'https://'),
   ebay('eBay', page: 'https://www.ebay.com/usr/'),
   epicgames('Epic Games'),
+  facebook('Facebook'),
   github('GitHub', page: 'https://github.com/'),
   instagram('Instagram', page: 'https://www.instagram.com/'),
   leagueoflegends('League of Legends'),
+  mastodon('Mastodon'),
+  paypal('PayPal'),
   playstation('PlayStation Network'),
   reddit('Reddit', page: 'https://www.reddit.com/user/'),
   riotgames('Riot Games'),
@@ -18,24 +24,33 @@ enum ConnectionService {
     pageById: true,
     pageSuffix: '/profile',
   ),
+  skype('Skype'),
   spotify('Spotify', page: 'https://open.spotify.com/user/', pageById: true),
   steam('Steam', page: 'https://steamcommunity.com/profiles/', pageById: true),
   tiktok('TikTok', page: 'https://www.tiktok.com/@'),
   twitch('Twitch', page: 'https://www.twitch.tv/'),
   twitter('X / Twitter', page: 'https://x.com/'),
+  xbox('Xbox'),
   youtube('YouTube', page: 'https://www.youtube.com/channel/', pageById: true);
 
   const ConnectionService(
     this.label, {
+    String? type,
     String? page,
     bool pageById = false,
     String pageSuffix = '',
-  }) : _page = page,
+  }) : _type = type,
+       _page = page,
        _pageById = pageById,
        _pageSuffix = pageSuffix;
 
   /// What the service calls itself.
   final String label;
+
+  /// The wire type, where it is not a Dart name.
+  final String? _type;
+
+  String get type => _type ?? name;
 
   /// Where an account's page starts, or null for a service with no public
   /// page, such as Battle.net.
@@ -45,7 +60,9 @@ enum ConnectionService {
   final bool _pageById;
   final String _pageSuffix;
 
-  static ConnectionService? byType(String type) => values.asNameMap()[type];
+  static final _byType = {for (final service in values) service.type: service};
+
+  static ConnectionService? byType(String type) => _byType[type];
 
   /// What to call the service Discord names [type]. A service not listed
   /// here takes Discord's own identifier, capitalised, rather than wording

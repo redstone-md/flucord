@@ -6,6 +6,7 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'service_logo.dart';
 
 class OAuthConnectedAccountDirectory extends StatelessWidget {
   const OAuthConnectedAccountDirectory({
@@ -91,12 +92,13 @@ class _ConnectedAccountRow extends StatelessWidget {
             Container(
               width: 30,
               height: 30,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: context.surfaces.raised,
                 borderRadius: FlucordRadius.medium,
               ),
-              child: FlucordIcon(
-                _serviceIcon(connection.type),
+              child: ServiceLogo(
+                connection.type,
                 size: 17,
                 color: connection.revoked
                     ? context.surfaces.muted
@@ -148,17 +150,3 @@ class _ConnectedAccountRow extends StatelessWidget {
     );
   }
 }
-
-FlucordIconData _serviceIcon(String type) => switch (type) {
-  'spotify' => FlucordIcons.music,
-  'steam' ||
-  'playstation' ||
-  'xbox' ||
-  'epicgames' ||
-  'riotgames' => FlucordIcons.game,
-  'github' => FlucordIcons.code,
-  'youtube' || 'twitch' || 'tiktok' => FlucordIcons.streaming,
-  'paypal' => FlucordIcons.payment,
-  'domain' => FlucordIcons.website,
-  _ => FlucordIcons.link,
-};

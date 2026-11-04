@@ -7,6 +7,7 @@ import '../../domain/account_connections.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'service_logo.dart';
 import 'user_settings_controls.dart';
 
 /// The account's third-party connections: what is linked, what can be.
@@ -145,6 +146,14 @@ class _ConnectionRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          ServiceLogo(
+            connection.type,
+            size: 24,
+            color: connection.revoked
+                ? context.surfaces.muted
+                : context.surfaces.text,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,18 +206,18 @@ class _LinkButtons extends StatelessWidget {
   final AccountConnectionsController controller;
 
   static const _services = [
-    ('spotify', 'Spotify'),
-    ('steam', 'Steam'),
-    ('github', 'GitHub'),
-    ('twitch', 'Twitch'),
-    ('youtube', 'YouTube'),
-    ('tiktok', 'TikTok'),
-    ('reddit', 'Reddit'),
-    ('paypal', 'PayPal'),
-    ('epicgames', 'Epic Games'),
-    ('playstation', 'PlayStation'),
-    ('xbox', 'Xbox'),
-    ('riotgames', 'Riot Games'),
+    ConnectionService.spotify,
+    ConnectionService.steam,
+    ConnectionService.github,
+    ConnectionService.twitch,
+    ConnectionService.youtube,
+    ConnectionService.tiktok,
+    ConnectionService.reddit,
+    ConnectionService.paypal,
+    ConnectionService.epicgames,
+    ConnectionService.playstation,
+    ConnectionService.xbox,
+    ConnectionService.riotgames,
   ];
 
   @override
@@ -218,16 +227,17 @@ class _LinkButtons extends StatelessWidget {
       spacing: 6,
       runSpacing: 6,
       children: [
-        for (final (type, label) in _services)
+        for (final service in _services)
           ActionChip(
-            key: ValueKey('connection-link-$type'),
+            key: ValueKey('connection-link-${service.type}'),
+            avatar: ServiceLogo(service.type, size: 16),
             label: Text(
-              label,
+              service.label,
               style: const TextStyle(fontSize: FlucordType.caption),
             ),
             onPressed: controller.isLinking
                 ? null
-                : () => unawaited(controller.startLink(type)),
+                : () => unawaited(controller.startLink(service.type)),
           ),
       ],
     );

@@ -295,6 +295,32 @@ void main() {
     }
   });
 
+  testWidgets('the window shows every role, unfolded', (tester) async {
+    final roles = [
+      for (var index = 0; index < 40; index++)
+        CommunityRole(
+          id: 'role-$index',
+          spaceId: _playAndDay.id,
+          name: 'Role number $index',
+          position: 40 - index,
+        ),
+    ];
+    await _pump(
+      tester,
+      ProfileCardData(
+        userId: _bare.userId,
+        displayName: _bare.displayName,
+        monogram: _bare.monogram,
+        roles: roles,
+      ),
+    );
+
+    for (final role in roles) {
+      expect(_key('profile-card-role-${role.id}'), findsOneWidget);
+    }
+    expect(_key('profile-card-more-roles'), findsNothing);
+  });
+
   testWidgets('scrolling the card leaves the window in place', (tester) async {
     await _pump(
       tester,

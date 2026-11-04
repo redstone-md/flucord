@@ -34,7 +34,9 @@ import 'profile_card_data.dart';
 import 'profile_card_route.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
+import 'service_logo.dart';
 
+part 'profile_card_chips.dart';
 part 'profile_card_full.dart';
 part 'profile_card_full_side.dart';
 part 'profile_card_parts.dart';
@@ -49,6 +51,8 @@ final class ProfileCardActions {
     this.onAddFriend,
     this.onAddRole,
     this.addableRoles = const [],
+    this.onRemoveRole,
+    this.removableRoleIds = const {},
     this.menu = const [],
     this.onOpenFullProfile,
     this.onOpenProfile,
@@ -69,6 +73,13 @@ final class ProfileCardActions {
 
   /// The roles [onAddRole] may give.
   final List<CommunityRole> addableRoles;
+
+  /// Takes a role away from the person. Present only for someone who can
+  /// manage roles.
+  final ValueChanged<CommunityRole>? onRemoveRole;
+
+  /// The ids of the held roles [onRemoveRole] may take away.
+  final Set<String> removableRoleIds;
 
   /// The rows of the "more" menu.
   final List<ProfileCardMenuEntry> menu;
@@ -231,6 +242,8 @@ class ProfileCard extends StatelessWidget {
                               roles: roles,
                               addable: actions.addableRoles,
                               onAdd: actions.onAddRole,
+                              removable: actions.removableRoleIds,
+                              onRemove: actions.onRemoveRole,
                             ),
                           if (actions.onMessage case final send?)
                             _MessageField(

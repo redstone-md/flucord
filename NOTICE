@@ -22,6 +22,11 @@ The icons come from the hugeicons package (https://hugeicons.com), Copyright
 (c) 2024 Halal Labs. They are licensed under the MIT License, whose full text
 ships with the package.
 
+The service logos in assets/logos come from Simple Icons
+(https://simpleicons.org), released under CC0 1.0. The other service logos
+are hugeicons drawings. Each logo is a trademark of its owner and is shown
+only to name that owner's service.
+
 The spellcheck word list in assets/spellcheck/en.txt is derived from SCOWL
 (Spell Checker Oriented Word Lists), Copyright 2000-2011 Kevin Atkinson, and
 the inflection database built with the WordNet 1.6 database, Copyright 1997

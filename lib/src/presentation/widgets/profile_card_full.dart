@@ -199,6 +199,9 @@ class _FullProfileCard extends StatelessWidget {
                           roles: roles,
                           addable: actions.addableRoles,
                           onAdd: actions.onAddRole,
+                          removable: actions.removableRoleIds,
+                          onRemove: actions.onRemoveRole,
+                          folds: false,
                         ),
                       if (note case final note?)
                         _AboutSection(
@@ -323,12 +326,7 @@ class _ConnectionRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              ArtTile(
-                url: null,
-                monogram: monogramOf(service),
-                color: surfaces.control,
-                size: 20,
-              ),
+              ServiceLogo(connection.type, size: 20, color: surfaces.text),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
