@@ -91,7 +91,7 @@ Future<void> _pumpMembers(
       home: NameStyleScope(
         videos: videos,
         fonts: DisplayNameFonts(
-          fetch: (url) => throw StateError('no font is fetched here'),
+          load: (font) => throw StateError('no font is loaded here'),
         ),
         child: Scaffold(
           body: Row(

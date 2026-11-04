@@ -73,9 +73,10 @@ class DisplayName extends StatelessWidget {
     final fonts = NameStyleScope.fontsOf(context);
     if (font == null || fonts == null) return style;
     fonts.request(font);
-    if (!fonts.isReady(font)) return style;
+    final family = fonts.familyOf(font);
+    if (family == null) return style;
     return style.copyWith(
-      fontFamily: font.family,
+      fontFamily: family,
       // Letters the font lacks are drawn in the app font.
       fontFamilyFallback: const [FlucordType.family],
       letterSpacing: font.letterSpacing * _fontSize,

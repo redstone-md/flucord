@@ -1,6 +1,3 @@
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:flucord/src/data/discord/display_name_fonts.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,36 +11,36 @@ void main() {
     }
   });
 
-  test('a font is fetched once and registered under its family', () async {
-    final fetched = <Uri>[];
-    final registered = <(String, Uint8List)>[];
-    final bytes = Uint8List.fromList([1, 2, 3]);
+  test('a font is loaded once and drawn under the family it got', () async {
+    final loads = <DisplayNameFont>[];
     final fonts = DisplayNameFonts(
-      fetch: (url) async {
-        fetched.add(url);
-        return bytes;
+      load: (font) async {
+        loads.add(font);
+        return 'Orbitron_700';
       },
-      register: (family, bytes) async => registered.add((family, bytes)),
     );
 
     fonts.request(DisplayNameFont.mainframe);
     fonts.request(DisplayNameFont.mainframe);
+    expect(fonts.familyOf(DisplayNameFont.mainframe), isNull);
     await fonts.loaded(DisplayNameFont.mainframe);
 
-    expect(fetched, [DisplayNameFont.mainframe.url]);
-    expect(fetched.single.host, 'fonts.gstatic.com');
-    expect(registered, [('Orbitron', bytes)]);
+    expect(loads, [DisplayNameFont.mainframe]);
+    expect(fonts.familyOf(DisplayNameFont.mainframe), 'Orbitron_700');
   });
 
-  test('a font that cannot be fetched is not registered', () async {
-    final registered = <String>[];
+  test('a font that fails stays in the app font and does not hold back '
+      'the next', () async {
     final fonts = DisplayNameFonts(
-      fetch: (url) async => throw const HttpException('404'),
-      register: (family, bytes) async => registered.add(family),
+      load: (font) async => font == DisplayNameFont.sakura
+          ? throw StateError('offline')
+          : font.family,
     );
 
-    await fonts.loaded(DisplayNameFont.sakura);
+    fonts.request(DisplayNameFont.sakura);
+    await fonts.loaded(DisplayNameFont.journal);
 
-    expect(registered, isEmpty);
+    expect(fonts.familyOf(DisplayNameFont.sakura), isNull);
+    expect(fonts.familyOf(DisplayNameFont.journal), 'Kalam');
   });
 }
