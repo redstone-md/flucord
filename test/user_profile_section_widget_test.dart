@@ -78,6 +78,66 @@ void main() {
     expect(find.byKey(const ValueKey('profile-save-bar')), findsNothing);
   });
 
+  testWidgets('the preview shows the draft as you type, before saving', (
+    tester,
+  ) async {
+    final repository = _FakeRepository();
+    final controller = UserProfileController(() => repository);
+    addTearDown(controller.dispose);
+
+    await pump(tester, controller);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-display-name')),
+      'Rx Two',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-pronouns')),
+      'they/them',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-bio')),
+      'Plays in the evenings.',
+    );
+    await tester.pump();
+
+    final preview = find.byKey(const ValueKey('profile-card'));
+    Finder inPreview(Finder finder) =>
+        find.descendant(of: preview, matching: finder);
+    expect(inPreview(find.text('Rx Two')), findsOne);
+    expect(inPreview(find.textContaining('they/them')), findsOne);
+    expect(inPreview(find.text('Plays in the evenings.')), findsOne);
+    expect(inPreview(find.text('Member since')), findsOne);
+    expect(repository.patches, isEmpty);
+  });
+
+  testWidgets('the preview sits beside a wide form and under a narrow one', (
+    tester,
+  ) async {
+    final repository = _FakeRepository();
+    final controller = UserProfileController(() => repository);
+    addTearDown(controller.dispose);
+
+    await pump(tester, controller);
+    await tester.pumpAndSettle();
+
+    final preview = find.byKey(const ValueKey('profile-card'));
+    final field = find.byKey(const ValueKey('profile-bio'));
+    expect(
+      tester.getTopLeft(preview).dx,
+      greaterThan(tester.getTopRight(field).dx),
+    );
+
+    tester.view.physicalSize = const Size(560, 2600);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(preview).dy,
+      greaterThan(tester.getBottomLeft(field).dy),
+    );
+  });
+
   testWidgets('resetting drops the draft and the bar with it', (tester) async {
     final repository = _FakeRepository();
     final controller = UserProfileController(() => repository);
@@ -314,7 +374,8 @@ void main() {
     await pump(tester, controller);
     await tester.pumpAndSettle();
 
-    expect(find.text('legacy#1234'), findsOne);
+    // The preview's handle line carries the pronouns after the tag.
+    expect(find.text('legacy#1234 · they/them'), findsOne);
     expect(find.text('#1234'), findsOne);
     expect(find.text('they/them'), findsWidgets);
     expect(find.text('about'), findsWidgets);
