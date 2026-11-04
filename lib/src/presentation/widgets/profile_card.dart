@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/user_profile.dart';
@@ -10,6 +13,7 @@ import 'activity_views.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'name_tags.dart';
+import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
@@ -58,6 +62,16 @@ final class ProfileCardMenuEntry {
     this.danger = false,
     this.key,
   });
+
+  /// "Copy user ID", which every card offers.
+  ProfileCardMenuEntry.copyUserId(String userId, {Key? key})
+    : this(
+        key: key,
+        label: 'Copy user ID',
+        icon: FlucordIcons.id,
+        onSelected: () =>
+            unawaited(Clipboard.setData(ClipboardData(text: userId))),
+      );
 
   final String label;
   final FlucordIconData icon;
@@ -292,21 +306,10 @@ class _Avatar extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(ProfileCard._ring),
               child: ClipOval(
-                child: RemoteIdentityImage(
+                child: ProfileAvatarImage(
                   url: data.avatarUrl,
-                  fallback: ColoredBox(
-                    color: colorValue == null
-                        ? surfaces.control
-                        : Color(colorValue),
-                    child: Center(
-                      child: Text(
-                        data.monogram,
-                        style: FlucordTextRole.display.style.copyWith(
-                          color: FlucordFixedColors.onFill,
-                        ),
-                      ),
-                    ),
-                  ),
+                  monogram: data.monogram,
+                  fill: colorValue == null ? null : Color(colorValue),
                 ),
               ),
             ),

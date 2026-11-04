@@ -11,6 +11,7 @@ import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'art_tile.dart';
 import 'member_avatar.dart';
+import 'overlapping_faces.dart';
 
 /// The Friends page's right column: one card per friend who is playing,
 /// listening, watching or sitting in voice.
@@ -189,7 +190,14 @@ class _ActiveFriendCard extends StatelessWidget {
               ),
               title: room.channel.name,
               caption: '${room.space.name} · ${_people(room.people.length)}',
-              trailing: _Faces(people: room.people.take(3).toList()),
+              trailing: OverlappingFaces(
+                size: 20,
+                ringColor: surfaces.raised,
+                faces: [
+                  for (final person in room.people.take(3))
+                    MemberAvatar(member: person, size: 20, showPresence: false),
+                ],
+              ),
             ),
           ],
         ],
@@ -277,29 +285,4 @@ class _Block extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Up to three faces from a voice channel, overlapping a little.
-class _Faces extends StatelessWidget {
-  const _Faces({required this.people});
-
-  final List<Member> people;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (final person in people)
-        Align(
-          widthFactor: 0.8,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: context.surfaces.raised, width: 2),
-            ),
-            child: MemberAvatar(member: person, size: 20, showPresence: false),
-          ),
-        ),
-    ],
-  );
 }

@@ -10,7 +10,6 @@ import '../../theme/flucord_type.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'profile_card.dart';
-import 'remote_identity_image.dart';
 import 'user_settings_controls.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
@@ -178,20 +177,7 @@ class ProfileAvatarRow extends StatelessWidget {
       ClipOval(
         child: SizedBox.square(
           dimension: _size,
-          child: RemoteIdentityImage(
-            url: url,
-            fallback: ColoredBox(
-              color: context.surfaces.control,
-              child: Center(
-                child: Text(
-                  monogram,
-                  style: FlucordTextRole.display.style.copyWith(
-                    color: FlucordFixedColors.onFill,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          child: ProfileAvatarImage(url: url, monogram: monogram),
         ),
       ),
       const SizedBox(width: 16),

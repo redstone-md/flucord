@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../application/guild_member_admin_controller.dart';
 import '../../application/member_profile_controller.dart';
@@ -142,13 +141,9 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
           if (!held.contains(role.id)) role.asCommunityRole,
       ],
       menu: [
-        ProfileCardMenuEntry(
+        ProfileCardMenuEntry.copyUserId(
+          widget.member.id,
           key: const ValueKey('copy-member-id'),
-          label: 'Copy user ID',
-          icon: FlucordIcons.id,
-          onSelected: () => unawaited(
-            Clipboard.setData(ClipboardData(text: widget.member.id)),
-          ),
         ),
         if (widget.profile case final profile? when profile.isSupported)
           ProfileCardMenuEntry(

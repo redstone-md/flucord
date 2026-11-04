@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
@@ -201,12 +200,9 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
             }
           : null,
       menu: [
-        ProfileCardMenuEntry(
+        ProfileCardMenuEntry.copyUserId(
+          user.id,
           key: const ValueKey('copy-friend-id'),
-          label: 'Copy user ID',
-          icon: FlucordIcons.id,
-          onSelected: () =>
-              unawaited(Clipboard.setData(ClipboardData(text: user.id))),
         ),
       ],
     );

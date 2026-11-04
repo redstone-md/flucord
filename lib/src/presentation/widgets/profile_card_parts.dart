@@ -133,8 +133,6 @@ class _MutualLine extends StatelessWidget {
   const _MutualLine({required this.friends, required this.serverCount});
 
   static const _face = 16.0;
-  static const _overlap = 4.0;
-  static const _ring = 2.0;
 
   final List<MutualFriend> friends;
   final int serverCount;
@@ -146,37 +144,20 @@ class _MutualLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final faces = friends.take(3).toList(growable: false);
-    final outer = _face + 2 * _ring;
     return Row(
       key: const ValueKey('profile-card-mutual'),
       children: [
         if (faces.isNotEmpty) ...[
-          SizedBox(
-            width: outer + (faces.length - 1) * (outer - _overlap - _ring),
-            height: outer,
-            child: Stack(
-              children: [
-                for (var index = 0; index < faces.length; index++)
-                  Positioned(
-                    left: index * (outer - _overlap - _ring),
-                    child: Container(
-                      width: outer,
-                      height: outer,
-                      padding: const EdgeInsets.all(_ring),
-                      decoration: BoxDecoration(
-                        color: surfaces.raised,
-                        shape: BoxShape.circle,
-                      ),
-                      child: ClipOval(
-                        child: RemoteIdentityImage(
-                          url: faces[index].avatarUrl,
-                          fallback: ColoredBox(color: surfaces.muted),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          OverlappingFaces(
+            size: _face,
+            ringColor: surfaces.raised,
+            faces: [
+              for (final face in faces)
+                RemoteIdentityImage(
+                  url: face.avatarUrl,
+                  fallback: ColoredBox(color: surfaces.muted),
+                ),
+            ],
           ),
           const SizedBox(width: 6),
         ],
@@ -365,4 +346,38 @@ class _RoleDot extends StatelessWidget {
       child: const SizedBox.square(dimension: 8),
     );
   }
+}
+
+/// A profile picture, or [monogram] on [fill] where there is none. The
+/// profile card and the profile editor's avatar row both draw it; the caller
+/// sizes it and clips it round.
+class ProfileAvatarImage extends StatelessWidget {
+  const ProfileAvatarImage({
+    required this.url,
+    required this.monogram,
+    this.fill,
+    super.key,
+  });
+
+  final String? url;
+  final String monogram;
+
+  /// The colour behind [monogram]. Null takes the control colour.
+  final Color? fill;
+
+  @override
+  Widget build(BuildContext context) => RemoteIdentityImage(
+    url: url,
+    fallback: ColoredBox(
+      color: fill ?? context.surfaces.control,
+      child: Center(
+        child: Text(
+          monogram,
+          style: FlucordTextRole.display.style.copyWith(
+            color: FlucordFixedColors.onFill,
+          ),
+        ),
+      ),
+    ),
+  );
 }
