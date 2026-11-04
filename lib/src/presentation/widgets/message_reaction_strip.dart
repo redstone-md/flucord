@@ -124,6 +124,9 @@ class _ReactionChip extends StatelessWidget {
         reaction.reactedByCurrentUser || reaction.burstByCurrentUser;
     final burstColor = reaction.burstColorValues.firstOrNull;
     return Semantics(
+      // Its own node, so a screen reader reaches each reaction as a button
+      // and the row's text does not swallow it.
+      container: true,
       label: '${reaction.emojiName} reaction, ${reaction.count}',
       button: true,
       toggled: selected,

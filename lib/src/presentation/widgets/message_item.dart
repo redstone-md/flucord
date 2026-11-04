@@ -440,14 +440,14 @@ class _MessageItemState extends State<MessageItem> {
   TextStyle _captionStyle(BuildContext context) => FlucordTextRole.caption.style
       .copyWith(color: context.surfaces.captionText);
 
-  /// The toolbar, over the right end of the highlight's top edge. It never
-  /// rises above the list the row scrolls in, so the topmost message keeps it
-  /// off the chat header.
   /// The hover bar, kept out of the timeline's selection: it is buttons,
   /// not text.
   Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) =>
       SelectionContainer.disabled(child: _bar(context, layout));
 
+  /// The toolbar, over the right end of the highlight's top edge. It never
+  /// rises above the list the row scrolls in, so the topmost message keeps it
+  /// off the chat header.
   Widget _bar(BuildContext context, OverlayChildLayoutInfo layout) {
     // A transform that flattens the row means it is not on screen.
     if (widget.isEditing || layout.childPaintTransform.determinant() == 0) {

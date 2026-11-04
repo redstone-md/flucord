@@ -874,10 +874,41 @@ class _TimelineSelectionAreaState extends State<_TimelineSelectionArea> {
   @override
   Widget build(BuildContext context) => TimelineSelection(
     text: () => _selected,
-    child: SelectionArea(
-      focusNode: _focus,
-      onSelectionChanged: (content) => _selected = content?.plainText ?? '',
-      child: widget.child,
+    // The selection's own up and down keys act only while it has the focus.
+    // With a row focused they move to the next row, as they did before the
+    // selection spanned the list.
+    child: Actions(
+      actions: {
+        ExtendSelectionVerticallyToAdjacentLineIntent:
+            _WhileFocused<ExtendSelectionVerticallyToAdjacentLineIntent>(
+              _focus,
+            ),
+        ExtendSelectionVerticallyToAdjacentPageIntent:
+            _WhileFocused<ExtendSelectionVerticallyToAdjacentPageIntent>(
+              _focus,
+            ),
+      },
+      child: SelectionArea(
+        focusNode: _focus,
+        onSelectionChanged: (content) => _selected = content?.plainText ?? '',
+        child: widget.child,
+      ),
     ),
   );
+}
+
+/// Lets the selection's own [T] action run only while [focus] is the
+/// primary focus. Otherwise the key goes on to the next handler.
+class _WhileFocused<T extends Intent> extends ContextAction<T> {
+  _WhileFocused(this.focus);
+
+  final FocusNode focus;
+
+  @override
+  bool isEnabled(T intent, [BuildContext? context]) =>
+      focus.hasPrimaryFocus && (callingAction?.isEnabled(intent) ?? false);
+
+  @override
+  Object? invoke(T intent, [BuildContext? context]) =>
+      callingAction?.invoke(intent);
 }
