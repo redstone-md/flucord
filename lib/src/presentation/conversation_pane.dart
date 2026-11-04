@@ -604,9 +604,11 @@ class ConversationPaneState extends State<ConversationPane> {
             channelName: channel.name,
             drafts: chat.drafts,
             replyTo: replyTo,
-            replyAuthor: replyTo == null
+            replyAuthorName: replyTo == null
                 ? null
-                : widget.workspace.memberOrNull(replyTo.authorId),
+                : widget.workspace
+                      .memberOrNull(replyTo.authorId)
+                      ?.displayNameFor(channel.spaceId),
             onCancelReply: () => _setReply(chat, null),
             onEditLastMessage: () =>
                 _timelineKey.currentState?.editLastOwnMessage() ?? false,

@@ -73,7 +73,7 @@ class MessageComposer extends StatefulWidget {
     this.voiceMessageRecorder,
     this.onSendVoiceMessage,
     this.replyTo,
-    this.replyAuthor,
+    this.replyAuthorName,
     this.slowmode = Duration.zero,
     this.slowmodeUntil,
     this.characterLimit = 2000,
@@ -107,7 +107,8 @@ class MessageComposer extends StatefulWidget {
   /// rather than offered and rejected once the file is already picked.
   final bool canAttachFiles;
   final ChatMessage? replyTo;
-  final Member? replyAuthor;
+  /// The name the replied-to author goes by where the reply is written.
+  final String? replyAuthorName;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
 
@@ -1004,7 +1005,7 @@ class MessageComposerState extends State<MessageComposer>
         const SizedBox(width: 7),
         Expanded(
           child: Text(
-            'Replying to ${widget.replyAuthor?.displayName ?? 'Unknown user'}',
+            'Replying to ${widget.replyAuthorName ?? 'Unknown user'}',
             overflow: TextOverflow.ellipsis,
             style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.bodyText,

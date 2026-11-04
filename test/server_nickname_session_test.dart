@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -172,6 +173,30 @@ void main() {
 
     expect(_inRow('Forge Friend', '900000000000000005'), findsOneWidget);
     expect(_inRow('@Forge Stranger', '900000000000000005'), findsOneWidget);
+  });
+
+  testSession('a reply names the author by their nickname in this server', (
+    tester,
+    session,
+  ) async {
+    await session.openChannel(_channelId);
+    await session.dispatch('MESSAGE_CREATE', {
+      ..._historyMessage(id: '900000000000000006'),
+      'guild_id': _guildId,
+      'member': {'nick': 'Forge Friend', 'roles': <Object?>[]},
+    });
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(
+      tester.getCenter(session.messageRow('900000000000000006')),
+    );
+    await session.settle();
+
+    await tester.tap(find.byTooltip('Reply'));
+    await session.settle();
+
+    expect(find.text('Replying to Forge Friend'), findsOneWidget);
   });
 
   testSession(
