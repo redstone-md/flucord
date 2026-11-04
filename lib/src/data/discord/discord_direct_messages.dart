@@ -38,17 +38,21 @@ final class DiscordDirectMessages {
 
   /// The DMs the account holds after a READY or an offline launch.
   ///
+  /// [channels] replace what was known: a DM closed while the client was
+  /// away must be new again, so that its next message brings it back.
   /// [payloads] are the private channels the READY carried, with their
   /// recipients expanded. An offline launch has none.
   void seed(
     Iterable<ConversationChannel> channels, {
     Iterable<Map<String, Object?>> payloads = const [],
   }) {
-    _knownChannelIds.addAll(
-      channels
-          .where((channel) => channel.isDirectMessage)
-          .map((channel) => channel.id),
-    );
+    _knownChannelIds
+      ..clear()
+      ..addAll(
+        channels
+            .where((channel) => channel.isDirectMessage)
+            .map((channel) => channel.id),
+      );
     _payloads
       ..clear()
       ..addEntries([

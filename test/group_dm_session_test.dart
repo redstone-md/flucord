@@ -226,6 +226,44 @@ void main() {
   );
 
   testSession(
+    'a DM closed while away comes back with the next message',
+    (tester, session) async {
+      expect(_row(_dmId), findsOneWidget);
+
+      // The session cannot resume, and the new READY no longer has the DM.
+      session.socket.receive({'op': 9, 'd': false});
+      await session.settle();
+      await session.socket.dropConnection(code: 1006);
+      await session.settle();
+      await tester.pump(const Duration(seconds: 2));
+      await session.settle();
+      await session.hello();
+      await session.dispatch(
+        'READY',
+        SessionHarness.defaultReady()..['private_channels'] = const <Object?>[],
+      );
+      await session.dispatch('READY_SUPPLEMENTAL', {
+        'lazy_private_channels': const <Object?>[],
+      });
+      expect(_row(_dmId), findsNothing);
+
+      await session.dispatch('MESSAGE_CREATE', {
+        'id': '500000000000000032',
+        'channel_id': _dmId,
+        'channel_type': 1,
+        'author': {
+          'id': _friendId,
+          'username': 'friend',
+          'global_name': 'Friend',
+        },
+        'content': 'back again',
+        'timestamp': '2026-11-04T10:00:00.000000+00:00',
+      });
+      expect(_row(_dmId), findsOneWidget);
+    },
+  );
+
+  testSession(
     'a recipient who joins or leaves renames an unnamed group',
     (tester, session) async {
       await session.dispatch('CHANNEL_RECIPIENT_ADD', {
