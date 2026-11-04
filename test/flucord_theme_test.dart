@@ -369,8 +369,13 @@ void main() {
       expect(text.titleLarge!.fontFamily, FlucordType.family);
     });
 
-    test('the sizes on the scale, smallest first', () {
-      expect(FlucordType.sizes, [12, 13, 14, 20, 24]);
+    test('the sizes on the scale, smallest first, tags first of all', () {
+      expect(FlucordType.sizes, [10, 11, 12, 13, 14, 20, 24]);
+    });
+
+    test('text drawn to fill a box is never under the caption', () {
+      expect(FlucordType.fitting(11), FlucordType.caption);
+      expect(FlucordType.fitting(13.5), FlucordType.label);
     });
   });
 
@@ -453,19 +458,22 @@ void main() {
       expect(input.focusedErrorBorder!.borderSide, danger);
     });
 
-    test('a dialog sits on the raised colour with a border and 12 px corners', () {
-      final dialog = theme.dialogTheme;
+    test(
+      'a dialog sits on the raised colour with a border and 12 px corners',
+      () {
+        final dialog = theme.dialogTheme;
 
-      expect(dialog.backgroundColor, surfaces.raised);
-      expect(
-        dialog.shape,
-        RoundedRectangleBorder(
-          borderRadius: FlucordRadius.large,
-          side: BorderSide(color: surfaces.border),
-        ),
-      );
-      expect(dialog.barrierColor, Colors.black.withValues(alpha: 0.6));
-    });
+        expect(dialog.backgroundColor, surfaces.raised);
+        expect(
+          dialog.shape,
+          RoundedRectangleBorder(
+            borderRadius: FlucordRadius.large,
+            side: BorderSide(color: surfaces.border),
+          ),
+        );
+        expect(dialog.barrierColor, Colors.black.withValues(alpha: 0.6));
+      },
+    );
 
     test('a slider has a 4 px track filled in the accent', () {
       final slider = theme.sliderTheme;
