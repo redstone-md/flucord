@@ -38,20 +38,16 @@ final class DiscordCdn {
       _asset(['clan-badges', guildId], hash, size: size);
 
   /// A profile badge's icon, by the hash the profile route gives with it.
-  static String? badgeIcon(String icon) => icon.isEmpty
-      ? null
-      : Uri.https('cdn.discordapp.com', '/badge-icons/$icon.png').toString();
+  static String? badgeIcon(String icon) =>
+      _named(icon, '/badge-icons/$icon.png');
 
   /// The avatar decoration somebody wears. `passthrough` keeps an animated
   /// one moving.
-  static String? avatarDecoration(String asset, {int size = 96}) =>
-      asset.isEmpty
-      ? null
-      : Uri.https(
-          'cdn.discordapp.com',
-          '/avatar-decoration-presets/$asset.png',
-          {'size': '$size', 'passthrough': 'true'},
-        ).toString();
+  static String? avatarDecoration(String asset, {int size = 96}) => _named(
+    asset,
+    '/avatar-decoration-presets/$asset.png',
+    {'size': '$size', 'passthrough': 'true'},
+  );
 
   /// The still picture of a nameplate, by its `asset` path, which ends in a
   /// slash.
@@ -69,13 +65,20 @@ final class DiscordCdn {
   static String? movingNameplate(String asset) =>
       _collectible(asset, 'asset.webm');
 
-  static String? _collectible(String asset, String file) => asset.isEmpty
+  static String? _collectible(String asset, String file) => _named(
+    asset,
+    '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}$file',
+  );
+
+  /// [path] on the CDN, or null when [name], the part of it that names the
+  /// file, is empty.
+  static String? _named(
+    String name,
+    String path, [
+    Map<String, String>? query,
+  ]) => name.isEmpty
       ? null
-      : Uri.https(
-          'cdn.discordapp.com',
-          '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}'
-              '$file',
-        ).toString();
+      : Uri.https('cdn.discordapp.com', path, query).toString();
 
   static String? guildMemberAvatar(
     String guildId,
