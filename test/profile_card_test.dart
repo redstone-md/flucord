@@ -68,6 +68,38 @@ Future<void> _pump(
 
 Finder _key(String key) => find.byKey(ValueKey(key));
 
+Finder _badgeShown(int index) => find.descendant(
+  of: _key('profile-card-badges'),
+  matching: find.byTooltip('Badge $index'),
+);
+
+/// [count] roles with names of different lengths, highest first.
+List<CommunityRole> _manyRoles(int count) => [
+  for (var index = 0; index < count; index++)
+    CommunityRole(
+      id: 'role-$index',
+      spaceId: 'guild-1',
+      name: 'Role ${'x' * (index % 7)}$index',
+      position: count - index,
+    ),
+];
+
+/// Where each role chip on screen sits.
+List<Rect> _shownRoleRects(WidgetTester tester) => [
+  for (final element in find
+      .byWidgetPredicate(
+        (widget) => switch (widget.key) {
+          ValueKey(:final String value) =>
+            value.startsWith('profile-card-role-') &&
+                !value.startsWith('profile-card-role-choice-') &&
+                !value.startsWith('profile-card-role-remove-'),
+          _ => false,
+        },
+      )
+      .evaluate())
+    tester.getRect(find.byWidget(element.widget)),
+];
+
 ProfileCardData _with({
   String pronouns = '',
   ClanTag? clanTag,
@@ -151,14 +183,52 @@ void main() {
       ),
     );
 
-    expect(
-      find.descendant(
-        of: _key('profile-card-badges'),
-        matching: find.byType(Tooltip),
-      ),
-      findsNWidgets(4),
-    );
+    expect(_badgeShown(2), findsOneWidget);
+    expect(_badgeShown(3), findsNothing);
     expect(find.text('+2'), findsOneWidget);
+
+    await tester.tap(_key('profile-card-more-badges'));
+    await tester.pumpAndSettle();
+    expect(_badgeShown(3), findsOneWidget);
+    expect(_badgeShown(4), findsOneWidget);
+    expect(find.text('+2'), findsNothing);
+
+    await tester.tap(_key('profile-card-more-badges'));
+    await tester.pumpAndSettle();
+    expect(_badgeShown(3), findsNothing);
+    expect(find.text('+2'), findsOneWidget);
+  });
+
+  testWidgets('many roles fold into two rows behind "+N", which unfolds', (
+    tester,
+  ) async {
+    final roles = _manyRoles(40);
+    await _pump(tester, _with(roles: roles));
+
+    final folded = _shownRoleRects(tester);
+    expect(folded.length, inInclusiveRange(2, roles.length - 1));
+    final more = find.text('+${roles.length - folded.length}');
+    expect(more, findsOneWidget);
+    final rows = {
+      for (final rect in [...folded, tester.getRect(more)])
+        rect.center.dy.round(),
+    };
+    expect(rows, hasLength(2));
+
+    await tester.tap(_key('profile-card-more-roles'));
+    await tester.pumpAndSettle();
+    expect(_shownRoleRects(tester), hasLength(roles.length));
+
+    await tester.tap(_key('profile-card-more-roles'));
+    await tester.pumpAndSettle();
+    expect(_shownRoleRects(tester), hasLength(folded.length));
+  });
+
+  testWidgets('a few roles that fit show without "+N"', (tester) async {
+    await _pump(tester, _with(roles: const [_boots, _gamers]));
+
+    expect(_shownRoleRects(tester), hasLength(2));
+    expect(_key('profile-card-more-roles'), findsNothing);
   });
 
   testWidgets('the mutual line counts friends and servers, and drops a zero', (

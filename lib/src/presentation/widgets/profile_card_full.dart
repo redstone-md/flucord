@@ -184,6 +184,9 @@ class _FullProfileCard extends StatelessWidget {
                         roles: roles,
                         addable: actions.addableRoles,
                         onAdd: actions.onAddRole,
+                        removable: actions.removableRoleIds,
+                        onRemove: actions.onRemoveRole,
+                        folds: false,
                       ),
                     if (note case final note?)
                       _AboutSection(
