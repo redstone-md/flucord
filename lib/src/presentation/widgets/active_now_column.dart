@@ -173,7 +173,7 @@ class _ActiveFriendCard extends StatelessWidget {
               art: _ArtTile(
                 url: rich.assets?.largeImageUrl,
                 monogram: _monogram(rich.name),
-                color: surfaces.control,
+                color: surfaces.inset,
               ),
               title: rich.details!,
               caption: [?rich.state, ?elapsed].join(' · '),
