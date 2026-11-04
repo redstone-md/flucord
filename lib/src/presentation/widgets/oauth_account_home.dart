@@ -407,9 +407,6 @@ class _SidebarRow extends StatelessWidget {
   static const iconSize = 16.0;
   static const gap = 8.0;
 
-  /// The selected row's fill: the text colour, faintly.
-  static const selectedAlpha = 0.06;
-
   final Widget leading;
   final String label;
   final String detail;
@@ -426,7 +423,7 @@ class _SidebarRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: selected
-            ? surfaces.text.withValues(alpha: selectedAlpha)
+            ? surfaces.quietFill
             : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(

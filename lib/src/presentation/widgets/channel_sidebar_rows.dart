@@ -44,9 +44,6 @@ abstract final class _SidebarMetrics {
 
   /// The unread marker on the sidebar's edge.
   static const unreadMarker = Size(4, 8);
-
-  /// The selected row's fill: the text colour, faintly.
-  static const selectedAlpha = 0.06;
 }
 
 /// A server's sidebar header: its name, and every action on the server in the
@@ -270,7 +267,7 @@ class _SidebarNavRow extends StatelessWidget {
         selected: selected,
         child: Material(
           color: selected
-              ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
+              ? surfaces.quietFill
               : Colors.transparent,
           borderRadius: FlucordRadius.control,
           child: InkWell(
@@ -561,7 +558,7 @@ class _ChannelRow extends StatelessWidget {
       selected: selected,
       child: Material(
         color: selected
-            ? surfaces.text.withValues(alpha: _SidebarMetrics.selectedAlpha)
+            ? surfaces.quietFill
             : Colors.transparent,
         borderRadius: FlucordRadius.control,
         child: InkWell(

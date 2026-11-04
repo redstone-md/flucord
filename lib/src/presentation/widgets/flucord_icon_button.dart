@@ -31,9 +31,6 @@ class FlucordIconButton extends StatelessWidget {
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
 
-  /// The fill behind a selected button.
-  static const _selectedAlpha = 0.06;
-
   final FlucordIconData icon;
   final String tooltip;
 
@@ -63,7 +60,7 @@ class FlucordIconButton extends StatelessWidget {
     if (!selected) return button;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: surfaces.text.withValues(alpha: _selectedAlpha),
+        color: surfaces.quietFill,
         borderRadius: FlucordRadius.control,
       ),
       child: button,
