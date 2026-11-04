@@ -1,4 +1,6 @@
 import 'package:flucord/src/domain/monogram.dart';
+import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +12,7 @@ import 'support/session_harness.dart';
 // The Friends page (FLUCORD-56): the Friends row at the top of the DM list
 // opens it in the canvas, beside the DM list and the Active now column.
 
-Map<String, Object?> _ready() =>
+Map<String, Object?> _ready({String? avatar}) =>
     SessionHarness.defaultReady()
       ..['relationships'] = [
         {
@@ -20,6 +22,7 @@ Map<String, Object?> _ready() =>
             'id': SessionHarness.friendId,
             'username': 'friend',
             'global_name': 'Friend',
+            'avatar': avatar,
           },
         },
         // A friend who shares no server or DM with the account, so the
@@ -36,11 +39,29 @@ Map<String, Object?> _ready() =>
       ];
 
 const _strangerId = '777777777777777777';
+const _suggestedId = '777777777777777778';
 
 final _friendsRow = find.byKey(const ValueKey('toggle-friends'));
 final _page = find.byKey(const ValueKey('friends-panel'));
 final _dmRow = find.byKey(
   const ValueKey('channel-${SessionHarness.dmChannelId}'),
+);
+
+/// The addresses of the pictures drawn inside [row].
+List<String> _avatarUrls(WidgetTester tester, Finder row) => [
+  for (final image in tester.widgetList<Image>(
+    find.descendant(of: row, matching: find.byType(Image)),
+  ))
+    if (image.image case final NetworkImage network) network.url,
+];
+
+/// The presence badges drawn on the avatar in [row].
+Finder _badges(Finder row) => find.descendant(
+  of: find.descendant(
+    of: row,
+    matching: find.byType(DiscordRelationshipAvatar),
+  ),
+  matching: find.byType(PresenceIndicator),
 );
 
 /// Whether [row] announces itself as selected. The key sits outside the
@@ -160,6 +181,84 @@ void main() {
     );
     expect(banner.color, Color(monogramColorOf(_strangerId)));
   }, ready: _ready());
+
+  testSession(
+    'friend rows show the avatar, or the default one, with presence on it',
+    (tester, session) async {
+      await session.dispatch('PRESENCE_UPDATE', {
+        'user': {'id': SessionHarness.friendId},
+        'guild_id': SessionHarness.guildId,
+        'status': 'online',
+        'activities': <Object?>[],
+        'client_status': {'desktop': 'online'},
+      });
+      await _openDirectMessages(tester, session);
+      await tester.tap(_friendsRow);
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('friends-tab-all')));
+      await session.settle();
+
+      expect(
+        _avatarUrls(
+          tester,
+          find.byKey(ValueKey('friend-${SessionHarness.friendId}')),
+        ),
+        [
+          'https://cdn.discordapp.com/avatars/${SessionHarness.friendId}/'
+              'f00d.webp?size=128',
+        ],
+      );
+      expect(
+        _badges(find.byKey(ValueKey('friend-${SessionHarness.friendId}'))),
+        findsOneWidget,
+      );
+      // No avatar of their own: Discord's default one, picked by their id.
+      expect(
+        _avatarUrls(tester, find.byKey(const ValueKey('friend-$_strangerId'))),
+        ['https://cdn.discordapp.com/embed/avatars/4.png'],
+      );
+      // No presence known, so no badge that would claim they are offline.
+      expect(
+        _badges(find.byKey(const ValueKey('friend-$_strangerId'))),
+        findsNothing,
+      );
+    },
+    ready: _ready(avatar: 'f00d'),
+  );
+
+  testSession(
+    'a suggestion shows the avatar of the person suggested',
+    (tester, session) async {
+      await _openDirectMessages(tester, session);
+      await tester.tap(_friendsRow);
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('friends-tab-add')));
+      await session.settle();
+
+      expect(
+        _avatarUrls(
+          tester,
+          find.byKey(const ValueKey('suggestion-$_suggestedId')),
+        ),
+        ['https://cdn.discordapp.com/avatars/$_suggestedId/beef.webp?size=128'],
+      );
+    },
+    ready: _ready(),
+    routes: (transport) => transport.on(
+      'GET',
+      '/api/v9/friend-suggestions',
+      (_) => jsonResponse([
+        {
+          'suggested_user': {
+            'id': _suggestedId,
+            'username': 'maybe',
+            'avatar': 'beef',
+          },
+          'reasons': <Object?>[],
+        },
+      ]),
+    ),
+  );
 
   testSession(
     'a friend row opens the DM with them',

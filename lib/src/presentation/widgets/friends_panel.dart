@@ -12,12 +12,12 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'captcha_scope.dart';
+import 'discord_relationship_avatar.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_icon_button.dart';
 import 'friends_page_header.dart';
 import 'popup_anchor.dart';
-import 'presence_indicator.dart';
 import 'profile_card_route.dart';
 
 /// The Friends page: a header with the Online, All, Pending and Blocked
@@ -83,7 +83,10 @@ class _FriendsPanelState extends State<FriendsPanel> {
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (context, _) => _tab == FriendsTab.add
-              ? _AddFriendView(controller: widget.controller)
+              ? _AddFriendView(
+                  controller: widget.controller,
+                  presenceOf: widget.presenceOf,
+                )
               : _RelationshipList(
                   groups: _groupsFor(_tab),
                   emptyText: _tab.empty,
@@ -186,9 +189,10 @@ class _RelationshipList extends StatelessWidget {
 /// The Add friend view: a username field, then people Discord thinks the
 /// account may know.
 class _AddFriendView extends StatefulWidget {
-  const _AddFriendView({required this.controller});
+  const _AddFriendView({required this.controller, this.presenceOf});
 
   final FriendsController controller;
+  final Presence? Function(String userId)? presenceOf;
 
   @override
   State<_AddFriendView> createState() => _AddFriendViewState();
@@ -262,7 +266,11 @@ class _AddFriendViewState extends State<_AddFriendView> {
           const SizedBox(height: 16),
           _SectionTitle('You may know ${suggestions.length}'),
           for (final suggestion in suggestions)
-            _SuggestionRow(suggestion: suggestion, controller: controller),
+            _SuggestionRow(
+              suggestion: suggestion,
+              controller: controller,
+              presence: widget.presenceOf?.call(suggestion.userId),
+            ),
         ],
       ],
     );
@@ -361,6 +369,9 @@ class _RequestNotice extends StatelessWidget {
   };
 }
 
+/// The avatar size of a friend or suggestion row.
+const double _avatarSize = 32;
+
 /// A list's caption heading, such as "Online 5".
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
@@ -447,16 +458,16 @@ class _RelationshipRow extends StatelessWidget {
     final identity = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (presence case final status?) ...[
-          // The shared indicator rather than a coloured dot: it paints a
-          // distinct shape per status, which is what keeps the four apart
-          // for somebody who cannot separate green from red.
-          PresenceIndicator(
-            key: ValueKey('friend-presence-${entry.user.id}'),
-            presence: UserPresence(status: status),
-          ),
-          const SizedBox(width: 8),
-        ],
+        // No badge where the presence is unknown, rather than a grey one
+        // that claims they are offline.
+        DiscordRelationshipAvatar(
+          user: entry.user,
+          size: _avatarSize,
+          presence: presence,
+          showPresence: presence != null,
+          presenceBorderColor: context.surfaces.raised,
+        ),
+        const SizedBox(width: 10),
         Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,10 +523,15 @@ class _RelationshipRow extends StatelessWidget {
 /// Two answers only: ask them, or say no. There is no relationship yet, so
 /// there is nothing else that could be done to one.
 class _SuggestionRow extends StatelessWidget {
-  const _SuggestionRow({required this.suggestion, required this.controller});
+  const _SuggestionRow({
+    required this.suggestion,
+    required this.controller,
+    this.presence,
+  });
 
   final FriendSuggestion suggestion;
   final FriendsController controller;
+  final Presence? presence;
 
   @override
   Widget build(BuildContext context) {
@@ -530,6 +546,14 @@ class _SuggestionRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          DiscordRelationshipAvatar(
+            user: suggestion.user,
+            size: _avatarSize,
+            presence: presence,
+            showPresence: presence != null,
+            presenceBorderColor: context.surfaces.raised,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,3 +1,5 @@
+import 'discord_relationship.dart';
+
 /// Somebody Discord thinks this account may know.
 ///
 /// A suggestion is not a relationship: nobody has asked for anything yet, and
@@ -10,6 +12,7 @@ final class FriendSuggestion {
     this.reason = '',
     this.mutualFriendCount = 0,
     this.contactNames = const [],
+    this.avatarUrl,
   });
 
   final String userId;
@@ -29,7 +32,17 @@ final class FriendSuggestion {
   /// singled out.
   final List<String> contactNames;
 
+  /// Their picture, or Discord's default one when they have none.
+  final String? avatarUrl;
+
   String get label => displayName.isEmpty ? userId : displayName;
+
+  /// This person as the shared relationship avatar draws them.
+  DiscordRelationshipUser get user => DiscordRelationshipUser(
+    id: userId,
+    displayName: label,
+    avatarUrl: avatarUrl,
+  );
 
   /// One line saying why, or empty when there is nothing honest to say.
   String describeReason() {
@@ -50,6 +63,7 @@ final class FriendSuggestion {
       other.displayName == displayName &&
       other.reason == reason &&
       other.mutualFriendCount == mutualFriendCount &&
+      other.avatarUrl == avatarUrl &&
       other.contactNames.join(',') == contactNames.join(',');
 
   @override
@@ -58,6 +72,7 @@ final class FriendSuggestion {
     displayName,
     reason,
     mutualFriendCount,
+    avatarUrl,
     contactNames.join(','),
   );
 }

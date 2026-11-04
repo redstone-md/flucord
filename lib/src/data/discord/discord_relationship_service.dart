@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../domain/discord_relationship.dart';
 import '../../domain/friend_suggestion.dart';
+import 'discord_cdn.dart';
 
 /// The account's friend graph, as the desktop-user session is told it.
 ///
@@ -115,6 +116,7 @@ final class DiscordRelationshipService {
     return FriendSuggestion(
       userId: id,
       displayName: global.isNotEmpty ? global : _text(fields['username']),
+      avatarUrl: DiscordCdn.userAvatar(id, _avatarHash(fields)),
       reason: _reason(payload['reasons']),
       mutualFriendCount: payload['mutual_friends_count'] is int
           ? payload['mutual_friends_count']! as int
@@ -160,6 +162,7 @@ final class DiscordRelationshipService {
             ? global
             : username,
         username: username.isEmpty ? null : username,
+        avatarUrl: DiscordCdn.userAvatar(id, _avatarHash(user)),
       ),
       kind: _kind(payload['type']),
       since: switch (payload['since']) {
@@ -197,6 +200,12 @@ final class DiscordRelationshipService {
     DiscordRelationshipKind.blocked => 4,
     DiscordRelationshipKind.unknown => 5,
   };
+
+  static String? _avatarHash(Map<String, Object?>? user) =>
+      switch (user?['avatar']) {
+        final String hash => hash,
+        _ => null,
+      };
 
   static List<Object?> _list(Object? value) => value is List ? value : const [];
 

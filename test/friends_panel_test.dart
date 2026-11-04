@@ -8,6 +8,7 @@ import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/friend_suggestion.dart';
 import 'package:flucord/src/domain/relationship_request.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -359,13 +360,10 @@ void main() {
       expect(_row('friend'), findsOneWidget);
       expect(_row('gone'), findsOneWidget);
       expect(_row('incoming'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('friend-presence-friend')),
-        findsOneWidget,
-      );
+      expect(_badge('friend'), findsOneWidget);
       // Somebody the session has no presence for gets no indicator rather
       // than a grey one that claims they are offline.
-      expect(find.byKey(const ValueKey('friend-presence-gone')), findsNothing);
+      expect(_badge('gone'), findsNothing);
     });
 
     testWidgets('removing a friend reaches the session', (tester) async {
@@ -565,6 +563,10 @@ void main() {
 Finder _tab(String name) => find.byKey(ValueKey('friends-tab-$name'));
 
 Finder _row(String userId) => find.byKey(ValueKey('friend-$userId'));
+
+/// The presence badge in the row of [userId].
+Finder _badge(String userId) =>
+    find.descendant(of: _row(userId), matching: find.byType(PresenceIndicator));
 
 SemanticsNode _tabSemantics(WidgetTester tester, String name) =>
     tester.getSemantics(_tab(name));
