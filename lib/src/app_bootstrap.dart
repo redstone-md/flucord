@@ -31,6 +31,7 @@ import 'platform/game_process_scanner.dart';
 import 'data/theme/file_theme_store.dart';
 import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
+import 'presentation/widgets/captcha_scope.dart';
 
 /// What the app is built from, and what a test replaces.
 ///
@@ -77,6 +78,7 @@ class AppBootstrap {
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
     this.discordRemoteAuthGatewayFactory,
+    this.captcha = hcaptchaPanel,
     this.enableBotTransport = const bool.fromEnvironment(
       'FLUCORD_ENABLE_BOT_TRANSPORT',
     ),
@@ -172,5 +174,8 @@ class AppBootstrap {
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
   final DiscordRemoteAuthGatewayFactory? discordRemoteAuthGatewayFactory;
+
+  /// The captcha view. Replaced in tests, which have no WebView2.
+  final CaptchaBuilder captcha;
   final bool enableBotTransport;
 }

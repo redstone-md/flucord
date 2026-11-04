@@ -7,8 +7,8 @@ import '../../domain/discord_session.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'captcha_scope.dart';
 import 'destructive_confirmation.dart';
-import 'discord_hcaptcha_panel.dart';
 
 final class DiscordDesktopLoginSection extends StatelessWidget {
   const DiscordDesktopLoginSection({
@@ -84,11 +84,7 @@ final class _DisconnectedContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (captcha != null) ...[
-          DiscordHcaptchaPanel(
-            key: ValueKey(captcha.rqToken ?? captcha.rqData ?? captcha.siteKey),
-            challenge: captcha,
-            onSolved: controller.submitCaptcha,
-          ),
+          CaptchaScope.of(context)(captcha, controller.submitCaptcha),
           const SizedBox(height: 14),
         ] else if (qrUri != null &&
             controller.state == DiscordDesktopLoginState.qrReady) ...[

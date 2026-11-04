@@ -6,17 +6,20 @@ import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/friend_suggestion.dart';
+import '../../domain/relationship_request.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'captcha_scope.dart';
+import 'discord_relationship_avatar.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_icon_button.dart';
 import 'friends_page_header.dart';
 import 'popup_anchor.dart';
-import 'presence_indicator.dart';
 import 'profile_card_route.dart';
+import 'motion_scope.dart';
 
 /// The Friends page: a header with the Online, All, Pending and Blocked
 /// lists and the Add friend view, then whichever of them is chosen.
@@ -81,7 +84,10 @@ class _FriendsPanelState extends State<FriendsPanel> {
         child: ListenableBuilder(
           listenable: widget.controller,
           builder: (context, _) => _tab == FriendsTab.add
-              ? _AddFriendView(controller: widget.controller)
+              ? _AddFriendView(
+                  controller: widget.controller,
+                  presenceOf: widget.presenceOf,
+                )
               : _RelationshipList(
                   groups: _groupsFor(_tab),
                   emptyText: _tab.empty,
@@ -150,6 +156,10 @@ class _RelationshipList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       children: [
+        _RequestNotice(
+          controller: controller,
+          onSolved: controller.solveCaptcha,
+        ),
         if (shown.isEmpty)
           Padding(
             key: const ValueKey('friends-empty'),
@@ -180,9 +190,10 @@ class _RelationshipList extends StatelessWidget {
 /// The Add friend view: a username field, then people Discord thinks the
 /// account may know.
 class _AddFriendView extends StatefulWidget {
-  const _AddFriendView({required this.controller});
+  const _AddFriendView({required this.controller, this.presenceOf});
 
   final FriendsController controller;
+  final Presence? Function(String userId)? presenceOf;
 
   @override
   State<_AddFriendView> createState() => _AddFriendViewState();
@@ -251,34 +262,116 @@ class _AddFriendViewState extends State<_AddFriendView> {
             ),
           ],
         ),
-        if (controller.lastRequestRefused)
-          Padding(
-            key: const ValueKey('friends-refused'),
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              // Somebody with requests off is a fact about them, not a
-              // failure here, so it reads as one.
-              'Discord would not send that request.',
-              style: FlucordTextRole.caption.style.copyWith(
-                color: surfaces.danger,
-              ),
-            ),
-          ),
+        _RequestNotice(controller: controller, onSolved: _solveCaptcha),
         if (suggestions.isNotEmpty) ...[
           const SizedBox(height: 16),
           _SectionTitle('You may know ${suggestions.length}'),
           for (final suggestion in suggestions)
-            _SuggestionRow(suggestion: suggestion, controller: controller),
+            _SuggestionRow(
+              suggestion: suggestion,
+              controller: controller,
+              presence: widget.presenceOf?.call(suggestion.userId),
+            ),
         ],
       ],
     );
   }
 
   Future<void> _send() async {
-    final accepted = await widget.controller.addFriend(_username.text);
+    final accepted = await widget.controller.addFriendByUsername(
+      _username.text,
+    );
+    if (accepted) _username.clear();
+  }
+
+  /// A captcha met here held back the name in the field, so a solved one
+  /// that goes through clears the field as a plain send does.
+  Future<void> _solveCaptcha(String key) async {
+    final accepted = await widget.controller.solveCaptcha(key);
     if (accepted) _username.clear();
   }
 }
+
+/// How the last request ended when it did not go through: the captcha
+/// Discord wants solved, why Discord refused, or that it failed.
+class _RequestNotice extends StatelessWidget {
+  const _RequestNotice({required this.controller, required this.onSolved});
+
+  final FriendsController controller;
+  final Future<void> Function(String key) onSolved;
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = FlucordTextRole.caption.style;
+    final surfaces = context.surfaces;
+    if (controller.captcha case final challenge?) {
+      return Padding(
+        key: const ValueKey('friends-captcha'),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Discord wants you to solve a captcha before it sends this.',
+              style: caption.copyWith(color: surfaces.text),
+            ),
+            const SizedBox(height: 8),
+            CaptchaScope.of(context)(challenge, onSolved),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton(
+                key: const ValueKey('friends-captcha-cancel'),
+                onPressed: controller.cancelCaptcha,
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final (key, text) = switch ((controller.refusal, controller.error)) {
+      (final refusal?, _) => (
+        const ValueKey('friends-refused'),
+        _refusalText(refusal.reason),
+      ),
+      (_, _?) => (
+        const ValueKey('friends-error'),
+        'Something went wrong while talking to Discord. Try again.',
+      ),
+      _ => (null, null),
+    };
+    if (text == null) return const SizedBox.shrink();
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Text(text, style: caption.copyWith(color: surfaces.danger)),
+    );
+  }
+
+  static String _refusalText(RelationshipRefusal reason) => switch (reason) {
+    RelationshipRefusal.unknownUser =>
+      'Nobody has that username. Check the spelling and try again.',
+    RelationshipRefusal.alreadyFriends => 'You are already friends.',
+    RelationshipRefusal.notAccepting =>
+      'This person is not accepting friend requests.',
+    RelationshipRefusal.bot => 'Bots cannot be added as friends.',
+    RelationshipRefusal.self => 'You cannot add yourself as a friend.',
+    RelationshipRefusal.friendLimit =>
+      'You have reached the limit of 1,000 friends.',
+    RelationshipRefusal.unverifiedAccount =>
+      'Verify your account with Discord to send friend requests.',
+    RelationshipRefusal.limited =>
+      'Discord has limited your friend requests for now.',
+    RelationshipRefusal.noIncomingRequest =>
+      'That request is no longer waiting for you.',
+    RelationshipRefusal.tooManyRequests =>
+      'You are sending requests too fast. Wait a moment and try again.',
+    RelationshipRefusal.other => 'Discord refused the request.',
+  };
+}
+
+/// The avatar size of a friend or suggestion row.
+const double _avatarSize = 32;
 
 /// A list's caption heading, such as "Online 5".
 class _SectionTitle extends StatelessWidget {
@@ -316,47 +409,50 @@ class _RelationshipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final onMessage = this.onMessage;
-    return Container(
-      key: ValueKey('friend-${entry.user.id}'),
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.surfaces.raised,
-        borderRadius: FlucordRadius.small,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: _identity(context),
+    return MotionHoverRegion(
+      child: Container(
+        key: ValueKey('friend-${entry.user.id}'),
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.surfaces.raised,
+          borderRadius: FlucordRadius.small,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _identity(context),
+              ),
             ),
-          ),
-          if (onMessage != null && entry.kind == DiscordRelationshipKind.friend)
-            FlucordIconButton(
-              key: ValueKey('friend-message-${entry.user.id}'),
-              icon: FlucordIcons.chat,
-              tooltip: 'Message',
-              onPressed: () => onMessage(entry.user.id),
-            ),
-          // Accepting is the same call as asking: Discord treats a request to
-          // somebody who already asked as the acceptance.
-          if (entry.kind == DiscordRelationshipKind.incomingRequest)
+            if (onMessage != null &&
+                entry.kind == DiscordRelationshipKind.friend)
+              FlucordIconButton(
+                key: ValueKey('friend-message-${entry.user.id}'),
+                icon: FlucordIcons.chat,
+                tooltip: 'Message',
+                onPressed: () => onMessage(entry.user.id),
+              ),
+            // Accepting is the same call as asking: Discord treats a request to
+            // somebody who already asked as the acceptance.
+            if (entry.kind == DiscordRelationshipKind.incomingRequest)
+              TextButton(
+                key: ValueKey('friend-accept-${entry.user.id}'),
+                onPressed: controller.isBusy
+                    ? null
+                    : () => unawaited(controller.acceptRequest(entry)),
+                child: const Text('Accept'),
+              ),
             TextButton(
-              key: ValueKey('friend-accept-${entry.user.id}'),
+              key: ValueKey('friend-remove-${entry.user.id}'),
               onPressed: controller.isBusy
                   ? null
-                  : () => unawaited(controller.acceptRequest(entry)),
-              child: const Text('Accept'),
+                  : () => unawaited(controller.remove(entry)),
+              child: Text(_removeLabel(entry.kind)),
             ),
-          TextButton(
-            key: ValueKey('friend-remove-${entry.user.id}'),
-            onPressed: controller.isBusy
-                ? null
-                : () => unawaited(controller.remove(entry)),
-            child: Text(_removeLabel(entry.kind)),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -366,16 +462,16 @@ class _RelationshipRow extends StatelessWidget {
     final identity = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (presence case final status?) ...[
-          // The shared indicator rather than a coloured dot: it paints a
-          // distinct shape per status, which is what keeps the four apart
-          // for somebody who cannot separate green from red.
-          PresenceIndicator(
-            key: ValueKey('friend-presence-${entry.user.id}'),
-            presence: UserPresence(status: status),
-          ),
-          const SizedBox(width: 8),
-        ],
+        // No badge where the presence is unknown, rather than a grey one
+        // that claims they are offline.
+        DiscordRelationshipAvatar(
+          user: entry.user,
+          size: _avatarSize,
+          presence: presence,
+          showPresence: presence != null,
+          presenceBorderColor: context.surfaces.raised,
+        ),
+        const SizedBox(width: 10),
         Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,59 +527,74 @@ class _RelationshipRow extends StatelessWidget {
 /// Two answers only: ask them, or say no. There is no relationship yet, so
 /// there is nothing else that could be done to one.
 class _SuggestionRow extends StatelessWidget {
-  const _SuggestionRow({required this.suggestion, required this.controller});
+  const _SuggestionRow({
+    required this.suggestion,
+    required this.controller,
+    this.presence,
+  });
 
   final FriendSuggestion suggestion;
   final FriendsController controller;
+  final Presence? presence;
 
   @override
   Widget build(BuildContext context) {
     final reason = suggestion.describeReason();
-    return Container(
-      key: ValueKey('suggestion-${suggestion.userId}'),
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.surfaces.raised,
-        borderRadius: FlucordRadius.small,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  suggestion.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.label.strong,
-                ),
-                if (reason.isNotEmpty)
-                  Text(
-                    reason,
-                    style: TextStyle(
-                      fontSize: FlucordType.caption,
-                      color: context.surfaces.muted,
-                    ),
-                  ),
-              ],
+    return MotionHoverRegion(
+      child: Container(
+        key: ValueKey('suggestion-${suggestion.userId}'),
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.surfaces.raised,
+          borderRadius: FlucordRadius.small,
+        ),
+        child: Row(
+          children: [
+            DiscordRelationshipAvatar(
+              user: suggestion.user,
+              size: _avatarSize,
+              presence: presence,
+              showPresence: presence != null,
+              presenceBorderColor: context.surfaces.raised,
             ),
-          ),
-          TextButton(
-            key: ValueKey('suggestion-add-${suggestion.userId}'),
-            onPressed: controller.isBusy
-                ? null
-                : () => unawaited(controller.addFriend(suggestion.userId)),
-            child: const Text('Add'),
-          ),
-          TextButton(
-            key: ValueKey('suggestion-dismiss-${suggestion.userId}'),
-            onPressed: controller.isBusy
-                ? null
-                : () => unawaited(controller.dismissSuggestion(suggestion)),
-            child: const Text('No'),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suggestion.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: FlucordTextRole.label.strong,
+                  ),
+                  if (reason.isNotEmpty)
+                    Text(
+                      reason,
+                      style: TextStyle(
+                        fontSize: FlucordType.caption,
+                        color: context.surfaces.muted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            TextButton(
+              key: ValueKey('suggestion-add-${suggestion.userId}'),
+              onPressed: controller.isBusy
+                  ? null
+                  : () => unawaited(controller.befriend(suggestion.userId)),
+              child: const Text('Add'),
+            ),
+            TextButton(
+              key: ValueKey('suggestion-dismiss-${suggestion.userId}'),
+              onPressed: controller.isBusy
+                  ? null
+                  : () => unawaited(controller.dismissSuggestion(suggestion)),
+              child: const Text('No'),
+            ),
+          ],
+        ),
       ),
     );
   }

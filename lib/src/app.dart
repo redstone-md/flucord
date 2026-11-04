@@ -14,6 +14,7 @@ import 'presentation/widgets/motion_scope.dart';
 import 'presentation/widgets/presence_scope.dart';
 import 'presentation/widgets/spell_check_scope.dart';
 import 'presentation/widgets/attachment_download_scope.dart';
+import 'presentation/widgets/captcha_scope.dart';
 import 'presentation/widgets/chat_scope.dart';
 import 'presentation/widgets/guild_access_scope.dart';
 import 'presentation/widgets/join_server_dialog.dart';
@@ -131,7 +132,10 @@ class _FlucordAppState extends State<FlucordApp> {
                 child: NameStyleScope(
                   videos: const ImageNameplateVideos(),
                   fonts: _composition.nameFonts,
-                  child: child!,
+                  child: CaptchaScope(
+                    builder: widget.bootstrap.captcha,
+                    child: child!,
+                  ),
                 ),
               ),
             ),

@@ -545,12 +545,14 @@ final class DiscordRestClient {
     return payload == null ? const [] : _asList(payload);
   }
 
+  /// [headers] are added to this request only, such as a solved captcha.
   Future<void> requestEmpty(
     String method,
     String path, {
     Map<String, Object?>? query,
     Map<String, Object?>? body,
     String? auditLogReason,
+    Map<String, String> headers = const {},
   }) async {
     await request(
       method,
@@ -558,6 +560,7 @@ final class DiscordRestClient {
       query: query,
       body: body,
       auditLogReason: auditLogReason,
+      headers: headers,
     );
   }
 
@@ -570,6 +573,7 @@ final class DiscordRestClient {
     String contentType = 'application/json',
     String? auditLogReason,
     bool guardedByNonce = false,
+    Map<String, String> headers = const {},
   }) => _execute(
     method,
     path,
@@ -579,6 +583,7 @@ final class DiscordRestClient {
     contentType: contentType,
     auditLogReason: auditLogReason,
     guardedByNonce: guardedByNonce,
+    headers: headers,
   );
 
   Future<Object?> _execute(
@@ -589,11 +594,12 @@ final class DiscordRestClient {
     String contentType = 'application/json',
     String? auditLogReason,
     bool guardedByNonce = false,
+    Map<String, String> headers = const {},
   }) => _executor.execute(
     method,
     path,
     query: query,
-    headers: _headers(contentType, auditLogReason),
+    headers: {..._headers(contentType, auditLogReason), ...headers},
     body: encodedBody,
     guardedByNonce: guardedByNonce,
   );

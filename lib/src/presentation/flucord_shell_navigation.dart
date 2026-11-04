@@ -815,7 +815,7 @@ extension _FlucordShellNavigation on FlucordShell {
               );
             },
       onAddFriend: friends != null && !isSelf && friends.canBefriend(member.id)
-          ? () => unawaited(friends.addFriend(member.id))
+          ? () => unawaited(friends.befriend(member.id))
           : null,
       onReport: canReport
           ? closing(() => _reportMember(context, member))
