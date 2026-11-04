@@ -11,6 +11,7 @@ import 'discord_mapper.dart';
 import 'discord_message_update_handler.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
+import 'discord_role_dispatch.dart';
 
 /// The gateway dispatches that the bot and desktop transports answer the same
 /// way.
@@ -24,14 +25,12 @@ final class DiscordSharedDispatches {
     required DiscordMapper mapper,
     required DiscordDirectMessages directMessages,
     required String? Function() currentMemberId,
-    required List<Map<String, Object?>> Function(String guildId) rolesOf,
     required DiscordUpdatedMessage updatedMessage,
     required StreamController<ChatRepositoryEvent> events,
   }) : _cache = cache,
        _mapper = mapper,
        _directMessages = directMessages,
        _currentMemberId = currentMemberId,
-       _rolesOf = rolesOf,
        _events = events,
        _reactions = DiscordReactionHandler(
          cache,
@@ -50,7 +49,6 @@ final class DiscordSharedDispatches {
   final DiscordMapper _mapper;
   final DiscordDirectMessages _directMessages;
   final String? Function() _currentMemberId;
-  final List<Map<String, Object?>> Function(String guildId) _rolesOf;
   final StreamController<ChatRepositoryEvent> _events;
   final DiscordReactionHandler _reactions;
   final DiscordMessageUpdateHandler _updates;
@@ -128,6 +126,11 @@ final class DiscordSharedDispatches {
         unawaited(_upsertMember(event.data));
       case 'GUILD_MEMBER_REMOVE':
         _removeMember(event.data);
+      case 'GUILD_ROLE_CREATE' || 'GUILD_ROLE_UPDATE' || 'GUILD_ROLE_DELETE':
+        if (DiscordRoleDispatch.read(event.name, event.data)
+            case final change?) {
+          unawaited(_changeRole(change));
+        }
       case 'PRESENCE_UPDATE':
         unawaited(_presenceIdentity(event.data));
     }
@@ -205,7 +208,7 @@ final class DiscordSharedDispatches {
   Future<void> _upsertMember(Map<String, Object?> data) async {
     final guildId = data['guild_id'] as String?;
     if (guildId == null || data['user'] is! Map) return;
-    final member = _mapper.guildMember(data, guildId, _rolesOf(guildId));
+    final member = _mapper.guildMember(data, guildId);
     _events.publish(MemberUpsertedEvent(member));
     await _cache.writeMember(member);
   }
@@ -223,6 +226,17 @@ final class DiscordSharedDispatches {
       MemberIdentityChangedEvent(memberId: memberId, identity: identity),
     );
     await _cache.writeMemberIdentity(memberId, identity);
+  }
+
+  Future<void> _changeRole(DiscordRoleDispatch change) async {
+    final role = change.role;
+    if (role == null) {
+      _events.publish(RoleDeletedEvent(change.roleId));
+      return _cache.deleteRole(change.roleId);
+    }
+    final mapped = _mapper.role(role, change.guildId);
+    _events.publish(RoleUpsertedEvent(mapped));
+    await _cache.writeRole(mapped);
   }
 
   void _removeMember(Map<String, Object?> data) {

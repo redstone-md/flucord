@@ -15,6 +15,8 @@ import '../../domain/app_authorisation.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import 'package:collection/collection.dart' show SetEquality;
+
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/expression_favorites.dart';
@@ -23,6 +25,7 @@ import '../../domain/guild_expression_repository.dart';
 import '../../domain/game_detection.dart';
 import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
+import '../../domain/guild_membership.dart';
 import '../../domain/guild_member_list_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
@@ -211,7 +214,6 @@ final class DiscordDesktopChatRepository
         mapper: _mapper,
         directMessages: _directMessages,
         currentMemberId: () => _currentMemberId,
-        rolesOf: _memberLists.rolesOf,
         updatedMessage: (payload, held) =>
             _messageFrom(payload, fallback: held),
         events: _events,

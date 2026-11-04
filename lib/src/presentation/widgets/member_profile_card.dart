@@ -110,15 +110,16 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
   List<CommunityRole>? _heldRoles() {
     final spaceId = widget.spaceId;
     if (spaceId == null) return null;
-    final held =
-        (_moderation?.profile?.roleIds ??
-                widget.member.membershipIn(spaceId)?.roleIds ??
-                const <String>[])
-            .toSet();
-    return [
+    final rolesById = {
       for (final role in widget.roles)
-        if (role.spaceId == spaceId && held.contains(role.id)) role,
-    ]..sort((left, right) => right.position.compareTo(left.position));
+        if (role.spaceId == spaceId) role.id: role,
+    };
+    return HeldRoles.ofIds(
+      _moderation?.profile?.roleIds ??
+          widget.member.membershipIn(spaceId)?.roleIds ??
+          const <String>[],
+      (roleId) => rolesById[roleId],
+    ).highestFirst;
   }
 
   ProfileCardActions _actions(

@@ -144,4 +144,21 @@ const _shell = [
     sort_index INTEGER NOT NULL
   )
   ''',
+  '''
+  CREATE TABLE members (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    initials TEXT NOT NULL,
+    role TEXT NOT NULL,
+    presence INTEGER NOT NULL,
+    color_value INTEGER NOT NULL,
+    space_ids_json TEXT NOT NULL,
+    roles_by_space_json TEXT NOT NULL,
+    avatar_url TEXT,
+    avatar_urls_by_space_json TEXT NOT NULL,
+    memberships_json TEXT,
+    is_bot INTEGER NOT NULL DEFAULT 0,
+    clan_tag_json TEXT
+  )
+  ''',
 ];

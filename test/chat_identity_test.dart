@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/guild_membership.dart';
 
 void main() {
   test('history merge preserves guild-specific member identity', () {
@@ -15,7 +16,9 @@ void main() {
           presence: Presence.online,
           colorValue: 0xff456b5a,
           spaceIds: {'guild-1'},
-          rolesBySpace: {'guild-1': 'Operator'},
+          membershipsBySpace: {
+            'guild-1': GuildMembership(roleIds: ['role-1']),
+          },
           avatarUrl: 'https://cdn.example/global-old.webp',
           avatarUrlsBySpace: {
             'guild-1': 'https://cdn.example/guild-avatar.webp',
@@ -46,7 +49,7 @@ void main() {
     final member = merged.members.single;
     expect(member.avatarUrl, endsWith('global-new.webp'));
     expect(member.avatarUrlFor('guild-1'), endsWith('guild-avatar.webp'));
-    expect(member.roleFor('guild-1'), 'Operator');
+    expect(member.membershipIn('guild-1')?.roleIds, ['role-1']);
     expect(member.presence, Presence.online);
   });
 }

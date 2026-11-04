@@ -124,7 +124,7 @@ mixin _DiscordGuildAccess {
       '/guilds/${_segment(guildId)}/channels',
     );
     final roles = await _rest.getList('/guilds/${_segment(guildId)}/roles');
-    final membership = await _readOwnMembership(guildId, roles);
+    final membership = await _readOwnMembership(guildId);
     return DiscordGuildAdminMapper.joinedGuild(
       guild: guild,
       channels: channels,
@@ -134,15 +134,12 @@ mixin _DiscordGuildAccess {
     );
   }
 
-  Future<Member?> _readOwnMembership(
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) async {
+  Future<Member?> _readOwnMembership(String guildId) async {
     try {
       final member = await _rest.getObject(
         '/guilds/${_segment(guildId)}/members/@me',
       );
-      return _mapper.guildMember(member, guildId, roles);
+      return _mapper.guildMember(member, guildId);
     } on DiscordApiException {
       return null;
     }

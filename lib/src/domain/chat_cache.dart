@@ -10,10 +10,12 @@ import 'chat_models.dart';
 abstract interface class ChatCache {
   Future<ChatWorkspace?> readWorkspace();
 
-  /// The workspace without its message history and without its members.
+  /// The workspace without its message history, and with no member but the
+  /// account itself.
   ///
   /// Read this where only the navigation is wanted: which spaces, channels,
-  /// categories and roles the account has, and what each channel has waiting.
+  /// categories and roles the account has, what each channel has waiting, and
+  /// the account's own standing in each server.
   /// Decoding every cached message costs seconds on an account with a long
   /// history, and a caller that only looks up a channel never touches one.
   Future<ChatWorkspace?> readWorkspaceShell();
@@ -64,6 +66,10 @@ abstract interface class ChatCache {
 
   Future<void> writeCategory(ChannelCategory category);
 
+  Future<void> writeRole(CommunityRole role);
+
+  Future<void> deleteRole(String roleId);
+
   /// One guild the account gained, written whole: space, channels,
   /// categories, roles and members. What a restart restores.
   Future<void> writeGuild(JoinedGuild guild);
@@ -103,7 +109,8 @@ abstract interface class ChatCache {
 
   /// Writes one [diff] in one transaction. A channel or server already held
   /// keeps its place, so an offline launch shows the same order. The diff's
-  /// members are not written: the next full load brings them.
+  /// members are not written: the next full load brings them. The account's
+  /// own memberships are, because permissions start from them.
   Future<void> applyWorkspaceDiff(WorkspaceDiff diff);
 
   /// Removes everything held, for good, so that nothing of the account can be

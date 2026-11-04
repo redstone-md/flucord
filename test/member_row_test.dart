@@ -31,7 +31,6 @@ Member _member({List<UserActivity> activities = const []}) => Member(
   presence: Presence.online,
   colorValue: 0xff665f82,
   spaceIds: const {_guild},
-  rolesBySpace: const {_guild: 'Engineer'},
   presenceDetail: UserPresence(status: Presence.online, activities: activities),
 );
 
@@ -52,7 +51,7 @@ Future<void> _pump(
   WidgetTester tester,
   Member member, {
   Map<String, List<VoiceParticipantStateEvent>> seats = const {},
-  int? Function(Member member)? nameColorOf,
+  HeldRoles Function(Member member)? heldRolesOf,
 }) => tester.pumpWidget(
   MaterialApp(
     theme: FlucordTheme.dark,
@@ -64,7 +63,7 @@ Future<void> _pump(
             members: [member],
             spaceId: _guild,
             seatedByChannel: seats,
-            nameColorOf: nameColorOf,
+            heldRolesOf: heldRolesOf,
           ),
         ],
       ),
@@ -266,7 +265,19 @@ void main() {
     });
 
     testWidgets('the name keeps its role colour', (tester) async {
-      await _pump(tester, _member(), nameColorOf: (_) => 0xffe91e63);
+      await _pump(
+        tester,
+        _member(),
+        heldRolesOf: (_) => const HeldRoles([
+          CommunityRole(
+            id: 'role-1',
+            spaceId: _guild,
+            name: 'Engineer',
+            position: 1,
+            colorValue: 0xffe91e63,
+          ),
+        ]),
+      );
 
       final name = tester.widget<Text>(find.text('Mira Chen'));
       expect(name.style?.color, const Color(0xffe91e63));
@@ -311,7 +322,7 @@ void main() {
       final header = tester.getRect(
         find.byKey(const ValueKey('member-list-header')),
       );
-      final label = tester.getRect(find.textContaining('Engineer'));
+      final label = tester.getRect(find.textContaining('Online'));
       expect(label.top - header.bottom, 16);
       expect(tester.getRect(_row).top - label.bottom, 4);
     });
@@ -321,7 +332,7 @@ void main() {
     ) async {
       await _pump(tester, _member());
 
-      final label = tester.widget<Text>(find.textContaining('Engineer'));
+      final label = tester.widget<Text>(find.textContaining('Online'));
       expect(label.style?.fontSize, 12);
       expect(label.style?.fontWeight, FontWeight.w400);
       expect(label.style?.color, _surfaces.captionText);

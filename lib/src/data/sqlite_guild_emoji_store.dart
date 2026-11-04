@@ -27,19 +27,27 @@ final class SqliteGuildEmojiStore {
     await batch.commit(noResult: true);
   }
 
-  Future<void> replaceForSpace(String spaceId, List<GuildEmoji> emojis) async {
-    await _database.transaction((transaction) async {
-      await transaction.delete(
-        'emojis',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
+  Future<void> replaceForSpace(String spaceId, List<GuildEmoji> emojis) =>
+      _database.transaction(
+        (transaction) => replaceForSpaceIn(transaction, spaceId, emojis),
       );
-      final batch = transaction.batch();
-      for (final emoji in emojis.where((emoji) => emoji.spaceId == spaceId)) {
-        batch.insert('emojis', _toRow(emoji));
-      }
-      await batch.commit(noResult: true);
-    });
+
+  /// [replaceForSpace] inside a transaction the caller holds.
+  Future<void> replaceForSpaceIn(
+    DatabaseExecutor executor,
+    String spaceId,
+    List<GuildEmoji> emojis,
+  ) async {
+    await executor.delete(
+      'emojis',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    final batch = executor.batch();
+    for (final emoji in emojis.where((emoji) => emoji.spaceId == spaceId)) {
+      batch.insert('emojis', _toRow(emoji));
+    }
+    await batch.commit(noResult: true);
   }
 
   static Map<String, Object?> _toRow(GuildEmoji emoji) => {

@@ -247,28 +247,30 @@ final class _CatalogSources {
                     right.displayName.toLowerCase(),
                   );
           });
+    final rolesById = {for (final role in _roles) role.id: role};
     final suggestions = members
-        .map(
-          (member) => ComposerAutocompleteSuggestion(
+        .map((member) {
+          final roleName = HeldRoles.of(
+            member,
+            _activeChannel.spaceId,
+            (roleId) => rolesById[roleId],
+          ).nameFor(member);
+          return ComposerAutocompleteSuggestion(
             id: member.id,
             label: member.displayName,
             description: _activeChannel.isDirectMessage
                 ? 'Member'
-                : '${member.roleFor(_activeChannel.spaceId)} · Member',
+                : '$roleName · Member',
             insertText: '<@${member.id}>',
             kind: ComposerAutocompleteKind.member,
-            searchTerms: [
-              member.displayName,
-              member.roleFor(_activeChannel.spaceId),
-              member.id,
-            ],
+            searchTerms: [member.displayName, roleName, member.id],
             initials: member.initials,
             colorValue: member.colorValue,
             avatarUrl: member.avatarUrlFor(
               _activeChannel.isDirectMessage ? null : _activeChannel.spaceId,
             ),
-          ),
-        )
+          );
+        })
         .toList(growable: true);
 
     if (!_activeChannel.isDirectMessage) {

@@ -41,6 +41,18 @@ final class GuildMembership {
   /// would be reproducible in a test.
   bool isTimedOutAt(DateTime now) => timeoutUntil?.isAfter(now) ?? false;
 
+  /// This membership holding only the roles [exists] knows. Answers this same
+  /// membership when it keeps them all.
+  GuildMembership withRolesThat(bool Function(String roleId) exists) {
+    if (roleIds.every(exists)) return this;
+    return GuildMembership(
+      roleIds: roleIds.where(exists).toList(growable: false),
+      flags: flags,
+      isPending: isPending,
+      timeoutUntil: timeoutUntil,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is GuildMembership &&

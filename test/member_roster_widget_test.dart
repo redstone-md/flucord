@@ -45,6 +45,7 @@ void main() {
     List<Member> members = const [_jack],
     String? channelId = 'channel-1',
     ValueChanged<Member>? onMessage,
+    HeldRoles Function(Member member)? heldRolesOf,
   }) async {
     final controller = GuildMemberListController(
       () => repository,
@@ -77,6 +78,7 @@ void main() {
                     position: 5,
                   ),
                 ],
+                heldRolesOf: heldRolesOf,
                 cardFor: (member, close) => MemberProfileCard(
                   member: member,
                   spaceId: 'guild-1',
@@ -210,6 +212,17 @@ void main() {
       tester,
       repository: repository,
       members: const [_jack, _mira],
+      heldRolesOf: (member) => member.id == _jack.id
+          ? const HeldRoles([
+              CommunityRole(
+                id: 'role-a',
+                spaceId: 'guild-1',
+                name: 'Architect',
+                position: 5,
+                hoist: true,
+              ),
+            ])
+          : HeldRoles.none,
     );
     await tester.pump();
 
@@ -370,7 +383,6 @@ const _jack = Member(
   presence: Presence.online,
   colorValue: 0xff48745f,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Architect'},
 );
 
 const _mira = Member(
@@ -381,7 +393,6 @@ const _mira = Member(
   presence: Presence.offline,
   colorValue: 0xff665f82,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Product design'},
 );
 
 const _longName = Member(
@@ -392,5 +403,4 @@ const _longName = Member(
   presence: Presence.online,
   colorValue: 0xff665f82,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Product design and platform architecture'},
 );

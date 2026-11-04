@@ -29,24 +29,29 @@ final class SqliteGuildStickerStore {
     await batch.commit(noResult: true);
   }
 
-  Future<void> replaceForSpace(
+  Future<void> replaceForSpace(String spaceId, List<GuildSticker> stickers) =>
+      _database.transaction(
+        (transaction) => replaceForSpaceIn(transaction, spaceId, stickers),
+      );
+
+  /// [replaceForSpace] inside a transaction the caller holds.
+  Future<void> replaceForSpaceIn(
+    DatabaseExecutor executor,
     String spaceId,
     List<GuildSticker> stickers,
   ) async {
-    await _database.transaction((transaction) async {
-      await transaction.delete(
-        'guild_stickers',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      final batch = transaction.batch();
-      for (final sticker in stickers.where(
-        (sticker) => sticker.spaceId == spaceId,
-      )) {
-        batch.insert('guild_stickers', _toRow(sticker));
-      }
-      await batch.commit(noResult: true);
-    });
+    await executor.delete(
+      'guild_stickers',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    final batch = executor.batch();
+    for (final sticker in stickers.where(
+      (sticker) => sticker.spaceId == spaceId,
+    )) {
+      batch.insert('guild_stickers', _toRow(sticker));
+    }
+    await batch.commit(noResult: true);
   }
 
   static Map<String, Object?> _toRow(GuildSticker sticker) => {

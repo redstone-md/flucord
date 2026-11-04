@@ -56,11 +56,11 @@ void main() {
     });
 
     test('a guild member, under a nickname', () {
-      final member = mapper.guildMember(
-        {'user': _user(), 'nick': 'Freezy', 'roles': <Object?>[]},
-        '200000000000000001',
-        const [],
-      );
+      final member = mapper.guildMember({
+        'user': _user(),
+        'nick': 'Freezy',
+        'roles': <Object?>[],
+      }, '200000000000000001');
 
       expect(member.displayName, 'Freezy');
       expect(member.username, 'freezz5126');

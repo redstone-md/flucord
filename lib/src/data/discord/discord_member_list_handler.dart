@@ -6,6 +6,7 @@ import 'discord_mapper.dart';
 import 'discord_member_list_directory.dart';
 import 'discord_member_list_store.dart';
 import 'discord_member_list_update.dart';
+import 'discord_role_dispatch.dart';
 
 /// Turns the Gateway's member-list traffic into domain state.
 ///
@@ -32,10 +33,6 @@ final class DiscordMemberListHandler {
     required String guildId,
     required String channelId,
   }) => _directory.memberListIdFor(guildId: guildId, channelId: channelId);
-
-  /// The guild's raw role payloads, which a member payload is mapped against.
-  List<Map<String, Object?>> rolesOf(String guildId) =>
-      _directory.rolesOf(guildId);
 
   /// Applies one dispatch and returns the members it carried.
   ///
@@ -67,6 +64,10 @@ final class DiscordMemberListHandler {
         _directory.acceptChannel(data);
       case 'CHANNEL_DELETE' || 'THREAD_DELETE':
         _directory.removeChannel(data);
+      case 'GUILD_ROLE_CREATE' || 'GUILD_ROLE_UPDATE' || 'GUILD_ROLE_DELETE':
+        if (DiscordRoleDispatch.read(name, data) case final change?) {
+          _directory.acceptRole(change);
+        }
       case 'GUILD_MEMBER_LIST_UPDATE':
         return _acceptListUpdate(data);
     }
@@ -76,10 +77,8 @@ final class DiscordMemberListHandler {
   List<Member> _acceptListUpdate(Map<String, Object?> data) {
     final update = DiscordMemberListUpdate.fromDispatch(data);
     if (update == null) return const [];
-    final roles = _directory.rolesOf(update.guildId);
     final members = [
-      for (final item in update.memberItems)
-        _memberOf(item, update.guildId, roles),
+      for (final item in update.memberItems) _memberOf(item, update.guildId),
     ];
     _updates.add(_store.apply(update));
     return members;
@@ -91,12 +90,8 @@ final class DiscordMemberListHandler {
   /// none — but on this transport the enclosing item is where presence first
   /// appears, so it has to be applied here or the roster renders everyone as
   /// offline.
-  Member _memberOf(
-    DiscordMemberListItem item,
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) {
-    final member = _mapper.guildMember(item.member!, guildId, roles);
+  Member _memberOf(DiscordMemberListItem item, String guildId) {
+    final member = _mapper.guildMember(item.member!, guildId);
     final status = item.presence?['status'];
     return status is String
         ? member.copyWith(presence: _mapper.presence(status))

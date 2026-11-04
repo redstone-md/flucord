@@ -98,11 +98,7 @@ final class DiscordMapper {
         ),
       );
       for (final payload in membersByGuild[guildId] ?? const []) {
-        final mapped = guildMember(
-          payload,
-          guildId,
-          rolesByGuild[guildId] ?? const [],
-        );
+        final mapped = guildMember(payload, guildId);
         members[mapped.id] = _mergeMembers(members[mapped.id], mapped);
       }
     }
@@ -317,7 +313,6 @@ final class DiscordMapper {
     String role = 'Member',
     Presence presence = Presence.offline,
     Set<String> spaceIds = const {},
-    Map<String, String> rolesBySpace = const {},
     int? colorValue,
   }) {
     final username =
@@ -333,7 +328,6 @@ final class DiscordMapper {
       presence: presence,
       colorValue: colorValue ?? _colorFor(id),
       spaceIds: spaceIds,
-      rolesBySpace: rolesBySpace,
       avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
       tags: tags(payload),
       username: _username(payload),
@@ -381,22 +375,11 @@ final class DiscordMapper {
     );
   }
 
-  Member guildMember(
-    Map<String, Object?> payload,
-    String guildId,
-    List<Map<String, Object?>> roles,
-  ) {
+  /// A guild member. Their roles are kept as ids in [GuildMembership]; the
+  /// name, place and colour of each role are read from the workspace, so a
+  /// role change shows on every member who holds it. See [HeldRoles].
+  Member guildMember(Map<String, Object?> payload, String guildId) {
     final user = (payload['user']! as Map).cast<String, Object?>();
-    final roleIds = (payload['roles'] as List? ?? const []).whereType<String>();
-    final matchingRoles =
-        roles.where((role) => roleIds.contains(role['id'])).toList()..sort(
-          (left, right) => (right['position'] as int? ?? 0).compareTo(
-            left['position'] as int? ?? 0,
-          ),
-        );
-    final topRole = matchingRoles.isEmpty ? null : matchingRoles.first;
-    final roleName = topRole?['name'] as String? ?? 'Member';
-    final roleColor = topRole?['color'] as int? ?? 0;
     final username =
         payload['nick'] as String? ??
         user['global_name'] as String? ??
@@ -412,11 +395,10 @@ final class DiscordMapper {
       id: id,
       displayName: username,
       initials: _monogram(username),
-      role: roleName,
+      role: 'Member',
       presence: Presence.offline,
-      colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
+      colorValue: _colorFor(id),
       spaceIds: {guildId},
-      rolesBySpace: {guildId: roleName},
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
       membershipsBySpace: {guildId: membership(payload)},
@@ -453,6 +435,7 @@ final class DiscordMapper {
       name: payload['name'] as String? ?? 'unknown-role',
       position: payload['position'] as int? ?? 0,
       colorValue: rawColor == 0 ? null : 0xff000000 | rawColor,
+      hoist: payload['hoist'] == true,
       // Left null rather than zeroed when the field is absent: a role that
       // grants nothing and a role we were told nothing about lead to opposite
       // decisions once permissions are computed.
@@ -474,7 +457,6 @@ final class DiscordMapper {
     if (previous == null) return incoming;
     return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
-      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
       avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
       avatarUrlsBySpace: {
         ...previous.avatarUrlsBySpace,

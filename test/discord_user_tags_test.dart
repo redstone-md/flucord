@@ -47,11 +47,10 @@ void main() {
   });
 
   test('a guild member keeps the bot flag and the clan tag', () {
-    final member = mapper.guildMember(
-      {'user': _user(bot: true, primaryGuild: _clan), 'roles': <Object?>[]},
-      _guild,
-      const [],
-    );
+    final member = mapper.guildMember({
+      'user': _user(bot: true, primaryGuild: _clan),
+      'roles': <Object?>[],
+    }, _guild);
 
     expect(member.isBot, isTrue);
     expect(member.clanTag?.tag, 'CODE');

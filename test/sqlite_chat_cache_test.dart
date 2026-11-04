@@ -88,7 +88,6 @@ void main() {
           presence: Presence.online,
           colorValue: 0xff48745f,
           spaceIds: {'guild-1'},
-          rolesBySpace: {'guild-1': 'Bot'},
           avatarUrl: 'https://cdn.discordapp.com/avatars/user-1/global.webp',
           avatarUrlsBySpace: {
             'guild-1':
@@ -206,7 +205,7 @@ void main() {
     expect(history.messages.single.stickers.single.name, 'Native signal');
     expect(history.messages.single.stickers.single.format, StickerFormat.apng);
     expect(history.members.single.displayName, 'Jack');
-    expect(history.members.single.roleFor('guild-1'), 'Bot');
+    expect(history.members.single.role, 'Bot');
     expect(history.members.single.avatarUrl, contains('/avatars/user-1/'));
     expect(
       history.members.single.avatarUrlFor('guild-1'),
@@ -464,7 +463,7 @@ void main() {
     expect(messageColumns.map((row) => row['name']), contains('is_pinned'));
     expect(
       memberColumns.map((row) => row['name']),
-      contains('roles_by_space_json'),
+      isNot(contains('roles_by_space_json')),
     );
     expect(memberColumns.map((row) => row['name']), contains('avatar_url'));
     expect(

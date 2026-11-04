@@ -1,4 +1,5 @@
 import 'discord_member_list_id.dart';
+import 'discord_role_dispatch.dart';
 
 /// Remembers enough guild shape to say which member list a channel reads from.
 ///
@@ -44,17 +45,29 @@ final class DiscordMemberListDirectory {
       final channelId = channel['id'];
       if (channelId is String) channels[channelId] = channel;
     }
-    final roles = _objects(guild['roles']);
     _guilds[id] = _Guild(
       channels: channels,
-      roles: roles,
       // The `@everyone` role always carries the guild's own id.
       everyonePermissions: _bits(
-        roles
+        _objects(guild['roles'])
             .where((role) => role['id'] == id)
             .map((role) => role['permissions'])
             .firstOrNull,
       ),
+    );
+  }
+
+  /// Folds one role change in. A change to `@everyone` can move a channel to
+  /// another member list; no other role decides one.
+  void acceptRole(DiscordRoleDispatch change) {
+    final guild = _guilds[change.guildId];
+    final everyone = change.role;
+    if (guild == null || change.roleId != change.guildId || everyone == null) {
+      return;
+    }
+    _guilds[change.guildId] = _Guild(
+      channels: guild.channels,
+      everyonePermissions: _bits(everyone['permissions']),
     );
   }
 
@@ -75,10 +88,6 @@ final class DiscordMemberListDirectory {
       _guilds[channel['guild_id']]?.channels.remove(channel['id']);
 
   void clear() => _guilds.clear();
-
-  /// Raw role payloads for a guild, in the order Discord sent them.
-  List<Map<String, Object?>> rolesOf(String guildId) =>
-      _guilds[guildId]?.roles ?? const [];
 
   /// The member list identifier the channel's roster arrives on.
   ///
@@ -122,13 +131,8 @@ final class DiscordMemberListDirectory {
 }
 
 final class _Guild {
-  const _Guild({
-    required this.channels,
-    required this.roles,
-    required this.everyonePermissions,
-  });
+  const _Guild({required this.channels, required this.everyonePermissions});
 
   final Map<String, Map<String, Object?>> channels;
-  final List<Map<String, Object?>> roles;
   final BigInt everyonePermissions;
 }

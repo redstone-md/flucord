@@ -4,7 +4,9 @@
 /// member row in each guild, `GUILD_CREATE` does the same for a guild that
 /// arrives later, and `GUILD_MEMBER_UPDATE` carries a change of roles. READY
 /// compresses a member's user to a bare `user_id`, and its user table leaves out
-/// the account itself, so both shapes of member row are read here.
+/// the account itself, so both shapes of member row are read here. A deleted
+/// role leaves every member without sending a member update, so
+/// `GUILD_ROLE_DELETE` is read too.
 final class DiscordAccountRoles {
   final Map<String, Set<String>> _rolesByGuild = {};
   String? _accountId;
@@ -21,6 +23,8 @@ final class DiscordAccountRoles {
         _acceptGuild(data, data['members']);
       case 'GUILD_MEMBER_UPDATE':
         _acceptMember(data['guild_id'], data);
+      case 'GUILD_ROLE_DELETE':
+        _rolesByGuild[data['guild_id']]?.remove(data['role_id']);
     }
   }
 

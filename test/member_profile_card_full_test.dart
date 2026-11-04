@@ -227,7 +227,6 @@ const _member = Member(
   presence: Presence.online,
   colorValue: 0xff665f82,
   spaceIds: {'guild-1'},
-  rolesBySpace: {'guild-1': 'Product design'},
 );
 
 const _fullProfile = OtherUserProfile(
