@@ -905,6 +905,35 @@ void main() {
     },
   );
 
+  test(
+    'seats fires on a roster change, and not on a speaking change',
+    () async {
+      final signaling = _FakeVoiceSignalingService();
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(_state('user-1'));
+      await _flushEvents();
+      var seatChanges = 0;
+      controller.seats.addListener(() => seatChanges++);
+
+      signaling.emit(
+        const VoiceSpeakingEvent(userId: 'user-1', ssrc: 9, speakingFlags: 1),
+      );
+      await _flushEvents();
+      expect(seatChanges, 0);
+
+      signaling.roster['voice-1'] = [_state('user-1')];
+      signaling.changeSeats();
+      await _flushEvents();
+      expect(seatChanges, 1);
+    },
+  );
+
   test('a participant the roster no longer seats leaves the room', () async {
     final signaling = _FakeVoiceSignalingService();
     final controller = VoiceController(

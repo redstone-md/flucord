@@ -124,6 +124,7 @@ final class VoiceController extends ChangeNotifier {
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
   StreamSubscription<void>? _seatedSubscription;
+  final _SeatsSignal _seats = _SeatsSignal();
   VoiceState _state = VoiceState.idle;
   VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
   List<VoiceDevice> _devices = const [];
@@ -289,6 +290,10 @@ final class VoiceController extends ChangeNotifier {
   /// view of every voice state instead.
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
       _signalingService?.seatedByChannel ?? const {};
+
+  /// Fires when [seatedByChannel] changes. The controller itself also fires
+  /// on every speaking change, so a list of people listens here instead.
+  Listenable get seats => _seats;
   bool get isTransportReady => _transportSession != null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
@@ -575,8 +580,12 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_seatedSubscription?.cancel());
     _seatedSubscription = service?.seatedChanges.listen((_) {
       _reconcileParticipants();
-      if (!_disposed) notifyListeners();
+      if (_disposed) return;
+      _seats.announce();
+      notifyListeners();
     });
+    // Another service holds another roster.
+    if (!_disposed) _seats.announce();
     _signalingSubscription = service?.voiceEvents.listen(
       _handleSignalingEvent,
       onDone: _handleSignalingDone,
@@ -995,6 +1004,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
+    _seats.dispose();
     unawaited(_camerasGone.close());
     unawaited(_pictureAsks.close());
     unawaited(_audioPipeline?.dispose());
@@ -1006,4 +1016,9 @@ final class VoiceController extends ChangeNotifier {
   static VoiceSignalingService? _noSignaling() => null;
 
   static DirectCallService? _noCalls() => null;
+}
+
+/// Announces that who is seated in the voice channels changed.
+final class _SeatsSignal extends ChangeNotifier {
+  void announce() => notifyListeners();
 }

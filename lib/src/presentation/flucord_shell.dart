@@ -611,11 +611,11 @@ class FlucordShell extends StatelessWidget {
                                   if (sidePanel != null && !panelCovers)
                                     sidePanel,
                                   if (showMembers)
-                                    // Rebuilt from the voice controller, as
-                                    // the channel sidebar is: a member's
-                                    // "In voice" line follows the seats.
+                                    // A member's "In voice" line follows the
+                                    // seats. Only the seats: the controller
+                                    // also fires on every speaking change.
                                     ListenableBuilder(
-                                      listenable: voiceController,
+                                      listenable: voiceController.seats,
                                       builder: (_, _) => MemberSidebar(
                                         seatedByChannel:
                                             voiceController.seatedByChannel,
