@@ -155,7 +155,7 @@ class _ForumMediaPreview extends StatelessWidget {
                     label: 'Loading preview',
                   ),
             errorBuilder: (_, _, _) => _MediaPlaceholder(
-              icon: FlucordIcons.imageError,
+              icon: FlucordIcons.brokenImage,
               label: attachment!.fileName,
             ),
           )
@@ -163,7 +163,7 @@ class _ForumMediaPreview extends StatelessWidget {
             icon: attachment?.isVideo == true
                 ? FlucordIcons.video
                 : attachment == null
-                ? FlucordIcons.media
+                ? FlucordIcons.mediaChannel
                 : FlucordIcons.file,
             label: attachment?.fileName ?? 'No media preview',
           ),
@@ -226,7 +226,7 @@ class _ForumPostDetails extends StatelessWidget {
         children: [
           FlucordIcon(
             parent.kind == ChannelKind.media
-                ? FlucordIcons.media
+                ? FlucordIcons.mediaChannel
                 : FlucordIcons.forum,
             size: 16,
             color: context.surfaces.muted,

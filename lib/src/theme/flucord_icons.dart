@@ -227,15 +227,15 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedCalendarRemove01,
   );
   static const archive = FlucordIconData(HugeIcons.strokeRoundedArchive);
-  static const media = FlucordIconData(HugeIcons.strokeRoundedAlbum02);
-  static const imageError = FlucordIconData(
+  static const mediaChannel = FlucordIconData(HugeIcons.strokeRoundedAlbum02);
+  static const brokenImage = FlucordIconData(
     HugeIcons.strokeRoundedImageNotFound01,
   );
   static const video = FlucordIconData(HugeIcons.strokeRoundedPlayCircle);
   static const file = FlucordIconData(HugeIcons.strokeRoundedFile01);
   static const filterOff = FlucordIconData(HugeIcons.strokeRoundedFilterRemove);
   static const newPost = FlucordIconData(HugeIcons.strokeRoundedCommentAdd01);
-  static const stage = FlucordIconData(HugeIcons.strokeRoundedMegaphone01);
+  static const stage = FlucordIconData(HugeIcons.strokeRoundedPodcast);
   static const raiseHand = FlucordIconData(HugeIcons.strokeRoundedHand);
   static const voiceCall = FlucordIconData(HugeIcons.strokeRoundedHeadset);
   static const speaking = FlucordIconData(HugeIcons.strokeRoundedAudioWave01);

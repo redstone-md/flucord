@@ -146,7 +146,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
           FlucordDialogHeader(
             title: 'Create a post',
             icon: widget.channel.kind == ChannelKind.media
-                ? FlucordIcons.media
+                ? FlucordIcons.mediaChannel
                 : FlucordIcons.forum,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
