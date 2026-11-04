@@ -36,6 +36,10 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
             _handleTyping(event.data);
           case 'GUILD_CREATE':
             _handleGuildSnapshot(event.data);
+          case 'GUILD_ROLE_CREATE' ||
+              'GUILD_ROLE_UPDATE' ||
+              'GUILD_ROLE_DELETE':
+            _foldRole(event);
           case 'GUILD_EMOJIS_UPDATE':
             unawaited(_handleGuildEmojis(event.data));
           case 'GUILD_STICKERS_UPDATE':
@@ -69,6 +73,15 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
     final memberId = data['user_id'] as String?;
     if (channelId == null || memberId == null || _events.isClosed) return;
     _events.add(TypingStartedEvent(channelId: channelId, memberId: memberId));
+  }
+
+  /// Keeps the raw roles a later member payload is mapped against. The shared
+  /// dispatches announce the change.
+  void _foldRole(DiscordGatewayDispatch event) {
+    final change = DiscordRoleDispatch.read(event.name, event.data);
+    if (change == null) return;
+    final roles = _rolesByGuild[change.guildId];
+    if (roles != null) _rolesByGuild[change.guildId] = change.applyTo(roles);
   }
 
   void _handleGuildSnapshot(Map<String, Object?> data) {

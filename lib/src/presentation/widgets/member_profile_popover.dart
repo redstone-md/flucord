@@ -27,6 +27,7 @@ class MemberProfilePopover extends StatelessWidget {
     required this.spaceId,
     required this.canMessage,
     required this.onMessage,
+    this.roleColor,
     this.profile,
     this.onReport,
     this.onBlock,
@@ -39,6 +40,9 @@ class MemberProfilePopover extends StatelessWidget {
   final String spaceId;
   final bool canMessage;
   final VoidCallback onMessage;
+
+  /// The colour of the member's highest coloured role here, or null for none.
+  final int? roleColor;
 
   /// Drives the full-profile fetch and the note. Null on a host with no
   /// account behind it, which draws the identity block and nothing else.
@@ -96,7 +100,10 @@ class MemberProfilePopover extends StatelessWidget {
         DiscordIdentityProfileDetail(
           label: 'ROLE',
           value: member.roleFor(spaceId),
-          indicatorColor: Color(member.colorValue),
+          indicatorColor: switch (roleColor) {
+            final color? => Color(color),
+            null => null,
+          },
         ),
       ],
       // Discord puts the rich-presence card between the identity block and the

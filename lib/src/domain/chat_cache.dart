@@ -64,6 +64,10 @@ abstract interface class ChatCache {
 
   Future<void> writeCategory(ChannelCategory category);
 
+  Future<void> writeRole(CommunityRole role);
+
+  Future<void> deleteRole(String roleId);
+
   /// One guild the account gained, written whole: space, channels,
   /// categories, roles and members. What a restart restores.
   Future<void> writeGuild(JoinedGuild guild);

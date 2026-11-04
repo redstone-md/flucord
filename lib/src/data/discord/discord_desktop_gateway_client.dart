@@ -17,6 +17,7 @@ import 'discord_gateway_transport_codec.dart';
 import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
+import 'discord_role_dispatch.dart';
 import '../../app_log.dart';
 
 export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
@@ -386,6 +387,11 @@ final class DiscordDesktopGatewayClient
       'READY_SUPPLEMENTAL' => () {
         _bootstrap.acceptSupplemental(dispatch.data);
         return const Duration(milliseconds: 350);
+      }(),
+      'GUILD_ROLE_CREATE' || 'GUILD_ROLE_UPDATE' || 'GUILD_ROLE_DELETE' => () {
+        final change = DiscordRoleDispatch.read(dispatch.name, dispatch.data);
+        if (change != null) _bootstrap.acceptRole(change);
+        return null;
       }(),
       // A guild in an outage is still the account's, so it keeps its entry.
       'GUILD_DELETE' => () {

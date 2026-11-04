@@ -392,6 +392,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
             child: MemberProfilePopover(
               member: member,
               spaceId: widget.spaceId,
+              roleColor: widget.nameColorOf?.call(member),
               profile: widget.profile,
               canMessage: member.id != widget.currentMemberId,
               moderation: _moderation,

@@ -196,6 +196,19 @@ final class SpaceUpsertedEvent extends ChatRepositoryEvent {
   final CommunitySpace space;
 }
 
+/// A server's role, new or changed. Name colours and permissions follow it.
+final class RoleUpsertedEvent extends ChatRepositoryEvent {
+  const RoleUpsertedEvent(this.role);
+
+  final CommunityRole role;
+}
+
+final class RoleDeletedEvent extends ChatRepositoryEvent {
+  const RoleDeletedEvent(this.roleId);
+
+  final String roleId;
+}
+
 final class GuildEmojisReplacedEvent extends ChatRepositoryEvent {
   const GuildEmojisReplacedEvent({required this.spaceId, required this.emojis});
 

@@ -1,4 +1,5 @@
 import 'discord_member_list_id.dart';
+import 'discord_role_dispatch.dart';
 
 /// Remembers enough guild shape to say which member list a channel reads from.
 ///
@@ -44,17 +45,18 @@ final class DiscordMemberListDirectory {
       final channelId = channel['id'];
       if (channelId is String) channels[channelId] = channel;
     }
-    final roles = _objects(guild['roles']);
-    _guilds[id] = _Guild(
-      channels: channels,
-      roles: roles,
-      // The `@everyone` role always carries the guild's own id.
-      everyonePermissions: _bits(
-        roles
-            .where((role) => role['id'] == id)
-            .map((role) => role['permissions'])
-            .firstOrNull,
-      ),
+    _guilds[id] = _Guild.of(id, channels, _objects(guild['roles']));
+  }
+
+  /// Folds one role change in. A change to `@everyone` can move a channel to
+  /// another member list.
+  void acceptRole(DiscordRoleDispatch change) {
+    final guild = _guilds[change.guildId];
+    if (guild == null) return;
+    _guilds[change.guildId] = _Guild.of(
+      change.guildId,
+      guild.channels,
+      change.applyTo(guild.roles),
     );
   }
 
@@ -127,6 +129,22 @@ final class _Guild {
     required this.roles,
     required this.everyonePermissions,
   });
+
+  factory _Guild.of(
+    String guildId,
+    Map<String, Map<String, Object?>> channels,
+    List<Map<String, Object?>> roles,
+  ) => _Guild(
+    channels: channels,
+    roles: roles,
+    // The `@everyone` role always carries the guild's own id.
+    everyonePermissions: DiscordMemberListDirectory._bits(
+      roles
+          .where((role) => role['id'] == guildId)
+          .map((role) => role['permissions'])
+          .firstOrNull,
+    ),
+  );
 
   final Map<String, Map<String, Object?>> channels;
   final List<Map<String, Object?>> roles;

@@ -552,7 +552,7 @@ void main() {
     final guildMember = workspace.memberById('user-1');
     expect(guildMember.displayName, 'Mira Ops');
     expect(guildMember.roleFor('guild-1'), 'Operator');
-    expect(guildMember.colorValue, 0xff336699);
+    expect(workspace.nameColorOf(guildMember, 'guild-1'), 0xff336699);
     expect(guildMember.avatarUrl, contains('/avatars/user-1/'));
     expect(
       guildMember.avatarUrlFor('guild-1'),

@@ -55,6 +55,7 @@ import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_mapper.dart';
+import 'discord_role_dispatch.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';

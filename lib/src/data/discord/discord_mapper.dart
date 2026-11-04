@@ -369,7 +369,6 @@ final class DiscordMapper {
         );
     final topRole = matchingRoles.isEmpty ? null : matchingRoles.first;
     final roleName = topRole?['name'] as String? ?? 'Member';
-    final roleColor = topRole?['color'] as int? ?? 0;
     final username =
         payload['nick'] as String? ??
         user['global_name'] as String? ??
@@ -387,7 +386,9 @@ final class DiscordMapper {
       initials: _monogram(username),
       role: roleName,
       presence: Presence.offline,
-      colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
+      // The name's colour comes from the roles in the workspace, so a role
+      // change recolours it. See `ChatWorkspace.nameColorOf`.
+      colorValue: _colorFor(id),
       spaceIds: {guildId},
       rolesBySpace: {guildId: roleName},
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),

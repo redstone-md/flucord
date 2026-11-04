@@ -387,6 +387,25 @@ final class SqliteChatCache
   }
 
   @override
+  Future<void> writeRole(CommunityRole role) async {
+    _writes.add(
+      (transaction) => transaction.insert(
+        'roles',
+        _roleToRow(role),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteRole(String roleId) async {
+    _writes.add(
+      (transaction) =>
+          transaction.delete('roles', where: 'id = ?', whereArgs: [roleId]),
+    );
+  }
+
+  @override
   Future<void> writeGuild(JoinedGuild guild) => _writes.inTurn(() {
     return _database.transaction((transaction) async {
       await _putSpace(transaction, guild.space);

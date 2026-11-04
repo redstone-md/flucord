@@ -2,6 +2,7 @@ import '../../domain/read_state.dart';
 import 'discord_private_channel_directory.dart';
 import 'discord_read_state_codec.dart';
 import 'discord_ready_user_table.dart';
+import 'discord_role_dispatch.dart';
 import '../../app_log.dart';
 
 final class DiscordDesktopWorkspaceSnapshot {
@@ -163,6 +164,13 @@ final class DiscordDesktopBootstrap {
     if (resolved.isNotEmpty) _membersByGuild[id] = resolved;
     _emojisByGuild[id] = _named(guild['emojis']);
     _stickersByGuild[id] = _named(guild['stickers']);
+  }
+
+  /// Folds one role change in, so a later rehydration does not bring back the
+  /// role as READY described it.
+  void acceptRole(DiscordRoleDispatch change) {
+    final roles = _rolesByGuild[change.guildId];
+    if (roles != null) _rolesByGuild[change.guildId] = change.applyTo(roles);
   }
 
   /// Forgets a guild the account left. A later pass over the snapshot must not

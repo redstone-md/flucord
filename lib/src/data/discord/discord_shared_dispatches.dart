@@ -11,6 +11,7 @@ import 'discord_mapper.dart';
 import 'discord_message_update_handler.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
+import 'discord_role_dispatch.dart';
 
 /// The gateway dispatches that the bot and desktop transports answer the same
 /// way.
@@ -124,6 +125,11 @@ final class DiscordSharedDispatches {
         unawaited(_upsertMember(event.data));
       case 'GUILD_MEMBER_REMOVE':
         _removeMember(event.data);
+      case 'GUILD_ROLE_CREATE' || 'GUILD_ROLE_UPDATE' || 'GUILD_ROLE_DELETE':
+        if (DiscordRoleDispatch.read(event.name, event.data)
+            case final change?) {
+          unawaited(_changeRole(change));
+        }
       case 'PRESENCE_UPDATE':
         unawaited(_presenceTags(event.data));
     }
@@ -204,6 +210,17 @@ final class DiscordSharedDispatches {
     final tags = _mapper.tags(user.cast<String, Object?>());
     _events.publish(MemberTagsChangedEvent(memberId: memberId, tags: tags));
     await _cache.writeMemberTags(memberId, tags);
+  }
+
+  Future<void> _changeRole(DiscordRoleDispatch change) async {
+    final role = change.role;
+    if (role == null) {
+      _events.publish(RoleDeletedEvent(change.roleId));
+      return _cache.deleteRole(change.roleId);
+    }
+    final mapped = _mapper.role(role, change.guildId);
+    _events.publish(RoleUpsertedEvent(mapped));
+    await _cache.writeRole(mapped);
   }
 
   void _removeMember(Map<String, Object?> data) {

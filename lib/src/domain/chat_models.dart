@@ -574,6 +574,17 @@ final class ChatWorkspace {
                 : existing,
         ];
 
+  /// A changed role keeps its place in the list; a new one goes last.
+  ChatWorkspace upsertRole(CommunityRole role) =>
+      copyWith(roles: _withChanged(roles, [role], (role) => role.id));
+
+  /// The members who held the role keep its id, as Discord's own records do
+  /// until each member next changes. Name colours and permissions skip an id
+  /// with no role.
+  ChatWorkspace removeRole(String roleId) => roleOrNull(roleId) == null
+      ? this
+      : copyWith(roles: roles.where((role) => role.id != roleId).toList());
+
   ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(
     categories: [
       ...categories.where((existing) => existing.id != category.id),

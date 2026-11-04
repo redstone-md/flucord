@@ -44,6 +44,10 @@ extension _ChatControllerEvents on ChatController {
         if (activeId != null) unawaited(_catchUpChannel(activeId));
       case SpaceRemovedEvent():
         _removeGuild(event.spaceId);
+      case RoleUpsertedEvent():
+        _workspace = _workspace?.upsertRole(event.role);
+      case RoleDeletedEvent():
+        _workspace = _workspace?.removeRole(event.roleId);
       case GuildEmojisReplacedEvent():
         _workspace = _workspace?.replaceGuildEmojis(
           event.spaceId,

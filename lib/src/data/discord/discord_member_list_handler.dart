@@ -6,6 +6,7 @@ import 'discord_mapper.dart';
 import 'discord_member_list_directory.dart';
 import 'discord_member_list_store.dart';
 import 'discord_member_list_update.dart';
+import 'discord_role_dispatch.dart';
 
 /// Turns the Gateway's member-list traffic into domain state.
 ///
@@ -67,6 +68,10 @@ final class DiscordMemberListHandler {
         _directory.acceptChannel(data);
       case 'CHANNEL_DELETE' || 'THREAD_DELETE':
         _directory.removeChannel(data);
+      case 'GUILD_ROLE_CREATE' || 'GUILD_ROLE_UPDATE' || 'GUILD_ROLE_DELETE':
+        if (DiscordRoleDispatch.read(name, data) case final change?) {
+          _directory.acceptRole(change);
+        }
       case 'GUILD_MEMBER_LIST_UPDATE':
         return _acceptListUpdate(data);
     }

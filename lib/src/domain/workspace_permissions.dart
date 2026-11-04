@@ -103,10 +103,17 @@ final class WorkspacePermissions {
   /// every roster page that arrives.
   final Map<String, GuildMembership?> _membershipCache = {};
 
+  ///
+  /// A deleted role stays on a member's record until that member next changes,
+  /// and its overwrites stay on a channel until the channel is next read. Only
+  /// the roles the guild still has count, so neither grants anything.
   GuildMembership? _membershipIn(String spaceId) =>
       _membershipCache.putIfAbsent(
         spaceId,
-        () => _workspace.memberOrNull(_memberId)?.membershipIn(spaceId),
+        () => _workspace
+            .memberOrNull(_memberId)
+            ?.membershipIn(spaceId)
+            ?.withRolesThat((roleId) => _workspace.roleOrNull(roleId) != null),
       );
 
   BigInt _resolve(ConversationChannel channel) {
