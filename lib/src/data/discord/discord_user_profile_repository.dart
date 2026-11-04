@@ -152,6 +152,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       accentColor: metadata['accent_color'] is int
           ? metadata['accent_color']! as int
           : null,
+      themeColors: _themeColors(metadata['theme_colors']),
       decoration: decorationData == null
           ? null
           : ProfileDecoration(
@@ -223,8 +224,18 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       pronouns: _metadataText(profile['pronouns']),
       bannerHash:
           _metadataText(profile['banner']) ?? _metadataText(member['banner']),
+      themeColors: _themeColors(profile['theme_colors']),
     );
   }
+
+  /// `theme_colors` is `[primary, accent]`, or null where none is set.
+  static ProfileThemeColors? _themeColors(Object? value) => switch (value) {
+    [final int primary, final int accent] => ProfileThemeColors(
+      primary,
+      accent,
+    ),
+    _ => null,
+  };
 
   /// The profile metadata spells an absent banner as null and an absent bio
   /// as an absent key, and both collapse here.
