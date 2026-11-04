@@ -15,6 +15,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'direct_message_views.dart';
 import 'member_avatar.dart';
+import 'message_context_menu.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
@@ -639,51 +640,55 @@ class MessageListState extends State<MessageList>
                 return false;
               },
               child: LayoutBuilder(
-                builder: (context, constraints) => CustomScrollView(
-                  key: ValueKey(_viewportGeneration),
-                  controller: _scrollController,
-                  center: _centreKey,
-                  // At the end of the conversation, the gap under the newest
-                  // message fills the viewport below the centre. Offset zero is
-                  // then the end, with the gap on screen.
-                  anchor: centre.isBelowMessage
-                      ? (1 - _endGap / constraints.maxHeight).clamp(0.0, 1.0)
-                      : _anchorFor(constraints.maxHeight),
-                  slivers: [
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => index == centreIndex
-                            ? _channelHead()
-                            : _messageAt(messages, centreIndex - 1 - index),
-                        childCount: centreIndex + 1,
-                        findChildIndexCallback: (key) {
-                          if (key == _headKey) return centreIndex;
-                          final row = rowIndex(key);
-                          return row == null || row >= centreIndex
-                              ? null
-                              : centreIndex - 1 - row;
-                        },
+                builder: (context, constraints) => _TimelineSelectionArea(
+                  child: CustomScrollView(
+                    key: ValueKey(_viewportGeneration),
+                    controller: _scrollController,
+                    center: _centreKey,
+                    // At the end of the conversation, the gap under the newest
+                    // message fills the viewport below the centre. Offset zero is
+                    // then the end, with the gap on screen.
+                    anchor: centre.isBelowMessage
+                        ? (1 - _endGap / constraints.maxHeight).clamp(0.0, 1.0)
+                        : _anchorFor(constraints.maxHeight),
+                    slivers: [
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => index == centreIndex
+                              ? _channelHead()
+                              : _messageAt(messages, centreIndex - 1 - index),
+                          childCount: centreIndex + 1,
+                          findChildIndexCallback: (key) {
+                            if (key == _headKey) return centreIndex;
+                            final row = rowIndex(key);
+                            return row == null || row >= centreIndex
+                                ? null
+                                : centreIndex - 1 - row;
+                          },
+                        ),
                       ),
-                    ),
-                    SliverToBoxAdapter(
-                      key: _centreKey,
-                      child: const SizedBox(),
-                    ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) =>
-                            _messageAt(messages, centreIndex + index),
-                        childCount: messages.length - centreIndex,
-                        findChildIndexCallback: (key) {
-                          final row = rowIndex(key);
-                          return row == null || row < centreIndex
-                              ? null
-                              : row - centreIndex;
-                        },
+                      SliverToBoxAdapter(
+                        key: _centreKey,
+                        child: const SizedBox(),
                       ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: _endGap)),
-                  ],
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) =>
+                              _messageAt(messages, centreIndex + index),
+                          childCount: messages.length - centreIndex,
+                          findChildIndexCallback: (key) {
+                            final row = rowIndex(key);
+                            return row == null || row < centreIndex
+                                ? null
+                                : row - centreIndex;
+                          },
+                        ),
+                      ),
+                      const SliverToBoxAdapter(
+                        child: SizedBox(height: _endGap),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -840,4 +845,39 @@ class MessageListState extends State<MessageList>
       ),
     );
   }
+}
+
+/// One selection over the timeline's rows ([TimelineSelection]).
+class _TimelineSelectionArea extends StatefulWidget {
+  const _TimelineSelectionArea({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TimelineSelectionArea> createState() => _TimelineSelectionAreaState();
+}
+
+class _TimelineSelectionAreaState extends State<_TimelineSelectionArea> {
+  /// Each row is a stop for Tab; the selection is not one more.
+  final _focus = FocusNode(
+    debugLabel: 'timeline selection',
+    skipTraversal: true,
+  );
+  String _selected = '';
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TimelineSelection(
+    text: () => _selected,
+    child: SelectionArea(
+      focusNode: _focus,
+      onSelectionChanged: (content) => _selected = content?.plainText ?? '',
+      child: widget.child,
+    ),
+  );
 }

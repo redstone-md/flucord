@@ -57,25 +57,28 @@ class _MessageContentViewState extends State<MessageContentView> {
     // on and off while the same message is on screen, and the copy held by the
     // cache is the one that has to survive it being turned off again.
     final body = StreamerModeScope.redact(context, widget.body);
+    final markdown = DiscordMarkdown(
+      body: body,
+      workspace: widget.workspace,
+      spaceId: widget.spaceId,
+      onSelectChannel: widget.onSelectChannel,
+      now: widget.now,
+      textStyle: widget.textStyle,
+      onTapLink: (href) => unawaited(_openLink(context, href)),
+    );
+    // In the timeline, the list's one selection covers this text.
+    if (TimelineSelection.maybeOf(context) != null) return markdown;
     final rowMenu = MessageMenuScope.maybeOf(context);
     // In a row, the row is the stop for Tab. A second stop on the text would
     // show nothing on screen and say nothing to a screen reader.
     _selectionFocus.skipTraversal = rowMenu != null;
-    final text = SelectionArea(
+    // A row takes the right button itself, so the selection's own menu does
+    // not open over the row's.
+    return SelectionArea(
       focusNode: _selectionFocus,
       onSelectionChanged: rowMenu?.onSelectionChanged,
-      child: DiscordMarkdown(
-        body: body,
-        workspace: widget.workspace,
-        spaceId: widget.spaceId,
-        onSelectChannel: widget.onSelectChannel,
-        now: widget.now,
-        textStyle: widget.textStyle,
-        onTapLink: (href) => unawaited(_openLink(context, href)),
-      ),
+      child: markdown,
     );
-    if (rowMenu == null) return text;
-    return RightClickClaim(onPressed: rowMenu.onOpen, child: text);
   }
 
   Future<void> _openLink(BuildContext context, String rawHref) async {

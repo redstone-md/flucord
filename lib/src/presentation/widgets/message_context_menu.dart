@@ -170,6 +170,25 @@ class MessageMenuScope extends InheritedWidget {
   bool updateShouldNotify(MessageMenuScope oldWidget) => false;
 }
 
+/// One selection over the whole timeline, so a drag can run from one
+/// message into the next, author lines and times included, as in Discord.
+///
+/// The message list puts a [SelectionArea] around its rows and this above
+/// it. A message body inside it draws no selection area of its own, and a
+/// row's menu reads what is selected from here.
+class TimelineSelection extends InheritedWidget {
+  const TimelineSelection({required this.text, required super.child, super.key});
+
+  /// The text selected in the timeline now.
+  final String Function() text;
+
+  static TimelineSelection? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<TimelineSelection>();
+
+  @override
+  bool updateShouldNotify(TimelineSelection oldWidget) => false;
+}
+
 /// Takes the right mouse button before anything inside [child] can use it.
 ///
 /// A [SelectionArea] uses that button to move the selection and open its own

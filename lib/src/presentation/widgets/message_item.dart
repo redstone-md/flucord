@@ -305,15 +305,14 @@ class _MessageItemState extends State<MessageItem> {
             child: MouseRegion(
               onEnter: (_) => _updateBar(() => _hovered = true),
               onExit: (_) => _updateBar(() => _hovered = false),
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                // The right button reaches the same actions the hover bar
-                // carries. Without it half of them were only discoverable by
-                // hovering the exact right pixels, and copying an id or a
-                // link had nowhere to live.
-                onSecondaryTapDown: (details) => unawaited(
-                  _openContextMenu(context, details.globalPosition),
-                ),
+              // The right button reaches the same actions the hover bar
+              // carries. Without it half of them were only discoverable by
+              // hovering the exact right pixels, and copying an id or a link
+              // had nowhere to live. It is claimed for the whole row, so a
+              // selection around the text never opens its own menu instead.
+              child: RightClickClaim(
+                onPressed: (position) =>
+                    unawaited(_openContextMenu(context, position)),
                 child: Stack(
                   children: [
                     MotionHoverRegion(child: _surface(context)),
@@ -444,7 +443,12 @@ class _MessageItemState extends State<MessageItem> {
   /// The toolbar, over the right end of the highlight's top edge. It never
   /// rises above the list the row scrolls in, so the topmost message keeps it
   /// off the chat header.
-  Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) {
+  /// The hover bar, kept out of the timeline's selection: it is buttons,
+  /// not text.
+  Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) =>
+      SelectionContainer.disabled(child: _bar(context, layout));
+
+  Widget _bar(BuildContext context, OverlayChildLayoutInfo layout) {
     // A transform that flattens the row means it is not on screen.
     if (widget.isEditing || layout.childPaintTransform.determinant() == 0) {
       return const SizedBox.shrink();
@@ -781,7 +785,8 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
-    final selectedText = _selectedText;
+    final selectedText =
+        TimelineSelection.maybeOf(context)?.text() ?? _selectedText;
     final action = await showMessageContextMenu(
       context: context,
       position: position,
