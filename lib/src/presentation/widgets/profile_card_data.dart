@@ -41,6 +41,7 @@ final class ProfileCardData {
     this.accentColorValue,
     this.pronouns = '',
     this.clanTag,
+    this.nameStyle,
     this.badges = const [],
     this.mutualFriends = const [],
     this.mutualServers = const [],
@@ -94,6 +95,7 @@ final class ProfileCardData {
       },
       pronouns: profile?.pronouns ?? '',
       clanTag: member.clanTag,
+      nameStyle: member.tags.nameStyle,
       badges: profile?.badges ?? const [],
       mutualFriends: [
         for (final friend in profile?.mutualFriends ?? const <MutualFriend>[])
@@ -202,6 +204,10 @@ final class ProfileCardData {
   final int? accentColorValue;
   final String pronouns;
   final ClanTag? clanTag;
+
+  /// How the person styled their name. A profile is the person, not their
+  /// standing in a server, so no role colour takes its place here.
+  final NameStyle? nameStyle;
   final List<ProfileBadge> badges;
   final List<ProfileMutualFriend> mutualFriends;
   final List<ProfileMutualServer> mutualServers;

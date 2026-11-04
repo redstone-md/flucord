@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 
-/// A person's name on one line, in the colours they styled it with. The
-/// member list, the DM list and message authors all draw names with it.
+/// A person's name in the colours they styled it with. The member list, the
+/// DM list, message authors and the profile all draw names with it.
 ///
 /// Inside a server the role colour wins: the name takes the colour of the
 /// member's role, or the plain colour of [style], and the style's colours are
@@ -23,6 +23,7 @@ class DisplayName extends StatelessWidget {
     this.nameStyle,
     this.roleColor,
     this.inServer = false,
+    this.maxLines = 1,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class DisplayName extends StatelessWidget {
   /// The colour of the member's role here, or null for none.
   final int? roleColor;
   final bool inServer;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +54,12 @@ class DisplayName extends StatelessWidget {
     };
   }
 
-  Widget _line(TextStyle style) =>
-      Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+  Widget _line(TextStyle style) => Text(
+    text,
+    maxLines: maxLines,
+    overflow: TextOverflow.ellipsis,
+    style: style,
+  );
 
   /// The colours of [style] this client draws, or none for the plain name.
   ///
