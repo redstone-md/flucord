@@ -19,18 +19,20 @@ const _clan = {
   'identity_enabled': true,
 };
 
-Map<String, Object?> _fromBot() => rawMessage(
-  id: _botMessageId,
-  channelId: SessionHarness.channelId,
-  guildId: SessionHarness.guildId,
-  authorId: _botId,
-  content: 'beep',
-)..['author'] = {
-    'id': _botId,
-    'username': 'Helper',
-    'bot': true,
-    'primary_guild': _clan,
-  };
+Map<String, Object?> _fromBot() =>
+    rawMessage(
+        id: _botMessageId,
+        channelId: SessionHarness.channelId,
+        guildId: SessionHarness.guildId,
+        authorId: _botId,
+        content: 'beep',
+      )
+      ..['author'] = {
+        'id': _botId,
+        'username': 'Helper',
+        'bot': true,
+        'primary_guild': _clan,
+      };
 
 Finder _in(Finder row, Finder matching) =>
     find.descendant(of: row, matching: matching);

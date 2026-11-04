@@ -49,10 +49,7 @@ class AppTag extends StatelessWidget {
     return _TagBox(
       height: height,
       color: surfaces.brandTint,
-      child: Text(
-        'APP',
-        style: _tagStyle(FlucordType.appTag, surfaces.brand),
-      ),
+      child: Text('APP', style: _tagStyle(FlucordType.appTag, surfaces.brand)),
     );
   }
 }

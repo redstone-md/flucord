@@ -73,7 +73,9 @@ void main() {
   });
 
   test('a clan without a badge keeps its tag and no picture', () {
-    final member = mapper.member(_user(primaryGuild: {..._clan, 'badge': null}));
+    final member = mapper.member(
+      _user(primaryGuild: {..._clan, 'badge': null}),
+    );
 
     expect(member.clanTag?.tag, 'CODE');
     expect(member.clanTag?.badgeUrl, isNull);
