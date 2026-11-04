@@ -585,16 +585,21 @@ final class VoiceController extends ChangeNotifier
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
       await _leaveActiveSession();
-      await _releaseCallMicrophone();
-      _connectedGuildId = null;
-      _connectedChannelId = null;
-      _isCallSession = false;
-      _connectionStatus = VoiceConnectionStatus.disconnected;
-      _transportSession = null;
-      _clearParticipants();
-      _isMuted = false;
-      _isDeafened = false;
-      _isCameraOn = false;
+      // The room is left by now. A microphone that will not stop is kept as
+      // the error, and must not keep the controller in the room.
+      try {
+        await _releaseCallMicrophone();
+      } finally {
+        _connectedGuildId = null;
+        _connectedChannelId = null;
+        _isCallSession = false;
+        _connectionStatus = VoiceConnectionStatus.disconnected;
+        _transportSession = null;
+        _clearParticipants();
+        _isMuted = false;
+        _isDeafened = false;
+        _isCameraOn = false;
+      }
     });
   }
 

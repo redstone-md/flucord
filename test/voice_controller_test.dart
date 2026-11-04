@@ -37,6 +37,21 @@ void main() {
     expect(media.microphoneEnabled, isTrue);
   });
 
+  test('leave ends the room even when the microphone will not stop', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+    media.failMicrophoneStop = true;
+    await controller.disconnect();
+
+    expect(controller.isConnected, isFalse);
+    expect(controller.connectionStatus, VoiceConnectionStatus.disconnected);
+    expect(controller.error, isA<StateError>());
+  });
+
   test('deafening also mutes, and undeafening leaves the mute alone', () async {
     final media = _FakeVoiceMediaService();
     final controller = VoiceController(media);
@@ -1213,6 +1228,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   final List<String?> startedInputs = [];
   bool failMicrophone = false;
   bool failMicrophoneToggle = false;
+  bool failMicrophoneStop = false;
   bool microphoneEnabled = true;
   bool microphoneStopped = false;
   String? selectedOutput;
@@ -1271,6 +1287,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
 
   @override
   Future<void> stopMicrophone() async {
+    if (failMicrophoneStop) throw StateError('device is gone');
     microphoneStopped = true;
     _operations?.add('microphone:stop');
   }
