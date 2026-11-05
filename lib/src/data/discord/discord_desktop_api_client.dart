@@ -828,6 +828,14 @@ final class DiscordDesktopApiClient
   Future<Map<String, Object?>> readProfileEffects() =>
       _rest.getObject('/user-profile-effects');
 
+  @override
+  Future<Map<String, Object?>> readStoreProducts(List<String> skuIds) =>
+      _rest.requestObject(
+        'GET',
+        '/storefront/products/skus',
+        query: {'sku_ids': skuIds, 'with_bundled_skus': 'true'},
+      );
+
   /// `GET /users/@me/notes`, every note the account holds.
   ///
   /// A request that fails to return a map is an account with no notes rather

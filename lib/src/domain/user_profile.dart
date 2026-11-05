@@ -1,6 +1,7 @@
 import 'account_connections.dart';
 import 'chat_models.dart';
 import 'profile_effect.dart';
+import 'profile_frame.dart';
 
 /// The account's own profile, as it appears to everyone else.
 ///
@@ -426,6 +427,8 @@ final class OtherUserProfile {
     this.serverProfile,
     this.profileEffect,
     this.profileEffectConfig,
+    this.profileFrame,
+    this.profileFrameConfig,
   });
 
   final String userId;
@@ -467,6 +470,12 @@ final class OtherUserProfile {
   /// How [effectiveProfileEffect] looks, or null where the catalogue does
   /// not have it.
   final ProfileEffectConfig? profileEffectConfig;
+
+  /// The frame around the card. Only the user profile carries one.
+  final ProfileFrame? profileFrame;
+
+  /// How [profileFrame] looks, or null where the shop does not describe it.
+  final ProfileFrameConfig? profileFrameConfig;
 
   /// The server profile's effect where it sets one, else the user profile's.
   ProfileEffect? get effectiveProfileEffect =>

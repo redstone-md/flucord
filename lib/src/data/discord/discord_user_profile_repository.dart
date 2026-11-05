@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import '../../domain/profile_effect.dart';
+import '../../domain/profile_frame.dart';
 import '../../domain/user_profile.dart';
 import 'discord_cdn.dart';
 import 'discord_mapper.dart';
+import 'discord_profile_frames.dart';
 
 /// The REST surface a profile edit needs.
 abstract interface class DiscordUserProfileTransport {
@@ -36,6 +38,10 @@ abstract interface class DiscordUserProfileTransport {
   /// `GET /user-profile-effects`: the catalogue of profile effects, as
   /// `{profile_effect_configs: [...]}`.
   Future<Map<String, Object?>> readProfileEffects();
+
+  /// `GET /storefront/products/skus`: the shop's description of the items
+  /// [skuIds] name, as `{products: [{items: [...]}]}`.
+  Future<Map<String, Object?>> readStoreProducts(List<String> skuIds);
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -56,6 +62,9 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   /// The effect catalogue, read once per session by the first profile that
   /// wears an effect.
   Future<Map<String, ProfileEffectConfig>>? _effects;
+
+  /// How each frame looks, by SKU, read once per session per frame.
+  final Map<String, Future<ProfileFrameConfig?>> _frames = {};
 
   @override
   UserProfile? get current => _current;
@@ -114,12 +123,33 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     if (payload == null) return null;
     final profile = readOtherProfile(payload, serverId: serverId);
     final effect = profile?.effectiveProfileEffect;
-    if (effect == null) return profile;
+    final frame = profile?.profileFrame;
+    if (effect == null && frame == null) return profile;
+    final (effectConfig, frameConfig) = await (
+      effect == null ? Future.value() : _effectConfig(effect.id),
+      frame == null ? Future.value() : _frameConfig(frame.skuId),
+    ).wait;
     return readOtherProfile(
       payload,
       serverId: serverId,
-      profileEffectConfig: await _effectConfig(effect.id),
+      profileEffectConfig: effectConfig,
+      profileFrameConfig: frameConfig,
     );
+  }
+
+  /// How the frame [skuId] looks, or null where the shop does not describe
+  /// it or could not be read. A failed read is tried again by the next
+  /// profile that wears the frame.
+  Future<ProfileFrameConfig?> _frameConfig(String skuId) async {
+    final frame = _frames[skuId] ??= _transport
+        .readStoreProducts([skuId])
+        .then((payload) => DiscordProfileFrames.read(payload, skuId));
+    try {
+      return await frame;
+    } on Object {
+      if (identical(_frames[skuId], frame)) _frames.remove(skuId);
+      return null;
+    }
   }
 
   /// How the effect [id] looks, or null where the catalogue lacks it or
@@ -210,6 +240,7 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     Map<String, Object?> payload, {
     String? serverId,
     ProfileEffectConfig? profileEffectConfig,
+    ProfileFrameConfig? profileFrameConfig,
   }) {
     final user = _object(payload['user']);
     if (user == null) return null;
@@ -281,6 +312,8 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
           : _readServerProfile(payload, serverId),
       profileEffect: ProfileEffect.fromJson(metadata['profile_effect']),
       profileEffectConfig: profileEffectConfig,
+      profileFrame: ProfileFrame.fromCollectibles(metadata['collectibles']),
+      profileFrameConfig: profileFrameConfig,
     );
   }
 
