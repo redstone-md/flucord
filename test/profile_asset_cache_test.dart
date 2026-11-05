@@ -31,7 +31,9 @@ void main() {
     }
 
     await draw();
-    // As after a restart: nothing of it is left in memory.
+    // As after a restart: nothing of it is left in memory, and no Image
+    // still holds the picture it drew.
+    await tester.pumpWidget(const SizedBox());
     imageCache
       ..clear()
       ..clearLiveImages();
