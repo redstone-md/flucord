@@ -408,11 +408,17 @@ final class Member {
   /// A payload says only part of what is known: the spaces and memberships
   /// it names, and no presence. So the spaces, avatars and memberships of
   /// [known] stay unless the payload names the same space, a known presence
-  /// stays, and so do the tags and username the payload left out.
+  /// stays, and so do the tags and username the payload left out. A
+  /// membership comes with the whole guild member, so a space it names and
+  /// gives no avatar has none any more.
   Member over(Member known) => copyWith(
     spaceIds: {...known.spaceIds, ...spaceIds},
     avatarUrl: avatarUrl ?? known.avatarUrl,
-    avatarUrlsBySpace: {...known.avatarUrlsBySpace, ...avatarUrlsBySpace},
+    avatarUrlsBySpace: {
+      for (final MapEntry(:key, :value) in known.avatarUrlsBySpace.entries)
+        if (!membershipsBySpace.containsKey(key)) key: value,
+      ...avatarUrlsBySpace,
+    },
     membershipsBySpace: {...known.membershipsBySpace, ...membershipsBySpace},
     // A member payload carries no presence, so the mapper defaults it to
     // offline; letting that erase a presence the gateway already reported
