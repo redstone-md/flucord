@@ -536,7 +536,6 @@ class _MessageItemState extends State<MessageItem> {
             spaceId: _channel?.spaceId,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
-            onOpenProfile: widget.onOpenMemberProfile,
           ),
         if (!widget.isEditing && message.body.isNotEmpty)
           MessageInviteCards(

@@ -7,6 +7,7 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_content_view.dart';
 import 'package:flucord/src/presentation/widgets/profile_card_route.dart';
+import 'package:flucord/src/presentation/widgets/profile_opener_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
@@ -195,6 +196,7 @@ void main() {
 
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: tester.getCenter(mention));
+    addTearDown(mouse.removePointer);
     await tester.pump();
     expect(fill(), isNot(idle));
 
@@ -287,19 +289,24 @@ Widget _host(
       alignment: Alignment.topLeft,
       child: SizedBox(
         width: 620,
-        child: MessageContentView(
-          body: body,
-          workspace: _workspace,
-          spaceId: null,
-          linkLauncher: launcher ?? _RecordingLinkLauncher(),
-          onSelectChannel: onSelectChannel ?? (_) {},
-          onOpenProfile: onOpenProfile,
-          now: now,
+        child: _withOpener(
+          onOpenProfile,
+          MessageContentView(
+            body: body,
+            workspace: _workspace,
+            spaceId: null,
+            linkLauncher: launcher ?? _RecordingLinkLauncher(),
+            onSelectChannel: onSelectChannel ?? (_) {},
+            now: now,
+          ),
         ),
       ),
     ),
   ),
 );
+
+Widget _withOpener(OpenProfileCard? open, Widget child) =>
+    open == null ? child : ProfileOpenerScope(open: open, child: child);
 
 /// What a body draws, for comparing two bodies.
 ({

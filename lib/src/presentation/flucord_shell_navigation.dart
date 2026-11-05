@@ -40,7 +40,14 @@ extension _FlucordShellNavigation on FlucordShell {
   /// Puts the connection banner above [body] and the incoming-call card over it.
   ///
   /// A demo has no connection to report, so it gets no banner.
-  Widget _withWorkspaceChrome(ChatWorkspace workspace, Widget body) => Column(
+  /// The connection banner, the incoming call, and a profile card for a
+  /// mention in any message text of [spaceId] around [body].
+  Widget _withWorkspaceChrome(
+    BuildContext context,
+    ChatWorkspace workspace,
+    String spaceId,
+    Widget body,
+  ) => Column(
     children: [
       if (connectionController.mode == SessionMode.discord)
         ConnectionBanner(
@@ -49,7 +56,13 @@ extension _FlucordShellNavigation on FlucordShell {
               ? () => unawaited(connectionController.connectSavedCredential())
               : null,
         ),
-      Expanded(child: _withIncomingCall(workspace, body)),
+      Expanded(
+        child: ProfileOpenerScope(
+          open: (userId, anchor) =>
+              unawaited(_openMemberCard(context, spaceId, userId, anchor)),
+          child: _withIncomingCall(workspace, body),
+        ),
+      ),
     ],
   );
 
