@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../domain/profile_frame.dart';
 import 'pictures_ready.dart';
+import 'profile_asset_images.dart';
 
 /// Draws a profile [frame] around [child], a card [cardWidth] wide, as
 /// Discord does: the frame is scaled to the card's width and reaches past
@@ -39,54 +40,58 @@ class ProfileFrameBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final frame = this.frame;
     if (frame == null) return child;
+    final image = ProfileAssetImages.of(context);
     return Stack(
       children: [
         if (frame.layers.any((layer) => !layer.inFront))
-          _layers(frame, inFront: false),
+          _layers(frame, image, inFront: false),
         Padding(padding: overhang(frame, cardWidth), child: child),
         if (frame.layers.any((layer) => layer.inFront))
-          _layers(frame, inFront: true),
+          _layers(frame, image, inFront: true),
       ],
     );
   }
 
-  static Widget _layers(ProfileFrameConfig frame, {required bool inFront}) =>
-      Positioned.fill(
-        key: ValueKey('profile-frame-${inFront ? 'front' : 'back'}'),
-        child: PicturesReady(
-          pictures: [for (final layer in frame.layers) NetworkImage(layer.src)],
-          child: IgnorePointer(
-            child: ExcludeSemantics(
-              child: Stack(
-                children: [
-                  for (final layer in frame.layers)
-                    if (layer.inFront == inFront)
-                      switch (layer.anchor) {
-                        ProfileFrameAnchor.top => Positioned(
-                          left: 0,
-                          right: 0,
-                          top: 0,
-                          child: _picture(layer.src, BoxFit.fitWidth),
-                        ),
-                        ProfileFrameAnchor.bottom => Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _picture(layer.src, BoxFit.fitWidth),
-                        ),
-                        ProfileFrameAnchor.center => Positioned.fill(
-                          child: _picture(layer.src, BoxFit.fill),
-                        ),
-                      },
-                ],
-              ),
-            ),
+  static Widget _layers(
+    ProfileFrameConfig frame,
+    ImageProvider Function(String url) image, {
+    required bool inFront,
+  }) => Positioned.fill(
+    key: ValueKey('profile-frame-${inFront ? 'front' : 'back'}'),
+    child: PicturesReady(
+      pictures: [for (final layer in frame.layers) image(layer.src)],
+      child: IgnorePointer(
+        child: ExcludeSemantics(
+          child: Stack(
+            children: [
+              for (final layer in frame.layers)
+                if (layer.inFront == inFront)
+                  switch (layer.anchor) {
+                    ProfileFrameAnchor.top => Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      child: _picture(image(layer.src), BoxFit.fitWidth),
+                    ),
+                    ProfileFrameAnchor.bottom => Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _picture(image(layer.src), BoxFit.fitWidth),
+                    ),
+                    ProfileFrameAnchor.center => Positioned.fill(
+                      child: _picture(image(layer.src), BoxFit.fill),
+                    ),
+                  },
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
-  static Widget _picture(String url, BoxFit fit) => Image.network(
-    url,
+  static Widget _picture(ImageProvider picture, BoxFit fit) => Image(
+    image: picture,
     fit: fit,
     filterQuality: FilterQuality.medium,
     // A picture that fails to load is left out; the card stays as it is.

@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../../domain/profile_effect.dart';
 import 'motion_scope.dart';
 import 'pictures_ready.dart';
+import 'profile_asset_images.dart';
 
 /// A profile effect over a card, scaled to the card's width. Place it in a
 /// [Stack] over the card, which clips it.
@@ -31,6 +32,7 @@ class ProfileEffectOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final image = ProfileAssetImages.of(context);
     return PicturesReady(
       pictures: [
         for (final url
@@ -42,7 +44,7 @@ class ProfileEffectOverlay extends StatelessWidget {
                       ...layer.randomizedSources,
                     ],
                   ])
-          NetworkImage(url),
+          image(url),
       ],
       child: _EffectPlayer(effect: effect, endsAt: endsAt),
     );
@@ -131,6 +133,7 @@ class _EffectPlayerState extends State<_EffectPlayer> {
   Widget build(BuildContext context) {
     if (_ended) return const SizedBox.shrink();
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final image = ProfileAssetImages.of(context);
     return IgnorePointer(
       child: ExcludeSemantics(
         child: LayoutBuilder(
@@ -146,7 +149,7 @@ class _EffectPlayerState extends State<_EffectPlayer> {
                           left: 0,
                           top: 0,
                           width: box.maxWidth,
-                          child: _picture(src, BoxFit.fitWidth),
+                          child: _picture(image(src), BoxFit.fitWidth),
                         ),
                     ]
                   : [
@@ -156,7 +159,7 @@ class _EffectPlayerState extends State<_EffectPlayer> {
                           top: layer.y * scale,
                           width: layer.width * scale,
                           height: layer.height * scale,
-                          child: _picture(_sources[layer]!, BoxFit.fill),
+                          child: _picture(image(_sources[layer]!), BoxFit.fill),
                         ),
                     ],
             );
@@ -166,8 +169,8 @@ class _EffectPlayerState extends State<_EffectPlayer> {
     );
   }
 
-  static Widget _picture(String url, BoxFit fit) => Image.network(
-    url,
+  static Widget _picture(ImageProvider picture, BoxFit fit) => Image(
+    image: picture,
     fit: fit,
     gaplessPlayback: true,
     filterQuality: FilterQuality.medium,
