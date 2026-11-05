@@ -152,11 +152,17 @@ void main() {
   );
 
   testSession(
-    'an expired frame is not drawn',
+    'an expired frame is not drawn and never asks the shop',
     (tester, session) async {
       await _openCard(tester, session);
 
       expect(_frontLayers, findsNothing);
+      expect(
+        session.transport.requests.where(
+          (request) => request.uri.path == _shopPath,
+        ),
+        isEmpty,
+      );
     },
     // 2001-09-09, long gone.
     routes: _routes(collectibles: [_frame(expiresAt: 1000000000)]),
