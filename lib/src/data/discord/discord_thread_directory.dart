@@ -106,12 +106,13 @@ final class DiscordThreadDirectory {
   final void Function(Map<String, Object?> member)? _onSelfMember;
   final Future<void> Function(Duration) _wait;
 
+  /// One page of the threads under [parentId]. It needs nothing from the
+  /// cache: each thread Discord lists names its own guild.
   Future<ThreadPage> loadThreads(
     String parentId, {
     required int offset,
     required Set<String> tagIds,
   }) async {
-    final parent = await _cachedParent(parentId);
     Future<Map<String, Object?>> search() =>
         _routes.searchThreads(parentId, offset: offset, tagIds: tagIds);
     var payload = await search();
@@ -135,7 +136,7 @@ final class DiscordThreadDirectory {
     }
     final threads = _objects(
       payload['threads'],
-    ).map((raw) => _thread(raw, parent.spaceId)).toList(growable: false);
+    ).map(_listedThread).toList(growable: false);
     final firstMessages = _objects(payload['first_messages'])
         .map((raw) => _mapper.message(raw, currentMemberId: _currentMemberId()))
         .toList(growable: false);
@@ -199,6 +200,17 @@ final class DiscordThreadDirectory {
     );
     if (parent == null) throw StateError('Parent channel is not cached');
     return parent;
+  }
+
+  ConversationChannel _listedThread(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    if (guildId is! String) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a guild_id on a listed thread',
+      );
+    }
+    return _thread(payload, guildId);
   }
 
   ConversationChannel _thread(Map<String, Object?> payload, String guildId) {

@@ -47,6 +47,60 @@ void main() {
     );
   });
 
+  // Shaped like a real forum page: a post whose owner Discord left out, an
+  // archived post whose opening message is gone, and a unicode reaction with
+  // no emoji id.
+  test('reads a forum page with no forum in the cache', () async {
+    final (directory, cache) = await _directory(
+      _QueuedTransport([_forumPage]),
+      cachesForum: false,
+    );
+
+    final page = await directory.loadThreads(
+      '100000000000000100',
+      offset: 0,
+      tagIds: const {},
+    );
+
+    expect(
+      page.threads.map(
+        (post) => (post.id, post.spaceId, post.parentId, post.isArchived),
+      ),
+      [
+        (
+          '100000000000000101',
+          '100000000000000001',
+          '100000000000000100',
+          false,
+        ),
+        (
+          '100000000000000102',
+          '100000000000000001',
+          '100000000000000100',
+          false,
+        ),
+        (
+          '100000000000000103',
+          '100000000000000001',
+          '100000000000000100',
+          true,
+        ),
+      ],
+    );
+    expect(page.firstMessages.map((message) => message.channelId), [
+      '100000000000000101',
+      '100000000000000102',
+    ]);
+    expect(
+      page.firstMessages.first.reactions.map((reaction) => reaction.count),
+      [5],
+    );
+    expect(
+      (await cache.readMessage('100000000000000102'))?.body,
+      'Who walks him at noon?',
+    );
+  });
+
   test('asks again while Discord is still indexing the channel', () async {
     final transport = _QueuedTransport([
       '{"message":"Index not yet available.","code":110000,'
@@ -72,13 +126,14 @@ Future<(DiscordThreadDirectory, SqliteChatCache)> _directory(
   _QueuedTransport transport, {
   void Function(Map<String, Object?>)? onSelfMember,
   void Function(Duration)? wait,
+  bool cachesForum = true,
 }) async {
   final cache = await SqliteChatCache.openAt(
     inMemoryDatabasePath,
     factory: databaseFactoryFfi,
   );
   addTearDown(cache.close);
-  await cache.writeWorkspace(_workspace);
+  if (cachesForum) await cache.writeWorkspace(_workspace);
   final client = DiscordApiClient(botToken: 'token', transport: transport);
   addTearDown(client.close);
   return (
@@ -112,6 +167,43 @@ const _page =
     '"timestamp":"2026-07-23T09:00:00.000Z","edited_timestamp":null,'
     '"pinned":false,"attachments":[],"embeds":[],"reactions":[],'
     '"author":{"id":"user-2","username":"mira"}}]}';
+
+const _owner =
+    '{"user":{"id":"100000000000000201","username":"walker"},'
+    '"roles":[],"joined_at":"2026-09-01T10:00:00.000000+00:00",'
+    '"nick":null,"mute":false,"deaf":false}';
+
+String _post(String id, {required bool archived, bool withOwner = true}) =>
+    '{"id":"$id","type":11,"guild_id":"100000000000000001",'
+    '"parent_id":"100000000000000100","name":"post $id","flags":0,'
+    '"last_message_id":"$id","owner_id":"100000000000000201",'
+    '"rate_limit_per_user":0,"bitrate":64000,"user_limit":0,'
+    '"rtc_region":null,"message_count":1,"member_count":1,'
+    '"total_message_sent":1,"member_ids_preview":["100000000000000201"],'
+    '"thread_metadata":{"archived":$archived,'
+    '"archive_timestamp":"2026-10-17T12:32:39.890000+00:00",'
+    '"auto_archive_duration":4320,"locked":false,'
+    '"create_timestamp":"2026-10-17T12:32:39.890000+00:00"}'
+    '${withOwner ? ',"owner":$_owner' : ''}}';
+
+String _opening(String id, String content, {String reactions = '[]'}) =>
+    '{"id":"$id","channel_id":"$id","type":0,"content":"$content",'
+    '"mentions":[],"mention_roles":[],"attachments":[],"embeds":[],'
+    '"components":[],"timestamp":"2026-10-17T12:32:39.890000+00:00",'
+    '"edited_timestamp":null,"flags":0,"pinned":false,'
+    '"mention_everyone":false,"tts":false,"position":0,'
+    '"author":{"id":"100000000000000201","username":"walker"},'
+    '"reactions":$reactions}';
+
+final _forumPage =
+    '{"threads":['
+    '${_post('100000000000000101', archived: false)},'
+    '${_post('100000000000000102', archived: false, withOwner: false)},'
+    '${_post('100000000000000103', archived: true)}],'
+    '"members":[],"has_more":true,"total_results":764,'
+    '"first_messages":['
+    '${_opening('100000000000000101', 'Meet Biscuit', reactions: '[{"emoji":{"id":null,"name":"\\u2764"},"count":5,"count_details":{"burst":0,"normal":5},"burst_colors":[],"me_burst":false,"burst_me":false,"me":false,"burst_count":0}]')},'
+    '${_opening('100000000000000102', 'Who walks him at noon?')}]}';
 
 final _workspace = ChatWorkspace(
   spaces: const [

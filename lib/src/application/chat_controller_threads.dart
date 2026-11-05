@@ -108,7 +108,14 @@ extension ChatControllerThreads on ChatController {
       pages.loaded[parentId] = offset + page.threads.length;
       pages.hasMore[parentId] = page.hasMore;
       pages.initialized.add(parentId);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      // The panel shows only "unavailable", so the log is where the cause is.
+      AppLog.error(
+        'chat.threads',
+        'Loading the threads under $parentId failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (current()) pages.errors[parentId] = error;
     } finally {
       if (current()) {
