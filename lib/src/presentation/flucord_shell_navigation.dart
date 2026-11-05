@@ -592,7 +592,12 @@ extension _FlucordShellNavigation on FlucordShell {
     ChatWorkspace workspace,
     FriendsController friends,
   ) => _WatchPresences(
-    userIds: [for (final friend in friends.friends) friend.user.id],
+    // Everyone the page can show with a status: every relationship tab,
+    // and the suggestions under Add Friend.
+    userIds: [
+      for (final entry in friends.all) entry.user.id,
+      for (final suggestion in friends.suggestions) suggestion.userId,
+    ],
     builder: (_) => FriendsPanel(
       controller: friends,
       // From the workspace as it stands, which the presence service keeps

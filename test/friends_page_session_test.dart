@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/monogram.dart';
 import 'package:flucord/src/presentation/widgets/discord_relationship_avatar.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
@@ -253,6 +254,48 @@ void main() {
             'id': _suggestedId,
             'username': 'maybe',
             'avatar': 'beef',
+          },
+          'reasons': <Object?>[],
+        },
+      ]),
+    ),
+  );
+
+  testSession(
+    'a suggestion\'s status follows their presence',
+    (tester, session) async {
+      await _openDirectMessages(tester, session);
+      await tester.tap(_friendsRow);
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('friends-tab-add')));
+      await session.settle();
+
+      await session.dispatch('PRESENCE_UPDATE', {
+        'user': {'id': SessionHarness.friendId},
+        'guild_id': SessionHarness.guildId,
+        'status': 'online',
+        'activities': <Object?>[],
+        'client_status': {'desktop': 'online'},
+      });
+
+      final badge = _badges(
+        find.byKey(const ValueKey('suggestion-${SessionHarness.friendId}')),
+      );
+      expect(
+        tester.widget<PresenceIndicator>(badge).presence.status,
+        Presence.online,
+      );
+    },
+    // The friend is only a suggestion here, so no relationship names them.
+    ready: SessionHarness.defaultReady()..['relationships'] = <Object?>[],
+    routes: (transport) => transport.on(
+      'GET',
+      '/api/v9/friend-suggestions',
+      (_) => jsonResponse([
+        {
+          'suggested_user': {
+            'id': SessionHarness.friendId,
+            'username': 'friend',
           },
           'reasons': <Object?>[],
         },
