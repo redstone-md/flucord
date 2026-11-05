@@ -79,6 +79,23 @@ void main() {
       },
     );
 
+    test('reopening after an account switch asks the new account', () async {
+      final first = _FakeProfileRepository();
+      final second = _FakeProfileRepository();
+      var current = first;
+      final controller = MemberProfileController(
+        profileProvider: () => current,
+        notesProvider: () => _FakeNotesRepository(),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.open('222');
+      current = second;
+      await controller.open('222');
+
+      expect(second.requestedIds, ['222']);
+    });
+
     test('opening another member refetches', () async {
       final profile = _FakeProfileRepository();
       final controller = MemberProfileController(
@@ -207,9 +224,7 @@ final class _FakeProfileRepository implements UserProfileRepository {
   );
 
   @override
-
   OtherUserProfile? get published => null;
-
 
   @override
   UserProfile? get current => null;

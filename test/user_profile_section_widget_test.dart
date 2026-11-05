@@ -423,10 +423,10 @@ final class _FakeRepository implements UserProfileRepository {
   bool failWrites = false;
   Completer<void>? gate;
 
-  // Null until the first load lands, the same as the real repository.
   @override
   OtherUserProfile? get published => null;
 
+  // Null until the first load lands, the same as the real repository.
   @override
   UserProfile? get current => _loaded ? _current : null;
 

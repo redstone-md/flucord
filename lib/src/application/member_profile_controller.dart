@@ -35,6 +35,10 @@ final class MemberProfileController extends ChangeNotifier {
   Object? _error;
   OtherUserProfile? _profile;
   bool _profileUnavailable = false;
+
+  /// The profile plane that gave the held answer. Another one means another
+  /// account, whose answer may differ.
+  UserProfileRepository? _answeredBy;
   bool _noteSaving = false;
   bool _noteRefused = false;
 
@@ -74,11 +78,14 @@ final class MemberProfileController extends ChangeNotifier {
   /// The answer held for the same user and server is kept rather than
   /// refetched: the popover closes and reopens on the same person in a
   /// session's lifetime, and the profile route is rate-limited. A refusal
-  /// is kept too. A failure is not, so the next open tries again.
+  /// is kept too. A failure is not, so the next open tries again, and
+  /// neither is an answer given to another account.
   Future<void> open(String userId, {String? serverId}) async {
     if (_disposed) return;
     _bindNotes();
-    final answered = _profile != null || _profileUnavailable;
+    final answered =
+        (_profile != null || _profileUnavailable) &&
+        identical(_answeredBy, _profileProvider());
     if (_openUserId == userId &&
         _openServerId == serverId &&
         (answered || _isLoading)) {
@@ -140,6 +147,7 @@ final class MemberProfileController extends ChangeNotifier {
 
   Future<void> _fetchProfile(String userId, String? serverId) async {
     final profile = _profileProvider();
+    _answeredBy = profile;
     if (profile == null) {
       // A transport with no profile plane still shows the roster's answer,
       // which the popover draws from its own member row.
