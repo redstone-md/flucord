@@ -330,7 +330,12 @@ class _EffectBox extends StatelessWidget {
       final effect? => Stack(
         children: [
           child,
-          Positioned.fill(child: ProfileEffectOverlay(effect: effect)),
+          Positioned.fill(
+            child: ProfileEffectOverlay(
+              effect: effect,
+              endsAt: data.effectEndsAt,
+            ),
+          ),
         ],
       ),
       null => child,

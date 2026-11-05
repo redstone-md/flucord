@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/scheduler.dart';
@@ -14,10 +15,14 @@ import 'motion_scope.dart';
 /// unfocused or suspended ([TickerMode]), so the effect resumes where it
 /// was. Reduced motion draws Discord's still picture instead.
 class ProfileEffectOverlay extends StatefulWidget {
-  ProfileEffectOverlay({required this.effect})
+  ProfileEffectOverlay({required this.effect, this.endsAt})
     : super(key: ValueKey('profile-effect-${effect.id}'));
 
   final ProfileEffectConfig effect;
+
+  /// When the effect stops being worn. The overlay goes away then, even on
+  /// a card that stays open.
+  final DateTime? endsAt;
 
   @override
   State<ProfileEffectOverlay> createState() => _ProfileEffectOverlayState();
@@ -36,6 +41,20 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
 
   Duration get _elapsed => _played + _run;
 
+  Timer? _expiry;
+  bool _ended = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.endsAt case final endsAt?) {
+      _expiry = Timer(endsAt.difference(DateTime.now()), () {
+        _ticker.stop();
+        setState(() => _ended = true);
+      });
+    }
+  }
+
   Map<ProfileEffectLayer, String> _pickSources() {
     final random = Random();
     return Map.identity()..addAll({
@@ -52,7 +71,7 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final plays = MotionScope.allows(context);
-    if (plays && !_ticker.isActive && _nextChange != null) {
+    if (plays && !_ended && !_ticker.isActive && _nextChange != null) {
       _ticker.start();
     } else if (!plays && _ticker.isActive) {
       _played += _run;
@@ -71,12 +90,14 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
 
   @override
   void dispose() {
+    _expiry?.cancel();
     _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_ended) return const SizedBox.shrink();
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return IgnorePointer(
       child: ExcludeSemantics(

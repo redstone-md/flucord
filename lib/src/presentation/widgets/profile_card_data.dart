@@ -55,6 +55,7 @@ final class ProfileCardData {
     this.friendsSince,
     this.connections = const [],
     this.effect,
+    this.effectEndsAt,
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
@@ -127,6 +128,7 @@ final class ProfileCardData {
       friendsSince: friendsSince,
       connections: profile?.connections ?? const [],
       effect: _wornEffect(profile),
+      effectEndsAt: profile?.effectiveProfileEffect?.expiresAt,
     );
   }
 
@@ -192,6 +194,7 @@ final class ProfileCardData {
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),
       effect: _wornEffect(published),
+      effectEndsAt: published?.effectiveProfileEffect?.expiresAt,
     );
   }
 
@@ -253,6 +256,9 @@ final class ProfileCardData {
 
   /// The profile effect drawn over the card. Null for none.
   final ProfileEffectConfig? effect;
+
+  /// When [effect] stops being worn, or null when it does not expire.
+  final DateTime? effectEndsAt;
 
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {

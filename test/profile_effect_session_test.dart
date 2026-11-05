@@ -258,6 +258,29 @@ void main() {
   );
 
   testSession(
+    'an effect that expires while the card is open goes away',
+    (tester, session) async {
+      await _openCard(tester, session);
+      expect(find.byKey(const ValueKey('profile-effect')), findsOneWidget);
+
+      await tester.pump(const Duration(minutes: 2));
+
+      expect(find.byKey(const ValueKey('profile-effect')), findsNothing);
+    },
+    routes: _routes(
+      userEffect: {
+        'id': _sakuraId,
+        // A minute from the real now: the card's clock is the real one.
+        'expires_at':
+            DateTime.now()
+                .add(const Duration(minutes: 1))
+                .millisecondsSinceEpoch ~/
+            1000,
+      },
+    ),
+  );
+
+  testSession(
     "reduced motion draws Discord's still picture",
     (tester, session) async {
       await _openCard(tester, session);
