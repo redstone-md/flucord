@@ -157,7 +157,7 @@ final class GuildNotificationSettings {
     required this.spaceId,
     this.muted = false,
     this.muteConfig,
-    this.messageNotifications = MessageNotificationLevel.allMessages,
+    this.messageNotifications = MessageNotificationLevel.inherit,
     this.suppressEveryone = false,
     this.suppressRoles = false,
     this.muteScheduledEvents = false,

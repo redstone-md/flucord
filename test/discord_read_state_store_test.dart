@@ -36,6 +36,34 @@ void main() {
     );
   });
 
+  test('reads each guild default from READY and GUILD_UPDATE', () {
+    final store = DiscordReadStateStore()
+      ..accept('READY', {
+        'guilds': [
+          {
+            'id': _guildId,
+            'properties': {'default_message_notifications': 1},
+          },
+        ],
+      });
+    expect(
+      store.snapshot.guildDefaults[_guildId],
+      MessageNotificationLevel.onlyMentions,
+    );
+
+    expect(
+      store.accept('GUILD_UPDATE', {
+        'id': _guildId,
+        'default_message_notifications': 0,
+      }),
+      isTrue,
+    );
+    expect(
+      store.snapshot.guildDefaults[_guildId],
+      MessageNotificationLevel.allMessages,
+    );
+  });
+
   test('a full READY replaces, a partial one merges', () {
     final store = DiscordReadStateStore()..accept('READY', _ready());
 

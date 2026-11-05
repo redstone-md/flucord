@@ -308,7 +308,7 @@ class ChannelSidebar extends StatelessWidget {
   List<PopupMenuEntry<NotificationMenuRequest>> get _spaceNotificationItems =>
       notificationMenuItems(
         muted: _spaceMuted,
-        level: _spaceSettings.messageNotifications,
+        level: _readState.spaceNotificationLevel(space.id),
         isSpaceScope: true,
         suppressEveryone: _spaceSettings.suppressEveryone,
         mobilePush: _spaceSettings.mobilePush,

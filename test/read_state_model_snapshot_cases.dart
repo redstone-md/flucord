@@ -6,10 +6,7 @@ void _snapshotCases() {
       final settings = ReadStateSnapshot.empty.settingsFor(_guildId);
       expect(settings.muted, isFalse);
       expect(settings.mobilePush, isTrue);
-      expect(
-        settings.messageNotifications,
-        MessageNotificationLevel.allMessages,
-      );
+      expect(settings.messageNotifications, MessageNotificationLevel.inherit);
       expect(settings.version, -1);
       expect(ReadStateSnapshot.empty.forChannel(_channelId), isNull);
     });
@@ -269,6 +266,37 @@ void _snapshotCases() {
           accountFlags: AccountNotificationFlags.useNewNotifications,
         ).unreadBadgeFor(channel),
         UnreadBadge.onlyMentions,
+      );
+    });
+
+    test('a guild the account never set follows the guild default', () {
+      final channel = _channel(id: _channelId);
+      final quietServer = ReadStateSnapshot(
+        guildDefaults: {_guildId: MessageNotificationLevel.onlyMentions},
+      );
+      expect(
+        quietServer.allowsDesktopNotification(
+          channel,
+          mentionsCurrentMember: false,
+        ),
+        isFalse,
+      );
+      expect(
+        quietServer.spaceNotificationLevel(_guildId),
+        MessageNotificationLevel.onlyMentions,
+      );
+
+      final chosen = quietServer.copyWith(
+        settings: {
+          _guildId: GuildNotificationSettings(
+            spaceId: _guildId,
+            messageNotifications: MessageNotificationLevel.allMessages,
+          ),
+        },
+      );
+      expect(
+        chosen.allowsDesktopNotification(channel, mentionsCurrentMember: false),
+        isTrue,
       );
     });
 

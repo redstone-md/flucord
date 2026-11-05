@@ -318,7 +318,7 @@ extension _FlucordShellNavigation on FlucordShell {
       context: context,
       position: at,
       muted: readState.isSpaceMuted(space.id),
-      level: settings.messageNotifications,
+      level: readState.spaceNotificationLevel(space.id),
       isSpaceScope: true,
       suppressEveryone: settings.suppressEveryone,
       mobilePush: settings.mobilePush,

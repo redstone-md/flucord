@@ -17,6 +17,7 @@ import 'discord_read_state_codec.dart';
 final class DiscordReadStateStore {
   final Map<String, ReadState> _readStates = {};
   final Map<String, GuildNotificationSettings> _settings = {};
+  final Map<String, MessageNotificationLevel> _guildDefaults = {};
   final DiscordAccountRoles _accountRoles = DiscordAccountRoles();
   int _accountNotificationFlags = 0;
   int _readStateVersion = 0;
@@ -25,6 +26,7 @@ final class DiscordReadStateStore {
   ReadStateSnapshot get snapshot => ReadStateSnapshot(
     readStates: Map.of(_readStates),
     settings: Map.of(_settings),
+    guildDefaults: Map.of(_guildDefaults),
     accountNotificationFlags: _accountNotificationFlags,
     readStateVersion: _readStateVersion,
     userGuildSettingsVersion: _userGuildSettingsVersion,
@@ -45,6 +47,7 @@ final class DiscordReadStateStore {
       'GUILD_FEATURE_ACK' => _acceptFeatureAck(data),
       'USER_NON_CHANNEL_ACK' => _acceptUserAck(data),
       'USER_GUILD_SETTINGS_UPDATE' => _acceptSettingsUpdate(data),
+      'GUILD_CREATE' || 'GUILD_UPDATE' => _acceptGuildDefault(data),
       _ => false,
     };
   }
@@ -135,6 +138,7 @@ final class DiscordReadStateStore {
   void clear() {
     _readStates.clear();
     _settings.clear();
+    _guildDefaults.clear();
     _accountRoles.clear();
     _accountNotificationFlags = 0;
     _readStateVersion = 0;
@@ -144,6 +148,10 @@ final class DiscordReadStateStore {
   bool _acceptReady(Map<String, Object?> data) {
     _acceptReadStateBlock(data['read_state']);
     _acceptSettingsBlock(data['user_guild_settings']);
+    _guildDefaults.clear();
+    for (final guild in _objects(data['guilds'])) {
+      _acceptGuildDefault(guild);
+    }
     final notifications = data['notification_settings'];
     if (notifications is Map) {
       _accountNotificationFlags = _int(notifications['flags']) ?? 0;
@@ -185,6 +193,27 @@ final class DiscordReadStateStore {
     }
     if (!removed) return false;
     _bumpReadStateVersion(_int(data['version']));
+    return true;
+  }
+
+  /// Reads a guild's `default_message_notifications`, which the desktop
+  /// session nests in `properties` and other shapes keep flat.
+  bool _acceptGuildDefault(Map<String, Object?> guild) {
+    final id = guild['id'];
+    if (id is! String) return false;
+    final properties = guild['properties'];
+    final level = MessageNotificationLevel.fromWire(
+      (properties is Map
+              ? properties['default_message_notifications']
+              : null) ??
+          guild['default_message_notifications'],
+      orElse: MessageNotificationLevel.inherit,
+    );
+    if (level == MessageNotificationLevel.inherit ||
+        _guildDefaults[id] == level) {
+      return false;
+    }
+    _guildDefaults[id] = level;
     return true;
   }
 
