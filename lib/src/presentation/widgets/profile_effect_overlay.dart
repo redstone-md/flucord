@@ -15,8 +15,10 @@ import 'motion_scope.dart';
 /// unfocused or suspended ([TickerMode]), so the effect resumes where it
 /// was. Reduced motion draws Discord's still picture instead.
 class ProfileEffectOverlay extends StatefulWidget {
+  /// Keyed by [effect], so another effect starts from its intro. The shop
+  /// is read once per effect, so one effect is one object.
   ProfileEffectOverlay({required this.effect, this.endsAt})
-    : super(key: ValueKey('profile-effect-${effect.id}'));
+    : super(key: ObjectKey(effect));
 
   final ProfileEffectConfig effect;
 

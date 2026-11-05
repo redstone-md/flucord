@@ -96,4 +96,3 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
     required AutoModAlertAction action,
   }) async {}
 }
-

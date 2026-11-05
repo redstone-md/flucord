@@ -825,8 +825,13 @@ final class DiscordDesktopApiClient
   }
 
   @override
-  Future<Map<String, Object?>> readProfileEffects() =>
-      _rest.getObject('/user-profile-effects');
+  Future<Map<String, Object?>> readCollectiblesProduct(String skuId) =>
+      _rest.requestObject(
+        'GET',
+        '/collectibles-products/${Uri.encodeComponent(skuId)}',
+        // Discord's client names its language; the app's is English.
+        query: {'locale': 'en-US'},
+      );
 
   @override
   Future<Map<String, Object?>> readStoreProducts(List<String> skuIds) =>
