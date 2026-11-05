@@ -582,6 +582,7 @@ void main() {
         await mouse.addPointer(
           location: tester.getCenter(session.messageRow(_idOf(_newest))),
         );
+        addTearDown(mouse.removePointer);
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Edit'));
         await tester.pumpAndSettle();
