@@ -497,6 +497,10 @@ final class _FakeTransport implements DiscordUserProfileTransport {
   Future<Map<String, Object?>> readProfileEffects() async => const {};
 
   @override
+  Future<Map<String, Object?>> readStoreProducts(List<String> skuIds) async =>
+      const {};
+
+  @override
   Future<Map<String, Object?>?> patchCurrentUser(
     Map<String, Object?> body,
   ) async {

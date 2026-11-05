@@ -8,6 +8,7 @@ import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/monogram.dart';
 import '../../domain/profile_effect.dart';
+import '../../domain/profile_frame.dart';
 import '../../domain/user_profile.dart';
 
 /// A friend both people share, with their status where the workspace knows
@@ -56,6 +57,7 @@ final class ProfileCardData {
     this.connections = const [],
     this.effect,
     this.effectEndsAt,
+    this.frame,
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
@@ -129,6 +131,7 @@ final class ProfileCardData {
       connections: profile?.connections ?? const [],
       effect: _wornEffect(profile),
       effectEndsAt: profile?.effectiveProfileEffect?.expiresAt,
+      frame: _wornFrame(profile),
     );
   }
 
@@ -195,6 +198,7 @@ final class ProfileCardData {
       memberSince: DiscordSnowflake.createdAt(profile.userId),
       effect: _wornEffect(published),
       effectEndsAt: published?.effectiveProfileEffect?.expiresAt,
+      frame: _wornFrame(published),
     );
   }
 
@@ -260,6 +264,9 @@ final class ProfileCardData {
   /// When [effect] stops being worn, or null when it does not expire.
   final DateTime? effectEndsAt;
 
+  /// The profile frame drawn around the card. Null for none.
+  final ProfileFrameConfig? frame;
+
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {
     final String text when text.isNotEmpty => text,
@@ -277,6 +284,14 @@ final class ProfileCardData {
       switch (profile?.effectiveProfileEffect) {
         final worn? when worn.isWornAt(DateTime.now()) =>
           profile?.profileEffectConfig,
+        _ => null,
+      };
+
+  /// How [profile]'s frame looks, unless it has expired.
+  static ProfileFrameConfig? _wornFrame(OtherUserProfile? profile) =>
+      switch (profile?.profileFrame) {
+        final worn? when worn.isWornAt(DateTime.now()) =>
+          profile?.profileFrameConfig,
         _ => null,
       };
 

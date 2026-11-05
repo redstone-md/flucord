@@ -33,6 +33,7 @@ import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'profile_card_route.dart';
 import 'profile_effect_overlay.dart';
+import 'profile_frame_box.dart';
 import 'profile_theme.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
@@ -178,6 +179,11 @@ class ProfileCard extends StatelessWidget {
     final screen = MediaQuery.sizeOf(context);
     // The popout is a route of its own; the preview is part of the page.
     final opensAsRoute = _preview ? null : true;
+    // The editor's preview sits in a page, where an overhang would cover
+    // what is around it.
+    final frame = _preview ? null : data.frame;
+    final cardWidth = width.clamp(0.0, screen.width - 16);
+    final overhang = ProfileFrameBox.overhang(frame, cardWidth);
     return MotionHoverRegion(
       // The card is one hover target: its avatar and banner play while the
       // pointer is anywhere on it.
@@ -186,83 +192,90 @@ class ProfileCard extends StatelessWidget {
         namesRoute: opensAsRoute,
         explicitChildNodes: true,
         label: '${data.displayName} profile',
-        child: _CardSurface(
-          key: const ValueKey('profile-card'),
-          theme: data.themeColors,
-          color: surfaces.raised,
-          elevation: _preview ? 0 : 12,
-          shadowColor: FlucordFixedColors.shadow,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: FlucordRadius.overlay,
-            side: BorderSide(color: surfaces.border),
-          ),
-          child: _EffectBox(
-            data: data,
-            constraints: BoxConstraints(
-              maxWidth: width.clamp(0.0, screen.width - 16),
-              maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+        child: ProfileFrameBox(
+          frame: frame,
+          cardWidth: cardWidth,
+          child: _CardSurface(
+            key: const ValueKey('profile-card'),
+            theme: data.themeColors,
+            color: surfaces.raised,
+            elevation: _preview ? 0 : 12,
+            shadowColor: FlucordFixedColors.shadow,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: FlucordRadius.overlay,
+              side: BorderSide(color: surfaces.border),
             ),
-            child: SingleChildScrollView(
-              child: SelectionArea(
-                // Names, the bio and the status can be selected and copied. A click on the name still opens the full profile.
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _Header(
-                      data: data,
-                      metrics: _ProfileMetrics.card,
-                      backdrop: surfaces.raised,
-                      actions: actions,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        _padding,
-                        12,
-                        _padding,
-                        _padding,
+            child: _EffectBox(
+              data: data,
+              constraints: BoxConstraints(
+                maxWidth: cardWidth,
+                maxHeight: (screen.height - 16 - overhang.vertical).clamp(
+                  0.0,
+                  double.infinity,
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: SelectionArea(
+                  // Names, the bio and the status can be selected and copied. A click on the name still opens the full profile.
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Header(
+                        data: data,
+                        metrics: _ProfileMetrics.card,
+                        backdrop: surfaces.raised,
+                        actions: actions,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        spacing: 12,
-                        children: [
-                          _Names(
-                            data: data,
-                            metrics: _ProfileMetrics.card,
-                            backdrop: surfaces.raised,
-                            onOpenFullProfile: actions.onOpenFullProfile,
-                          ),
-                          if (_preview)
-                            _AboutSections(data: data)
-                          else if (data.bio.isNotEmpty)
-                            _Bio(
-                              bio: data.bio,
-                              onViewFull: actions.onOpenFullProfile,
-                              onOpenLink: actions.onOpenLink,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          _padding,
+                          12,
+                          _padding,
+                          _padding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          spacing: 12,
+                          children: [
+                            _Names(
+                              data: data,
+                              metrics: _ProfileMetrics.card,
+                              backdrop: surfaces.raised,
+                              onOpenFullProfile: actions.onOpenFullProfile,
                             ),
-                          if (data.activity case final activity?)
-                            ActivityCard(
-                              activity: activity,
-                              now: now ?? DateTime.now(),
-                            ),
-                          if (showsRoles)
-                            _Roles(
-                              roles: roles,
-                              addable: actions.addableRoles,
-                              onAdd: actions.onAddRole,
-                              removable: actions.removableRoleIds,
-                              onRemove: actions.onRemoveRole,
-                            ),
-                          if (actions.onMessage case final send?)
-                            _MessageField(
-                              name: data.displayName,
-                              onSubmit: send,
-                            ),
-                        ],
+                            if (_preview)
+                              _AboutSections(data: data)
+                            else if (data.bio.isNotEmpty)
+                              _Bio(
+                                bio: data.bio,
+                                onViewFull: actions.onOpenFullProfile,
+                                onOpenLink: actions.onOpenLink,
+                              ),
+                            if (data.activity case final activity?)
+                              ActivityCard(
+                                activity: activity,
+                                now: now ?? DateTime.now(),
+                              ),
+                            if (showsRoles)
+                              _Roles(
+                                roles: roles,
+                                addable: actions.addableRoles,
+                                onAdd: actions.onAddRole,
+                                removable: actions.removableRoleIds,
+                                onRemove: actions.onRemoveRole,
+                              ),
+                            if (actions.onMessage case final send?)
+                              _MessageField(
+                                name: data.displayName,
+                                onSubmit: send,
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

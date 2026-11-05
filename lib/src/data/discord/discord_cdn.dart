@@ -68,6 +68,14 @@ final class DiscordCdn {
   static String? movingNameplate(String asset) =>
       _collectible(asset, 'img.png');
 
+  /// One picture of a profile frame, by the frame's SKU and the layer's id
+  /// from the shop's description of it. Seen in Discord's own client; no
+  /// public reference lists it.
+  static String? profileFrameLayer(String skuId, String layerId) =>
+      skuId.isEmpty
+      ? null
+      : _named(layerId, '/media/v1/collectibles-shop/$skuId/$layerId/static');
+
   static String? _collectible(String asset, String file) => _named(
     asset,
     '/assets/collectibles/${asset.endsWith('/') ? asset : '$asset/'}$file',
