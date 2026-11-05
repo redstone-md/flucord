@@ -8,6 +8,10 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   PendingVoiceMessage? _pendingVoiceMessage;
   Object? _voiceError;
   bool _isRecordingVoice = false;
+
+  /// Between the stop and the recorder's answer, while the capture hands
+  /// over its last frames.
+  bool _isStoppingVoice = false;
   bool _isUploadingVoice = false;
   int _voiceGeneration = 0;
 
@@ -26,7 +30,9 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   void _listenToVoiceProgress() {
     _voiceProgressSubscription = widget.voiceMessageRecorder?.progress.listen(
       (progress) {
-        if (mounted && _isRecordingVoice) _voiceLevels.add(progress);
+        if (mounted && (_isRecordingVoice || _isStoppingVoice)) {
+          _voiceLevels.add(progress);
+        }
       },
       onError: (Object error) {
         if (mounted) unawaited(_abortVoiceCapture(error));
@@ -68,8 +74,14 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
       _isUploadingVoice = true;
       _voiceError = null;
     });
+    _isStoppingVoice = true;
     try {
-      final pending = await recorder.stop();
+      final PendingVoiceMessage pending;
+      try {
+        pending = await recorder.stop();
+      } finally {
+        _isStoppingVoice = false;
+      }
       if (!mounted || generation != _voiceGeneration) {
         await _deleteVoiceMessageIgnoringErrors(recorder, pending);
         return;

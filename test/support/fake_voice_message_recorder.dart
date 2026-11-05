@@ -23,6 +23,10 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   final List<PendingVoiceMessage> deleted = [];
   final Object? deleteError;
 
+  /// What the capture hands over while it stops, after [stop] is called
+  /// and before it answers.
+  List<VoiceMessageRecordingProgress> lastFrames = const [];
+
   int startCount = 0;
   int cancelCount = 0;
   int deleteCount = 0;
@@ -43,6 +47,9 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
 
   @override
   Future<PendingVoiceMessage> stop() async {
+    lastFrames.forEach(emit);
+    // A broadcast stream delivers on a later microtask.
+    await Future<void>.delayed(Duration.zero);
     isRecording = false;
     return pending;
   }

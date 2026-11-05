@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/composer_draft.dart';
@@ -59,6 +61,40 @@ void main() {
     expect(recorder.deleted, [same(recorder.pending)]);
     expect(find.byKey(const ValueKey('record-voice-message')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the frames a stop hands over still count', (tester) async {
+    final recorder = FakeVoiceMessageRecorder();
+    addTearDown(recorder.dispose);
+    final upload = Completer<bool>();
+    await tester.pumpWidget(
+      _composerApp(
+        recorder: recorder,
+        onSendVoiceMessage: (_) => upload.future,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+    recorder.emit(
+      const VoiceMessageRecordingProgress(
+        duration: Duration(milliseconds: 1240),
+        level: 0.8,
+      ),
+    );
+    recorder.lastFrames = const [
+      VoiceMessageRecordingProgress(
+        duration: Duration(milliseconds: 2400),
+        level: 0.5,
+      ),
+    ];
+    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('00:02'), findsOneWidget);
+    upload.complete(true);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a recording does not rebuild the composer on each level', (
