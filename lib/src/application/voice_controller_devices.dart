@@ -8,7 +8,11 @@ part of 'voice_controller.dart';
 /// leave paths made the file harder to follow than the two concerns are apart.
 extension VoiceControllerDevices on VoiceController {
   /// Switches the microphone, for this session and the next.
+  ///
+  /// Marks the settings touched before it queues, so a startup load that
+  /// finishes while the microphone restarts cannot put the saved one back.
   Future<void> selectInput(String deviceId) async {
+    _processingTouched = true;
     await _run(() async {
       if (_selectedInputId == deviceId) return;
       _selectedInputId = deviceId;
@@ -23,6 +27,7 @@ extension VoiceControllerDevices on VoiceController {
 
   /// Switches the speakers, for this session and the next.
   Future<void> selectOutput(String deviceId) async {
+    _processingTouched = true;
     await _run(() async {
       if (_selectedOutputId == deviceId) return;
       await _playOn(deviceId);
@@ -56,7 +61,6 @@ extension VoiceControllerDevices on VoiceController {
         choice) {
       return;
     }
-    _processingTouched = true;
     _processing = input
         ? _processing.copyWith(inputDevice: choice)
         : _processing.copyWith(outputDevice: choice);

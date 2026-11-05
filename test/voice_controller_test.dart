@@ -274,6 +274,31 @@ void main() {
       expect(controller.selectedInputId, 'mic-2');
     });
 
+    test('a choice made while the settings load is kept', () async {
+      final repository = MemoryVoiceProcessingRepository()
+        ..pendingLoad = Completer();
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        processingRepository: repository,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final loading = controller.loadProcessingSettings();
+
+      final choosing = controller.selectInput('mic-1');
+      repository.pendingLoad!.complete(
+        const VoiceProcessingSettings(
+          inputDevice: VoiceDeviceChoice(
+            id: 'mic-2',
+            label: 'Backup microphone',
+          ),
+        ),
+      );
+      await Future.wait([choosing, loading]);
+
+      expect(controller.selectedInputId, 'mic-1');
+    });
+
     test('a device that is gone leaves the first one', () async {
       final controller = VoiceController(
         _FakeVoiceMediaService(),
