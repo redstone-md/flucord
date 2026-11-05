@@ -1,53 +1,57 @@
 # Flucord
 
-A native Discord desktop client built with Flutter, without Electron or an
-embedded browser. A [Redstone](https://redstone.md) project by **Rxflex**.
+Flucord is a native Discord desktop client built with Flutter. It runs without
+Electron or an embedded browser. It is a [Redstone](https://redstone.md)
+project by Rxflex.
 
 > [!IMPORTANT]
 > Flucord is not affiliated with Discord. It uses Discord's private client
 > protocol, which can change at any time, and a third-party client may break
 > Discord's terms of service.
 
-![Flucord: servers, channels, a conversation and the member list](docs/images/workspace-overview.png)
+![Flucord with servers, channels, a conversation and the member list](docs/images/workspace-overview.png)
 
 ## Download
 
 Windows x64 builds are on the
-[releases page](https://github.com/redstone-md/flucord/releases): an
-installer, a portable ZIP, and `SHA256SUMS.txt`.
+[releases page](https://github.com/redstone-md/flucord/releases). Each release
+has an installer, a portable ZIP and a `SHA256SUMS.txt` file.
 
-Sign in with **Connections → Sign in with QR code** and scan the code with the
-Discord mobile app. The session is kept in the Windows credential vault.
+To sign in, open **Connections**, choose **Sign in with QR code** and scan the
+code with the Discord mobile app. Flucord keeps the session in the Windows
+credential vault.
 
 ## What works
 
-Chat, threads, forums and DMs; voice, video, screen share and calls; friends,
-profiles and the member list; notifications, keybinds, Rich Presence and
-themes. Windows is the tested platform.
+Flucord has chat, threads, forums and DMs, voice and video calls, screen share,
+friends, profiles and the member list. It also has notifications, keybinds,
+Rich Presence and themes. We test on Windows.
 
-Some parts are partial or not yet checked against the official client. See
-[the feature parity table](docs/FEATURE_PARITY.md) for details.
+Some features are partial, and some have not been checked against the official
+client yet. [The feature parity table](docs/FEATURE_PARITY.md) lists the
+status of each one.
 
 ## Build from source
 
-Requires Flutter 3.44+, Visual Studio 2022 with the C++ desktop workload, and
-the WebView2 Runtime.
+You need Flutter 3.44 or newer, Visual Studio 2022 with the C++ desktop
+workload, and the WebView2 Runtime.
 
 ```powershell
 flutter pub get
 flutter run -d windows
 ```
 
-Add `--dart-define=FLUCORD_DEMO_MODE=true` to try the interface with demo data
-and no account.
+To try the interface with demo data and no account, add
+`--dart-define=FLUCORD_DEMO_MODE=true`.
 
-Before a pull request, run `flutter analyze`, `flutter test` and
-`.\tool\audit_public_repository.ps1`. The next work is in
-[roadmap.md](roadmap.md), and the docs are in [docs/](docs).
+Before you open a pull request, run `flutter analyze`, `flutter test` and
+`.\tool\audit_public_repository.ps1`. Planned work is in
+[roadmap.md](roadmap.md), and the other docs are in [docs/](docs).
 
 ## License
 
-Source-available under the [Flucord Project License 1.0](LICENSE): use, change
-and distribute it with credit, published source and the same license. The
-interface may not be reused outside Flucord or its forks. This is not an
-OSI-approved open source license.
+Flucord is source-available under the
+[Flucord Project License 1.0](LICENSE). You may use, change and distribute it
+if you give credit, publish your source and keep the same license. You may not
+reuse the interface outside Flucord or its forks. This is not an OSI-approved
+open source license.
