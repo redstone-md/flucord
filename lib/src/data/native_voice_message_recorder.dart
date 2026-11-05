@@ -72,7 +72,6 @@ final class NativeVoiceMessageRecorder implements VoiceMessageRecorder {
         onError: _handleCaptureError,
         onDone: _handleStreamDone,
       );
-      _emitProgress();
     } catch (error, stackTrace) {
       _isRecording = false;
       await _cancelSubscriptionIgnoringErrors();
@@ -91,35 +90,41 @@ final class NativeVoiceMessageRecorder implements VoiceMessageRecorder {
       for (final frame in _framer.add(chunk)) {
         _packets.add(Uint8List.fromList(_encoder!.encode(frame)));
         _frameCount++;
-        _sampleWaveform(frame);
+        _emitLevel(_sampleWaveform(frame));
       }
-      _emitProgress();
     } catch (error) {
       _handleCaptureError(error);
     }
   }
 
-  void _sampleWaveform(Int16List frame) {
+  /// Folds [frame] into the waveform and answers its own level.
+  double _sampleWaveform(Int16List frame) {
+    var framePeak = 0.0;
     for (final sample in frame) {
       final normalized = sample.abs() / 32768;
-      if (normalized > _peak) _peak = normalized;
+      if (normalized > framePeak) framePeak = normalized;
     }
+    if (framePeak > _peak) _peak = framePeak;
     _peakFrameCount++;
     if (_peakFrameCount == _framesPerWaveformSample) _flushPeak();
+    return _shaped(framePeak);
   }
 
   void _flushPeak() {
-    _waveformPeaks.add(math.sqrt(_peak.clamp(0, 1)));
+    _waveformPeaks.add(_shaped(_peak));
     _peakFrameCount = 0;
     _peak = 0;
   }
 
-  void _emitProgress() {
+  /// The square root lifts quiet speech, so it still draws as a visible bar.
+  static double _shaped(double peak) => math.sqrt(peak.clamp(0, 1));
+
+  void _emitLevel(double level) {
     if (_progress.isClosed) return;
     _progress.add(
       VoiceMessageRecordingProgress(
         duration: Duration(milliseconds: _frameCount * 20),
-        samples: _downsample(_waveformPeaks, _maxWaveformSamples),
+        level: level,
       ),
     );
   }

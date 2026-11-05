@@ -102,7 +102,7 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.profile?.open(widget.member.id));
+    unawaited(widget.profile?.open(widget.member.id, serverId: widget.spaceId));
     final moderation = widget.moderationBuilder?.call();
     _moderation = moderation;
     if (moderation != null) unawaited(moderation.load());
@@ -190,6 +190,13 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
         for (final role in assignable.values)
           if (!held.contains(role.id)) role.asCommunityRole,
       ],
+      onRemoveRole: moderation == null || assignable.isEmpty
+          ? null
+          : (role) => unawaited(moderation.revokeRole(assignable[role.id]!)),
+      removableRoleIds: {
+        for (final id in assignable.keys)
+          if (held.contains(id)) id,
+      },
       onOpenFullProfile: widget.onOpenFullProfile,
       onOpenProfile: widget.onOpenProfile,
       onOpenServer: widget.onOpenServer,
@@ -223,7 +230,8 @@ class _MemberProfileCardState extends State<MemberProfileCard> {
             onSelected: () => unawaited(
               _openDialog(
                 context,
-                title: 'Moderate ${widget.member.displayName}',
+                title:
+                    'Moderate ${widget.member.displayNameFor(widget.spaceId)}',
                 content: MemberModerationSection(controller: moderation),
               ),
             ),

@@ -7,6 +7,7 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_rgb.dart';
 import '../../domain/discord_snowflake.dart';
 import '../../domain/monogram.dart';
+import '../../domain/profile_effect.dart';
 import '../../domain/user_profile.dart';
 
 /// A friend both people share, with their status where the workspace knows
@@ -38,6 +39,7 @@ final class ProfileCardData {
     this.presence,
     this.bannerUrl,
     this.accentColorValue,
+    this.themeColors,
     this.pronouns = '',
     this.clanTag,
     this.nameStyle,
@@ -52,6 +54,8 @@ final class ProfileCardData {
     this.serverSince,
     this.friendsSince,
     this.connections = const [],
+    this.effect,
+    this.effectEndsAt,
   });
 
   /// [member] as the workspace knows them, with the fetched [profile] laid
@@ -79,22 +83,24 @@ final class ProfileCardData {
         : member.membershipIn(spaceId)?.joinedAt;
     return ProfileCardData(
       userId: member.id,
-      displayName: member.displayName,
+      displayName: member.displayNameFor(spaceId),
       monogram: member.initials,
       username: member.username ?? _nonEmpty(profile?.username),
       avatarUrl: member.avatarUrlFor(spaceId),
       avatarColorValue: member.colorValue,
-      decorationUrl: switch (profile?.decoration) {
-        final decoration? => DiscordCdn.avatarDecoration(decoration.asset),
-        null => null,
-      },
+      decorationUrl: _decorationUrl(tags.decoration),
       presence: presence,
-      bannerUrl: DiscordCdn.userBanner(member.id, profile?.bannerHash),
+      bannerUrl: switch (profile?.serverProfile) {
+        ServerProfile(:final guildId, bannerHash: final hash?) =>
+          DiscordCdn.guildMemberBanner(guildId, member.id, hash),
+        _ => DiscordCdn.userBanner(member.id, profile?.bannerHash),
+      },
       accentColorValue: switch (profile?.accentColor) {
         final rgb? => DiscordRgb(rgb).opaque,
         null => member.colorValue,
       },
-      pronouns: profile?.pronouns ?? '',
+      themeColors: profile?.effectiveThemeColors,
+      pronouns: profile?.effectivePronouns ?? '',
       clanTag: tags.clanTag,
       nameStyle: tags.nameStyle,
       badges: profile?.badges ?? const [],
@@ -110,7 +116,7 @@ final class ProfileCardData {
           if (workspace?.spaceOrNull(server.id) case final space?)
             (space: space, nickname: server.nickname),
       ],
-      bio: profile?.bio ?? '',
+      bio: profile?.effectiveBio ?? '',
       // Discord's card shows a plain "Playing" too, not only rich presence.
       activity: presence.doing.firstOrNull,
       voiceRoom: voiceRoom,
@@ -121,6 +127,8 @@ final class ProfileCardData {
           : (serverName: space.name, since: joined),
       friendsSince: friendsSince,
       connections: profile?.connections ?? const [],
+      effect: _wornEffect(profile),
+      effectEndsAt: profile?.effectiveProfileEffect?.expiresAt,
     );
   }
 
@@ -152,16 +160,19 @@ final class ProfileCardData {
 
   /// The account's own profile while it is being edited: [profile] says who
   /// it is, the rest are the form's current values, saved or not. The
-  /// images are the staged ones where the user picked new ones.
+  /// images are the staged ones where the user picked new ones. [published]
+  /// gives the collectibles.
   factory ProfileCardData.ownProfile(
     UserProfile profile, {
     required String displayName,
     required String pronouns,
     required String bio,
     required int? accentColor,
+    required ProfileThemeColors? themeColors,
     required String? avatarUrl,
     required String? bannerUrl,
     UserPresence? presence,
+    OtherUserProfile? published,
   }) {
     final name = displayName.isEmpty ? profile.username : displayName;
     return ProfileCardData(
@@ -172,14 +183,18 @@ final class ProfileCardData {
           ? '${profile.username}#${profile.discriminator}'
           : _nonEmpty(profile.username),
       avatarUrl: avatarUrl,
+      decorationUrl: _decorationUrl(published?.tags?.decoration),
       presence: presence,
       bannerUrl: bannerUrl,
       accentColorValue: accentColor == null
           ? null
           : DiscordRgb(accentColor).opaque,
+      themeColors: themeColors,
       pronouns: pronouns,
       bio: bio,
       memberSince: DiscordSnowflake.createdAt(profile.userId),
+      effect: _wornEffect(published),
+      effectEndsAt: published?.effectiveProfileEffect?.expiresAt,
     );
   }
 
@@ -201,6 +216,10 @@ final class ProfileCardData {
 
   /// The banner's colour where there is no banner image.
   final int? accentColorValue;
+
+  /// The person's Nitro theme, which paints the card. Null keeps the app's
+  /// own colours.
+  final ProfileThemeColors? themeColors;
   final String pronouns;
   final ClanTag? clanTag;
 
@@ -235,11 +254,31 @@ final class ProfileCardData {
   /// Their linked accounts on other services.
   final List<ProfileConnection> connections;
 
+  /// The profile effect drawn over the card. Null for none.
+  final ProfileEffectConfig? effect;
+
+  /// When [effect] stops being worn, or null when it does not expire.
+  final DateTime? effectEndsAt;
+
   /// The custom status text, or null for none.
   String? get customStatus => switch (presence?.customStatus?.summary) {
     final String text when text.isNotEmpty => text,
     _ => null,
   };
+
+  static String? _decorationUrl(AvatarDecoration? decoration) =>
+      switch (decoration) {
+        final decoration? => DiscordCdn.avatarDecoration(decoration.asset),
+        null => null,
+      };
+
+  /// How [profile]'s effect looks, unless it has expired.
+  static ProfileEffectConfig? _wornEffect(OtherUserProfile? profile) =>
+      switch (profile?.effectiveProfileEffect) {
+        final worn? when worn.isWornAt(DateTime.now()) =>
+          profile?.profileEffectConfig,
+        _ => null,
+      };
 
   static String? _nonEmpty(String? value) =>
       value == null || value.isEmpty ? null : value;

@@ -4,8 +4,11 @@ import 'package:flucord/src/application/friends_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/friend_suggestion.dart';
+import 'package:flucord/src/domain/relationship_request.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -83,6 +86,28 @@ void main() {
   });
 
   group('the controller', () {
+    test('drops a captcha held for an account it no longer acts for', () async {
+      final first = _FakeGraph(_graph)
+        ..wantsCaptcha = const DiscordRemoteAuthCaptchaChallenge(
+          siteKey: 'site',
+          service: 'hcaptcha',
+          userAgent: 'Flucord',
+        );
+      final second = _FakeGraph(_graph);
+      var current = first;
+      final controller = FriendsController(() => current);
+      addTearDown(controller.dispose);
+
+      expect(await controller.addFriendByUsername('mira'), isFalse);
+      expect(controller.captcha, isNotNull);
+
+      current = second;
+
+      expect(controller.captcha, isNull);
+      expect(await controller.solveCaptcha('solved'), isFalse);
+      expect(second.addedByName, isEmpty);
+    });
+
     test('splits the graph into what each part is for', () {
       final controller = FriendsController(() => _FakeGraph(_graph));
       addTearDown(controller.dispose);
@@ -102,7 +127,7 @@ void main() {
 
       expect(controller.isAvailable, isFalse);
       expect(controller.all, isEmpty);
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
     });
 
     test('adding, accepting and removing reach the session', () async {
@@ -110,15 +135,15 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('  mira  '), isTrue);
+      expect(await controller.addFriendByUsername('  mira  '), isTrue);
       // Trimmed: the trailing space is part of typing, not the name.
-      expect(graph.added, ['mira']);
+      expect(graph.addedByName, ['mira']);
 
       // Accepting is the same call as asking, which is how Discord spells it.
       await controller.acceptRequest(
         _entry('incoming', DiscordRelationshipKind.incomingRequest),
       );
-      expect(graph.added, ['mira', 'incoming']);
+      expect(graph.added, ['incoming']);
 
       await controller.remove(_entry('friend', DiscordRelationshipKind.friend));
       expect(graph.removed, ['friend']);
@@ -132,8 +157,8 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('   '), isFalse);
-      expect(graph.added, isEmpty);
+      expect(await controller.addFriendByUsername('   '), isFalse);
+      expect(graph.addedByName, isEmpty);
     });
 
     test('a refusal is an answer about them, not a fault here', () async {
@@ -141,9 +166,9 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
 
-      expect(controller.lastRequestRefused, isTrue);
+      expect(controller.refusal?.reason, RelationshipRefusal.other);
       expect(controller.error, isNull);
     });
 
@@ -152,7 +177,7 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      expect(await controller.addFriend('mira'), isFalse);
+      expect(await controller.addFriendByUsername('mira'), isFalse);
 
       expect(controller.error, isA<StateError>());
     });
@@ -204,7 +229,7 @@ void main() {
       final controller = FriendsController(() => graph);
       addTearDown(controller.dispose);
 
-      final adding = controller.addFriend('mira');
+      final adding = controller.addFriendByUsername('mira');
       await controller.loadSuggestions();
       await adding;
 
@@ -357,13 +382,10 @@ void main() {
       expect(_row('friend'), findsOneWidget);
       expect(_row('gone'), findsOneWidget);
       expect(_row('incoming'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('friend-presence-friend')),
-        findsOneWidget,
-      );
+      expect(_badge('friend'), findsOneWidget);
       // Somebody the session has no presence for gets no indicator rather
       // than a grey one that claims they are offline.
-      expect(find.byKey(const ValueKey('friend-presence-gone')), findsNothing);
+      expect(_badge('gone'), findsNothing);
     });
 
     testWidgets('removing a friend reaches the session', (tester) async {
@@ -478,7 +500,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('friends-add')));
       await tester.pumpAndSettle();
 
-      expect(graph.added, ['mira']);
+      expect(graph.addedByName, ['mira']);
       expect(
         tester
             .widget<TextField>(
@@ -488,6 +510,26 @@ void main() {
             ?.text,
         isEmpty,
       );
+    });
+
+    testWidgets('a name typed while a request is on its way stays', (
+      tester,
+    ) async {
+      final graph = _FakeGraph(_graph)..hold = Completer();
+      await _pump(tester, graph);
+      await _open(tester, 'add');
+      final field = find.byKey(const ValueKey('friends-add-username'));
+
+      await tester.enterText(field, 'mira');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('friends-add')));
+      await tester.pump();
+      await tester.enterText(field, 'noor');
+      graph.hold!.complete();
+      await tester.pumpAndSettle();
+
+      expect(graph.addedByName, ['mira']);
+      expect(tester.widget<TextField>(field).controller?.text, 'noor');
     });
 
     testWidgets('a refused request is explained, not shown as a crash', (
@@ -564,6 +606,10 @@ Finder _tab(String name) => find.byKey(ValueKey('friends-tab-$name'));
 
 Finder _row(String userId) => find.byKey(ValueKey('friend-$userId'));
 
+/// The presence badge in the row of [userId].
+Finder _badge(String userId) =>
+    find.descendant(of: _row(userId), matching: find.byType(PresenceIndicator));
+
 SemanticsNode _tabSemantics(WidgetTester tester, String name) =>
     tester.getSemantics(_tab(name));
 
@@ -606,10 +652,17 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   final StreamController<List<DiscordRelationship>> _updates =
       StreamController.broadcast();
   final List<String> added = [];
+  final List<String> addedByName = [];
   final List<String> removed = [];
   final List<String> blocked = [];
   bool accept = true;
   bool failNext = false;
+
+  /// When set, a request without an answer is held for this captcha.
+  DiscordRemoteAuthCaptchaChallenge? wantsCaptcha;
+
+  /// When set, every request waits for it before it is answered.
+  Completer<void>? hold;
 
   void push(List<DiscordRelationship> next) {
     _entries = next;
@@ -623,21 +676,36 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   Stream<List<DiscordRelationship>> get relationshipUpdates => _updates.stream;
 
   @override
-  Future<bool> addFriend(String userId) async {
+  Future<RelationshipResult> send(
+    RelationshipRequest request, {
+    DiscordCaptchaAnswer? captcha,
+  }) async {
+    await hold?.future;
     if (failNext) {
       failNext = false;
-      throw StateError('add failed');
+      throw StateError('request failed');
     }
-    if (!accept) return false;
-    added.add(userId);
-    return true;
-  }
-
-  @override
-  Future<bool> removeRelationship(String userId) async {
-    if (!accept) return false;
-    removed.add(userId);
-    return true;
+    if (!accept) return const RelationshipRefused(RelationshipRefusal.other);
+    if (wantsCaptcha case final challenge? when captcha == null) {
+      return RelationshipCaptchaRequired(challenge);
+    }
+    switch (request) {
+      case BefriendUser(:final userId):
+        added.add(userId);
+      case BefriendUsername(:final username):
+        addedByName.add(username);
+      case RemoveRelationship(:final userId):
+        removed.add(userId);
+      case BlockUser(:final userId):
+        blocked.add(userId);
+      case DismissSuggestion(:final userId):
+        dismissed.add(userId);
+        suggestions = [
+          for (final entry in suggestions)
+            if (entry.userId != userId) entry,
+        ];
+    }
+    return const RelationshipDone();
   }
 
   List<FriendSuggestion> suggestions = const [];
@@ -656,23 +724,5 @@ final class _FakeGraph implements DesktopRelationshipRepository {
       throw StateError('suggestions failed');
     }
     suggestionLoads++;
-  }
-
-  @override
-  Future<bool> dismissSuggestion(String userId) async {
-    if (!accept) return false;
-    dismissed.add(userId);
-    suggestions = [
-      for (final entry in suggestions)
-        if (entry.userId != userId) entry,
-    ];
-    return true;
-  }
-
-  @override
-  Future<bool> blockUser(String userId) async {
-    if (!accept) return false;
-    blocked.add(userId);
-    return true;
   }
 }

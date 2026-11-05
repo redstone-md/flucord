@@ -1,5 +1,6 @@
 import 'package:flucord/src/data/discord/discord_user_settings_proto.dart';
 import 'package:flucord/src/data/proto/proto_message.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,7 +39,14 @@ void main() {
         fromFriend('400000000000000002', sentAt(12, 59)),
       );
 
-      final clock = tester.renderObject<RenderParagraph>(find.text('12:59 PM'));
+      // Selectable text sits under a mouse region, so the paragraph is found
+      // inside it.
+      final clock = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: find.text('12:59 PM'),
+          matching: find.byType(RichText),
+        ),
+      );
       // Room for the whole clock on one line means it does not wrap.
       expect(
         clock.size.width,

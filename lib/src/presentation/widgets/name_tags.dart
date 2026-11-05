@@ -49,19 +49,20 @@ class AppTag extends StatelessWidget {
     return _TagBox(
       height: height,
       color: surfaces.brandTint,
-      child: Text('APP', style: _tagStyle(FlucordType.appTag, surfaces.brand)),
+      child: _TagLabel('APP', size: FlucordType.appTag, color: surfaces.brand),
     );
   }
 }
 
 /// A quiet chip with the clan's badge and its tag. Without a badge, a small
-/// accent mark stands in for it.
+/// accent mark stands in for it. Sizes from the "Clan tag" component in the
+/// Flucord Figma file.
 class ClanTagChip extends StatelessWidget {
   const ClanTagChip({required this.clan, super.key});
 
   static const height = 16.0;
-  static const _badgeSize = 12.0;
-  static const _markSize = 6.0;
+  static const _badgeSize = 8.0;
+  static const _badgeCorner = BorderRadius.all(Radius.circular(2));
   static const _gap = 4.0;
 
   final ClanTag clan;
@@ -76,44 +77,35 @@ class ClanTagChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox.square(
-            dimension: _badgeSize,
-            child: badgeUrl == null
-                ? Center(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: surfaces.brand,
-                        borderRadius: FlucordRadius.full,
-                      ),
-                      child: const SizedBox.square(dimension: _markSize),
+          ClipRRect(
+            key: const ValueKey('clan-tag-mark'),
+            borderRadius: _badgeCorner,
+            child: SizedBox.square(
+              dimension: _badgeSize,
+              child: badgeUrl == null
+                  ? ColoredBox(color: surfaces.brand)
+                  : RemoteIdentityImage(
+                      url: badgeUrl,
+                      fallback: const SizedBox.shrink(),
                     ),
-                  )
-                : RemoteIdentityImage(
-                    url: badgeUrl,
-                    fallback: const SizedBox.shrink(),
-                  ),
+            ),
           ),
           const SizedBox(width: _gap),
-          Text(
-            clan.tag,
-            maxLines: 1,
-            style: _tagStyle(FlucordType.clanTag, surfaces.muted),
-          ),
+          _TagLabel(clan.tag, size: FlucordType.clanTag, color: surfaces.muted),
         ],
       ),
     );
   }
 }
 
-/// The shared shape of a tag: fixed height, a pill, centred content.
+/// The shared shape of a tag: fixed height, a pill, centred content, 4 px
+/// before it and 5 px after, as the component has it.
 class _TagBox extends StatelessWidget {
   const _TagBox({
     required this.height,
     required this.color,
     required this.child,
   });
-
-  static const _padding = 4.0;
 
   final double height;
   final Color color;
@@ -122,18 +114,47 @@ class _TagBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     height: height,
-    padding: const EdgeInsets.symmetric(horizontal: _padding),
+    padding: const EdgeInsets.only(left: 4, right: 5),
     decoration: BoxDecoration(color: color, borderRadius: FlucordRadius.full),
     alignment: Alignment.center,
     child: child,
   );
 }
 
-/// Tag letters sit on one line as tall as the font, so they centre in the box.
-TextStyle _tagStyle(double size, Color color) =>
-    FlucordTextRole.caption.style.copyWith(
-      fontSize: size,
-      height: 1,
-      fontWeight: FontWeight.w500,
-      color: color,
-    );
+/// Tag letters trimmed to their capitals, with 1 px of room below them, as
+/// the component's cap height trim does. Centring that box puts the capitals
+/// where the eye expects them; Golos Text keeps more room above its capitals
+/// than below its baseline, so centring the whole line looks low.
+class _TagLabel extends StatelessWidget {
+  const _TagLabel(this.text, {required this.size, required this.color});
+
+  static const _roomBelow = 1.0;
+
+  final String text;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: _roomBelow),
+    child: SizedBox(
+      height: FlucordType.capHeight(size),
+      child: Transform.translate(
+        offset: Offset(0, -FlucordType.capTop(size, lineHeight: size)),
+        child: Text(
+          text,
+          maxLines: 1,
+          // Drawn past the box, which is only as tall as the capitals.
+          overflow: TextOverflow.visible,
+          // One line exactly as tall as the letters' size.
+          style: FlucordTextRole.caption.style.copyWith(
+            fontSize: size,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ),
+    ),
+  );
+}

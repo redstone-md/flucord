@@ -222,7 +222,7 @@ class VoiceParticipantTile extends StatelessWidget {
       onTap: onTap == null ? null : () => onTap(participant.userId),
       child: Semantics(
         selected: participant.isSpeaking,
-        label: '${member.displayName}, voice participant',
+        label: '${member.displayNameFor(spaceId)}, voice participant',
         child: DecoratedBox(
           key: ValueKey('voice-participant-${participant.userId}'),
           decoration: BoxDecoration(
@@ -274,7 +274,7 @@ class VoiceParticipantTile extends StatelessWidget {
                   bottom: 8,
                   child: _StreamCard(
                     userId: participant.userId,
-                    name: member.displayName,
+                    name: member.displayNameFor(spaceId),
                     stateIcons: _stateIcons,
                     isOpen: isOpen,
                     hasFailed:
@@ -291,7 +291,9 @@ class VoiceParticipantTile extends StatelessWidget {
                   bottom: 9,
                   child: Row(
                     children: [
-                      Expanded(child: _TileName(member.displayName)),
+                      Expanded(
+                        child: _TileName(member.displayNameFor(spaceId)),
+                      ),
                       if (isCurrentUser) ...[
                         const SizedBox(width: 6),
                         Text(

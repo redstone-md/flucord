@@ -66,6 +66,7 @@ import 'widgets/navigation_theme.dart';
 import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
+import 'widgets/presence_scope.dart';
 import 'widgets/leave_server_dialog.dart';
 import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../domain/profile_effect.dart';
 import '../../domain/user_profile.dart';
 import 'discord_cdn.dart';
 import 'discord_mapper.dart';
@@ -15,13 +16,26 @@ abstract interface class DiscordUserProfileTransport {
   /// business, not this layer's.
   Future<Map<String, Object?>?> patchCurrentUser(Map<String, Object?> body);
 
-  /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`.
+  /// `PATCH /users/@me/profile`, for what Discord keeps only on the profile.
+  /// Answers the profile as saved.
+  Future<Map<String, Object?>> patchCurrentProfile(Map<String, Object?> body);
+
+  /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`,
+  /// plus `guild_id` when [guildId] is given, which adds the server profile.
   ///
-  /// Answers null when Discord refused the read, which the route does for
-  /// somebody this account has no relationship with at all. The mutuals are
-  /// asked for up front: the popover wants them, and a second request per
-  /// open would only save a round trip for a profile with none.
-  Future<Map<String, Object?>?> readUserProfile(String userId);
+  /// Answers null when Discord refused the read (403 or 404), which the route
+  /// does for somebody this account has no relationship with at all. Any
+  /// other failure throws. The mutuals are asked for up front: the popover
+  /// wants them, and a second request per open would only save a round trip
+  /// for a profile with none.
+  Future<Map<String, Object?>?> readUserProfile(
+    String userId, {
+    String? guildId,
+  });
+
+  /// `GET /user-profile-effects`: the catalogue of profile effects, as
+  /// `{profile_effect_configs: [...]}`.
+  Future<Map<String, Object?>> readProfileEffects();
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -37,6 +51,11 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   final StreamController<UserProfile> _updates = StreamController.broadcast();
 
   UserProfile? _current;
+  OtherUserProfile? _published;
+
+  /// The effect catalogue, read once per session by the first profile that
+  /// wears an effect.
+  Future<Map<String, ProfileEffectConfig>>? _effects;
 
   @override
   UserProfile? get current => _current;
@@ -45,28 +64,88 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   Stream<UserProfile> get updates => _updates.stream;
 
   @override
+  OtherUserProfile? get published => _published;
+
+  /// Reads the user object, then the published profile once, for the theme
+  /// colours the user object does not carry and for [published].
+  ///
+  /// The published profile is extra: when its read fails, such as on a rate
+  /// limit, the editor still loads, without a theme or collectibles.
+  @override
   Future<UserProfile?> load() async {
-    final payload = await _transport.readCurrentUser();
-    return _install(payload);
+    final profile = readProfile(await _transport.readCurrentUser());
+    if (profile == null) return _current;
+    try {
+      _published = await loadProfileOf(profile.userId);
+    } on Object {
+      _published = null;
+    }
+    return _publish(profile.withThemeColors(_published?.themeColors));
   }
 
   @override
   Future<UserProfile?> apply(UserProfilePatch patch) async {
     if (patch.isEmpty) return _current;
-    final payload = await _transport.patchCurrentUser(patch.toJson());
-    // A refusal comes back as no payload rather than as a throw: a wrong
-    // password and a username somebody else already has are both answers
-    // about the request, and reporting either as an outage would be wrong.
-    if (payload == null) return null;
-    return _install(payload);
+    final user = patch.toJson();
+    if (user.isNotEmpty) {
+      final payload = await _transport.patchCurrentUser(user);
+      // A refusal comes back as no payload rather than as a throw: a wrong
+      // password and a username somebody else already has are both answers
+      // about the request, and reporting either as an outage would be wrong.
+      if (payload == null) return null;
+      _install(payload);
+    }
+    final profile = patch.toProfileJson();
+    final current = _current;
+    if (profile.isEmpty || current == null) return current;
+    final saved = await _transport.patchCurrentProfile(profile);
+    return _publish(
+      current.withThemeColors(_themeColors(saved['theme_colors'])),
+    );
   }
 
   @override
-  Future<OtherUserProfile?> loadProfileOf(String userId) async {
+  Future<OtherUserProfile?> loadProfileOf(
+    String userId, {
+    String? serverId,
+  }) async {
     if (userId.trim().isEmpty) return null;
-    final payload = await _transport.readUserProfile(userId);
+    final payload = await _transport.readUserProfile(userId, guildId: serverId);
     if (payload == null) return null;
-    return readOtherProfile(payload);
+    final profile = readOtherProfile(payload, serverId: serverId);
+    final effect = profile?.effectiveProfileEffect;
+    if (effect == null) return profile;
+    return readOtherProfile(
+      payload,
+      serverId: serverId,
+      profileEffectConfig: await _effectConfig(effect.id),
+    );
+  }
+
+  /// How the effect [id] looks, or null where the catalogue lacks it or
+  /// could not be read. A failed read is tried again by the next profile.
+  Future<ProfileEffectConfig?> _effectConfig(String id) async {
+    final effects = _effects ??= _readEffects();
+    try {
+      return (await effects)[id];
+    } on Object {
+      if (identical(_effects, effects)) _effects = null;
+      return null;
+    }
+  }
+
+  /// The catalogue by effect id and by SKU id: a profile names an effect by
+  /// one or the other, depending on when it was bought.
+  Future<Map<String, ProfileEffectConfig>> _readEffects() async {
+    final payload = await _transport.readProfileEffects();
+    final configs = [
+      for (final entry in _objects(payload['profile_effect_configs']))
+        ?ProfileEffectConfig.fromJson(entry),
+    ];
+    return {
+      for (final config in configs) ?config.skuId: config,
+      for (final config in configs) config.id: config,
+    };
   }
 
   /// Applies a `USER_UPDATE` dispatch, which is how a change made on another
@@ -80,9 +159,15 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     if (!_updates.isClosed) await _updates.close();
   }
 
+  /// Takes a user object, which has no theme colours, so the known ones
+  /// stay.
   UserProfile? _install(Map<String, Object?> payload) {
     final profile = readProfile(payload);
     if (profile == null) return _current;
+    return _publish(profile.withThemeColors(_current?.themeColors));
+  }
+
+  UserProfile _publish(UserProfile profile) {
     _current = profile;
     if (!_updates.isClosed) _updates.add(profile);
     return profile;
@@ -117,13 +202,20 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   /// half under `user`, and redacts several fields for a private profile or a
   /// user who blocked this account. Anything absent stays absent rather than
   /// guessing: an empty bio and no bio read the same to the popover.
-  static OtherUserProfile? readOtherProfile(Map<String, Object?> payload) {
+  ///
+  /// Either level can carry the banner on its profile half or only on its
+  /// identity half (`user`, `guild_member`), so the second backs up the first.
+  /// The server profile is read only for the [serverId] that was asked for.
+  static OtherUserProfile? readOtherProfile(
+    Map<String, Object?> payload, {
+    String? serverId,
+    ProfileEffectConfig? profileEffectConfig,
+  }) {
     final user = _object(payload['user']);
     if (user == null) return null;
     final id = user['id'];
     if (id is! String || id.isEmpty) return null;
     final metadata = _object(payload['user_profile']) ?? const {};
-    final decorationData = _object(user['avatar_decoration_data']);
     return OtherUserProfile(
       userId: id,
       username: _text(user['username']),
@@ -132,16 +224,12 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
       bio: _text(metadata['bio']),
       pronouns: _text(metadata['pronouns']),
       avatarHash: _nullableText(user['avatar']),
-      bannerHash: _metadataText(metadata['banner']),
+      bannerHash:
+          _metadataText(metadata['banner']) ?? _metadataText(user['banner']),
       accentColor: metadata['accent_color'] is int
           ? metadata['accent_color']! as int
           : null,
-      decoration: decorationData == null
-          ? null
-          : ProfileDecoration(
-              asset: _text(decorationData['asset']),
-              skuId: _nullableText(decorationData['sku_id']),
-            ),
+      themeColors: _themeColors(metadata['theme_colors']),
       tags: DiscordMapper.tags(user),
       badges: [
         for (final badge in _objects(payload['badges']))
@@ -188,8 +276,40 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
               ),
             ),
       ],
+      serverProfile: serverId == null
+          ? null
+          : _readServerProfile(payload, serverId),
+      profileEffect: ProfileEffect.fromJson(metadata['profile_effect']),
+      profileEffectConfig: profileEffectConfig,
     );
   }
+
+  static ServerProfile? _readServerProfile(
+    Map<String, Object?> payload,
+    String serverId,
+  ) {
+    final profile = _object(payload['guild_member_profile']);
+    final member = _object(payload['guild_member']) ?? const {};
+    if (profile == null) return null;
+    return ServerProfile(
+      guildId: serverId,
+      bio: _metadataText(profile['bio']),
+      pronouns: _metadataText(profile['pronouns']),
+      bannerHash:
+          _metadataText(profile['banner']) ?? _metadataText(member['banner']),
+      themeColors: _themeColors(profile['theme_colors']),
+      profileEffect: ProfileEffect.fromJson(profile['profile_effect']),
+    );
+  }
+
+  /// `theme_colors` is `[primary, accent]`, or null where none is set.
+  static ProfileThemeColors? _themeColors(Object? value) => switch (value) {
+    [final int primary, final int accent] => ProfileThemeColors(
+      primary,
+      accent,
+    ),
+    _ => null,
+  };
 
   /// The profile metadata spells an absent banner as null and an absent bio
   /// as an absent key, and both collapse here.

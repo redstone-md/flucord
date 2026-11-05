@@ -3,6 +3,7 @@ import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
+import 'package:flucord/src/presentation/widgets/member_avatar.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/typing_indicator.dart';
@@ -196,7 +197,7 @@ void main() {
           }
           await session.settle();
         });
-        expect(_shellBuilds(builds), greaterThan(0));
+        expect(_shellBuilds(builds), 0);
         expect(builds.of<MessageItem>(), 0);
 
         // The control: an edit to a row that is not mounted changes no row on
@@ -245,12 +246,11 @@ void main() {
       session,
     ) async {
       await _openAndRest(tester, session, _channelId);
-      await _meetFarMembers(session);
       final mentioned = _farMembers.first;
       await _say(session, 'hello <@$mentioned>');
 
       await session.dispatch('GUILD_MEMBER_UPDATE', {
-        'guild_id': _farGuildId,
+        'guild_id': _guildId,
         'user': {'id': mentioned, 'username': 'far'},
         'nick': 'Renamed',
         'roles': <Object?>[],
@@ -337,16 +337,22 @@ void main() {
       expect(_shellBuilds(builds), 0);
     });
 
-    testSession('for somebody the app knows still reaches the screen', (
-      tester,
-      session,
-    ) async {
-      await _openAndRest(tester, session, _channelId);
+    testSession(
+      'for somebody on screen redraws their avatar, not the shell or rows',
+      (tester, session) async {
+        await _openAndRest(tester, session, _channelId);
+        await _say(session, 'on screen');
+        await _rest(tester, session);
 
-      final builds = await countBuilds(() => _presence(session, _friendId));
+        final builds = await countBuilds(() => _presence(session, _friendId));
 
-      expect(_shellBuilds(builds), greaterThan(0));
-    });
+        expect(_authorStatus(tester, session), Presence.doNotDisturb);
+        expect(_shellBuilds(builds), 0);
+        expect(builds.of<MessageItem>(), 0);
+        expect(builds.of<ChannelSidebar>(), 0);
+        expect(builds.of<MemberAvatar>(), greaterThan(0));
+      },
+    );
 
     testSession('in a burst folds once, and the last one for a person wins', (
       tester,
@@ -356,13 +362,13 @@ void main() {
       await _say(session, 'on screen');
       await _meetFarMembers(session);
       await _rest(tester, session);
-      final chat = ChatScope.read(
+      final changes = ChatScope.read(
         tester.element(session.messageRow(_spokenId)),
-      );
+      ).presenceChanges;
       var folds = 0;
       void countFold() => folds++;
-      chat.addListener(countFold);
-      addTearDown(() => chat.removeListener(countFold));
+      changes.addListener(countFold);
+      addTearDown(() => changes.removeListener(countFold));
 
       for (final id in _farMembers) {
         await _presence(session, id, guildId: _farGuildId, settle: false);
@@ -375,6 +381,37 @@ void main() {
 
       expect(folds, 1);
       expect(_authorStatus(tester, session), Presence.idle);
+    });
+
+    testSession('two folds before one frame both reach the screen', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'on screen');
+      await _meetFarMembers(session);
+      await _rest(tester, session);
+      expect(_authorStatus(tester, session), isNot(Presence.doNotDisturb));
+
+      // Each fold lands with no frame after it, as while the window is
+      // hidden: the second one names only somebody far away.
+      Future<void> foldWithoutFrame() async {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.binding.delayed(const Duration(milliseconds: 151));
+      }
+
+      await _presence(session, _friendId, settle: false);
+      await foldWithoutFrame();
+      await _presence(
+        session,
+        _farMembers.first,
+        guildId: _farGuildId,
+        settle: false,
+      );
+      await foldWithoutFrame();
+      await tester.pump();
+
+      expect(_authorStatus(tester, session), Presence.doNotDisturb);
     });
 
     testSession('waits for the window, then updates the author on screen', (

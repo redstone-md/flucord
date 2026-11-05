@@ -423,6 +423,9 @@ final class _FakeRepository implements UserProfileRepository {
   bool failWrites = false;
   Completer<void>? gate;
 
+  @override
+  OtherUserProfile? get published => null;
+
   // Null until the first load lands, the same as the real repository.
   @override
   UserProfile? get current => _loaded ? _current : null;
@@ -447,7 +450,10 @@ final class _FakeRepository implements UserProfileRepository {
   }
 
   @override
-  Future<OtherUserProfile?> loadProfileOf(String userId) async => null;
+  Future<OtherUserProfile?> loadProfileOf(
+    String userId, {
+    String? serverId,
+  }) async => null;
 
   void push(UserProfile profile) {
     _loaded = true;

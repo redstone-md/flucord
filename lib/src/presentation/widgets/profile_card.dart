@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/discord/discord_cdn.dart';
@@ -14,21 +17,28 @@ import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'display_name.dart';
 import 'art_tile.dart';
+import 'chat_scope.dart';
+import 'discord_markdown.dart';
 import 'flucord_button.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'member_avatar.dart';
+import 'motion_scope.dart';
 import 'name_tags.dart';
 import 'overlapping_faces.dart';
 import 'popup_anchor.dart';
 import 'presence_indicator.dart';
 import 'profile_card_data.dart';
 import 'profile_card_route.dart';
+import 'profile_effect_overlay.dart';
+import 'profile_theme.dart';
 import 'recessed_field.dart';
 import 'remote_identity_image.dart';
+import 'service_logo.dart';
 
+part 'profile_card_chips.dart';
 part 'profile_card_full.dart';
 part 'profile_card_full_side.dart';
 part 'profile_card_parts.dart';
@@ -43,6 +53,8 @@ final class ProfileCardActions {
     this.onAddFriend,
     this.onAddRole,
     this.addableRoles = const [],
+    this.onRemoveRole,
+    this.removableRoleIds = const {},
     this.menu = const [],
     this.onOpenFullProfile,
     this.onOpenProfile,
@@ -63,6 +75,13 @@ final class ProfileCardActions {
 
   /// The roles [onAddRole] may give.
   final List<CommunityRole> addableRoles;
+
+  /// Takes a role away from the person. Present only for someone who can
+  /// manage roles.
+  final ValueChanged<CommunityRole>? onRemoveRole;
+
+  /// The ids of the held roles [onRemoveRole] may take away.
+  final Set<String> removableRoleIds;
 
   /// The rows of the "more" menu.
   final List<ProfileCardMenuEntry> menu;
@@ -146,7 +165,12 @@ class ProfileCard extends StatelessWidget {
   final bool _preview;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ProfileTheme(
+    colors: data.themeColors,
+    child: Builder(builder: _buildCard),
+  );
+
+  Widget _buildCard(BuildContext context) {
     final surfaces = context.surfaces;
     final roles = data.roles;
     final showsRoles =
@@ -154,83 +178,169 @@ class ProfileCard extends StatelessWidget {
     final screen = MediaQuery.sizeOf(context);
     // The popout is a route of its own; the preview is part of the page.
     final opensAsRoute = _preview ? null : true;
-    return Semantics(
-      scopesRoute: opensAsRoute,
-      namesRoute: opensAsRoute,
-      explicitChildNodes: true,
-      label: '${data.displayName} profile',
-      child: Material(
-        key: const ValueKey('profile-card'),
-        color: surfaces.raised,
-        elevation: _preview ? 0 : 12,
-        shadowColor: FlucordFixedColors.shadow,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: FlucordRadius.overlay,
-          side: BorderSide(color: surfaces.border),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: width.clamp(0.0, screen.width - 16),
-            maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+    return MotionHoverRegion(
+      // The card is one hover target: its avatar and banner play while the
+      // pointer is anywhere on it.
+      child: Semantics(
+        scopesRoute: opensAsRoute,
+        namesRoute: opensAsRoute,
+        explicitChildNodes: true,
+        label: '${data.displayName} profile',
+        child: _CardSurface(
+          key: const ValueKey('profile-card'),
+          theme: data.themeColors,
+          color: surfaces.raised,
+          elevation: _preview ? 0 : 12,
+          shadowColor: FlucordFixedColors.shadow,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: FlucordRadius.overlay,
+            side: BorderSide(color: surfaces.border),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(
-                  data: data,
-                  metrics: _ProfileMetrics.card,
-                  backdrop: surfaces.raised,
-                  actions: actions,
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    _padding,
-                    12,
-                    _padding,
-                    _padding,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 12,
-                    children: [
-                      _Names(
-                        data: data,
-                        metrics: _ProfileMetrics.card,
-                        backdrop: surfaces.raised,
-                        onOpenFullProfile: actions.onOpenFullProfile,
+          child: _EffectBox(
+            data: data,
+            constraints: BoxConstraints(
+              maxWidth: width.clamp(0.0, screen.width - 16),
+              maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+            ),
+            child: SingleChildScrollView(
+              child: SelectionArea(
+                // Names, the bio and the status can be selected and copied. A click on the name still opens the full profile.
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(
+                      data: data,
+                      metrics: _ProfileMetrics.card,
+                      backdrop: surfaces.raised,
+                      actions: actions,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        _padding,
+                        12,
+                        _padding,
+                        _padding,
                       ),
-                      if (_preview)
-                        _AboutSections(data: data)
-                      else if (data.bio.isNotEmpty)
-                        _Bio(
-                          bio: data.bio,
-                          onViewFull: actions.onOpenFullProfile,
-                        ),
-                      if (data.activity case final activity?)
-                        ActivityCard(
-                          activity: activity,
-                          now: now ?? DateTime.now(),
-                        ),
-                      if (showsRoles)
-                        _Roles(
-                          roles: roles,
-                          addable: actions.addableRoles,
-                          onAdd: actions.onAddRole,
-                        ),
-                      if (actions.onMessage case final send?)
-                        _MessageField(name: data.displayName, onSubmit: send),
-                    ],
-                  ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        spacing: 12,
+                        children: [
+                          _Names(
+                            data: data,
+                            metrics: _ProfileMetrics.card,
+                            backdrop: surfaces.raised,
+                            onOpenFullProfile: actions.onOpenFullProfile,
+                          ),
+                          if (_preview)
+                            _AboutSections(data: data)
+                          else if (data.bio.isNotEmpty)
+                            _Bio(
+                              bio: data.bio,
+                              onViewFull: actions.onOpenFullProfile,
+                              onOpenLink: actions.onOpenLink,
+                            ),
+                          if (data.activity case final activity?)
+                            ActivityCard(
+                              activity: activity,
+                              now: now ?? DateTime.now(),
+                            ),
+                          if (showsRoles)
+                            _Roles(
+                              roles: roles,
+                              addable: actions.addableRoles,
+                              onAdd: actions.onAddRole,
+                              removable: actions.removableRoleIds,
+                              onRemove: actions.onRemoveRole,
+                            ),
+                          if (actions.onMessage case final send?)
+                            _MessageField(
+                              name: data.displayName,
+                              onSubmit: send,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// The card's frame: a [Material] that paints the profile's gradient, where
+/// it has one, under [child].
+class _CardSurface extends StatelessWidget {
+  const _CardSurface({
+    required this.theme,
+    required this.color,
+    required this.elevation,
+    required this.shadowColor,
+    required this.clipBehavior,
+    required this.shape,
+    required this.child,
+    super.key,
+  });
+
+  final ProfileThemeColors? theme;
+  final Color color;
+  final double elevation;
+  final Color shadowColor;
+  final Clip clipBehavior;
+  final ShapeBorder shape;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: color,
+    elevation: elevation,
+    shadowColor: shadowColor,
+    clipBehavior: clipBehavior,
+    shape: shape,
+    child: ProfileBackdrop(
+      key: const ValueKey('profile-card-theme'),
+      color: null,
+      colors: theme,
+      child: child,
+    ),
+  );
+}
+
+/// The box that holds a card's content: [child] in [constraints], with the
+/// profile effect of [data] over it.
+class _EffectBox extends StatelessWidget {
+  const _EffectBox({
+    required this.data,
+    required this.child,
+    this.constraints = const BoxConstraints(),
+  });
+
+  final ProfileCardData data;
+  final BoxConstraints constraints;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = switch (data.effect) {
+      final effect? => Stack(
+        children: [
+          child,
+          Positioned.fill(
+            child: ProfileEffectOverlay(
+              effect: effect,
+              endsAt: data.effectEndsAt,
+            ),
+          ),
+        ],
+      ),
+      null => child,
+    };
+    return ConstrainedBox(constraints: constraints, child: content);
   }
 }
 
@@ -241,9 +351,9 @@ class ProfileCard extends StatelessWidget {
 final class _ProfileMetrics {
   const _ProfileMetrics({
     required this.bannerHeight,
+    required this.imageBannerHeight,
     required this.avatarSize,
     required this.ring,
-    required this.avatarTop,
     required this.padding,
     required this.dot,
     required this.name,
@@ -252,9 +362,10 @@ final class _ProfileMetrics {
 
   static const card = _ProfileMetrics(
     bannerHeight: 72,
+    // Discord's popout: 105 px of banner image on a 300 px card.
+    imageBannerHeight: 105,
     avatarSize: 80,
     ring: 4,
-    avatarTop: 32,
     padding: ProfileCard._padding,
     dot: 16,
     name: FlucordTextRole.title,
@@ -263,9 +374,9 @@ final class _ProfileMetrics {
 
   static const window = _ProfileMetrics(
     bannerHeight: 120,
+    imageBannerHeight: 120,
     avatarSize: 96,
     ring: 6,
-    avatarTop: 72,
     padding: 20,
     dot: 18,
     name: FlucordTextRole.display,
@@ -275,19 +386,20 @@ final class _ProfileMetrics {
   final FlucordTextRole name;
   final bool showsMutualLine;
 
+  /// The banner's height with only a colour in it.
   final double bannerHeight;
+  final double imageBannerHeight;
   final double avatarSize;
 
   /// The band of [_Header.backdrop] around the avatar.
   final double ring;
-
-  /// Where the avatar's top sits below the banner's top.
-  final double avatarTop;
   final double padding;
   final double dot;
 
-  double get height => avatarTop + avatarSize + ring;
   double get statusLeft => padding + avatarSize + ring + 8;
+
+  double bannerHeightOf(ProfileCardData data) =>
+      data.bannerUrl == null ? bannerHeight : imageBannerHeight;
 }
 
 /// The banner, the avatar over its bottom edge and the custom status beside
@@ -313,9 +425,15 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final accent = data.accentColorValue;
-    final avatar = _Avatar(data: data, metrics: metrics, backdrop: backdrop);
+    // A picture, not text: its fallback letter stays out of a selection.
+    final avatar = SelectionContainer.disabled(
+      child: _Avatar(data: data, metrics: metrics, backdrop: backdrop),
+    );
+    final bannerHeight = metrics.bannerHeightOf(data);
+    // The avatar's middle sits on the banner's bottom edge.
+    final avatarTop = bannerHeight - metrics.avatarSize / 2;
     return SizedBox(
-      height: metrics.height,
+      height: avatarTop + metrics.avatarSize + metrics.ring,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -323,7 +441,7 @@ class _Header extends StatelessWidget {
             left: 0,
             right: 0,
             top: 0,
-            height: metrics.bannerHeight,
+            height: bannerHeight,
             child: ColoredBox(
               key: const ValueKey('profile-card-banner'),
               color: accent == null ? surfaces.control : Color(accent),
@@ -356,7 +474,7 @@ class _Header extends StatelessWidget {
           ),
           Positioned(
             left: metrics.padding - metrics.ring,
-            top: metrics.avatarTop - metrics.ring,
+            top: avatarTop - metrics.ring,
             child: _FullProfileLink(
               linkKey: const ValueKey('profile-card-avatar'),
               name: data.displayName,
@@ -368,7 +486,7 @@ class _Header extends StatelessWidget {
             Positioned(
               left: metrics.statusLeft,
               right: metrics.padding,
-              top: metrics.bannerHeight - 14,
+              top: bannerHeight - 14,
               child: Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: _StatusBubble(text: status, fill: backdrop),
@@ -417,7 +535,7 @@ class _Avatar extends StatelessWidget {
           ),
           if (data.decorationUrl case final url?)
             SizedBox.square(
-              dimension: metrics.avatarSize * 1.2,
+              dimension: metrics.avatarSize * MemberAvatar.decorationScale,
               child: RemoteIdentityImage(
                 key: const ValueKey('profile-card-decoration'),
                 url: url,
@@ -601,29 +719,32 @@ class _MessageFieldState extends State<_MessageField> {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    return TextField(
-      key: const ValueKey('profile-card-message'),
-      controller: _text,
-      textInputAction: TextInputAction.send,
-      onSubmitted: (text) => widget.onSubmit(text.trim()),
-      style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
-      // Framed, as the activity card above it: siblings share a corner.
-      decoration:
-          recessedFieldDecoration(
-            context,
-            borderRadius: FlucordRadius.framed,
-          ).copyWith(
-            hintText: 'Message @${widget.name}',
-            hintStyle: FlucordTextRole.label.style.copyWith(
-              color: surfaces.captionText,
+    return SelectionContainer.disabled(
+      // Its hint is a prompt, not profile text.
+      child: TextField(
+        key: const ValueKey('profile-card-message'),
+        controller: _text,
+        textInputAction: TextInputAction.send,
+        onSubmitted: (text) => widget.onSubmit(text.trim()),
+        style: FlucordTextRole.label.style.copyWith(color: surfaces.text),
+        // Framed, as the activity card above it: siblings share a corner.
+        decoration:
+            recessedFieldDecoration(
+              context,
+              borderRadius: FlucordRadius.framed,
+            ).copyWith(
+              hintText: 'Message @${widget.name}',
+              hintStyle: FlucordTextRole.label.style.copyWith(
+                color: surfaces.captionText,
+              ),
+              // 9 + 18 + 9: the label line in the middle of a 36 px field,
+              // as the app's other fields have it.
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
-            // 9 + 18 + 9: the label line in the middle of a 36 px field,
-            // as the app's other fields have it.
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 9,
-            ),
-          ),
+      ),
     );
   }
 }

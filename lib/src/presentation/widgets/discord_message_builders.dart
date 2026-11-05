@@ -10,12 +10,19 @@ import '../../theme/flucord_theme.dart';
 import 'message_preview_text.dart';
 import 'user_settings_scope.dart';
 
+/// [spaceId] is where the message was sent: a mentioned person goes by the
+/// name that space knows them by.
 Map<String, MarkdownElementBuilder> discordMessageBuilders({
   required ChatWorkspace workspace,
+  required String? spaceId,
   required ValueChanged<String> onSelectChannel,
   DateTime? now,
 }) => {
-  'discord-user': _MentionBuilder(workspace, _MentionKind.user),
+  'discord-user': _MentionBuilder(
+    workspace,
+    _MentionKind.user,
+    spaceId: spaceId,
+  ),
   'discord-role': _MentionBuilder(workspace, _MentionKind.role),
   'discord-channel': _MentionBuilder(
     workspace,
@@ -32,11 +39,17 @@ Map<String, MarkdownElementBuilder> discordMessageBuilders({
 enum _MentionKind { user, role, channel, broadcast }
 
 final class _MentionBuilder extends MarkdownElementBuilder {
-  _MentionBuilder(this._workspace, this._kind, {this.onSelectChannel});
+  _MentionBuilder(
+    this._workspace,
+    this._kind, {
+    this.onSelectChannel,
+    this.spaceId,
+  });
 
   final ChatWorkspace _workspace;
   final _MentionKind _kind;
   final ValueChanged<String>? onSelectChannel;
+  final String? spaceId;
 
   @override
   Widget visitElementAfterWithContext(
@@ -47,7 +60,7 @@ final class _MentionBuilder extends MarkdownElementBuilder {
   ) {
     final id = element.attributes['id'] ?? element.textContent;
     final label = switch (_kind) {
-      _MentionKind.user => DiscordMentionLabel.user(_workspace, id),
+      _MentionKind.user => DiscordMentionLabel.user(_workspace, id, spaceId),
       _MentionKind.role => DiscordMentionLabel.role(_workspace, id),
       _MentionKind.channel => DiscordMentionLabel.channel(_workspace, id),
       _MentionKind.broadcast => '@${element.textContent}',

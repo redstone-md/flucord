@@ -52,4 +52,31 @@ void main() {
     expect(member.membershipIn('guild-1')?.roleIds, ['role-1']);
     expect(member.presence, Presence.online);
   });
+
+  test('a guild member with no server avatar ends the one held', () {
+    const known = Member(
+      id: 'user-1',
+      displayName: 'Name',
+      initials: 'N',
+      role: 'Member',
+      colorValue: 0xff456b5a,
+      presence: Presence.online,
+      spaceIds: {'guild-1'},
+      membershipsBySpace: {'guild-1': GuildMembership()},
+      avatarUrl: 'https://cdn.example/global.webp',
+      avatarUrlsBySpace: {'guild-1': 'https://cdn.example/guild-avatar.webp'},
+    );
+    const update = Member(
+      id: 'user-1',
+      displayName: 'Name',
+      initials: 'N',
+      role: 'Member',
+      colorValue: 0xff456b5a,
+      presence: Presence.offline,
+      spaceIds: {'guild-1'},
+      membershipsBySpace: {'guild-1': GuildMembership()},
+    );
+
+    expect(update.over(known).avatarUrlFor('guild-1'), endsWith('global.webp'));
+  });
 }

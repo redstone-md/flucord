@@ -6,6 +6,7 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'motion_scope.dart';
 
 typedef StickerAssetBuilder =
     Widget Function(BuildContext context, MessageSticker sticker);
@@ -56,6 +57,9 @@ Widget buildStickerAsset(BuildContext context, MessageSticker sticker) {
           sticker.url,
           fit: BoxFit.contain,
           repeat: true,
+          // Holds its first frame under reduced motion. While the window is
+          // unfocused or suspended, its ticker is muted instead.
+          animate: MotionScope.allows(context),
           backgroundLoading: true,
           errorBuilder: (_, _, _) => fallback,
         ),

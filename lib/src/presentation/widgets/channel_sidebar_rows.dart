@@ -568,6 +568,7 @@ class _ChannelRow extends StatelessWidget {
                       MemberAvatar(
                         member: person,
                         size: _SidebarMetrics.personAvatarSize,
+                        decorated: true,
                         // The dot is cut out of the rail it sits on.
                         presenceBorderColor: surfaces.rail,
                       )
@@ -601,7 +602,8 @@ class _ChannelRow extends StatelessWidget {
                             // What the person is doing, the way the member list
                             // says it. With nothing to say the name sits
                             // centred.
-                            if (_activityOf(person) case final summary?)
+                            if (_activityOf(context, person)
+                                case final summary?)
                               ActivitySummaryLine(summary: summary),
                           ],
                         ),
@@ -636,7 +638,7 @@ class _ChannelRow extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          row,
+          MotionHoverRegion(child: row),
           // The selected row is read the moment it opens, so only the others
           // carry the marker.
           if (showsUnread && !selected)
@@ -654,12 +656,14 @@ class _ChannelRow extends StatelessWidget {
 
   /// The activity line for a DM's person, or null for a channel or somebody
   /// doing nothing.
-  static ActivitySummary? _activityOf(Member? person) => switch (person) {
-    final person? => ActivitySummary.of(
-      person.presenceDetail?.activities ?? const [],
-    ),
-    null => null,
-  };
+  static ActivitySummary? _activityOf(BuildContext context, Member? person) =>
+      switch (person) {
+        final person? => ActivitySummary.of(
+          PresenceScope.memberOf(context, person).presenceDetail?.activities ??
+              const [],
+        ),
+        null => null,
+      };
 
   static FlucordIconData _iconFor(ConversationChannel channel) {
     if (channel.isDirectMessage) return FlucordIcons.person;
@@ -740,7 +744,7 @@ class VoiceSeatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
-    final name = member?.displayName ?? 'Unknown user';
+    final name = member?.displayNameFor(spaceId) ?? 'Unknown user';
     final silenced = state.selfMuted || state.serverMuted;
     final deafened = state.selfDeafened || state.serverDeafened;
     final nameColor = speaking

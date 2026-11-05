@@ -29,6 +29,10 @@ final class ChatScope extends InheritedNotifier<ChatController> {
   static ChatController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ChatScope>()!.notifier!;
 
+  /// [read], or null when there is no scope above [context].
+  static ChatController? maybeRead(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<ChatScope>()?.notifier;
+
   /// The workspace as it is now, for an action a timeline row takes.
   ///
   /// A row builds again only when something it draws changes, so the workspace

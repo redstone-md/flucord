@@ -190,7 +190,7 @@ void main() {
   test('the moving nameplate sits next to the still one', () {
     expect(
       DiscordCdn.movingNameplate('nameplates/nameplates/twilight'),
-      'https://cdn.discordapp.com/assets/collectibles/nameplates/nameplates/twilight/asset.webm',
+      'https://cdn.discordapp.com/assets/collectibles/nameplates/nameplates/twilight/img.png',
     );
     expect(DiscordCdn.movingNameplate(''), isNull);
   });

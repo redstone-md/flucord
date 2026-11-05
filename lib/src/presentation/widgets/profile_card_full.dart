@@ -61,35 +61,43 @@ class FullProfile extends StatelessWidget {
     large: true,
     maxWidth: _maxWidth,
     maxHeight: _maxHeight,
-    child: Semantics(
-      scopesRoute: true,
-      namesRoute: true,
-      explicitChildNodes: true,
-      label: '${data.displayName} profile',
-      child: SizedBox.expand(
-        key: const ValueKey('full-profile'),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: _cardInset, top: _cardInset),
-              child: SizedBox(
-                width: _cardWidth,
-                child: _FullProfileCard(
-                  data: data,
-                  actions: actions,
-                  note: note,
+    child: MotionHoverRegion(
+      child: Semantics(
+        scopesRoute: true,
+        namesRoute: true,
+        explicitChildNodes: true,
+        label: '${data.displayName} profile',
+        child: SizedBox.expand(
+          key: const ValueKey('full-profile'),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: _cardInset,
+                  top: _cardInset,
+                ),
+                child: SizedBox(
+                  width: _cardWidth,
+                  child: ProfileTheme(
+                    colors: data.themeColors,
+                    child: _FullProfileCard(
+                      data: data,
+                      actions: actions,
+                      note: note,
+                    ),
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: _FullProfileSide(
-                data: data,
-                actions: actions,
-                now: now ?? DateTime.now(),
+              Expanded(
+                child: _FullProfileSide(
+                  data: data,
+                  actions: actions,
+                  now: now ?? DateTime.now(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),
@@ -125,75 +133,94 @@ class _FullProfileCard extends StatelessWidget {
       borderRadius: const BorderRadius.vertical(
         top: FlucordRadius.overlayCorner,
       ),
-      child: ColoredBox(
+      child: ProfileBackdrop(
+        key: const ValueKey('full-profile-theme'),
         color: surfaces.inset,
-        child: SingleChildScrollView(
-          key: const ValueKey('full-profile-card-scroll'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Header(data: data, metrics: _metrics, backdrop: surfaces.inset),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  _metrics.padding,
-                  12,
-                  _metrics.padding,
-                  _metrics.padding,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 16,
-                  children: [
-                    _Names(
-                      data: data,
-                      metrics: _metrics,
-                      backdrop: surfaces.inset,
+        colors: data.themeColors,
+        child: _EffectBox(
+          data: data,
+          child: SingleChildScrollView(
+            key: const ValueKey('full-profile-card-scroll'),
+            child: SelectionArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Header(
+                    data: data,
+                    metrics: _metrics,
+                    backdrop: surfaces.inset,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      _metrics.padding,
+                      12,
+                      _metrics.padding,
+                      _metrics.padding,
                     ),
-                    ?_FullProfileButtons.of(actions),
-                    if (data.bio.isNotEmpty) _AboutText(data.bio),
-                    if (memberSince != null)
-                      _AboutSection(
-                        key: const ValueKey('full-profile-member-since'),
-                        heading: 'Member since',
-                        child: _AboutText(
-                          [
-                            'Discord ${_date(context, memberSince)}',
-                            if (data.serverSince case final server?)
-                              '${server.serverName} '
-                                  '${_date(context, server.since)}',
-                          ].join(' · '),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      spacing: 16,
+                      children: [
+                        _Names(
+                          data: data,
+                          metrics: _metrics,
+                          backdrop: surfaces.inset,
                         ),
-                      ),
-                    if (friendsSince != null)
-                      _AboutSection(
-                        key: const ValueKey('full-profile-friends-since'),
-                        heading: 'Friends since',
-                        child: _AboutText(_date(context, friendsSince)),
-                      ),
-                    if (data.connections.isNotEmpty)
-                      _AboutSection(
-                        key: const ValueKey('full-profile-connections'),
-                        heading: 'Connections',
-                        child: _Connections(
-                          connections: data.connections,
-                          onOpen: actions.onOpenLink,
-                        ),
-                      ),
-                    if (showsRoles)
-                      _Roles(
-                        roles: roles,
-                        addable: actions.addableRoles,
-                        onAdd: actions.onAddRole,
-                      ),
-                    if (note case final note?)
-                      _AboutSection(
-                        heading: 'Note (only you see it)',
-                        child: note,
-                      ),
-                  ],
-                ),
+                        ?_FullProfileButtons.of(actions),
+                        if (data.bio.isNotEmpty)
+                          ProfileBioText(
+                            data.bio,
+                            key: const ValueKey('full-profile-bio'),
+                            onOpenLink: actions.onOpenLink,
+                          ),
+                        if (memberSince != null)
+                          _AboutSection(
+                            key: const ValueKey('full-profile-member-since'),
+                            heading: 'Member since',
+                            child: _AboutText(
+                              [
+                                'Discord ${_date(context, memberSince)}',
+                                if (data.serverSince case final server?)
+                                  '${server.serverName} '
+                                      '${_date(context, server.since)}',
+                              ].join(' · '),
+                            ),
+                          ),
+                        if (friendsSince != null)
+                          _AboutSection(
+                            key: const ValueKey('full-profile-friends-since'),
+                            heading: 'Friends since',
+                            child: _AboutText(_date(context, friendsSince)),
+                          ),
+                        if (data.connections.isNotEmpty)
+                          _AboutSection(
+                            key: const ValueKey('full-profile-connections'),
+                            heading: 'Connections',
+                            child: _Connections(
+                              connections: data.connections,
+                              onOpen: actions.onOpenLink,
+                            ),
+                          ),
+                        if (showsRoles)
+                          _Roles(
+                            roles: roles,
+                            addable: actions.addableRoles,
+                            onAdd: actions.onAddRole,
+                            removable: actions.removableRoleIds,
+                            onRemove: actions.onRemoveRole,
+                            folds: false,
+                          ),
+                        if (note case final note?)
+                          _AboutSection(
+                            heading: 'Note (only you see it)',
+                            child: note,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -307,12 +334,7 @@ class _ConnectionRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              ArtTile(
-                url: null,
-                monogram: monogramOf(service),
-                color: surfaces.control,
-                size: 20,
-              ),
+              ServiceLogo(connection.type, size: 20, color: surfaces.text),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

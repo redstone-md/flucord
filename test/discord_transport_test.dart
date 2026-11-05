@@ -550,7 +550,7 @@ void main() {
       'Discord bot',
     );
     final guildMember = workspace.memberById('user-1');
-    expect(guildMember.displayName, 'Mira Ops');
+    expect(guildMember.displayNameFor('guild-1'), 'Mira Ops');
     expect(
       workspace.heldRolesOf(guildMember, 'guild-1').nameFor(guildMember),
       'Operator',
@@ -562,7 +562,9 @@ void main() {
       contains('/guilds/guild-1/users/user-1/avatars/member-avatar.webp'),
     );
     expect(history.messages.map((message) => message.id), ['old', 'new']);
-    expect(history.members.single.displayName, 'Mira');
+    // The author, and the bot one message mentions.
+    expect(history.members.map((member) => member.id), ['user-1', 'bot-1']);
+    expect(history.members.first.displayName, 'Mira');
     expect(history.messages.first.embeds.single.title, 'Release status');
     expect(history.messages.first.embeds.single.fields, hasLength(2));
     expect(history.messages.first.mentionsCurrentMember, isTrue);

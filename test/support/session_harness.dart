@@ -26,6 +26,7 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/navigation_memory.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
@@ -108,6 +109,12 @@ final class SessionHarness {
   /// The DM with [friendId].
   static const dmChannelId = '300000000000000003';
 
+  /// The key a captcha solved in a test hands back.
+  static const solvedCaptchaKey = 'harness-captcha-key';
+
+  /// The captcha the app shows. A tap solves it, as a person would.
+  static final captchaView = find.byKey(const ValueKey('harness-captcha'));
+
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final MemoryCredentialVault _vault = MemoryCredentialVault(
@@ -127,6 +134,11 @@ final class SessionHarness {
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
+
+  final _RecordingLinks _links = _RecordingLinks();
+
+  /// Every link the app opened in the browser, oldest first.
+  List<Uri> get openedLinks => _links.opened;
 
   /// The QR sign-in. Feed it what the phone and Discord would cause.
   final FakeRemoteAuth remoteAuth = FakeRemoteAuth();
@@ -160,7 +172,7 @@ final class SessionHarness {
         ],
         // What an ordinary member can do, so the composer is fully open.
         everyonePermissions:
-            '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.addReactions | DiscordPermissions.attachFiles | DiscordPermissions.embedLinks}',
+            '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.addReactions | DiscordPermissions.attachFiles | DiscordPermissions.embedLinks | DiscordPermissions.sendVoiceMessages}',
       ),
     ],
     'private_channels': [
@@ -190,6 +202,8 @@ final class SessionHarness {
         clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
         discordRemoteAuthGatewayFactory: remoteAuth,
         navigationMemoryRepository: _navigationMemory,
+        captcha: _solvableCaptcha,
+        externalLinkLauncher: _links,
       ),
     ),
   );
@@ -344,6 +358,13 @@ final class SessionHarness {
 
   /// Gives the window the focus back, as the platform layer reports it.
   void focusWindow() => _window.setFocused(true);
+
+  /// Minimizes the window, as the platform layer reports it, which suspends
+  /// the app.
+  void minimizeWindow() => _window.setVisible(false);
+
+  /// Brings the minimized window back, as the platform layer reports it.
+  void restoreWindow() => _window.setVisible(true);
 
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
@@ -579,6 +600,17 @@ void testSession(
   });
 }
 
+/// Stands in for the hCaptcha view, which needs WebView2: one button that
+/// solves the captcha with [SessionHarness.solvedCaptchaKey].
+Widget _solvableCaptcha(
+  DiscordRemoteAuthCaptchaChallenge challenge,
+  Future<void> Function(String key) onSolved,
+) => TextButton(
+  key: const ValueKey('harness-captcha'),
+  onPressed: () => onSolved(SessionHarness.solvedCaptchaKey),
+  child: const Text('Solve the captcha'),
+);
+
 /// A test with no folder for the chat image cache has nothing in it to clear.
 Future<void> _noChatImagesToClear() async {}
 
@@ -676,6 +708,8 @@ final class _FakeDesktopWindow implements DesktopIntegration {
 
   void setFocused(bool value) => _surface.setApplicationActive(value);
 
+  void setVisible(bool value) => _surface.setWindowVisible(value);
+
   @override
   Future<void> initialize() async {}
 
@@ -689,6 +723,18 @@ final class _FakeDesktopWindow implements DesktopIntegration {
 
   @override
   Future<void> dispose() async => _subscription?.cancel();
+}
+
+/// The browser, as far as the app can tell: it keeps each link and says it
+/// opened.
+final class _RecordingLinks implements ExternalLinkLauncher {
+  final opened = <Uri>[];
+
+  @override
+  Future<bool> open(Uri uri) async {
+    opened.add(uri);
+    return true;
+  }
 }
 
 /// The QR sign-in, below the app's controller. It stands in for the phone and

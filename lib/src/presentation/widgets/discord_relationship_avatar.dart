@@ -8,11 +8,15 @@ import '../../theme/flucord_type.dart';
 import 'presence_indicator.dart';
 import 'remote_identity_image.dart';
 
+/// Somebody from the friend graph: their picture, or their monogram, with
+/// their presence as a badge on it.
 class DiscordRelationshipAvatar extends StatelessWidget {
   const DiscordRelationshipAvatar({
     required this.user,
     this.size = 36,
     this.presenceBorderColor,
+    this.presence,
+    this.showPresence = true,
     super.key,
   });
 
@@ -20,9 +24,16 @@ class DiscordRelationshipAvatar extends StatelessWidget {
   final double size;
   final Color? presenceBorderColor;
 
+  /// The status to badge, for a surface that reads presence from somewhere
+  /// other than [user]. Null badges [user]'s own status. An unknown status
+  /// gets no badge, rather than one that says offline.
+  final Presence? presence;
+  final bool showPresence;
+
   @override
   Widget build(BuildContext context) {
     final statusSize = (size * 0.3).clamp(10.0, 18.0);
+    final status = presence ?? user.status.presence;
     return SizedBox.square(
       dimension: size,
       child: Stack(
@@ -45,16 +56,17 @@ class DiscordRelationshipAvatar extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: PresenceIndicator(
-              presence: UserPresence(status: user.status.presence),
-              size: statusSize,
-              borderColor: presenceBorderColor ?? context.surfaces.canvas,
-              borderWidth: size >= 60 ? 3 : 2,
+          if (showPresence && status != Presence.unknown)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: PresenceIndicator(
+                presence: UserPresence(status: status),
+                size: statusSize,
+                borderColor: presenceBorderColor ?? context.surfaces.canvas,
+                borderWidth: size >= 60 ? 3 : 2,
+              ),
             ),
-          ),
         ],
       ),
     );

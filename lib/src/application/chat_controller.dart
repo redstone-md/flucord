@@ -147,6 +147,9 @@ final class ChatController extends ChangeNotifier {
   final Map<String, DateTime> _typingRequests = {};
   final Map<String, UserPresence> _heldPresences = {};
   Timer? _presenceFold;
+
+  /// Hears each presence fold. Presence never notifies this controller.
+  final PresenceChanges presenceChanges = PresenceChanges();
   final _typingSignal = _TypingSignal();
   final _archivedThreadState = _ArchivedThreadState();
 
@@ -221,21 +224,28 @@ final class ChatController extends ChangeNotifier {
     );
   }
 
-  /// Asks about the authors of a history page whose roles in the guild are not
-  /// known yet. A page names none, and a name's colour comes from them. Each
-  /// author is asked about once per session, so moving between channels sends
-  /// nothing new.
+  /// Asks about the people a history page names, authors and mentions alike,
+  /// whose standing in the guild is not known yet. A page says nothing of it,
+  /// and the nickname and the name's colour come from it. Each person is
+  /// asked about once per session, so moving between channels sends nothing
+  /// new.
   void _askAboutAuthors(ChannelHistory history) {
     final workspace = _workspace;
     final channel = workspace?.channelOrNull(history.channelId);
     if (workspace == null || channel == null || channel.isDirectMessage) return;
     final spaceId = channel.spaceId;
     final asked = _askedAuthors.putIfAbsent(spaceId, () => {});
+    final named = {
+      for (final message in history.messages) ...[
+        message.authorId,
+        ...message.mentionedMemberIds,
+      ],
+    };
     final unknown = [
-      for (final author in history.members)
-        if (workspace.memberOrNull(author.id)?.membershipIn(spaceId) == null &&
-            asked.add(author.id))
-          author.id,
+      for (final id in named)
+        if (workspace.memberOrNull(id)?.membershipIn(spaceId) == null &&
+            asked.add(id))
+          id,
     ];
     if (unknown.isEmpty) return;
     memberListRepository?.requestGuildMembers(
@@ -921,10 +931,13 @@ final class ChatController extends ChangeNotifier {
   /// Runs [send] as the one send of [channelId], with its composer busy until
   /// it ends. Returns false when the channel already has a send on its way, or
   /// when [send] throws, and then [error] holds why.
+  /// Runs [send] while [channelId] shows as sending. A failure is logged with
+  /// its cause, under [what] was being sent.
   Future<bool> _sendingIn(
     String channelId,
-    Future<void> Function() send,
-  ) async {
+    Future<void> Function() send, {
+    String what = 'message',
+  }) async {
     if (!_sendingChannels.add(channelId)) return false;
     notifyListeners();
     try {
@@ -932,6 +945,7 @@ final class ChatController extends ChangeNotifier {
       _error = null;
       return true;
     } catch (error) {
+      AppLog.warning('chat.send', 'Sending a $what failed', error: error);
       _error = error;
       return false;
     } finally {
@@ -950,6 +964,7 @@ final class ChatController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _presenceFold?.cancel();
+    presenceChanges.dispose();
     _clearTyping();
     _typingSignal.dispose();
     unawaited(_readStateSubscription?.cancel());

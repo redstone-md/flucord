@@ -10,13 +10,12 @@ import '../../theme/flucord_theme.dart';
 /// discord-userdoccers (resources/user.mdx, "Display Name Effect"). How each
 /// one looks comes from the web client's stylesheet on discord.com and the
 /// mobile client's `UsernameWithEffects.tsx` and `generateColorVariants` in
-/// `DisplayNameStylesUtils.tsx`, read the same day. Discord animates neon,
-/// toon, pop and prism once or in a loop; this client draws their resting
-/// look.
+/// `DisplayNameStylesUtils.tsx`, read the same day. Every effect but solid
+/// moves: [NameLook.motion] says how, and `DisplayName` plays it while the
+/// motion rule allows.
 ///
-/// Not drawn, so the name stays plain: 6 (glow; the web docs say it draws as
-/// a gradient, the mobile client draws it solid), 8 (gummy, a striped
-/// pattern whose letters squash and stretch) and the test ids from 1001.
+/// Not drawn, so the name stays plain: 8 (gummy, a striped pattern whose
+/// letters squash and stretch) and the test ids from 1001.
 enum NameEffect {
   /// The first colour.
   solid(1),
@@ -34,6 +33,9 @@ enum NameEffect {
   /// White letters with a dark outline, over a copy in the colour set a
   /// little lower.
   pop(5),
+
+  /// Drawn as [gradient], as Discord's web docs describe it.
+  glow(6),
 
   /// All the colours from left to right and back to the first. Discord
   /// scrolls it.
@@ -74,12 +76,17 @@ enum NameEffect {
     final l = hsl.lightness;
     return switch (this) {
       solid => NameLook(fill: [main]),
-      gradient => NameLook(
+      gradient || glow => NameLook(
         fill: colors,
         fillFrom: Alignment.topLeft,
         fillTo: Alignment.bottomRight,
+        motion: NameMotion.sway,
       ),
-      prism => NameLook(fill: colors, repeatsFirst: true),
+      prism => NameLook(
+        fill: colors,
+        repeatsFirst: true,
+        motion: NameMotion.scroll,
+      ),
       neon => NameLook(
         fill: const [FlucordFixedColors.onFill],
         outline: hsl
@@ -88,6 +95,7 @@ enum NameEffect {
             .toColor(),
         outlinePixels: 1,
         glow: main,
+        motion: NameMotion.pulse,
       ),
       toon => NameLook(
         fill: [
@@ -100,12 +108,14 @@ enum NameEffect {
         fillTo: Alignment.bottomCenter,
         outline: lightness((l * 0.4).clamp(0.12, 1)),
         outlinePixels: 1.6,
+        motion: NameMotion.bounce,
       ),
       pop => NameLook(
         fill: const [FlucordFixedColors.onFill],
         outline: lightness(l * 0.2),
         outlinePixels: 1.2,
         drop: main,
+        motion: NameMotion.lift,
       ),
     };
   }
@@ -122,6 +132,7 @@ final class NameLook {
     this.outlinePixels = 0,
     this.glow,
     this.drop,
+    this.motion = NameMotion.none,
   });
 
   /// One colour, or the stops of a gradient from [fillFrom] to [fillTo].
@@ -145,6 +156,9 @@ final class NameLook {
   /// which leaves under a pixel of it showing at the sizes of a list.
   final Color? drop;
 
+  /// How the look moves over time.
+  final NameMotion motion;
+
   /// The outline's width at [fontSize]: Discord's pixels plus 0.04 em.
   double outlineWidth(double fontSize) => outlinePixels + 0.04 * fontSize;
 
@@ -162,4 +176,35 @@ final class NameLook {
     final outline = this.outline;
     return fill.every(reads) || (outline != null && reads(outline));
   }
+}
+
+/// How a name look moves, once per [period]. Discord's effects move like
+/// this; the timings are this client's.
+enum NameMotion {
+  /// Still.
+  none(Duration.zero),
+
+  /// The gradient slides across the letters and back.
+  sway(Duration(seconds: 4)),
+
+  /// The gradient slides across the letters, around and around.
+  scroll(Duration(seconds: 3)),
+
+  /// The glow breathes in and out.
+  pulse(Duration(seconds: 2)),
+
+  /// The letters hop up and settle.
+  bounce(Duration(milliseconds: 1600)),
+
+  /// The copy behind the letters sinks a little and comes back.
+  lift(Duration(seconds: 2));
+
+  const NameMotion(this.period);
+
+  final Duration period;
+
+  /// Where in its period the motion is at [time], from 0 to 1.
+  double phaseAt(Duration time) => period == Duration.zero
+      ? 0
+      : (time.inMicroseconds % period.inMicroseconds) / period.inMicroseconds;
 }

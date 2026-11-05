@@ -158,6 +158,7 @@ class _EmbedTestApp extends StatelessWidget {
         child: MessageEmbedView(
           embed: embed,
           workspace: _workspace,
+          spaceId: null,
           linkLauncher: const _TestLinkLauncher(),
           onSelectChannel: (_) {},
           inlineVideoBuilder: inlineVideoBuilder,

@@ -239,7 +239,8 @@ class RepositoryPrivacyAudit {
       }
     }
     foreach ($ip in $this.IpPattern.Matches($text)) {
-      if (-not $this.IsAllowedIpAddress($ip.Value)) {
+      if (-not $this.IsAllowedIpAddress($ip.Value) -and
+          -not $this.IsVectorPathData($location)) {
         $this.AddFinding('public-ip-address', $location)
       }
     }
@@ -261,6 +262,12 @@ class RepositoryPrivacyAudit {
   hidden [bool] IsAllowedEmail([string] $email) {
     return $email -match '(?i)@(?:example\.(?:com|org|net)|[^@]+\.(?:test|invalid)|users\.noreply\.github\.com)$' -or
       $email -match '(?i)^(?:support|noreply)@github\.com$'
+  }
+
+  # SVG path data writes numbers back to back, as in ".311.245.311.245",
+  # which reads as a dotted quad. A vector logo carries no address.
+  hidden [bool] IsVectorPathData([string] $location) {
+    return $location -match '(?:^|:)assets/logos/[^:]+\.svg:[0-9]+$'
   }
 
   hidden [bool] IsAllowedIpAddress([string] $value) {

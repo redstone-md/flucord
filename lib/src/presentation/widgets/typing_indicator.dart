@@ -5,9 +5,16 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
 class TypingIndicator extends StatefulWidget {
-  const TypingIndicator({required this.members, super.key});
+  const TypingIndicator({
+    required this.members,
+    required this.spaceId,
+    super.key,
+  });
 
   final List<Member> members;
+
+  /// Where they type, whose names they go by.
+  final String spaceId;
 
   @override
   State<TypingIndicator> createState() => _TypingIndicatorState();
@@ -61,7 +68,10 @@ class _TypingIndicatorState extends State<TypingIndicator>
 
   @override
   Widget build(BuildContext context) {
-    final names = widget.members.map((member) => member.displayName).toList();
+    final names = [
+      for (final member in widget.members)
+        member.displayNameFor(widget.spaceId),
+    ];
     final label = switch (names.length) {
       0 => '',
       1 => '${names.first} is typing...',

@@ -59,6 +59,10 @@ abstract interface class ChatCache {
 
   Future<void> writeMember(Member member);
 
+  /// Lays each member over what the cache holds of them, the way
+  /// [Member.over] does, in one write.
+  Future<void> writeMembers(List<Member> members);
+
   /// Sets the username and tags of a member the cache holds, the tags laid
   /// over the stored ones. A member the cache does not hold stays out of it.
   Future<void> writeMemberIdentity(String memberId, MemberIdentity identity);

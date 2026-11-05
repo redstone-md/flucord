@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,26 @@ void main() {
 
     expect(find.byKey(const ValueKey('image-attachment-viewer')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a hovered image shows no tooltip and still names its action', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _app(MessageAttachmentView(attachment: _imageAttachment)),
+    );
+    final image = find.byKey(const ValueKey('open-image-attachment-image-1'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+
+    await mouse.moveTo(tester.getCenter(image));
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.byType(Tooltip), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^Open image')), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('zooms, resets, and remains usable at compact width', (

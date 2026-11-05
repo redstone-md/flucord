@@ -64,7 +64,8 @@ abstract final class FlucordType {
   /// The font keeps more room above its capitals than below its baseline,
   /// so text centred by its box looks a little low next to a picture.
   static double opticalLift(FlucordTextRole first, FlucordTextRole last) {
-    final below = _halfLeading(last) + _descent * last.size;
+    final below = _halfLeadingOf(last.size, last.lineHeight) +
+        _descent * last.size;
     return (roomAboveCapitals(first) - below) / 2;
   }
 
@@ -72,10 +73,19 @@ abstract final class FlucordType {
   /// capitals. Take it off a top padding to make the gap above a title look
   /// the same as the gap beside it.
   static double roomAboveCapitals(FlucordTextRole role) =>
-      _halfLeading(role) + (_ascent - _capHeight) * role.size;
+      capTop(role.size, lineHeight: role.lineHeight);
 
-  static double _halfLeading(FlucordTextRole role) =>
-      (role.lineHeight - role.size * (_ascent + _descent)) / 2;
+  /// The empty space between the top of a line and the top of its capitals,
+  /// for text of [size] in a line [lineHeight] tall, with the leading shared
+  /// evenly. It is what a design tool's cap height trim cuts off the top.
+  static double capTop(double size, {required double lineHeight}) =>
+      _halfLeadingOf(size, lineHeight) + (_ascent - _capHeight) * size;
+
+  /// How tall the capitals of text of [size] are.
+  static double capHeight(double size) => _capHeight * size;
+
+  static double _halfLeadingOf(double size, double lineHeight) =>
+      (lineHeight - size * (_ascent + _descent)) / 2;
 
   /// Every size on the scale, smallest first.
   static const sizes = [appTag, clanTag, caption, label, body, title, display];

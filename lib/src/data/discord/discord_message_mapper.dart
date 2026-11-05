@@ -8,10 +8,7 @@ extension DiscordMessageMapper on DiscordMapper {
     if (author is! Map) return null;
     final mapped = member(
       author.cast<String, Object?>(),
-      spaceIds: {
-        if (payload['guild_id'] case final String guildId) guildId,
-        if (payload['guild_id'] == null) DiscordMapper.directMessagesSpaceId,
-      },
+      spaceIds: _spacesOf(payload),
     );
     // A gateway message says who the author is in this guild. A history page
     // does not, so there the roles come from a member request.
@@ -24,6 +21,37 @@ extension DiscordMessageMapper on DiscordMapper {
       _ => mapped,
     };
   }
+
+  /// The people [payload] mentions, in the space the message is in. In a
+  /// guild, each mention may carry its `member`, which says who that person
+  /// is in the guild.
+  List<Member> mentionedMembers(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    return [
+      for (final raw in (payload['mentions'] as List? ?? const []))
+        if (raw case final Map user when user['id'] is String)
+          switch ((guildId, user['member'])) {
+            (final String guildId, final Map guildMember) => _withGuildStanding(
+              member(user.cast<String, Object?>(), spaceIds: {guildId}),
+              guildMember.cast<String, Object?>(),
+              guildId,
+            ),
+            _ => member(
+              user.cast<String, Object?>(),
+              spaceIds: _spacesOf(payload),
+            ),
+          },
+    ];
+  }
+
+  /// The space a message in [payload] belongs to: its guild, or the direct
+  /// messages.
+  Set<String> _spacesOf(Map<String, Object?> payload) => {
+    switch (payload['guild_id']) {
+      final String guildId => guildId,
+      _ => DiscordMapper.directMessagesSpaceId,
+    },
+  };
 
   ChatMessage message(
     Map<String, Object?> payload, {

@@ -90,6 +90,12 @@ final class ChatModelJson {
   static Nameplate? nameplateFrom(String? source) =>
       source == null ? null : Nameplate.fromJson(jsonDecode(source));
 
+  static String? decoration(AvatarDecoration? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+
+  static AvatarDecoration? decorationFrom(String? source) =>
+      source == null ? null : AvatarDecoration.fromJson(jsonDecode(source));
+
   static String? nameStyle(NameStyle? value) => value == null
       ? null
       : jsonEncode({
@@ -210,6 +216,7 @@ final class ChatModelJson {
         'pending': entry.value.isPending,
         'timeout': entry.value.timeoutUntil?.toIso8601String(),
         'joined': entry.value.joinedAt?.toIso8601String(),
+        'nick': entry.value.nickname,
       },
   });
 
@@ -237,6 +244,7 @@ final class ChatModelJson {
       isPending: raw['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
       joinedAt: joined == null ? null : DateTime.tryParse(joined),
+      nickname: raw['nick'] as String?,
     );
   }
 }

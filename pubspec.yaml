@@ -41,6 +41,7 @@ dependencies:
   media_kit_libs_video: ^1.0.7
   lottie: ^3.5.1
   hugeicons: ^4.4.0
+  flutter_svg: ^2.3.2
   pointycastle: ^4.0.0
   qr_flutter: ^4.1.0
   google_fonts: ^8.2.1
@@ -53,7 +54,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   fake_async: ^1.3.3
   sqflite_common: ^2.5.11
-  flutter_svg: ^2.3.2
 
 flutter:
   uses-material-design: true
@@ -64,6 +64,8 @@ flutter:
     - assets/sounds/call_accept.wav
     - assets/sounds/call_hang_up.wav
     - assets/spellcheck/en.txt
+    # Service logos Hugeicons lacks, from Simple Icons (CC0). See NOTICE.
+    - assets/logos/
     # The font licence ships beside the font, as the SIL OFL asks.
     - assets/fonts/golos_text/OFL.txt
   # One font on every platform. Golos Text is under the SIL Open Font License

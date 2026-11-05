@@ -263,6 +263,67 @@ void main() {
 
     await images.letTimersEnd(tester);
   });
+
+  group('an animated embed image', () {
+    for (final (away, back, how) in [
+      (
+        (SessionHarness session) => session.blurWindow(),
+        (SessionHarness session) => session.focusWindow(),
+        'unfocused',
+      ),
+      (
+        (SessionHarness session) => session.minimizeWindow(),
+        (SessionHarness session) => session.restoreWindow(),
+        'suspended',
+      ),
+    ]) {
+      testSession('stops while the window is $how, and moves on after', (
+        tester,
+        session,
+      ) async {
+        final path = '/external/$how/picture.gif';
+        final address = images.serve(path, ChatImageDisk.redThenBlueGif);
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _messageWithEmbed({
+            'image': _media(address, width: 300, height: 200),
+          }),
+        );
+        await images.waitUntil(
+          tester,
+          () => _drawn(tester).image != null,
+          'the first frame',
+        );
+
+        away(session);
+        await session.settle();
+        final held = _drawn(tester).image!;
+        await _wait(tester, const Duration(milliseconds: 400));
+
+        expect(_drawn(tester).image!.isCloneOf(held), isTrue);
+        expect(tester.binding.hasScheduledFrame, isFalse);
+
+        back(session);
+        await images.waitUntil(
+          tester,
+          () => !_drawn(tester).image!.isCloneOf(held),
+          'the next frame',
+        );
+        await images.letTimersEnd(tester);
+      });
+    }
+  });
+}
+
+/// Lets [time] pass on both clocks, a frame at a time.
+Future<void> _wait(WidgetTester tester, Duration time) async {
+  const frame = Duration(milliseconds: 16);
+  for (var passed = Duration.zero; passed < time; passed += frame) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump(frame);
+  }
 }
 
 /// Account settings that turn GIF autoplay off.

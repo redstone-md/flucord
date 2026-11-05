@@ -41,6 +41,25 @@ Future<void> _openTwoRows(SessionHarness session) async {
   }
 }
 
+/// The friend as an author, their name glowing in neon.
+const _neonFriend = {
+  'id': SessionHarness.friendId,
+  'username': 'friend',
+  'global_name': 'Neon',
+  'display_name_styles': {
+    'colors': [0xff5555],
+    'font_id': 11,
+    'effect_id': 3,
+  },
+};
+
+/// Somebody else, so the second message starts its own group.
+const _otherAuthor = {
+  'id': '100000000000000077',
+  'username': 'other',
+  'global_name': 'Other',
+};
+
 /// More emoji in the server than the picker's grid shows at once.
 Map<String, Object?> _readyWithManyEmoji() {
   final ready = SessionHarness.defaultReady();
@@ -244,6 +263,60 @@ void main() {
 
       expect(copied, hasLength(1));
       expect(_lowerBody, startsWith(copied.single));
+    },
+  );
+
+  testSession(
+    'a drag runs across two messages and copies names and text in order',
+    platform: TargetPlatform.windows,
+    (tester, session) async {
+      final copied = _watchClipboard(tester);
+      await session.openChannel(SessionHarness.channelId);
+      for (final (id, body, author) in [
+        (_upperId, 'above', _neonFriend),
+        (_lowerId, _lowerBody, _otherAuthor),
+      ]) {
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          rawMessage(
+            id: id,
+            channelId: SessionHarness.channelId,
+            guildId: SessionHarness.guildId,
+            authorId: author['id']! as String,
+            content: body,
+          )..['author'] = author,
+        );
+      }
+      final upperName = find.descendant(
+        of: session.messageRow(_upperId),
+        matching: find.byKey(const ValueKey('message-author-name')),
+      );
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.down(tester.getTopLeft(upperName) + const Offset(1, 8));
+      await tester.pump();
+      await mouse.moveTo(
+        tester.getBottomRight(_drawn(_lowerBody)) - const Offset(1, 4),
+      );
+      await tester.pump();
+      await mouse.up();
+      await mouse.removePointer();
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      final text = copied.single;
+      expect('Neon'.allMatches(text), hasLength(1), reason: text);
+      final order = [
+        text.indexOf('Neon'),
+        text.indexOf('above'),
+        text.indexOf('Other'),
+        text.indexOf(_lowerBody),
+      ];
+      expect(order, everyElement(greaterThanOrEqualTo(0)), reason: text);
+      expect(order, orderedEquals([...order]..sort()), reason: text);
     },
   );
 

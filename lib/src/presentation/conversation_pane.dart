@@ -584,8 +584,10 @@ class ConversationPaneState extends State<ConversationPane> {
         if (showsMessages && !locked)
           ListenableBuilder(
             listenable: chat.activeChannelTyping,
-            builder: (_, _) =>
-                TypingIndicator(members: chat.typingMembersFor(channel.id)),
+            builder: (_, _) => TypingIndicator(
+              members: chat.typingMembersFor(channel.id),
+              spaceId: channel.spaceId,
+            ),
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
@@ -602,9 +604,11 @@ class ConversationPaneState extends State<ConversationPane> {
             channelName: channel.name,
             drafts: chat.drafts,
             replyTo: replyTo,
-            replyAuthor: replyTo == null
+            replyAuthorName: replyTo == null
                 ? null
-                : widget.workspace.memberOrNull(replyTo.authorId),
+                : widget.workspace
+                      .memberOrNull(replyTo.authorId)
+                      ?.displayNameFor(channel.spaceId),
             onCancelReply: () => _setReply(chat, null),
             onEditLastMessage: () =>
                 _timelineKey.currentState?.editLastOwnMessage() ?? false,
@@ -641,10 +645,14 @@ class ConversationPaneState extends State<ConversationPane> {
               stickerIds: stickerIds,
             ),
             voiceMessageRecorder: VoiceMessageRecorderScope.maybeOf(context),
-            onSendVoiceMessage: (voiceMessage) => chat.sendVoiceMessage(
-              channelId: channel.id,
-              voiceMessage: voiceMessage,
-            ),
+            onSendVoiceMessage:
+                chat.canSendVoiceMessages &&
+                    widget.capabilities.sendVoiceMessages
+                ? (voiceMessage) => chat.sendVoiceMessage(
+                    channelId: channel.id,
+                    voiceMessage: voiceMessage,
+                  )
+                : null,
             onSend:
                 (
                   body,

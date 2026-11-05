@@ -138,7 +138,11 @@ class ProfileFormWithPreview extends StatelessWidget {
       builder: (context, constraints) => constraints.maxWidth < besideWidth
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [form, const SizedBox(height: _gap), column],
+              children: [
+                form,
+                const SizedBox(height: _gap),
+                column,
+              ],
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,15 +226,21 @@ class ProfileImageButtons extends StatelessWidget {
   );
 }
 
-/// The banner colour behind the profile, or none at all.
-class ProfileAccentPicker extends StatelessWidget {
-  const ProfileAccentPicker({
+/// One profile colour from [profileAccentSwatches], or none at all. Each
+/// swatch is keyed `<keyPrefix>-<hex>`, and none is `<keyPrefix>-none`.
+class ProfileColourPicker extends StatelessWidget {
+  const ProfileColourPicker({
+    required this.label,
+    required this.keyPrefix,
     required this.value,
     required this.onChanged,
     super.key,
   });
 
-  /// The 24-bit RGB accent, or `null` for the avatar's own colour.
+  final String label;
+  final String keyPrefix;
+
+  /// The 24-bit RGB colour, or `null` for none.
   final int? value;
   final ValueChanged<int?> onChanged;
 
@@ -238,13 +248,13 @@ class ProfileAccentPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const FlucordFieldLabel('Accent colour'),
+      FlucordFieldLabel(label),
       Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           _Swatch(
-            swatchKey: const ValueKey('profile-accent-none'),
+            swatchKey: ValueKey('$keyPrefix-none'),
             selected: value == null,
             onPressed: () => onChanged(null),
             child: FlucordIcon(
@@ -255,7 +265,7 @@ class ProfileAccentPicker extends StatelessWidget {
           ),
           for (final swatch in profileAccentSwatches)
             _Swatch(
-              swatchKey: ValueKey('profile-accent-${swatch.toRadixString(16)}'),
+              swatchKey: ValueKey('$keyPrefix-${swatch.toRadixString(16)}'),
               selected: value == swatch,
               colour: Color(DiscordRgb(swatch).opaque),
               onPressed: () => onChanged(swatch),

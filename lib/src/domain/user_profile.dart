@@ -1,5 +1,6 @@
 import 'account_connections.dart';
 import 'chat_models.dart';
+import 'profile_effect.dart';
 
 /// The account's own profile, as it appears to everyone else.
 ///
@@ -18,6 +19,7 @@ final class UserProfile {
     this.avatarHash,
     this.bannerHash,
     this.accentColor,
+    this.themeColors,
   });
 
   final String userId;
@@ -39,6 +41,10 @@ final class UserProfile {
 
   /// A 24-bit RGB value, or `null` when the avatar's own colour is used.
   final int? accentColor;
+
+  /// The Nitro theme, or null when the account set none. Discord keeps it on
+  /// the profile, not on the user object, so it is read and written apart.
+  final ProfileThemeColors? themeColors;
 
   /// What other people see as this account's name.
   String get effectiveName => displayName.isEmpty ? username : displayName;
@@ -66,6 +72,21 @@ final class UserProfile {
     avatarHash: avatarHash ?? this.avatarHash,
     bannerHash: bannerHash ?? this.bannerHash,
     accentColor: accentColor ?? this.accentColor,
+    themeColors: themeColors,
+  );
+
+  /// This profile with [colors] as its theme, which may be none.
+  UserProfile withThemeColors(ProfileThemeColors? colors) => UserProfile(
+    userId: userId,
+    username: username,
+    displayName: displayName,
+    discriminator: discriminator,
+    bio: bio,
+    pronouns: pronouns,
+    avatarHash: avatarHash,
+    bannerHash: bannerHash,
+    accentColor: accentColor,
+    themeColors: colors,
   );
 
   @override
@@ -79,7 +100,8 @@ final class UserProfile {
       other.pronouns == pronouns &&
       other.avatarHash == avatarHash &&
       other.bannerHash == bannerHash &&
-      other.accentColor == accentColor;
+      other.accentColor == accentColor &&
+      other.themeColors == themeColors;
 
   @override
   int get hashCode => Object.hash(
@@ -92,6 +114,7 @@ final class UserProfile {
     avatarHash,
     bannerHash,
     accentColor,
+    themeColors,
   );
 }
 
@@ -107,6 +130,7 @@ final class UserProfilePatch {
     this.bio,
     this.pronouns,
     this.accentColor = const ProfileValue.untouched(),
+    this.themeColors = const ProfileValue.untouched(),
     this.avatar = const ProfileImage.untouched(),
     this.banner = const ProfileImage.untouched(),
     this.username,
@@ -118,6 +142,7 @@ final class UserProfilePatch {
   final String? bio;
   final String? pronouns;
   final ProfileValue<int> accentColor;
+  final ProfileValue<ProfileThemeColors> themeColors;
   final ProfileImage avatar;
   final ProfileImage banner;
 
@@ -140,6 +165,7 @@ final class UserProfilePatch {
       bio == null &&
       pronouns == null &&
       accentColor.isUntouched &&
+      themeColors.isUntouched &&
       avatar.isUntouched &&
       banner.isUntouched &&
       username == null &&
@@ -149,7 +175,7 @@ final class UserProfilePatch {
   /// password. Stated here so a caller cannot forget which fields those are.
   bool get needsPassword => username != null || newPassword != null;
 
-  /// The request body. Only touched fields appear.
+  /// The `PATCH /users/@me` body. Only touched fields appear.
   Map<String, Object?> toJson() => {
     if (displayName != null) 'global_name': displayName,
     if (bio != null) 'bio': bio,
@@ -162,6 +188,16 @@ final class UserProfilePatch {
     // Sent only where Discord asks for it, so an ordinary profile edit does
     // not carry a password it has no use for.
     if (needsPassword && password != null) 'password': password,
+  };
+
+  /// The `PATCH /users/@me/profile` body, for what Discord keeps only on the
+  /// profile. Empty when none of it was touched.
+  Map<String, Object?> toProfileJson() => {
+    if (!themeColors.isUntouched)
+      'theme_colors': switch (themeColors.value) {
+        final colors? => [colors.primary, colors.accent],
+        null => null,
+      },
   };
 }
 
@@ -219,26 +255,6 @@ final class ProfileBadge {
   int get hashCode => Object.hash(id, description, icon, link);
 }
 
-/// The avatar decoration somebody wears, as the profile route reports it.
-///
-/// `asset` names a file under the CDN's `avatar-decoration-presets`, as
-/// Discord's image reference gives it.
-final class ProfileDecoration {
-  const ProfileDecoration({required this.asset, this.skuId});
-
-  final String asset;
-  final String? skuId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ProfileDecoration &&
-      other.asset == asset &&
-      other.skuId == skuId;
-
-  @override
-  int get hashCode => Object.hash(asset, skuId);
-}
-
 /// A third-party account shown on somebody's profile.
 ///
 /// Only what the profile route hands back: the connection's type, the
@@ -274,6 +290,66 @@ final class ProfileConnection {
 
   @override
   int get hashCode => Object.hash(type, name, id, verified);
+}
+
+/// A Nitro profile theme: a vertical gradient from [primary] at the top to
+/// [accent] at the bottom. Both are 24-bit RGB values.
+final class ProfileThemeColors {
+  const ProfileThemeColors(this.primary, this.accent);
+
+  final int primary;
+  final int accent;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProfileThemeColors &&
+      other.primary == primary &&
+      other.accent == accent;
+
+  @override
+  int get hashCode => Object.hash(primary, accent);
+}
+
+/// What somebody set for one server: Discord's `guild_member_profile`.
+///
+/// Each field is null where the server profile does not set it, and the
+/// user profile's value shows instead.
+final class ServerProfile {
+  const ServerProfile({
+    required this.guildId,
+    this.bio,
+    this.pronouns,
+    this.bannerHash,
+    this.themeColors,
+    this.profileEffect,
+  });
+
+  final String guildId;
+  final String? bio;
+  final String? pronouns;
+  final String? bannerHash;
+  final ProfileThemeColors? themeColors;
+  final ProfileEffect? profileEffect;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServerProfile &&
+      other.guildId == guildId &&
+      other.bio == bio &&
+      other.pronouns == pronouns &&
+      other.bannerHash == bannerHash &&
+      other.themeColors == themeColors &&
+      other.profileEffect == profileEffect;
+
+  @override
+  int get hashCode => Object.hash(
+    guildId,
+    bio,
+    pronouns,
+    bannerHash,
+    themeColors,
+    profileEffect,
+  );
 }
 
 /// A server both this account and the profile's user belong to.
@@ -341,12 +417,15 @@ final class OtherUserProfile {
     this.avatarHash,
     this.bannerHash,
     this.accentColor,
-    this.decoration,
+    this.themeColors,
     this.tags,
     this.badges = const [],
     this.connections = const [],
     this.mutualServers = const [],
     this.mutualFriends = const [],
+    this.serverProfile,
+    this.profileEffect,
+    this.profileEffectConfig,
   });
 
   final String userId;
@@ -361,7 +440,8 @@ final class OtherUserProfile {
   /// A 24-bit RGB value, or null when the account set none.
   final int? accentColor;
 
-  final ProfileDecoration? decoration;
+  /// The Nitro theme, or null when the account set none.
+  final ProfileThemeColors? themeColors;
 
   /// The tags the profile's user object carries, or null when it was not
   /// read from one.
@@ -376,7 +456,31 @@ final class OtherUserProfile {
   /// Friends both accounts share. Same absence rules as [mutualServers].
   final List<MutualFriend> mutualFriends;
 
+  /// The profile set for the server it was read in, or null outside a
+  /// server or where the person set none.
+  final ServerProfile? serverProfile;
+
+  /// The effect on the user profile. Read the one to draw with
+  /// [effectiveProfileEffect].
+  final ProfileEffect? profileEffect;
+
+  /// How [effectiveProfileEffect] looks, or null where the catalogue does
+  /// not have it.
+  final ProfileEffectConfig? profileEffectConfig;
+
+  /// The server profile's effect where it sets one, else the user profile's.
+  ProfileEffect? get effectiveProfileEffect =>
+      serverProfile?.profileEffect ?? profileEffect;
+
   String get effectiveName => displayName.isEmpty ? username : displayName;
+
+  /// The server profile's bio where it sets one, else the user profile's.
+  String get effectiveBio => serverProfile?.bio ?? bio;
+
+  String get effectivePronouns => serverProfile?.pronouns ?? pronouns;
+
+  ProfileThemeColors? get effectiveThemeColors =>
+      serverProfile?.themeColors ?? themeColors;
 
   bool get hasLegacyDiscriminator =>
       discriminator.isNotEmpty && discriminator != '0';
@@ -389,15 +493,22 @@ abstract interface class UserProfileRepository {
 
   Stream<UserProfile> get updates;
 
+  /// The account's own profile as other people see it, with its
+  /// collectibles, from the last [load]. Null before it, or where that read
+  /// failed.
+  OtherUserProfile? get published;
+
   Future<UserProfile?> load();
 
   /// Applies [patch] and returns the profile the server echoed back.
   Future<UserProfile?> apply(UserProfilePatch patch);
 
-  /// Reads somebody else's profile.
+  /// Reads somebody else's profile, with what they set for [serverId] when
+  /// it is given.
   ///
   /// Null when Discord refused the read, which is an answer about the
   /// relationship rather than a fault: the route needs a mutual server, a
   /// friend link, or a pending request, and a stranger meets none of them.
-  Future<OtherUserProfile?> loadProfileOf(String userId);
+  /// A failure that may pass, such as a rate limit, throws instead.
+  Future<OtherUserProfile?> loadProfileOf(String userId, {String? serverId});
 }

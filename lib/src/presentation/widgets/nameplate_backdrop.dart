@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_radius.dart';
+import 'motion_scope.dart';
 import 'name_style_scope.dart';
 import 'nameplate_motion.dart';
 
@@ -88,8 +89,9 @@ extension on NameplatePalette {
 ///
 /// Under the pointer the moving nameplate plays over the still picture,
 /// through the [NameplateMotion] of the [NameStyleScope] above, which plays
-/// one at a time. It does not play under reduced motion, or before the still
-/// picture has shown, so a picture that failed stays a blank.
+/// one at a time. It plays only while the motion rule allows it (not under
+/// reduced motion, nor while the window is unfocused or suspended), and only
+/// once the still picture has shown, so a picture that failed stays a blank.
 class NameplateBackdrop extends StatefulWidget {
   const NameplateBackdrop({
     required this.nameplate,
@@ -119,7 +121,7 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
   bool _stillShown = false;
   NameplateMotion? _motion;
 
-  bool get _stillOnly => MediaQuery.disableAnimationsOf(context);
+  bool get _stillOnly => !MotionScope.allows(context);
 
   @override
   void didChangeDependencies() {
@@ -130,7 +132,7 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
       _motion?.stop(this);
       _motion = motion?..addListener(_redraw);
     }
-    if (_stillOnly) _motion?.stop(this);
+    _sync();
   }
 
   @override
@@ -151,17 +153,32 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
 
   void _redraw() => setState(() {});
 
-  void _enter() {
+  /// Plays while the row is hovered, the still picture shows and motion is
+  /// allowed, and stops otherwise. It follows those three facts, not the
+  /// pointer's enter event, so a hover that came before the still picture
+  /// plays once it shows.
+  void _sync() {
     final moving = DiscordCdn.movingNameplate(widget.nameplate.asset);
-    if (_stillShown && !_stillOnly && moving != null) {
+    if (_hovered && _stillShown && !_stillOnly && moving != null) {
       _motion?.play(this, moving);
+    } else {
+      _motion?.stop(this);
     }
-    setState(() => _hovered = true);
   }
 
-  void _exit() {
-    _motion?.stop(this);
-    setState(() => _hovered = false);
+  void _hover(bool hovered) {
+    setState(() => _hovered = hovered);
+    _sync();
+  }
+
+  /// Called while building the still picture, so the playback that depends
+  /// on it starts after the frame.
+  void _stillDrew(bool shown) {
+    if (shown == _stillShown) return;
+    _stillShown = shown;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _sync();
+    });
   }
 
   @override
@@ -179,8 +196,8 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
             selected: widget.selected,
           );
     return MouseRegion(
-      onEnter: (_) => _enter(),
-      onExit: (_) => _exit(),
+      onEnter: (_) => _hover(true),
+      onExit: (_) => _hover(false),
       child: Stack(
         children: [
           Positioned.fill(
@@ -214,11 +231,11 @@ class _NameplateBackdropState extends State<NameplateBackdrop> {
                                 filterQuality: FilterQuality.medium,
                                 excludeFromSemantics: true,
                                 frameBuilder: (_, child, frame, synchronous) {
-                                  _stillShown = frame != null || synchronous;
+                                  _stillDrew(frame != null || synchronous);
                                   return child;
                                 },
                                 errorBuilder: (_, _, _) {
-                                  _stillShown = false;
+                                  _stillDrew(false);
                                   return const SizedBox.shrink();
                                 },
                               ),

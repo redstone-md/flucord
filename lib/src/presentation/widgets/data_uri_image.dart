@@ -25,9 +25,7 @@ final class DataUriImage extends ImageProvider<DataUriImage> {
   ) => MultiFrameImageStreamCompleter(codec: _decode(decode), scale: 1);
 
   Future<ui.Codec> _decode(ImageDecoderCallback decode) async => decode(
-    await ui.ImmutableBuffer.fromUint8List(
-      UriData.parse(uri).contentAsBytes(),
-    ),
+    await ui.ImmutableBuffer.fromUint8List(UriData.parse(uri).contentAsBytes()),
   );
 
   @override

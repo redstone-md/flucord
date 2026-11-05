@@ -9,12 +9,15 @@ import 'app_composition.dart';
 import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/accessibility_dials.dart';
 import 'presentation/widgets/accessibility_scope.dart';
+import 'presentation/widgets/image_nameplate_videos.dart';
+import 'presentation/widgets/motion_scope.dart';
+import 'presentation/widgets/presence_scope.dart';
 import 'presentation/widgets/spell_check_scope.dart';
 import 'presentation/widgets/attachment_download_scope.dart';
+import 'presentation/widgets/captcha_scope.dart';
 import 'presentation/widgets/chat_scope.dart';
 import 'presentation/widgets/guild_access_scope.dart';
 import 'presentation/widgets/join_server_dialog.dart';
-import 'presentation/widgets/media_kit_nameplate_videos.dart';
 import 'presentation/widgets/name_style_scope.dart';
 import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_desktop_login_scope.dart';
@@ -122,10 +125,24 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _composition.accessibility,
           child: AccessibilityDials(
             controller: _composition.accessibility,
-            child: NameStyleScope(
-              videos: const MediaKitNameplateVideos(),
-              fonts: _composition.nameFonts,
-              child: child!,
+            child: MotionScope(
+              window: _composition.windowVisible,
+              child: PresenceScope(
+                chat: _composition.chat,
+                // Above the navigator, so a popout or a dialog reads the
+                // chat as the pane does.
+                child: ChatScope(
+                  controller: _composition.chat,
+                  child: NameStyleScope(
+                    videos: const ImageNameplateVideos(),
+                    fonts: _composition.nameFonts,
+                    child: CaptchaScope(
+                      builder: widget.bootstrap.captcha,
+                      child: child!,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -314,44 +331,41 @@ class _FlucordAppState extends State<FlucordApp> {
         ),
       );
     },
-    child: ChatScope(
-      controller: _composition.chat,
-      child: WorkspaceScope(
-        controller: _composition.workspace,
-        child: DirectCallScope(
-          controller: _composition.directCall,
-          child: ExternalLinkLauncherScope(
-            launcher: _composition.externalLinkLauncher,
-            child: AttachmentDownloadScope(
-              service: _composition.attachmentDownload,
-              child: VoiceMessageRecorderScope(
-                recorder: _composition.voiceMessageRecorder,
-                child: ThreadMembershipScope(
-                  controller: _composition.threadMembership,
-                  child: StageScope(
-                    controller: _composition.stage,
-                    child: SoundboardScope(
-                      controller: _composition.soundboard,
-                      child: GoLiveScope(
-                        controller: _composition.goLive,
-                        child: StreamViewerScope(
-                          controller: _composition.streamViewer,
-                          child: RoomFocusScope(
-                            focus: _composition.roomFocus,
-                            child: RemoteCameraScope(
-                              controller: _composition.remoteCameras,
-                              child: GifPickerScope(
-                                controller: _composition.gifPicker,
-                                child: ExpressionFavoritesScope(
-                                  controller: _composition.expressionFavorites,
-                                  child: SlashCommandScope(
-                                    controller: _composition.slashCommand,
-                                    child: MessageComponentScope(
-                                      controller: _composition.messageComponent,
-                                      child: SelfVideoScope(
-                                        controller: _composition.selfVideo,
-                                        child: child,
-                                      ),
+    child: WorkspaceScope(
+      controller: _composition.workspace,
+      child: DirectCallScope(
+        controller: _composition.directCall,
+        child: ExternalLinkLauncherScope(
+          launcher: _composition.externalLinkLauncher,
+          child: AttachmentDownloadScope(
+            service: _composition.attachmentDownload,
+            child: VoiceMessageRecorderScope(
+              recorder: _composition.voiceMessageRecorder,
+              child: ThreadMembershipScope(
+                controller: _composition.threadMembership,
+                child: StageScope(
+                  controller: _composition.stage,
+                  child: SoundboardScope(
+                    controller: _composition.soundboard,
+                    child: GoLiveScope(
+                      controller: _composition.goLive,
+                      child: StreamViewerScope(
+                        controller: _composition.streamViewer,
+                        child: RoomFocusScope(
+                          focus: _composition.roomFocus,
+                          child: RemoteCameraScope(
+                            controller: _composition.remoteCameras,
+                            child: GifPickerScope(
+                              controller: _composition.gifPicker,
+                              child: ExpressionFavoritesScope(
+                                controller: _composition.expressionFavorites,
+                                child: SlashCommandScope(
+                                  controller: _composition.slashCommand,
+                                  child: MessageComponentScope(
+                                    controller: _composition.messageComponent,
+                                    child: SelfVideoScope(
+                                      controller: _composition.selfVideo,
+                                      child: child,
                                     ),
                                   ),
                                 ),

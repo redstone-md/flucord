@@ -50,7 +50,7 @@ abstract final class ComponentDirectory {
     for (final member in workspace.members)
       DirectoryEntry(
         id: member.id,
-        label: member.displayName,
+        label: member.displayNameFor(spaceId),
         detail: workspace.heldRolesOf(member, spaceId).nameFor(member),
       ),
   ];

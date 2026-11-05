@@ -4,19 +4,28 @@ import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 /// A recorder with no microphone. A test reads its counts and feeds [emit].
 final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
-  FakeVoiceMessageRecorder({this.deleteError});
+  /// [pending] is what [stop] hands back; a test that uploads it passes one
+  /// whose file exists.
+  FakeVoiceMessageRecorder({this.deleteError, PendingVoiceMessage? pending})
+    : pending =
+          pending ??
+          PendingVoiceMessage(
+            name: 'voice.ogg',
+            path: 'C:\\temp\\voice.ogg',
+            size: 128,
+            durationSecs: 2,
+            waveform: 'AQID',
+          );
 
   final StreamController<VoiceMessageRecordingProgress> _progress =
       StreamController.broadcast();
-  final PendingVoiceMessage pending = PendingVoiceMessage(
-    name: 'voice.ogg',
-    path: 'C:\\temp\\voice.ogg',
-    size: 128,
-    durationSecs: 2,
-    waveform: 'AQID',
-  );
+  final PendingVoiceMessage pending;
   final List<PendingVoiceMessage> deleted = [];
   final Object? deleteError;
+
+  /// What the capture hands over while it stops, after [stop] is called
+  /// and before it answers.
+  List<VoiceMessageRecordingProgress> lastFrames = const [];
 
   int startCount = 0;
   int cancelCount = 0;
@@ -38,6 +47,9 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
 
   @override
   Future<PendingVoiceMessage> stop() async {
+    lastFrames.forEach(emit);
+    // A broadcast stream delivers on a later microtask.
+    await Future<void>.delayed(Duration.zero);
     isRecording = false;
     return pending;
   }

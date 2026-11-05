@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 30;
+  static const version = 31;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -96,7 +96,8 @@ abstract final class SqliteChatSchema {
         clan_tag_json TEXT,
         username TEXT,
         nameplate_json TEXT,
-        name_style_json TEXT
+        name_style_json TEXT,
+        decoration_json TEXT
       )
     ''');
     await database.execute('''
@@ -452,6 +453,11 @@ abstract final class SqliteChatSchema {
       // and a plain name. Both come back the next time Discord sends the user.
       await _addColumn(database, 'members', 'nameplate_json TEXT');
       await _addColumn(database, 'members', 'name_style_json TEXT');
+    }
+    if (oldVersion < 31) {
+      // A row written before this version reads as a person with no avatar
+      // decoration until Discord next sends the user.
+      await _addColumn(database, 'members', 'decoration_json TEXT');
     }
   }
 

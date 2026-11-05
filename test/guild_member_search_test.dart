@@ -1,7 +1,6 @@
 import 'package:flucord/src/data/discord/discord_desktop_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
-import 'package:flucord/src/domain/monogram.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -64,10 +63,9 @@ void main() {
 
       expect(members.map((member) => member.id), ['user-1', 'user-2']);
       expect(members.first.displayName, 'Mira');
-      // The guild nickname wins: it is the name everybody there sees.
-      expect(members.last.displayName, 'Forge Lena');
-      // A row with no picture draws the monogram of that same name.
-      expect(members.last.initials, monogramOf('Forge Lena'));
+      // The guild nickname is the name everybody there sees, and only there.
+      expect(members.last.displayNameFor('guild-1'), 'Forge Lena');
+      expect(members.last.displayName, 'lena');
       // Each one is filed under the guild the chunk named, so the mention list
       // for that guild can find them.
       expect(members.first.spaceIds, {'guild-1'});
@@ -84,7 +82,7 @@ void main() {
         ],
       });
 
-      expect(members.single.displayName, 'mira');
+      expect(members.single.displayNameFor('guild-1'), 'mira');
     });
 
     test('a chunk about no guild, or with no members, is nothing', () {

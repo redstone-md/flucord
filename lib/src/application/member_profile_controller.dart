@@ -30,10 +30,15 @@ final class MemberProfileController extends ChangeNotifier {
   bool _disposed = false;
 
   String? _openUserId;
+  String? _openServerId;
   bool _isLoading = false;
   Object? _error;
   OtherUserProfile? _profile;
   bool _profileUnavailable = false;
+
+  /// The profile plane that gave the held answer. Another one means another
+  /// account, whose answer may differ.
+  UserProfileRepository? _answeredBy;
   bool _noteSaving = false;
   bool _noteRefused = false;
 
@@ -67,22 +72,33 @@ final class MemberProfileController extends ChangeNotifier {
   bool get isSupported =>
       _profileProvider() != null || _notesProvider() != null;
 
-  /// Opens the popover on [userId], fetching the profile and the notes.
+  /// Opens the popover on [userId] in [serverId], or outside a server when
+  /// it is null, fetching the profile and the notes.
   ///
-  /// A profile that is already held for the same user is kept rather than
+  /// The answer held for the same user and server is kept rather than
   /// refetched: the popover closes and reopens on the same person in a
-  /// session's lifetime, and the profile route is rate-limited.
-  Future<void> open(String userId) async {
+  /// session's lifetime, and the profile route is rate-limited. A refusal
+  /// is kept too. A failure is not, so the next open tries again, and
+  /// neither is an answer given to another account.
+  Future<void> open(String userId, {String? serverId}) async {
     if (_disposed) return;
     _bindNotes();
-    if (_openUserId == userId && (_profile != null || _isLoading)) return;
+    final answered =
+        (_profile != null || _profileUnavailable) &&
+        identical(_answeredBy, _profileProvider());
+    if (_openUserId == userId &&
+        _openServerId == serverId &&
+        (answered || _isLoading)) {
+      return;
+    }
     _openUserId = userId;
+    _openServerId = serverId;
     _profile = null;
     _profileUnavailable = false;
     _error = null;
     _noteRefused = false;
     _notify();
-    await _fetchProfile(userId);
+    await _fetchProfile(userId, serverId);
   }
 
   /// Re-reads the profile of the open user, after a failure.
@@ -91,7 +107,7 @@ final class MemberProfileController extends ChangeNotifier {
     if (userId == null || _disposed) return;
     _error = null;
     _notify();
-    await _fetchProfile(userId);
+    await _fetchProfile(userId, _openServerId);
   }
 
   /// Saves the note on the open user, or removes it when [text] is empty.
@@ -129,8 +145,9 @@ final class MemberProfileController extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _fetchProfile(String userId) async {
+  Future<void> _fetchProfile(String userId, String? serverId) async {
     final profile = _profileProvider();
+    _answeredBy = profile;
     if (profile == null) {
       // A transport with no profile plane still shows the roster's answer,
       // which the popover draws from its own member row.
@@ -141,18 +158,21 @@ final class MemberProfileController extends ChangeNotifier {
     _isLoading = true;
     _notify();
     try {
-      final fetched = await profile.loadProfileOf(userId);
-      if (_openUserId != userId) return;
+      final fetched = await profile.loadProfileOf(userId, serverId: serverId);
+      if (!_isOpenOn(userId, serverId)) return;
       _profile = fetched;
       _profileUnavailable = fetched == null;
     } on Object catch (error) {
-      if (_openUserId != userId) return;
+      if (!_isOpenOn(userId, serverId)) return;
       _error = error;
     } finally {
       _isLoading = false;
       if (!_disposed) _notify();
     }
   }
+
+  bool _isOpenOn(String userId, String? serverId) =>
+      _openUserId == userId && _openServerId == serverId;
 
   /// Follows the live notes store rather than one captured at construction,
   /// so a note edited on another device repaints the open popover.

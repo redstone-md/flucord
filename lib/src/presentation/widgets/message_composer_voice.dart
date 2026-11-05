@@ -2,13 +2,16 @@ part of 'message_composer.dart';
 
 mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   StreamSubscription<VoiceMessageRecordingProgress>? _voiceProgressSubscription;
-  VoiceMessageRecordingProgress _voiceProgress = VoiceMessageRecordingProgress(
-    duration: Duration.zero,
-    samples: const [],
-  );
+
+  /// Fed per frame without a rebuild: only the waveform and clock listen.
+  final VoiceRecordingLevels _voiceLevels = VoiceRecordingLevels();
   PendingVoiceMessage? _pendingVoiceMessage;
   Object? _voiceError;
   bool _isRecordingVoice = false;
+
+  /// Between the stop and the recorder's answer, while the capture hands
+  /// over its last frames.
+  bool _isStoppingVoice = false;
   bool _isUploadingVoice = false;
   int _voiceGeneration = 0;
 
@@ -27,8 +30,9 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   void _listenToVoiceProgress() {
     _voiceProgressSubscription = widget.voiceMessageRecorder?.progress.listen(
       (progress) {
-        if (!mounted || !_isRecordingVoice) return;
-        setState(() => _voiceProgress = progress);
+        if (mounted && (_isRecordingVoice || _isStoppingVoice)) {
+          _voiceLevels.add(progress);
+        }
       },
       onError: (Object error) {
         if (mounted) unawaited(_abortVoiceCapture(error));
@@ -40,13 +44,10 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     if (!_canRecordVoice || _hasVoiceSession) return;
     final recorder = widget.voiceMessageRecorder!;
     final generation = ++_voiceGeneration;
+    _voiceLevels.clear();
     setState(() {
       _isRecordingVoice = true;
       _voiceError = null;
-      _voiceProgress = VoiceMessageRecordingProgress(
-        duration: Duration.zero,
-        samples: const [],
-      );
     });
     try {
       await recorder.start();
@@ -73,8 +74,14 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
       _isUploadingVoice = true;
       _voiceError = null;
     });
+    _isStoppingVoice = true;
     try {
-      final pending = await recorder.stop();
+      final PendingVoiceMessage pending;
+      try {
+        pending = await recorder.stop();
+      } finally {
+        _isStoppingVoice = false;
+      }
       if (!mounted || generation != _voiceGeneration) {
         await _deleteVoiceMessageIgnoringErrors(recorder, pending);
         return;
@@ -127,14 +134,11 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
         pending,
       );
       if (!mounted || generation != _voiceGeneration) return;
+      _voiceLevels.clear();
       setState(() {
         _pendingVoiceMessage = null;
         _isUploadingVoice = false;
         _voiceError = null;
-        _voiceProgress = VoiceMessageRecordingProgress(
-          duration: Duration.zero,
-          samples: const [],
-        );
       });
       return;
     }
@@ -148,15 +152,12 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     final recorder = widget.voiceMessageRecorder;
     final pending = _pendingVoiceMessage;
     _voiceGeneration++;
+    _voiceLevels.clear();
     setState(() {
       _isRecordingVoice = false;
       _isUploadingVoice = false;
       _pendingVoiceMessage = null;
       _voiceError = null;
-      _voiceProgress = VoiceMessageRecordingProgress(
-        duration: Duration.zero,
-        samples: const [],
-      );
     });
     if (recorder?.isRecording ?? false) {
       await _cancelVoiceRecordingIgnoringErrors(recorder);
@@ -182,10 +183,7 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     _isUploadingVoice = false;
     _pendingVoiceMessage = null;
     _voiceError = null;
-    _voiceProgress = VoiceMessageRecordingProgress(
-      duration: Duration.zero,
-      samples: const [],
-    );
+    _voiceLevels.clear();
     if ((recorder?.isRecording ?? false) && !wasUploading) {
       unawaited(_cancelVoiceRecordingIgnoringErrors(recorder));
     }
@@ -224,7 +222,7 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
 
 class _VoiceMessageComposerBar extends StatelessWidget {
   const _VoiceMessageComposerBar({
-    required this.progress,
+    required this.levels,
     required this.isRecording,
     required this.isUploading,
     required this.hasPendingMessage,
@@ -233,7 +231,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
     required this.onPrimaryAction,
   });
 
-  final VoiceMessageRecordingProgress progress;
+  final VoiceRecordingLevels levels;
   final bool isRecording;
   final bool isUploading;
   final bool hasPendingMessage;
@@ -275,25 +273,24 @@ class _VoiceMessageComposerBar extends StatelessWidget {
             const SizedBox(width: 8),
           ],
           Expanded(
-            child: VoiceWaveformSurface(
-              key: const ValueKey('voice-recording-waveform'),
-              samples: progress.samples,
-              progress: isRecording ? 1 : 0,
-              activeColor: isRecording ? errorColor : context.surfaces.brand,
-              semanticsLabel: isRecording
-                  ? 'Live voice recording waveform'
-                  : 'Recorded voice message waveform',
-            ),
+            child: isRecording
+                ? VoiceRecordingWaveform(
+                    key: const ValueKey('voice-recording-waveform'),
+                    levels: levels,
+                    color: errorColor,
+                  )
+                : VoiceWaveformSurface(
+                    key: const ValueKey('voice-recording-waveform'),
+                    samples: levels.levels,
+                    activeColor: context.surfaces.brand,
+                    semanticsLabel: 'Recorded voice message waveform',
+                  ),
           ),
           const SizedBox(width: 8),
-          Text(
-            formatVoiceDuration(progress.duration),
+          VoiceRecordingClock(
             key: const ValueKey('voice-recording-time'),
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+            levels: levels,
+            color: context.surfaces.muted,
           ),
           if (error != null) ...[
             const SizedBox(width: 4),

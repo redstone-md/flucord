@@ -288,6 +288,24 @@ final class DiscordHttpExecutor {
     final uri = Uri.parse(
       '${_baseUri.toString()}$path',
     ).replace(queryParameters: _queryParameters(query));
+    return sendTo(
+      method,
+      uri,
+      headers: headers,
+      body: body,
+      guardedByNonce: guardedByNonce,
+    );
+  }
+
+  /// Like [send], for a full [uri] outside Discord's API, such as the storage
+  /// URL of an upload slot.
+  Future<DiscordApiResponse> sendTo(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    List<int>? body,
+    bool guardedByNonce = false,
+  }) async {
     final repeatsServerErrors = method != 'POST' || guardedByNonce;
     var waited = Duration.zero;
     for (var attempt = 1; ; attempt++) {
@@ -527,12 +545,14 @@ final class DiscordRestClient {
     return payload == null ? const [] : _asList(payload);
   }
 
+  /// [headers] are added to this request only, such as a solved captcha.
   Future<void> requestEmpty(
     String method,
     String path, {
     Map<String, Object?>? query,
     Map<String, Object?>? body,
     String? auditLogReason,
+    Map<String, String> headers = const {},
   }) async {
     await request(
       method,
@@ -540,6 +560,7 @@ final class DiscordRestClient {
       query: query,
       body: body,
       auditLogReason: auditLogReason,
+      headers: headers,
     );
   }
 
@@ -552,6 +573,7 @@ final class DiscordRestClient {
     String contentType = 'application/json',
     String? auditLogReason,
     bool guardedByNonce = false,
+    Map<String, String> headers = const {},
   }) => _execute(
     method,
     path,
@@ -561,6 +583,7 @@ final class DiscordRestClient {
     contentType: contentType,
     auditLogReason: auditLogReason,
     guardedByNonce: guardedByNonce,
+    headers: headers,
   );
 
   Future<Object?> _execute(
@@ -571,13 +594,27 @@ final class DiscordRestClient {
     String contentType = 'application/json',
     String? auditLogReason,
     bool guardedByNonce = false,
+    Map<String, String> headers = const {},
   }) => _executor.execute(
     method,
     path,
     query: query,
-    headers: _headers(contentType, auditLogReason),
+    headers: {..._headers(contentType, auditLogReason), ...headers},
     body: encodedBody,
     guardedByNonce: guardedByNonce,
+  );
+
+  /// PUTs [bytes] to the storage [url] of an upload slot. The URL is signed,
+  /// so this request carries no Discord credentials.
+  Future<void> uploadTo(
+    Uri url,
+    List<int> bytes, {
+    required String contentType,
+  }) => _executor.sendTo(
+    'PUT',
+    url,
+    headers: {HttpHeaders.contentTypeHeader: contentType},
+    body: bytes,
   );
 
   /// A request whose status and headers the caller needs, for the routes where

@@ -37,6 +37,7 @@ final class UserProfileController extends ChangeNotifier {
   ProfileImage _avatarDraft = const ProfileImage.untouched();
   ProfileImage _bannerDraft = const ProfileImage.untouched();
   ProfileValue<int> _accentDraft = const ProfileValue.untouched();
+  ProfileValue<ProfileThemeColors> _themeDraft = const ProfileValue.untouched();
 
   /// Whether this transport can edit a profile at all.
   bool get isSupported {
@@ -45,6 +46,10 @@ final class UserProfileController extends ChangeNotifier {
   }
 
   UserProfile? get profile => _repository?.current;
+
+  /// The account's profile as other people read it, with the collectibles
+  /// the editable profile does not carry. Null until it loads.
+  OtherUserProfile? get published => _repository?.published;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   Object? get error => _error;
@@ -59,6 +64,10 @@ final class UserProfileController extends ChangeNotifier {
   /// stored one. Null means the avatar's own colour stands in.
   int? get accentColor =>
       _accentDraft.isUntouched ? profile?.accentColor : _accentDraft.value;
+
+  /// The Nitro theme as it would be saved. Null means none.
+  ProfileThemeColors? get themeColors =>
+      _themeDraft.isUntouched ? profile?.themeColors : _themeDraft.value;
 
   /// Whether anything is waiting to be saved.
   bool get hasChanges => !_patch().isEmpty;
@@ -117,6 +126,13 @@ final class UserProfileController extends ChangeNotifier {
 
   void editAccentColor(int? value) {
     _accentDraft = value == null
+        ? const ProfileValue.cleared()
+        : ProfileValue.set(value);
+    _notify();
+  }
+
+  void editThemeColors(ProfileThemeColors? value) {
+    _themeDraft = value == null
         ? const ProfileValue.cleared()
         : ProfileValue.set(value);
     _notify();
@@ -216,6 +232,7 @@ final class UserProfileController extends ChangeNotifier {
       bio: _changed(_bioDraft, saved?.bio),
       pronouns: _changed(_pronounsDraft, saved?.pronouns),
       accentColor: _accentDraft,
+      themeColors: _themeDraft,
       avatar: _avatarDraft,
       banner: _bannerDraft,
     );
@@ -249,6 +266,7 @@ final class UserProfileController extends ChangeNotifier {
     _avatarDraft = const ProfileImage.untouched();
     _bannerDraft = const ProfileImage.untouched();
     _accentDraft = const ProfileValue.untouched();
+    _themeDraft = const ProfileValue.untouched();
   }
 
   void _notify() {

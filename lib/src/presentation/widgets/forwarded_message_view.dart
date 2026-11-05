@@ -49,6 +49,7 @@ class ForwardedMessageView extends StatelessWidget {
             MessageContentView(
               body: snapshot.body,
               workspace: workspace,
+              spaceId: reference.guildId,
               linkLauncher: linkLauncher,
               onSelectChannel: onSelectChannel,
             ),
@@ -62,6 +63,7 @@ class ForwardedMessageView extends StatelessWidget {
                 key: ValueKey('forwarded-embed-$index'),
                 embed: snapshot.embeds[index],
                 workspace: workspace,
+                spaceId: reference.guildId,
                 linkLauncher: linkLauncher,
                 onSelectChannel: onSelectChannel,
               ),

@@ -98,8 +98,8 @@ void main() {
       expect(profile.avatarHash, 'mhash');
       expect(profile.bannerHash, 'a_bhash');
       expect(profile.accentColor, 0x5865f2);
-      expect(profile.decoration?.asset, 'a_deco');
-      expect(profile.decoration?.skuId, '444444444444444444');
+      expect(profile.tags?.decoration?.asset, 'a_deco');
+      expect(profile.tags?.decoration?.skuId, '444444444444444444');
       expect(profile.badges.single.description, contains('mira#1234'));
       expect(profile.connections, hasLength(2));
       expect(profile.connections.first.type, 'twitter');
@@ -129,7 +129,7 @@ void main() {
       expect(profile.avatarHash, isNull);
       expect(profile.bannerHash, isNull);
       expect(profile.accentColor, isNull);
-      expect(profile.decoration, isNull);
+      expect(profile.tags?.decoration, isNull);
       expect(profile.badges, isEmpty);
       expect(profile.connections, isEmpty);
       expect(profile.mutualServers, isEmpty);
@@ -481,7 +481,10 @@ final class _FakeTransport implements DiscordUserProfileTransport {
   }
 
   @override
-  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+  Future<Map<String, Object?>?> readUserProfile(
+    String userId, {
+    String? guildId,
+  }) async {
     requestedProfileIds.add(userId);
     if (refuseProfile) return null;
     return {
@@ -489,6 +492,9 @@ final class _FakeTransport implements DiscordUserProfileTransport {
       'user_profile': {'bio': 'ships the parser'},
     };
   }
+
+  @override
+  Future<Map<String, Object?>> readProfileEffects() async => const {};
 
   @override
   Future<Map<String, Object?>?> patchCurrentUser(
@@ -500,6 +506,11 @@ final class _FakeTransport implements DiscordUserProfileTransport {
     if (name is String) _displayName = name.trim();
     return _user();
   }
+
+  @override
+  Future<Map<String, Object?>> patchCurrentProfile(
+    Map<String, Object?> body,
+  ) async => body;
 
   Map<String, Object?> _user() => {
     'id': '123456789012345678',

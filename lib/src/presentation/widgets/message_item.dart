@@ -28,6 +28,7 @@ import 'display_name.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
+import 'motion_scope.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
@@ -304,18 +305,17 @@ class _MessageItemState extends State<MessageItem> {
             child: MouseRegion(
               onEnter: (_) => _updateBar(() => _hovered = true),
               onExit: (_) => _updateBar(() => _hovered = false),
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                // The right button reaches the same actions the hover bar
-                // carries. Without it half of them were only discoverable by
-                // hovering the exact right pixels, and copying an id or a
-                // link had nowhere to live.
-                onSecondaryTapDown: (details) => unawaited(
-                  _openContextMenu(context, details.globalPosition),
-                ),
+              // The right button reaches the same actions the hover bar
+              // carries. Without it half of them were only discoverable by
+              // hovering the exact right pixels, and copying an id or a link
+              // had nowhere to live. It is claimed for the whole row, so a
+              // selection around the text never opens its own menu instead.
+              child: RightClickClaim(
+                onPressed: (position) =>
+                    unawaited(_openContextMenu(context, position)),
                 child: Stack(
                   children: [
-                    _surface(context),
+                    MotionHoverRegion(child: _surface(context)),
                     if (_rowFocus.hasPrimaryFocus)
                       Positioned.fill(
                         child: IgnorePointer(
@@ -399,6 +399,7 @@ class _MessageItemState extends State<MessageItem> {
                 child: MemberAvatar(
                   member: widget.member,
                   size: MessageRowMetrics.avatarSize,
+                  decorated: true,
                   spaceId: widget.workspace
                       .channelById(widget.message.channelId)
                       .spaceId,
@@ -440,10 +441,15 @@ class _MessageItemState extends State<MessageItem> {
   TextStyle _captionStyle(BuildContext context) => FlucordTextRole.caption.style
       .copyWith(color: context.surfaces.captionText);
 
+  /// The hover bar, kept out of the timeline's selection: it is buttons,
+  /// not text.
+  Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) =>
+      SelectionContainer.disabled(child: _bar(context, layout));
+
   /// The toolbar, over the right end of the highlight's top edge. It never
   /// rises above the list the row scrolls in, so the topmost message keeps it
   /// off the chat header.
-  Widget _floatingBar(BuildContext context, OverlayChildLayoutInfo layout) {
+  Widget _bar(BuildContext context, OverlayChildLayoutInfo layout) {
     // A transform that flattens the row means it is not on screen.
     if (widget.isEditing || layout.childPaintTransform.determinant() == 0) {
       return const SizedBox.shrink();
@@ -485,9 +491,15 @@ class _MessageItemState extends State<MessageItem> {
   String _announcement(BuildContext context) {
     final body = StreamerModeScope.redact(context, widget.message.body);
     return [
-      widget.member.displayName,
+      _authorName,
       MessageTimestamp.longOf(context, widget.message.sentAt),
-      if (body.isNotEmpty) messagePreviewText(context, body, widget.workspace),
+      if (body.isNotEmpty)
+        messagePreviewText(
+          context,
+          body,
+          widget.workspace,
+          spaceId: _channel?.spaceId,
+        ),
     ].join(', ');
   }
 
@@ -507,6 +519,7 @@ class _MessageItemState extends State<MessageItem> {
               color: context.surfaces.bodyText,
             ),
             workspace: widget.workspace,
+            spaceId: _channel?.spaceId,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
           ),
@@ -545,6 +558,7 @@ class _MessageItemState extends State<MessageItem> {
                 key: ValueKey('message-${message.id}-embed-$index'),
                 embed: message.embeds[index],
                 workspace: widget.workspace,
+                spaceId: _channel?.spaceId,
                 linkLauncher: widget.linkLauncher,
                 onSelectChannel: widget.onSelectChannel,
               ),
@@ -610,13 +624,16 @@ class _MessageItemState extends State<MessageItem> {
             child: _opensAuthorProfile(
               key: const ValueKey('message-author-name'),
               child: DisplayName(
-                widget.member.displayName,
+                _authorName,
                 style: FlucordTextRole.heading.style.copyWith(
                   height:
                       MessageRowMetrics.nameRowHeight /
                       FlucordTextRole.heading.size,
                 ),
                 nameStyle: widget.member.tags.nameStyle,
+                // Discord moves a name in chat only while its message is
+                // hovered.
+                animatesOnHover: true,
                 inServer: (_channel?.isDirectMessage ?? false)
                     ? null
                     : InServer(roleColor: _roleColorOf(widget.member)),
@@ -663,6 +680,9 @@ class _MessageItemState extends State<MessageItem> {
   ConversationChannel? get _channel =>
       widget.workspace.channelOrNull(widget.message.channelId);
 
+  /// The author's name in the space the message was sent in.
+  String get _authorName => widget.member.displayNameFor(_channel?.spaceId);
+
   /// The colour of [member]'s role here, or null for none.
   int? _roleColorOf(Member member) => switch (_channel?.spaceId) {
     final spaceId? => widget.workspace.nameColorOf(member, spaceId),
@@ -704,7 +724,7 @@ class _MessageItemState extends State<MessageItem> {
     return Builder(
       builder: (context) => _clickable(
         key: key,
-        label: '${widget.member.displayName} profile',
+        label: '$_authorName profile',
         onTap: open == null
             ? null
             : () => open(widget.message.authorId, popupAnchorOf(context)),
@@ -766,7 +786,8 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
-    final selectedText = _selectedText;
+    final selectedText =
+        TimelineSelection.maybeOf(context)?.text() ?? _selectedText;
     final action = await showMessageContextMenu(
       context: context,
       position: position,

@@ -591,18 +591,33 @@ extension _FlucordShellNavigation on FlucordShell {
     BuildContext context,
     ChatWorkspace workspace,
     FriendsController friends,
-  ) => FriendsPanel(
-    controller: friends,
-    // From the workspace, which the presence service already keeps current;
-    // a second copy would be a second thing to go stale.
-    presenceOf: (userId) => workspace.memberOrNull(userId)?.presence,
-    onMessage: (userId) => unawaited(_openDirectConversation(context, userId)),
-    onOpenProfile: (userId, anchor) => unawaited(
-      _openMemberCard(context, CommunitySpace.directMessagesId, userId, anchor),
-    ),
-    inbox: InboxActivityButton(
-      summary: InboxSummary.fromWorkspace(workspace),
-      onPressed: () => unawaited(_openInbox(context)),
+  ) => _WatchPresences(
+    // Everyone the page can show with a status: every relationship tab,
+    // and the suggestions under Add Friend.
+    userIds: [
+      for (final entry in friends.all) entry.user.id,
+      for (final suggestion in friends.suggestions) suggestion.userId,
+    ],
+    builder: (_) => FriendsPanel(
+      controller: friends,
+      // From the workspace as it stands, which the presence service keeps
+      // current; a second copy would be a second thing to go stale.
+      presenceOf: (userId) =>
+          chatController.workspace?.memberOrNull(userId)?.presence,
+      onMessage: (userId) =>
+          unawaited(_openDirectConversation(context, userId)),
+      onOpenProfile: (userId, anchor) => unawaited(
+        _openMemberCard(
+          context,
+          CommunitySpace.directMessagesId,
+          userId,
+          anchor,
+        ),
+      ),
+      inbox: InboxActivityButton(
+        summary: InboxSummary.fromWorkspace(workspace),
+        onPressed: () => unawaited(_openInbox(context)),
+      ),
     ),
   );
 
@@ -616,18 +631,24 @@ extension _FlucordShellNavigation on FlucordShell {
     builder: (_, _) => build(voiceController.seatedByChannel),
   );
 
-  /// The friends doing something now.
-  Widget _activeNow(ChatWorkspace workspace, FriendsController friends) =>
-      _onSeats(
-        (seated) => ActiveNowColumn(
+  /// The friends doing something now. Built again when a friend's presence
+  /// moves, from the workspace as it stands then.
+  Widget _activeNow(ChatWorkspace workspace, FriendsController friends) {
+    final users = [for (final friend in friends.friends) friend.user];
+    return _onSeats(
+      (seated) => _WatchPresences(
+        userIds: [for (final user in users) user.id],
+        builder: (_) => ActiveNowColumn(
           friends: activeFriends(
-            [for (final friend in friends.friends) friend.user],
-            workspace: workspace,
+            users,
+            workspace: chatController.workspace ?? workspace,
             seatedByChannel: seated,
           ),
           onOpenRoom: (channel) => _openVoiceRoom(channel.id),
         ),
-      );
+      ),
+    );
+  }
 
   /// The name of the server [channelId] is in, or null for a call.
   String? _serverNameOf(String channelId) {
@@ -799,7 +820,7 @@ extension _FlucordShellNavigation on FlucordShell {
               );
             },
       onAddFriend: friends != null && !isSelf && friends.canBefriend(member.id)
-          ? () => unawaited(friends.addFriend(member.id))
+          ? () => unawaited(friends.befriend(member.id))
           : null,
       onReport: canReport
           ? closing(() => _reportMember(context, member))
@@ -889,5 +910,20 @@ extension _FlucordShellNavigation on FlucordShell {
     if (!context.mounted) return;
     final channel = chatController.workspace!.channelById(channelId);
     _openDestination(spaceId: channel.spaceId, channelId: channel.id);
+  }
+}
+
+/// Calls [builder] again when the presence of any of [userIds] moves, for a
+/// view that reads presences through the workspace.
+class _WatchPresences extends StatelessWidget {
+  const _WatchPresences({required this.userIds, required this.builder});
+
+  final List<String> userIds;
+  final WidgetBuilder builder;
+
+  @override
+  Widget build(BuildContext context) {
+    PresenceScope.watch(context, userIds);
+    return builder(context);
   }
 }

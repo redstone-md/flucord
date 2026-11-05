@@ -533,7 +533,7 @@ void main() {
       );
     });
 
-    test('a single presence notifies only for a member it knows', () async {
+    test('a single presence is announced only for a member it knows', () async {
       final repository = _EventRepository();
       final controller = ChatController(repository);
       addTearDown(controller.dispose);
@@ -541,7 +541,9 @@ void main() {
       // The channel the load opened finishes first, and that notifies.
       await pumpEventQueue();
       var notifications = 0;
+      var announced = 0;
       controller.addListener(() => notifications++);
+      controller.presenceChanges.addListener(() => announced++);
 
       repository.emit(
         const PresenceChangedEvent(
@@ -550,7 +552,7 @@ void main() {
         ),
       );
       await Future<void>.delayed(_presenceWindow);
-      expect(notifications, 0);
+      expect(announced, 0);
 
       repository.emit(
         const PresenceChangedEvent(
@@ -559,7 +561,10 @@ void main() {
         ),
       );
       await Future<void>.delayed(_presenceWindow);
-      expect(notifications, 1);
+      expect(announced, 1);
+      expect(controller.presenceChanges.moved, {'lena'});
+      // A presence redraws only the widgets showing that person.
+      expect(notifications, 0);
     });
 
     test(

@@ -26,6 +26,7 @@ void main() {
             body: MessageContentView(
               body: 'https://discord.gg/aurora',
               workspace: _workspace,
+              spaceId: null,
               linkLauncher: launcher,
               onSelectChannel: (_) {},
             ),
@@ -60,6 +61,7 @@ void main() {
           body: MessageContentView(
             body: 'https://discord.gg/aurora',
             workspace: _workspace,
+            spaceId: null,
             linkLauncher: launcher,
             onSelectChannel: (_) {},
           ),

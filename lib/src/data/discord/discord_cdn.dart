@@ -41,12 +41,13 @@ final class DiscordCdn {
   static String? badgeIcon(String icon) =>
       _named(icon, '/badge-icons/$icon.png');
 
-  /// The avatar decoration somebody wears. `passthrough` keeps an animated
-  /// one moving.
+  /// The avatar decoration somebody wears. An animated one (`a_`) comes
+  /// with `passthrough=true`, which keeps it moving; `passthrough=false` is
+  /// its first frame.
   static String? avatarDecoration(String asset, {int size = 96}) => _named(
     asset,
     '/avatar-decoration-presets/$asset.png',
-    {'size': '$size', 'passthrough': 'true'},
+    {'size': '$size', if (asset.startsWith('a_')) 'passthrough': 'true'},
   );
 
   /// The still picture of a nameplate, by its `asset` path, which ends in a
@@ -60,10 +61,12 @@ final class DiscordCdn {
   /// Kord's `DiscordCdn.staticNameplate`.
   static String? nameplate(String asset) => _collectible(asset, 'static.png');
 
-  /// The moving nameplate, `asset.webm` beside the still picture (the same
-  /// sources as [nameplate]).
+  /// The moving nameplate as an animated PNG with alpha, `img.png` beside
+  /// the still picture (the same sources as [nameplate]). The `asset.webm`
+  /// beside it carries its alpha in a side channel that common VP9 decoders
+  /// drop.
   static String? movingNameplate(String asset) =>
-      _collectible(asset, 'asset.webm');
+      _collectible(asset, 'img.png');
 
   static String? _collectible(String asset, String file) => _named(
     asset,
@@ -87,6 +90,15 @@ final class DiscordCdn {
     int size = 128,
   }) =>
       _asset(['guilds', guildId, 'users', userId, 'avatars'], hash, size: size);
+
+  /// The banner somebody set for one server.
+  static String? guildMemberBanner(
+    String guildId,
+    String userId,
+    String? hash, {
+    int size = 512,
+  }) =>
+      _asset(['guilds', guildId, 'users', userId, 'banners'], hash, size: size);
 
   static String customEmoji(
     String emojiId, {

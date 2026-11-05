@@ -303,7 +303,7 @@ const _fullProfile = OtherUserProfile(
   avatarHash: 'mhash',
   bannerHash: 'a_bhash',
   accentColor: 0x5865f2,
-  decoration: ProfileDecoration(asset: 'a_deco'),
+  tags: MemberTags(decoration: AvatarDecoration(asset: 'a_deco')),
   badges: [
     ProfileBadge(
       id: 'legacy_username',
@@ -326,6 +326,9 @@ final class _FakeProfileRepository implements UserProfileRepository {
   final OtherUserProfile? profile;
 
   @override
+  OtherUserProfile? get published => null;
+
+  @override
   UserProfile? get current => null;
 
   @override
@@ -338,7 +341,10 @@ final class _FakeProfileRepository implements UserProfileRepository {
   Future<UserProfile?> apply(UserProfilePatch patch) async => null;
 
   @override
-  Future<OtherUserProfile?> loadProfileOf(String userId) async => profile;
+  Future<OtherUserProfile?> loadProfileOf(
+    String userId, {
+    String? serverId,
+  }) async => profile;
 }
 
 final class _FakeNotesRepository implements UserNotesRepository {

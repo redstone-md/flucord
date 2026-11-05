@@ -51,6 +51,17 @@ final class DiscordRemoteAuthCaptchaChallenge {
       'DiscordRemoteAuthCaptchaChallenge(service: $service, <data redacted>)';
 }
 
+/// A solved [challenge]: the key the captcha gave, to send with the retry.
+final class DiscordCaptchaAnswer {
+  const DiscordCaptchaAnswer(this.challenge, this.key);
+
+  final DiscordRemoteAuthCaptchaChallenge challenge;
+  final String key;
+
+  @override
+  String toString() => 'DiscordCaptchaAnswer(<redacted>)';
+}
+
 final class DiscordRemoteAuthCaptchaRequired extends DiscordRemoteAuthEvent {
   const DiscordRemoteAuthCaptchaRequired(this.challenge);
 

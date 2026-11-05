@@ -26,7 +26,12 @@ class SystemMessageItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final descriptor = _SystemMessageDescriptor.from(message, member);
+    final descriptor = _SystemMessageDescriptor.from(
+      message,
+      member.displayNameFor(
+        workspace.channelOrNull(message.channelId)?.spaceId,
+      ),
+    );
     final action = _action();
     return Semantics(
       label:
@@ -124,7 +129,7 @@ final class _SystemMessageDescriptor {
   final FlucordIconData icon;
   final String text;
 
-  factory _SystemMessageDescriptor.from(ChatMessage message, Member member) {
+  factory _SystemMessageDescriptor.from(ChatMessage message, String author) {
     final icon = switch (message.type) {
       DiscordMessageType.recipientAdd => FlucordIcons.invite,
       DiscordMessageType.recipientRemove => FlucordIcons.removeFriend,
@@ -163,7 +168,7 @@ final class _SystemMessageDescriptor {
     };
     return _SystemMessageDescriptor(
       icon: icon,
-      text: SystemMessageText.describe(message, member.displayName),
+      text: SystemMessageText.describe(message, author),
     );
   }
 }
