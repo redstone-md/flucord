@@ -5,6 +5,7 @@ import 'dart:async';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_type.dart';
 import 'emoji_picker.dart';
+import 'reveal_boundary.dart';
 import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
@@ -787,11 +788,15 @@ class _MessageItemState extends State<MessageItem> {
           const SingleActivator(LogicalKeyboardKey.numpadEnter): _saveEdit,
           const SingleActivator(LogicalKeyboardKey.escape): _closeEdit,
         },
-        child: TextField(
-          key: ValueKey('edit-${widget.message.id}'),
-          controller: _editController,
-          focusNode: _editFocus,
-          maxLines: 4,
+        // The caret shows the whole row, field and hint, in the timeline.
+        child: RevealBoundary(
+          onReveal: () => revealInScrollable(context),
+          child: TextField(
+            key: ValueKey('edit-${widget.message.id}'),
+            controller: _editController,
+            focusNode: _editFocus,
+            maxLines: 4,
+          ),
         ),
       ),
       const SizedBox(height: 4),
