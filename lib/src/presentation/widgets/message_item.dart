@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/channel_capabilities.dart';
+import '../../domain/user_settings.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
@@ -503,6 +504,18 @@ class _MessageItemState extends State<MessageItem> {
     ].join(', ');
   }
 
+  /// Whether the body is only the link to the picture its embed draws,
+  /// which Discord leaves out, as the picture says the same.
+  bool _bodyIsItsImage(MessageDisplayPreferences display) {
+    final message = widget.message;
+    return !message.suppressesEmbeds &&
+        display.rendersEmbeds &&
+        display.rendersEmbedMedia &&
+        message.embeds.length == 1 &&
+        message.embeds.single.linkedImage != null &&
+        message.embeds.single.url == message.body.trim();
+  }
+
   Widget _content(BuildContext context) {
     final message = widget.message;
     final display = UserSettingsScope.displayOf(context);
@@ -512,7 +525,7 @@ class _MessageItemState extends State<MessageItem> {
         if (!widget.grouped) _authorLine(context),
         if (widget.isEditing)
           _editField(context)
-        else if (message.body.isNotEmpty)
+        else if (message.body.isNotEmpty && !_bodyIsItsImage(display))
           MessageContentView(
             body: message.body,
             textStyle: FlucordTextRole.body.style.copyWith(

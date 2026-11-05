@@ -28,6 +28,11 @@ final class MessageEmbed {
   final MessageEmbedProvider? provider;
   final MessageEmbedAuthor? author;
   final List<MessageEmbedField> fields;
+
+  /// The picture of a link to an image, a GIF included, which Discord draws
+  /// on its own rather than in a card. Discord files it as the thumbnail.
+  MessageEmbedMedia? get linkedImage =>
+      type == 'image' ? thumbnail ?? image : null;
 }
 
 final class MessageEmbedMedia {

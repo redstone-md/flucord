@@ -31,6 +31,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a linked GIF draws on its own, at its own size', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _EmbedTestApp(
+        embed: MessageEmbed(
+          type: 'image',
+          url: 'https://cdn.example.test/cat.gif',
+          thumbnail: const MessageEmbedMedia(
+            url: 'https://cdn.example.test/cat.gif',
+            width: 160,
+            height: 200,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('embed-card')), findsNothing);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('embed-linked-image'))),
+      const Size(160, 200),
+    );
+  });
+
   testWidgets('sits on a barely raised card with a thin border', (
     tester,
   ) async {

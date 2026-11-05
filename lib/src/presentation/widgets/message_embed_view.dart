@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../domain/message_embed.dart';
@@ -50,6 +52,9 @@ class MessageEmbedView extends StatelessWidget {
         ? surfaces.border
         : Color(0xff000000 | (embed.colorValue! & 0x00ffffff));
     final showsMedia = UserSettingsScope.displayOf(context).rendersEmbedMedia;
+    if (embed.linkedImage case final image? when showsMedia) {
+      return _LinkedImage(media: image);
+    }
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 520),
       child: Container(
@@ -398,6 +403,39 @@ class _EmbedMediaView extends StatelessWidget {
             media: media,
             box: boxFitting(_bounds, ratio),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A linked picture on its own, at its own size up to the bounds an
+/// attached image has.
+class _LinkedImage extends StatelessWidget {
+  const _LinkedImage({required this.media});
+
+  static const _bounds = Size(400, 300);
+
+  final MessageEmbedMedia media;
+
+  @override
+  Widget build(BuildContext context) {
+    final box = boxFitting(
+      Size(
+        math.min(_bounds.width, media.width?.toDouble() ?? _bounds.width),
+        math.min(_bounds.height, media.height?.toDouble() ?? _bounds.height),
+      ),
+      media.aspectRatio,
+    );
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      widthFactor: 1,
+      child: SizedBox.fromSize(
+        key: const ValueKey('embed-linked-image'),
+        size: box,
+        child: ClipRRect(
+          borderRadius: FlucordRadius.small,
+          child: _RemoteEmbedImage(media: media, box: box),
         ),
       ),
     );
