@@ -152,6 +152,23 @@ void main() {
   );
 
   testSession(
+    'the popout keeps the whole frame on screen',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      // The card opens by a message at the window's bottom edge.
+      final window = MediaQuery.sizeOf(tester.element(_card));
+      final frame = tester
+          .getRect(_layer(_topLayer))
+          .expandToInclude(tester.getRect(_layer(_bottomLayer)));
+      expect(frame.top, greaterThanOrEqualTo(8));
+      expect(frame.bottom, lessThanOrEqualTo(window.height - 8 + 0.01));
+      expect(frame.right, lessThanOrEqualTo(window.width - 8 + 0.01));
+    },
+    routes: _routes(collectibles: [_frame()]),
+  );
+
+  testSession(
     'an expired frame is not drawn and never asks the shop',
     (tester, session) async {
       await _openCard(tester, session);

@@ -179,6 +179,11 @@ class ProfileCard extends StatelessWidget {
     final screen = MediaQuery.sizeOf(context);
     // The popout is a route of its own; the preview is part of the page.
     final opensAsRoute = _preview ? null : true;
+    // The editor's preview sits in a page, where an overhang would cover
+    // what is around it.
+    final frame = _preview ? null : data.frame;
+    final cardWidth = width.clamp(0.0, screen.width - 16);
+    final overhang = ProfileFrameBox.overhang(frame, cardWidth);
     return MotionHoverRegion(
       // The card is one hover target: its avatar and banner play while the
       // pointer is anywhere on it.
@@ -187,10 +192,9 @@ class ProfileCard extends StatelessWidget {
         namesRoute: opensAsRoute,
         explicitChildNodes: true,
         label: '${data.displayName} profile',
-        // The editor's preview sits in a page, where an overhang would
-        // cover what is around it.
         child: ProfileFrameBox(
-          frame: _preview ? null : data.frame,
+          frame: frame,
+          cardWidth: cardWidth,
           child: _CardSurface(
             key: const ValueKey('profile-card'),
             theme: data.themeColors,
@@ -205,8 +209,11 @@ class ProfileCard extends StatelessWidget {
             child: _EffectBox(
               data: data,
               constraints: BoxConstraints(
-                maxWidth: width.clamp(0.0, screen.width - 16),
-                maxHeight: (screen.height - 16).clamp(0.0, double.infinity),
+                maxWidth: cardWidth,
+                maxHeight: (screen.height - 16 - overhang.vertical).clamp(
+                  0.0,
+                  double.infinity,
+                ),
               ),
               child: SingleChildScrollView(
                 child: SelectionArea(
