@@ -277,18 +277,24 @@ class _AddFriendViewState extends State<_AddFriendView> {
     );
   }
 
+  /// The name the last request went out with.
+  String _sent = '';
+
   Future<void> _send() async {
-    final accepted = await widget.controller.addFriendByUsername(
-      _username.text,
-    );
-    if (accepted) _username.clear();
+    _sent = _username.text;
+    _clearIfTaken(await widget.controller.addFriendByUsername(_sent));
   }
 
   /// A captcha met here held back the name in the field, so a solved one
   /// that goes through clears the field as a plain send does.
   Future<void> _solveCaptcha(String key) async {
-    final accepted = await widget.controller.solveCaptcha(key);
-    if (accepted) _username.clear();
+    _clearIfTaken(await widget.controller.solveCaptcha(key));
+  }
+
+  /// Clears the field after a request went through, unless somebody typed
+  /// another name while it was on its way.
+  void _clearIfTaken(bool accepted) {
+    if (accepted && mounted && _username.text == _sent) _username.clear();
   }
 }
 

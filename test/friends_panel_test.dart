@@ -512,6 +512,26 @@ void main() {
       );
     });
 
+    testWidgets('a name typed while a request is on its way stays', (
+      tester,
+    ) async {
+      final graph = _FakeGraph(_graph)..hold = Completer();
+      await _pump(tester, graph);
+      await _open(tester, 'add');
+      final field = find.byKey(const ValueKey('friends-add-username'));
+
+      await tester.enterText(field, 'mira');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('friends-add')));
+      await tester.pump();
+      await tester.enterText(field, 'noor');
+      graph.hold!.complete();
+      await tester.pumpAndSettle();
+
+      expect(graph.addedByName, ['mira']);
+      expect(tester.widget<TextField>(field).controller?.text, 'noor');
+    });
+
     testWidgets('a refused request is explained, not shown as a crash', (
       tester,
     ) async {
@@ -641,6 +661,9 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   /// When set, a request without an answer is held for this captcha.
   DiscordRemoteAuthCaptchaChallenge? wantsCaptcha;
 
+  /// When set, every request waits for it before it is answered.
+  Completer<void>? hold;
+
   void push(List<DiscordRelationship> next) {
     _entries = next;
     _updates.add(next);
@@ -657,6 +680,7 @@ final class _FakeGraph implements DesktopRelationshipRepository {
     RelationshipRequest request, {
     DiscordCaptchaAnswer? captcha,
   }) async {
+    await hold?.future;
     if (failNext) {
       failNext = false;
       throw StateError('request failed');
