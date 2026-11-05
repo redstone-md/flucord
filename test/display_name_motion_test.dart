@@ -95,7 +95,11 @@ Future<List<int>> _picture(WidgetTester tester) async {
   );
   final bytes = await tester.runAsync(() async {
     final image = await boundary.toImage();
-    return image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    try {
+      return await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    } finally {
+      image.dispose();
+    }
   });
   return bytes!.buffer.asUint8List();
 }
