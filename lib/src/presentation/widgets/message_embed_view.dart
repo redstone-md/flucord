@@ -422,8 +422,8 @@ class _LinkedImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final box = boxFitting(
       Size(
-        math.min(_bounds.width, media.width?.toDouble() ?? _bounds.width),
-        math.min(_bounds.height, media.height?.toDouble() ?? _bounds.height),
+        _upTo(media.width, _bounds.width),
+        _upTo(media.height, _bounds.height),
       ),
       media.aspectRatio,
     );
@@ -440,6 +440,11 @@ class _LinkedImage extends StatelessWidget {
       ),
     );
   }
+
+  /// A side Discord gave, kept within [bound]. A missing or zero side is
+  /// unknown, so the picture takes the bound and its ratio decides.
+  static double _upTo(int? side, double bound) =>
+      side == null || side <= 0 ? bound : math.min(bound, side.toDouble());
 }
 
 class _RemoteEmbedImage extends StatelessWidget {

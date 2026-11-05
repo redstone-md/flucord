@@ -31,9 +31,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a linked GIF draws on its own, at its own size', (
-    tester,
-  ) async {
+  testWidgets('a linked GIF draws on its own, at its own size', (tester) async {
     await tester.pumpWidget(
       _EmbedTestApp(
         embed: MessageEmbed(
@@ -52,6 +50,27 @@ void main() {
     expect(
       tester.getSize(find.byKey(const ValueKey('embed-linked-image'))),
       const Size(160, 200),
+    );
+  });
+
+  testWidgets('a linked picture with no height still shows', (tester) async {
+    await tester.pumpWidget(
+      _EmbedTestApp(
+        embed: MessageEmbed(
+          type: 'image',
+          url: 'https://cdn.example.test/cat.gif',
+          thumbnail: const MessageEmbedMedia(
+            url: 'https://cdn.example.test/cat.gif',
+            width: 160,
+            height: 0,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('embed-linked-image'))),
+      isNot(Size.zero),
     );
   });
 
