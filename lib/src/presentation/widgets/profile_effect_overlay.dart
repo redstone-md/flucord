@@ -6,15 +6,17 @@ import 'package:flutter/widgets.dart';
 
 import '../../domain/profile_effect.dart';
 import 'motion_scope.dart';
+import 'pictures_ready.dart';
 
 /// A profile effect over a card, scaled to the card's width. Place it in a
 /// [Stack] over the card, which clips it.
 ///
-/// The layers follow Discord's timing from the moment the effect appears:
-/// the intro plays once, then the loop. The clock stops while the window is
-/// unfocused or suspended ([TickerMode]), so the effect resumes where it
-/// was. Reduced motion draws Discord's still picture instead.
-class ProfileEffectOverlay extends StatefulWidget {
+/// The effect waits for its pictures, then follows Discord's timing from
+/// there: the intro plays once, then the loop, with no gap while the loop
+/// loads. The clock stops while the window is unfocused or suspended
+/// ([TickerMode]), so the effect resumes where it was. Reduced motion draws
+/// Discord's still picture instead.
+class ProfileEffectOverlay extends StatelessWidget {
   /// Keyed by [effect], so another effect starts from its intro. The shop
   /// is read once per effect, so one effect is one object.
   ProfileEffectOverlay({required this.effect, this.endsAt})
@@ -27,10 +29,38 @@ class ProfileEffectOverlay extends StatefulWidget {
   final DateTime? endsAt;
 
   @override
-  State<ProfileEffectOverlay> createState() => _ProfileEffectOverlayState();
+  Widget build(BuildContext context) {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return PicturesReady(
+      pictures: [
+        for (final url
+            in still
+                ? [?effect.stillSrc]
+                : [
+                    for (final layer in effect.layers) ...[
+                      layer.src,
+                      ...layer.randomizedSources,
+                    ],
+                  ])
+          NetworkImage(url),
+      ],
+      child: _EffectPlayer(effect: effect, endsAt: endsAt),
+    );
+  }
 }
 
-class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
+/// Plays [effect] from the moment it is built.
+class _EffectPlayer extends StatefulWidget {
+  const _EffectPlayer({required this.effect, required this.endsAt});
+
+  final ProfileEffectConfig effect;
+  final DateTime? endsAt;
+
+  @override
+  State<_EffectPlayer> createState() => _EffectPlayerState();
+}
+
+class _EffectPlayerState extends State<_EffectPlayer> {
   late final Ticker _ticker = Ticker(_tick);
 
   /// The picture each layer draws: its own, or one of its random ones.
