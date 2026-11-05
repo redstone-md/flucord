@@ -480,18 +480,33 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.selectedCamera, 0);
-      controller.selectCamera(1);
+      await controller.selectCamera(1);
       // A camera that is already selected, or an index that is not one, does
       // not disturb the setting.
-      controller
-        ..selectCamera(1)
-        ..selectCamera(-1);
+      await controller.selectCamera(1);
+      await controller.selectCamera(-1);
       expect(controller.selectedCamera, 1);
 
       await controller.turnOn();
       expect(encoder.started.single.displayIndex, 1);
       expect(encoder.started.single.bitrate, 1200000);
     });
+  });
+
+  test('a running camera moves to the one chosen', () async {
+    final encoder = FakeVideoEncoder(cameras: const ['Front', 'Back']);
+    final controller = _controllerFor(
+      encoder,
+      transport: _FakeVoiceVideoTransport(),
+    );
+    addTearDown(controller.dispose);
+
+    expect(await controller.turnOn(), isTrue);
+    await controller.selectCamera(1);
+
+    expect(encoder.started.map((settings) => settings.displayIndex), [0, 1]);
+    expect(encoder.stopped, 1);
+    expect(controller.isOn, isTrue);
   });
 
   group('the voice state', () {

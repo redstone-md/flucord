@@ -93,10 +93,15 @@ final class SelfVideoController extends ChangeNotifier {
   /// camera is moving rather than merely open.
   int get sentPackets => _transport?.sentPackets ?? 0;
 
-  void selectCamera(int index) {
+  /// Picks the camera by its place in [cameras]. A camera that is running
+  /// moves over to it at once, as Discord's does.
+  Future<void> selectCamera(int index) async {
     if (index < 0 || index == _selectedCamera) return;
     _selectedCamera = index;
     notifyListeners();
+    if (!_isOn || _isBusy) return;
+    await turnOff();
+    await turnOn();
   }
 
   Future<bool> turnOn() async {
