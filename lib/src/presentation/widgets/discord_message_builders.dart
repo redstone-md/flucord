@@ -8,20 +8,25 @@ import '../../domain/duration_in_words.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_preview_text.dart';
+import 'popup_anchor.dart';
+import 'profile_card_route.dart';
 import 'user_settings_scope.dart';
 
 /// [spaceId] is where the message was sent: a mentioned person goes by the
-/// name that space knows them by.
+/// name that space knows them by. [onOpenProfile] opens a mentioned person's
+/// card; without it a person's mention is only a label.
 Map<String, MarkdownElementBuilder> discordMessageBuilders({
   required ChatWorkspace workspace,
   required String? spaceId,
   required ValueChanged<String> onSelectChannel,
+  OpenProfileCard? onOpenProfile,
   DateTime? now,
 }) => {
   'discord-user': _MentionBuilder(
     workspace,
     _MentionKind.user,
     spaceId: spaceId,
+    onOpenProfile: onOpenProfile,
   ),
   'discord-role': _MentionBuilder(workspace, _MentionKind.role),
   'discord-channel': _MentionBuilder(
@@ -43,12 +48,14 @@ final class _MentionBuilder extends MarkdownElementBuilder {
     this._workspace,
     this._kind, {
     this.onSelectChannel,
+    this.onOpenProfile,
     this.spaceId,
   });
 
   final ChatWorkspace _workspace;
   final _MentionKind _kind;
   final ValueChanged<String>? onSelectChannel;
+  final OpenProfileCard? onOpenProfile;
   final String? spaceId;
 
   @override
@@ -71,35 +78,96 @@ final class _MentionBuilder extends MarkdownElementBuilder {
     final foreground = roleColor == null
         ? context.surfaces.link
         : Color(roleColor);
-    final channel = _kind == _MentionKind.channel
-        ? _workspace.channelOrNull(id)
-        : null;
+    final openProfile = onOpenProfile;
+    final selectChannel = onSelectChannel;
     // Every channel the workspace knows is reachable, voice included: a voice
-    // mention opens that channel's chat, the way it does in Discord.
-    final enabled = channel != null;
+    // mention opens that channel's chat, the way it does in Discord. A person
+    // opens their card when the workspace knows them.
+    final ValueChanged<Rect>? onTap = switch (_kind) {
+      _MentionKind.channel
+          when selectChannel != null && _workspace.channelOrNull(id) != null =>
+        (_) => selectChannel(id),
+      _MentionKind.user
+          when openProfile != null && _workspace.memberOrNull(id) != null =>
+        (anchor) => openProfile(id, anchor),
+      _ => null,
+    };
     return Semantics(
-      button: enabled,
+      button: onTap != null,
       label: label,
-      child: InkWell(
+      child: _MentionChip(
         key: ValueKey('discord-${_kind.name}-$id'),
-        onTap: enabled ? () => onSelectChannel?.call(id) : null,
+        label: label,
+        color: foreground,
+        style: parentStyle ?? preferredStyle,
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// A mention's pill. One that leads somewhere fills with the brand colour
+/// under the pointer and darkens while pressed, as in Discord. [onTap] gets
+/// the pill's rectangle, for a card that opens beside it.
+class _MentionChip extends StatefulWidget {
+  const _MentionChip({
+    required this.label,
+    required this.color,
+    required this.style,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final Color color;
+  final TextStyle? style;
+  final ValueChanged<Rect>? onTap;
+
+  @override
+  State<_MentionChip> createState() => _MentionChipState();
+}
+
+class _MentionChipState extends State<_MentionChip> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final onTap = widget.onTap;
+    final surfaces = context.surfaces;
+    final lit = onTap != null && (_hovered || _pressed);
+    final chip = DecoratedBox(
+      decoration: BoxDecoration(
+        color: !lit
+            ? widget.color.withValues(alpha: 0.16)
+            : _pressed
+            ? surfaces.brandPressed
+            : surfaces.brand,
         borderRadius: FlucordRadius.small,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: foreground.withValues(alpha: 0.16),
-            borderRadius: FlucordRadius.small,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-            child: Text(
-              label,
-              style: (parentStyle ?? preferredStyle)?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+        child: Text(
+          widget.label,
+          style: widget.style?.copyWith(
+            color: lit ? Colors.white : widget.color,
+            fontWeight: FontWeight.w500,
           ),
         ),
+      ),
+    );
+    if (onTap == null) return chip;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: () => onTap(popupAnchorOf(context)),
+        child: chip,
       ),
     );
   }

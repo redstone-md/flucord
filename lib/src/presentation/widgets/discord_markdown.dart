@@ -10,6 +10,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
+import 'profile_card_route.dart';
 import 'timeline_dependencies.dart';
 
 /// Text in Discord's markup, drawn as chat draws it: markdown, links, custom
@@ -26,6 +27,7 @@ class DiscordMarkdown extends StatefulWidget {
     this.workspace,
     this.spaceId,
     this.onSelectChannel,
+    this.onOpenProfile,
     this.now,
     this.textStyle,
     super.key,
@@ -38,6 +40,9 @@ class DiscordMarkdown extends StatefulWidget {
   /// The space whose names mentions read in, or null for each person's own.
   final String? spaceId;
   final ValueChanged<String>? onSelectChannel;
+
+  /// Opens a mentioned person's card. Without it a mention is only a label.
+  final OpenProfileCard? onOpenProfile;
   final DateTime? now;
   final TextStyle? textStyle;
 
@@ -146,6 +151,7 @@ class _DiscordMarkdownState extends State<DiscordMarkdown> {
       workspace: _workspace,
       spaceId: widget.spaceId,
       onSelectChannel: widget.onSelectChannel ?? (_) {},
+      onOpenProfile: widget.onOpenProfile,
       now: widget.now,
     ),
     styleSheet: _markdownStyleSheet ??= _buildStyleSheet(context),
