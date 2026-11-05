@@ -34,6 +34,7 @@ final class ConversationChannel {
     this.mentionCount = 0,
     this.firstUnreadMessageId,
     this.lastMessageId,
+    this.messageCount,
     this.permissionOverwrites = const {},
     this.rateLimitPerUser = 0,
     this.isAgeGated = false,
@@ -102,6 +103,11 @@ final class ConversationChannel {
   /// is what lets that comparison survive a restart, because the client can
   /// answer it without having loaded a single message.
   final String? lastMessageId;
+
+  /// How many messages a thread holds, its opening message aside, as
+  /// Discord last reported it. Null outside a thread and on a thread read
+  /// from the local cache, which does not keep it.
+  final int? messageCount;
 
   /// The channel's permission overwrites, keyed by role or member id.
   ///
@@ -274,5 +280,6 @@ final class ConversationChannel {
     lastMessageId: identical(lastMessageId, _keepLastMessageId)
         ? this.lastMessageId
         : lastMessageId as String?,
+    messageCount: messageCount,
   );
 }

@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/discord_snowflake.dart';
+import '../../domain/duration_in_words.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'chat_image.dart';
+import 'message_attachment_view.dart';
 
+/// One post in a forum or media channel, as Discord's post card draws it.
+///
+/// A gallery card is led by the post's picture; a list card puts the text
+/// first with a small thumbnail beside it. Both end in the same footer: who
+/// opened the post, when it last moved, and how many replies it has.
 class ForumPostTile extends StatelessWidget {
   const ForumPostTile({
     required this.workspace,
@@ -28,9 +37,18 @@ class ForumPostTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final starter = _starterMessage();
     final attachment = _previewAttachment(starter);
-    final tags = parent.availableTags
-        .where((tag) => post.appliedTagIds.contains(tag.id))
-        .toList(growable: false);
+    final details = _ForumPostDetails(
+      parent: parent,
+      post: post,
+      starter: starter,
+      author: starter == null
+          ? null
+          : workspace.memberOrNull(starter.authorId)?.displayName,
+      tags: parent.availableTags
+          .where((tag) => post.appliedTagIds.contains(tag.id))
+          .toList(growable: false),
+      snippetLines: gallery ? 1 : 2,
+    );
     return Material(
       color: context.surfaces.raised,
       borderRadius: FlucordRadius.small,
@@ -51,20 +69,36 @@ class ForumPostTile extends StatelessWidget {
                 shouldLoad: starter == null,
                 onLoad: onLoadPreview,
               ),
-              if (gallery)
-                _ForumMediaPreview(post: post, attachment: attachment),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _ForumPostDetails(
-                    parent: parent,
-                    post: post,
-                    starter: starter,
-                    attachment: attachment,
-                    tags: tags,
+              if (gallery) ...[
+                Expanded(
+                  child: _ForumMediaPreview(post: post, attachment: attachment),
+                ),
+                Padding(padding: const EdgeInsets.all(12), child: details),
+              ] else
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: details),
+                        if (attachment?.isImage == true) ...[
+                          const SizedBox(width: 12),
+                          ClipRRect(
+                            borderRadius: FlucordRadius.small,
+                            child: SizedBox.square(
+                              dimension: 72,
+                              child: _ForumMediaPreview(
+                                post: post,
+                                attachment: attachment,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -133,6 +167,8 @@ class _PreviewLoadTriggerState extends State<_PreviewLoadTrigger> {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
+/// The post's picture cropped to fill whatever box it is given, or an icon
+/// for a post with no picture.
 class _ForumMediaPreview extends StatelessWidget {
   const _ForumMediaPreview({required this.post, required this.attachment});
 
@@ -140,67 +176,87 @@ class _ForumMediaPreview extends StatelessWidget {
   final MessageAttachment? attachment;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: ValueKey('forum-post-media-${post.id}'),
-    height: 124,
-    child: attachment?.isImage == true && attachment!.url.isNotEmpty
-        ? Image.network(
-            attachment!.url,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.medium,
-            loadingBuilder: (context, child, progress) => progress == null
-                ? child
-                : const _MediaPlaceholder(
-                    icon: FlucordIcons.image,
-                    label: 'Loading preview',
-                  ),
-            errorBuilder: (_, _, _) => _MediaPlaceholder(
-              icon: FlucordIcons.brokenImage,
-              label: attachment!.fileName,
+  Widget build(BuildContext context) {
+    final attachment = this.attachment;
+    return KeyedSubtree(
+      key: ValueKey('forum-post-media-${post.id}'),
+      child: attachment != null && attachment.isImage
+          ? LayoutBuilder(
+              builder: (context, constraints) => Image(
+                image: attachmentPreviewImage(
+                  context,
+                  attachment,
+                  _coverBox(attachment, constraints.biggest),
+                ),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                frameBuilder: (context, child, frame, synchronous) =>
+                    synchronous || frame != null
+                    ? child
+                    : const _MediaPlaceholder(icon: FlucordIcons.image),
+                errorBuilder: (_, _, _) =>
+                    const _MediaPlaceholder(icon: FlucordIcons.brokenImage),
+              ),
+            )
+          : _MediaPlaceholder(
+              icon: attachment?.isVideo == true
+                  ? FlucordIcons.videoFile
+                  : attachment == null
+                  ? FlucordIcons.mediaChannel
+                  : FlucordIcons.file,
+              label: attachment?.fileName,
             ),
-          )
-        : _MediaPlaceholder(
-            icon: attachment?.isVideo == true
-                ? FlucordIcons.videoFile
-                : attachment == null
-                ? FlucordIcons.mediaChannel
-                : FlucordIcons.file,
-            label: attachment?.fileName ?? 'No media preview',
-          ),
-  );
+    );
+  }
+
+  /// The size to fetch and decode at: enough to fill [bounds] once cropped,
+  /// and no more.
+  static Size _coverBox(MessageAttachment attachment, Size bounds) {
+    final width = attachment.width;
+    final height = attachment.height;
+    if (width == null || height == null || width == 0 || height == 0) {
+      return bounds;
+    }
+    return boxCovering(bounds, width / height);
+  }
 }
 
 class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder({required this.icon, required this.label});
+  const _MediaPlaceholder({required this.icon, this.label});
 
   final FlucordIconData icon;
-  final String label;
+  final String? label;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: context.surfaces.inset,
-    child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FlucordIcon(icon, size: 24, color: context.surfaces.muted),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: context.surfaces.muted,
-                fontSize: FlucordType.caption,
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) {
+    final label = this.label;
+    return ColoredBox(
+      color: context.surfaces.inset,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlucordIcon(icon, size: 24, color: context.surfaces.muted),
+              if (label != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ForumPostDetails extends StatelessWidget {
@@ -208,84 +264,126 @@ class _ForumPostDetails extends StatelessWidget {
     required this.parent,
     required this.post,
     required this.starter,
-    required this.attachment,
+    required this.author,
     required this.tags,
+    required this.snippetLines,
   });
 
   final ConversationChannel parent;
   final ConversationChannel post;
   final ChatMessage? starter;
-  final MessageAttachment? attachment;
+  final String? author;
   final List<ForumTag> tags;
+  final int snippetLines;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          FlucordIcon(
-            parent.kind == ChannelKind.media
-                ? FlucordIcons.mediaChannel
-                : FlucordIcons.forum,
-            size: 16,
-            color: context.surfaces.muted,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              post.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlucordTextRole.label.strong,
-            ),
-          ),
-          if (post.isLocked)
-            FlucordIcon(
-              FlucordIcons.lock,
-              size: 14,
-              color: context.surfaces.muted,
-            ),
-        ],
-      ),
-      const SizedBox(height: 7),
-      Expanded(
-        child: Text(
-          _previewText(),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            height: 1.3,
-          ),
-        ),
-      ),
-      if (tags.isNotEmpty)
+  Widget build(BuildContext context) {
+    final muted = TextStyle(
+      color: context.surfaces.muted,
+      fontSize: FlucordType.caption,
+      height: 1.3,
+    );
+    // The opening message's text, when it has any. A post that opens with
+    // only a picture shows no snippet: the picture is its content, and its
+    // file name says nothing.
+    final snippet = starter?.body.trim() ?? '';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Row(
           children: [
-            for (final tag in tags.take(2)) ...[
-              _PostTag(label: tag.name),
-              const SizedBox(width: 4),
-            ],
-            if (tags.length > 2)
-              Text(
-                '+${tags.length - 2}',
-                style: TextStyle(
-                  color: context.surfaces.muted,
-                  fontSize: FlucordType.caption,
-                ),
+            Expanded(
+              child: Text(
+                post.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: FlucordTextRole.label.strong,
+              ),
+            ),
+            if (post.isLocked)
+              FlucordIcon(
+                FlucordIcons.lock,
+                size: 14,
+                color: context.surfaces.muted,
               ),
           ],
         ),
-    ],
-  );
+        if (snippet.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            snippet,
+            maxLines: snippetLines,
+            overflow: TextOverflow.ellipsis,
+            style: muted,
+          ),
+        ],
+        if (tags.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              for (final tag in tags.take(2)) ...[
+                _PostTag(label: tag.name),
+                const SizedBox(width: 4),
+              ],
+              if (tags.length > 2) Text('+${tags.length - 2}', style: muted),
+            ],
+          ),
+        ],
+        const SizedBox(height: 6),
+        _ForumPostFooter(post: post, author: author, style: muted),
+      ],
+    );
+  }
+}
 
-  String _previewText() {
-    final body = starter?.body.trim();
-    if (body?.isNotEmpty == true) return body!;
-    if (attachment != null) return attachment!.fileName;
-    return post.isArchived ? 'Archived post' : 'Open post';
+/// Who opened the post, when it last moved, and how many replies it holds.
+class _ForumPostFooter extends StatelessWidget {
+  const _ForumPostFooter({
+    required this.post,
+    required this.author,
+    required this.style,
+  });
+
+  final ConversationChannel post;
+  final String? author;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final activity = _lastActivity();
+    final count = post.messageCount;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            [?author, ?activity].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+        if (count != null) ...[
+          const SizedBox(width: 8),
+          FlucordIcon(
+            FlucordIcons.forum,
+            size: 14,
+            color: context.surfaces.muted,
+          ),
+          const SizedBox(width: 4),
+          Text('$count', style: style),
+        ],
+      ],
+    );
+  }
+
+  /// How long ago the post last moved: its newest message, else its opening.
+  String? _lastActivity() {
+    final at = DiscordSnowflake.createdAt(post.lastMessageId ?? post.id);
+    if (at == null) return null;
+    final ago = DateTime.now().toUtc().difference(at);
+    if (ago < const Duration(minutes: 1)) return 'just now';
+    return '${durationInWords(ago)} ago';
   }
 }
 

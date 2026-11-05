@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -17,12 +18,18 @@ void main() {
       find.byKey(const ValueKey('forum-post-media-post-1')),
       findsOneWidget,
     );
-    final image = tester.widget<Image>(find.byType(Image));
-    expect(image.image, isA<NetworkImage>());
+    // Decoded at the card's size and kept on disk, so focus coming back to
+    // the window does not fetch the picture again.
+    final image = tester.widget<Image>(find.byType(Image)).image;
+    expect(image, isA<ResizeImage>());
+    final source = (image as ResizeImage).imageProvider;
+    expect(source, isA<CachedNetworkImageProvider>());
     expect(
-      (image.image as NetworkImage).url,
+      (source as CachedNetworkImageProvider).url,
       'https://cdn.discordapp.com/attachments/1/2/capture.png',
     );
+    final shown = tester.getSize(find.byType(Image));
+    expect(image.width, (shown.width * tester.view.devicePixelRatio).round());
     expect(find.text('Native capture'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -42,11 +49,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps list cards text-first', (tester) async {
+  testWidgets('keeps list cards text-first with a thumbnail beside', (
+    tester,
+  ) async {
     await _pumpTile(tester, workspace: _imageWorkspace, gallery: false);
 
-    expect(find.byKey(const ValueKey('forum-post-media-post-1')), findsNothing);
-    expect(find.text('Capture from the native client.'), findsOneWidget);
+    final text = tester.getTopLeft(
+      find.text('Capture from the native client.'),
+    );
+    final thumbnail = tester.getTopLeft(
+      find.byKey(const ValueKey('forum-post-media-post-1')),
+    );
+    expect(thumbnail.dx, greaterThan(text.dx));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a picture-only post shows no file name as its text', (
+    tester,
+  ) async {
+    await _pumpTile(
+      tester,
+      workspace: _workspace(_capture, body: ''),
+      gallery: true,
+      post: _countedPost,
+    );
+
+    expect(find.text('capture.png'), findsNothing);
+    expect(find.text('12'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -73,6 +102,7 @@ Future<void> _pumpTile(
   required ChatWorkspace workspace,
   required bool gallery,
   double width = 520,
+  ConversationChannel post = _post,
   VoidCallback? onLoadPreview,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -82,11 +112,11 @@ Future<void> _pumpTile(
         alignment: Alignment.topLeft,
         child: SizedBox(
           width: width,
-          height: gallery ? 244 : 108,
+          height: gallery ? 260 : 128,
           child: ForumPostTile(
             workspace: workspace,
             parent: _media,
-            post: _post,
+            post: post,
             gallery: gallery,
             onPressed: () {},
             onLoadPreview: onLoadPreview ?? () {},
@@ -118,17 +148,28 @@ const _post = ConversationChannel(
   appliedTagIds: ['tag-1'],
 );
 
-final _imageWorkspace = _workspace(
-  MessageAttachment(
-    id: 'image-1',
-    fileName: 'capture.png',
-    url: 'https://cdn.discordapp.com/attachments/1/2/capture.png',
-    size: 1024,
-    contentType: 'image/png',
-    width: 1280,
-    height: 720,
-  ),
+const _countedPost = ConversationChannel(
+  id: 'post-1',
+  spaceId: 'guild-1',
+  name: 'Native capture',
+  topic: '',
+  kind: ChannelKind.text,
+  parentId: 'media-1',
+  isThread: true,
+  messageCount: 12,
 );
+
+const _capture = MessageAttachment(
+  id: 'image-1',
+  fileName: 'capture.png',
+  url: 'https://cdn.discordapp.com/attachments/1/2/capture.png',
+  size: 1024,
+  contentType: 'image/png',
+  width: 1280,
+  height: 720,
+);
+
+final _imageWorkspace = _workspace(_capture);
 
 final _fileWorkspace = _workspace(
   const MessageAttachment(

@@ -244,7 +244,12 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
 }
 
 /// The image a preview draws, fetched and decoded at the size it is shown at.
-ImageProvider _previewImage(
+///
+/// Every surface that shows an attachment's picture goes through here, so a
+/// photo is cached on disk and decoded small wherever it appears. A full-size
+/// decode does not fit the image cache and is fetched again each time the
+/// window comes back into focus.
+ImageProvider attachmentPreviewImage(
   BuildContext context,
   MessageAttachment attachment,
   Size box,
@@ -335,7 +340,7 @@ class _ImageAttachment extends StatelessWidget {
                     ),
                   ),
                   child: Image(
-                    image: _previewImage(context, attachment, box),
+                    image: attachmentPreviewImage(context, attachment, box),
                     fit: BoxFit.cover,
                     filterQuality: FilterQuality.medium,
                     errorBuilder: (_, _, _) =>
