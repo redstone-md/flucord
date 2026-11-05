@@ -214,6 +214,83 @@ void main() {
     },
   );
 
+  group('the chosen microphone and speakers come back after a restart', () {
+    Future<void> choose(MemoryVoiceProcessingRepository repository) async {
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        processingRepository: repository,
+      );
+      addTearDown(controller.dispose);
+      await controller.loadProcessingSettings();
+      await controller.initialize();
+      await controller.selectInput('mic-2');
+      await controller.selectOutput('speaker-2');
+    }
+
+    for (final settingsFirst in [true, false]) {
+      test(
+        settingsFirst
+            ? 'with the settings read before the devices'
+            : 'with the devices read before the settings',
+        () async {
+          final repository = MemoryVoiceProcessingRepository();
+          await choose(repository);
+
+          final media = _FakeVoiceMediaService();
+          final controller = VoiceController(
+            media,
+            processingRepository: repository,
+          );
+          addTearDown(controller.dispose);
+          if (settingsFirst) await controller.loadProcessingSettings();
+          await controller.initialize();
+          if (!settingsFirst) await controller.loadProcessingSettings();
+
+          expect(controller.selectedInputId, 'mic-2');
+          expect(controller.selectedOutputId, 'speaker-2');
+          expect(media.selectedOutput, 'speaker-2');
+          await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+          expect(media.startedInputs, ['mic-2']);
+        },
+      );
+    }
+
+    test('found by name when the system gave it another id', () async {
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        processingRepository: MemoryVoiceProcessingRepository(
+          const VoiceProcessingSettings(
+            inputDevice: VoiceDeviceChoice(
+              id: 'mic-old',
+              label: 'Backup microphone',
+            ),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadProcessingSettings();
+      await controller.initialize();
+
+      expect(controller.selectedInputId, 'mic-2');
+    });
+
+    test('a device that is gone leaves the first one', () async {
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        processingRepository: MemoryVoiceProcessingRepository(
+          const VoiceProcessingSettings(
+            inputDevice: VoiceDeviceChoice(id: 'mic-9', label: 'Unplugged'),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadProcessingSettings();
+      await controller.initialize();
+
+      expect(controller.selectedInputId, 'mic-1');
+    });
+  });
+
   test('a manual sensitivity overrides the gate and is saved for the next '
       'session', () async {
     final media = _FakeVoiceMediaService();

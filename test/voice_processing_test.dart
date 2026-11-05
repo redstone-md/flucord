@@ -28,13 +28,13 @@ void main() {
     );
 
     expect(await repository.load(), const VoiceProcessingSettings());
-    await repository.save(
-      const VoiceProcessingSettings(noiseSuppression: true),
+    const saved = VoiceProcessingSettings(
+      noiseSuppression: true,
+      inputDevice: VoiceDeviceChoice(id: 'mic-2', label: 'Backup microphone'),
+      outputDevice: VoiceDeviceChoice(id: 'speaker-2', label: 'Headset'),
     );
-    expect(
-      await repository.load(),
-      const VoiceProcessingSettings(noiseSuppression: true),
-    );
+    await repository.save(saved);
+    expect(await repository.load(), saved);
 
     await File(
       '${directory.path}/${FileVoiceProcessingRepository.fileName}',
