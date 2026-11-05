@@ -383,6 +383,37 @@ void main() {
       expect(_authorStatus(tester, session), Presence.idle);
     });
 
+    testSession('two folds before one frame both reach the screen', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'on screen');
+      await _meetFarMembers(session);
+      await _rest(tester, session);
+      expect(_authorStatus(tester, session), isNot(Presence.doNotDisturb));
+
+      // Each fold lands with no frame after it, as while the window is
+      // hidden: the second one names only somebody far away.
+      Future<void> foldWithoutFrame() async {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.binding.delayed(const Duration(milliseconds: 151));
+      }
+
+      await _presence(session, _friendId, settle: false);
+      await foldWithoutFrame();
+      await _presence(
+        session,
+        _farMembers.first,
+        guildId: _farGuildId,
+        settle: false,
+      );
+      await foldWithoutFrame();
+      await tester.pump();
+
+      expect(_authorStatus(tester, session), Presence.doNotDisturb);
+    });
+
     testSession('waits for the window, then updates the author on screen', (
       tester,
       session,

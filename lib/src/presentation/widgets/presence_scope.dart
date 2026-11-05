@@ -54,38 +54,53 @@ class PresenceScope extends StatefulWidget {
 class _PresenceScopeState extends State<PresenceScope> {
   int _revision = 0;
 
+  /// Everyone announced since the last build. Several folds can land before
+  /// a frame, such as while the window is hidden, and each names only its
+  /// own people.
+  Set<String> _moved = {};
+  Set<String> _flipped = {};
+
   @override
   void initState() {
     super.initState();
-    widget.chat.presenceChanges.addListener(_moved);
+    widget.chat.presenceChanges.addListener(_announced);
   }
 
   @override
   void didUpdateWidget(PresenceScope oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.chat == widget.chat) return;
-    oldWidget.chat.presenceChanges.removeListener(_moved);
-    widget.chat.presenceChanges.addListener(_moved);
+    oldWidget.chat.presenceChanges.removeListener(_announced);
+    widget.chat.presenceChanges.addListener(_announced);
   }
 
   @override
   void dispose() {
-    widget.chat.presenceChanges.removeListener(_moved);
+    widget.chat.presenceChanges.removeListener(_announced);
     super.dispose();
   }
 
-  void _moved() => setState(() => _revision++);
+  void _announced() {
+    final changes = widget.chat.presenceChanges;
+    setState(() {
+      _revision++;
+      _moved.addAll(changes.moved);
+      _flipped.addAll(changes.flipped);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final changes = widget.chat.presenceChanges;
-    return _PresenceModel(
+    final model = _PresenceModel(
       chat: widget.chat,
       revision: _revision,
-      moved: changes.moved,
-      flipped: changes.flipped,
+      moved: _moved,
+      flipped: _flipped,
       child: widget.child,
     );
+    _moved = {};
+    _flipped = {};
+    return model;
   }
 }
 
