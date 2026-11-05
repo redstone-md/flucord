@@ -18,41 +18,60 @@ const _shop = 'https://cdn.discordapp.com/media/v1/collectibles-shop';
 
 final _card = find.byKey(const ValueKey('profile-card'));
 
-/// The shop's answer for the frame, shaped as a capture of Discord's.
+/// The shop's answer for the frame, shaped as a capture of Discord's: one
+/// product for all colours of the frame, each colour a SKU of its own that
+/// carries the frame's description.
 Map<String, Object?> _products() => {
   'products': [
     {
-      'sku_id': _frameSku,
+      'id': '100000000000000400',
       'name': 'Dark Roses',
-      'items': [
-        {
-          'type': 3,
-          'sku_id': _frameSku,
-          'label': 'Roses on two corners',
-          'layers': [
-            {
-              'id': _topLayer,
-              'type': 'staple',
-              'order': 'front',
-              'anchor': 'top',
-              'responsive': false,
-            },
-            {
-              'id': _bottomLayer,
-              'type': 'staple',
-              'order': 'front',
-              'anchor': 'bottom',
-              'responsive': false,
-            },
-          ],
-          'inner_width': 1200,
-          'overflow_top': 211,
-          'overflow_bottom': 186,
-          'overflow_horizontal': 56,
-        },
+      'sku_ids': [_otherColour, _frameSku],
+      'skus': [
+        _colour(_otherColour, '100000000000000421', '100000000000000422'),
+        _colour(_frameSku, _topLayer, _bottomLayer),
       ],
     },
   ],
+};
+
+const _otherColour = '100000000000000403';
+
+/// One colour of the frame, as a SKU of the product.
+Map<String, Object?> _colour(String sku, String top, String bottom) => {
+  'id': sku,
+  'name': 'Dark Roses ($sku)',
+  'product_id': '100000000000000400',
+  'tenant_metadata': {
+    'collectibles': {
+      'type': 3,
+      'item': {
+        'type': 3,
+        'sku_id': sku,
+        'label': 'Roses on two corners',
+        'layers': [
+          {
+            'id': top,
+            'type': 'staple',
+            'order': 'front',
+            'anchor': 'top',
+            'responsive': false,
+          },
+          {
+            'id': bottom,
+            'type': 'staple',
+            'order': 'front',
+            'anchor': 'bottom',
+            'responsive': false,
+          },
+        ],
+        'inner_width': 1200,
+        'overflow_top': 211,
+        'overflow_bottom': 186,
+        'overflow_horizontal': 56,
+      },
+    },
+  },
 };
 
 /// The profile route with [collectibles] on the user profile, and the shop.
