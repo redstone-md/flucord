@@ -17,6 +17,7 @@ const _profilePath = '/api/v9/users/${SessionHarness.friendId}/profile';
 // A deep indigo to violet, and a pale yellow to pink.
 const _darkTheme = [0x1e1b4b, 0x4c1d95];
 const _lightTheme = [0xfde68a, 0xfbcfe8];
+const _greyToWhite = [0x404040, 0xffffff];
 
 final _card = find.byKey(const ValueKey('profile-card'));
 final _cardTheme = find.descendant(
@@ -228,6 +229,20 @@ void main() {
     },
     ready: _readyWithRole(),
     routes: _profileRoute(themeColors: _darkTheme),
+  );
+
+  testSession(
+    'text is light on a dark primary, even with a white accent',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      expect(
+        _cardInk(tester).map(_toneOn(_greyToWhite)),
+        everyElement(Brightness.light),
+      );
+    },
+    ready: _readyWithRole(),
+    routes: _profileRoute(themeColors: _greyToWhite),
   );
 
   testSession(

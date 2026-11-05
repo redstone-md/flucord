@@ -8,8 +8,8 @@ import '../../theme/flucord_theme.dart';
 /// the app's theme when [colors] is null.
 ///
 /// The palette starts from Flucord's own dark or light theme, picked by the
-/// gradient's brightness, and never from the theme the app is in: a profile
-/// looks the same to everybody. Its backgrounds take the primary colour, so
+/// primary colour's brightness, and never from the theme the app is in: a
+/// profile looks the same to everybody. Its backgrounds take the primary colour, so
 /// the avatar ring and the status bubble match the top of the gradient.
 class ProfileTheme extends StatelessWidget {
   const ProfileTheme({required this.colors, required this.child, super.key});
@@ -28,8 +28,9 @@ class ProfileTheme extends StatelessWidget {
 
   static ThemeData _themeOf(ProfileThemeColors colors) {
     final (:primary, :accent) = _colorsOf(colors);
-    final middle = Color.lerp(primary, accent, 0.5)!;
-    final base = switch (ThemeData.estimateBrightnessForColor(middle)) {
+    // As in Discord, the primary colour picks the palette: the name and the
+    // header sit on it, so their text always reads.
+    final base = switch (ThemeData.estimateBrightnessForColor(primary)) {
       Brightness.dark => _dark,
       Brightness.light => _light,
     };
