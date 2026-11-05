@@ -130,16 +130,15 @@ final class DiscordCdn {
     ).toString();
   }
 
+  /// A sticker's file. A GIF sticker is only served by the media proxy:
+  /// the cdn answers its address with an error.
   static String sticker(String stickerId, StickerFormat format) {
-    final extension = switch (format) {
-      StickerFormat.lottie => 'json',
-      StickerFormat.gif => 'gif',
-      _ => 'png',
+    final (host, extension) = switch (format) {
+      StickerFormat.lottie => ('cdn.discordapp.com', 'json'),
+      StickerFormat.gif => ('media.discordapp.net', 'gif'),
+      _ => ('cdn.discordapp.com', 'png'),
     };
-    return Uri.https(
-      'cdn.discordapp.com',
-      '/stickers/$stickerId.$extension',
-    ).toString();
+    return Uri.https(host, '/stickers/$stickerId.$extension').toString();
   }
 
   /// The artwork behind an `activity.assets.*_image` key.

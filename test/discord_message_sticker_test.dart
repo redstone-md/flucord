@@ -14,7 +14,10 @@ void main() {
     expect(message.stickers[1].format, StickerFormat.lottie);
     expect(message.stickers[1].url, endsWith('/stickers/sticker-json.json'));
     expect(message.stickers[2].format, StickerFormat.gif);
-    expect(message.stickers[2].url, endsWith('/stickers/sticker-gif.gif'));
+    expect(
+      message.stickers[2].url,
+      'https://media.discordapp.net/stickers/sticker-gif.gif',
+    );
     expect(
       DiscordCdn.sticker('sticker-apng', StickerFormat.apng),
       endsWith('/stickers/sticker-apng.png'),
