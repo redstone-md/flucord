@@ -1,3 +1,4 @@
+import 'package:flucord/src/presentation/widgets/profile_theme.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -188,6 +189,39 @@ void main() {
       await _openCard(tester, session);
 
       _expectGradient(tester, _cardTheme, _darkTheme);
+    },
+    routes: _profileRoute(themeColors: _darkTheme),
+  );
+
+  testSession(
+    'the popout holds primary down to the banner, under a veil with a rim',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      // Discord's: primary to the banner's bottom edge, then on to accent,
+      // with a black veil at 60 % over all but a 2 px rim of it.
+      final gradient = _gradientIn(tester, _cardTheme)! as HeldGradient;
+      expect(gradient.hold, 2 + 72);
+      final veil = find.descendant(
+        of: _cardTheme,
+        matching: _key('profile-veil'),
+      );
+      expect(
+        (tester.widget<DecoratedBox>(veil).decoration as BoxDecoration).color,
+        Colors.black.withValues(alpha: 0.6),
+      );
+      expect(tester.getRect(veil), tester.getRect(_cardTheme).deflate(2));
+      // The outline is a faint white line, as Discord's.
+      final shape =
+          tester
+                  .widget<Material>(
+                    find
+                        .descendant(of: _card, matching: find.byType(Material))
+                        .first,
+                  )
+                  .shape!
+              as RoundedRectangleBorder;
+      expect(shape.side.color, Colors.white.withValues(alpha: 0.08));
     },
     routes: _profileRoute(themeColors: _darkTheme),
   );
