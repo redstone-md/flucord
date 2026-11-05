@@ -137,6 +137,7 @@ class _FullProfileCard extends StatelessWidget {
         key: const ValueKey('full-profile-theme'),
         color: surfaces.inset,
         colors: data.themeColors,
+        bannerHeight: _metrics.bannerHeightOf(data),
         child: _EffectBox(
           data: data,
           child: SingleChildScrollView(

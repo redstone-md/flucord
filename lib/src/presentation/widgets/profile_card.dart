@@ -198,6 +198,7 @@ class ProfileCard extends StatelessWidget {
           child: _CardSurface(
             key: const ValueKey('profile-card'),
             theme: data.themeColors,
+            bannerHeight: _ProfileMetrics.card.bannerHeightOf(data),
             color: surfaces.raised,
             elevation: _preview ? 0 : 12,
             shadowColor: FlucordFixedColors.shadow,
@@ -291,6 +292,7 @@ class ProfileCard extends StatelessWidget {
 class _CardSurface extends StatelessWidget {
   const _CardSurface({
     required this.theme,
+    required this.bannerHeight,
     required this.color,
     required this.elevation,
     required this.shadowColor,
@@ -301,6 +303,7 @@ class _CardSurface extends StatelessWidget {
   });
 
   final ProfileThemeColors? theme;
+  final double bannerHeight;
   final Color color;
   final double elevation;
   final Color shadowColor;
@@ -319,6 +322,9 @@ class _CardSurface extends StatelessWidget {
       key: const ValueKey('profile-card-theme'),
       color: null,
       colors: theme,
+      bannerHeight: bannerHeight,
+      rim: 2,
+      radius: FlucordRadius.overlay,
       child: child,
     ),
   );

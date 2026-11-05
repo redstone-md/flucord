@@ -169,11 +169,11 @@ final class _FakeTransport implements DiscordUserNotesTransport {
   }
 
   @override
-  Future<Object?> writeNote({
+  Future<bool> writeNote({
     required String userId,
     required Map<String, Object?> body,
   }) async {
-    if (refuse) return null;
+    if (refuse) return false;
     final note = body['note'];
     if (note is String && note.isNotEmpty) {
       stored[userId] = note;
@@ -182,6 +182,6 @@ final class _FakeTransport implements DiscordUserNotesTransport {
       stored.remove(userId);
       writes.add((userId, null));
     }
-    return {};
+    return true;
   }
 }

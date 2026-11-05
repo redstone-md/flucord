@@ -520,4 +520,10 @@ abstract interface class UserProfileRepository {
   /// friend link, or a pending request, and a stranger meets none of them.
   /// A failure that may pass, such as a rate limit, throws instead.
   Future<OtherUserProfile?> loadProfileOf(String userId, {String? serverId});
+
+  /// What [loadProfileOf] last answered for [userId] in [serverId] this
+  /// session, with how its effect and frame look, or null when it has not.
+  /// A popout shows it at once while it asks again, as Discord's does, so
+  /// the banner, the colours and the frame do not appear a moment late.
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId});
 }

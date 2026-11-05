@@ -200,6 +200,8 @@ final class SessionHarness {
         desktopIntegration: _window,
         chatRepositoryFactory: _factory,
         clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
+        // Straight from the network: the disk cache needs a real folder.
+        profileAssetImage: NetworkImage.new,
         discordRemoteAuthGatewayFactory: remoteAuth,
         navigationMemoryRepository: _navigationMemory,
         captcha: _solvableCaptcha,

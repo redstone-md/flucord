@@ -1,20 +1,20 @@
 /// The profile effect somebody wears: Discord's `profile_effect` on a user
 /// profile or a server profile.
 final class ProfileEffect {
-  const ProfileEffect({required this.id, this.expiresAt});
+  const ProfileEffect({required this.skuId, this.expiresAt});
 
-  /// Reads a `profile_effect` object. A live profile names the effect by
-  /// `sku_id` only, an older one by `id`. Null for one with neither.
+  /// Its kind among the items of a shop product.
+  static const collectibleType = 1;
+
+  /// Reads a `profile_effect` object, which names the effect by its
+  /// `sku_id`. Null for one without.
   static ProfileEffect? fromJson(Object? json) {
     if (json is! Map) return null;
-    final id = switch (json['id']) {
-      final String id when id.isNotEmpty => id,
-      _ => json['sku_id'],
-    };
-    if (id is! String || id.isEmpty) return null;
+    final skuId = json['sku_id'];
+    if (skuId is! String || skuId.isEmpty) return null;
     final expiresAt = json['expires_at'];
     return ProfileEffect(
-      id: id,
+      skuId: skuId,
       // Unix seconds, or null for an effect that does not expire.
       expiresAt: expiresAt is int
           ? DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000, isUtc: true)
@@ -22,37 +22,30 @@ final class ProfileEffect {
     );
   }
 
-  /// The effect's id or its SKU id, which the catalogue both knows.
-  final String id;
+  /// What the shop sells the effect as, and what it describes it by.
+  final String skuId;
   final DateTime? expiresAt;
 
   bool isWornAt(DateTime now) => expiresAt?.isAfter(now) ?? true;
 
   @override
   bool operator ==(Object other) =>
-      other is ProfileEffect && other.id == id && other.expiresAt == expiresAt;
+      other is ProfileEffect &&
+      other.skuId == skuId &&
+      other.expiresAt == expiresAt;
 
   @override
-  int get hashCode => Object.hash(id, expiresAt);
+  int get hashCode => Object.hash(skuId, expiresAt);
 }
 
-/// How an effect looks: one entry of the catalogue Discord's client reads
-/// from `GET /user-profile-effects`.
+/// How an effect looks: the effect item of the shop's product for it, as
+/// Discord's client reads it from `GET /collectibles-products/{sku}`.
 final class ProfileEffectConfig {
-  const ProfileEffectConfig({
-    required this.id,
-    required this.layers,
-    this.skuId,
-    this.stillSrc,
-  });
+  const ProfileEffectConfig({required this.layers, this.stillSrc});
 
-  /// Reads one `profile_effect_configs` entry. Null for one without an id.
+  /// Reads the effect item. Null for one with nothing to draw.
   static ProfileEffectConfig? fromJson(Map<String, Object?> json) {
-    final id = json['id'];
-    if (id is! String || id.isEmpty) return null;
-    return ProfileEffectConfig(
-      id: id,
-      skuId: _text(json['sku_id']),
+    final config = ProfileEffectConfig(
       stillSrc:
           _text(json['reducedMotionSrc']) ??
           _text(json['staticFrameSrc']) ??
@@ -63,14 +56,12 @@ final class ProfileEffectConfig {
             ?ProfileEffectLayer.fromJson(layer.cast<String, Object?>()),
       ],
     );
+    return config.layers.isEmpty && config.stillSrc == null ? null : config;
   }
 
   /// The width, in Discord's units, that layer positions and sizes are
   /// given in. The effect is scaled to the card's width.
   static const canvasWidth = 450.0;
-
-  final String id;
-  final String? skuId;
 
   /// What reduced motion draws in place of the layers.
   final String? stillSrc;

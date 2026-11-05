@@ -14,6 +14,8 @@ final class VoiceProcessingSettings {
     this.pushToTalkReleaseDelayMs = 0,
     this.echoCancellation = true,
     this.automaticGainControl = true,
+    this.inputDevice,
+    this.outputDevice,
   });
 
   /// Off by default: the filter costs CPU on every frame, and a machine that
@@ -41,6 +43,11 @@ final class VoiceProcessingSettings {
 
   final VoiceListeningSettings listening;
 
+  /// The microphone and the speakers chosen last, or null for the first the
+  /// system lists. Kept on this machine, as Discord keeps them.
+  final VoiceDeviceChoice? inputDevice;
+  final VoiceDeviceChoice? outputDevice;
+
   VoiceProcessingSettings copyWith({
     bool? noiseSuppression,
     VoiceListeningSettings? listening,
@@ -49,6 +56,8 @@ final class VoiceProcessingSettings {
     int? pushToTalkReleaseDelayMs,
     bool? echoCancellation,
     bool? automaticGainControl,
+    VoiceDeviceChoice? inputDevice,
+    VoiceDeviceChoice? outputDevice,
   }) => VoiceProcessingSettings(
     noiseSuppression: noiseSuppression ?? this.noiseSuppression,
     listening: listening ?? this.listening,
@@ -61,6 +70,8 @@ final class VoiceProcessingSettings {
         pushToTalkReleaseDelayMs ?? this.pushToTalkReleaseDelayMs,
     echoCancellation: echoCancellation ?? this.echoCancellation,
     automaticGainControl: automaticGainControl ?? this.automaticGainControl,
+    inputDevice: inputDevice ?? this.inputDevice,
+    outputDevice: outputDevice ?? this.outputDevice,
   );
 
   Map<String, Object?> toJson() => {
@@ -71,6 +82,8 @@ final class VoiceProcessingSettings {
     'push_to_talk_release_delay_ms': pushToTalkReleaseDelayMs,
     'echo_cancellation': echoCancellation,
     'automatic_gain_control': automaticGainControl,
+    'input_device': ?inputDevice?.toJson(),
+    'output_device': ?outputDevice?.toJson(),
   };
 
   /// Reads stored settings, falling back per field: a file edited by hand
@@ -91,6 +104,8 @@ final class VoiceProcessingSettings {
           : 0,
       echoCancellation: echoCancellation is bool ? echoCancellation : true,
       automaticGainControl: gainControl is bool ? gainControl : true,
+      inputDevice: VoiceDeviceChoice.fromJson(value['input_device']),
+      outputDevice: VoiceDeviceChoice.fromJson(value['output_device']),
     );
   }
 
@@ -102,7 +117,9 @@ final class VoiceProcessingSettings {
       other.inputSensitivity == inputSensitivity &&
       other.pushToTalkReleaseDelayMs == pushToTalkReleaseDelayMs &&
       other.echoCancellation == echoCancellation &&
-      other.automaticGainControl == automaticGainControl;
+      other.automaticGainControl == automaticGainControl &&
+      other.inputDevice == inputDevice &&
+      other.outputDevice == outputDevice;
 
   @override
   int get hashCode => Object.hash(
@@ -112,7 +129,34 @@ final class VoiceProcessingSettings {
     pushToTalkReleaseDelayMs,
     echoCancellation,
     automaticGainControl,
+    inputDevice,
+    outputDevice,
   );
+}
+
+/// A microphone or speakers somebody chose: the system's id for it, and the
+/// name it showed, which finds it again when the system gives it another id.
+final class VoiceDeviceChoice {
+  const VoiceDeviceChoice({required this.id, required this.label});
+
+  final String id;
+  final String label;
+
+  /// Null for anything but an object with a non-empty id.
+  static VoiceDeviceChoice? fromJson(Object? value) => switch (value) {
+    {'id': final String id, 'label': final String label} when id.isNotEmpty =>
+      VoiceDeviceChoice(id: id, label: label),
+    _ => null,
+  };
+
+  Map<String, Object?> toJson() => {'id': id, 'label': label};
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceDeviceChoice && other.id == id && other.label == label;
+
+  @override
+  int get hashCode => Object.hash(id, label);
 }
 
 /// The room-listening preferences: how loud each participant is, and what

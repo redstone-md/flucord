@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,6 +209,28 @@ void main() {
         SessionHarness.guildId: {'bio': 'Forge regular', 'banner': null},
       },
     ),
+  );
+
+  testSession(
+    'an animated banner holds still, and plays as an animated WebP on hover',
+    (tester, session) async {
+      final pointer = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await pointer.addPointer(location: Offset.zero);
+      addTearDown(pointer.removePointer);
+      await _openCard(tester, session);
+      await pointer.moveTo(Offset.zero);
+      await tester.pump();
+      const banner =
+          'https://cdn.discordapp.com/banners/100000000000000002/a_moving.webp';
+      expect(_bannerUrl(tester), '$banner?size=512');
+
+      await pointer.moveTo(tester.getCenter(_bannerImage));
+      await tester.pump();
+
+      // What Discord's client loads: no banner comes as a GIF any more.
+      expect(_bannerUrl(tester), '$banner?size=512&animated=true');
+    },
+    routes: _profileRoute(userProfile: {'banner': 'a_moving'}),
   );
 
   testSession(

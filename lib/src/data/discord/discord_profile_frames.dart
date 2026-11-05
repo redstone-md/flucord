@@ -2,16 +2,25 @@ import '../../domain/profile_frame.dart';
 import 'discord_cdn.dart';
 
 /// Reads profile frames out of the shop's product answer
-/// (`GET /storefront/products/skus`), which describes each item it sells.
+/// (`GET /storefront/products/skus`).
+///
+/// A product holds every colour of a frame, and each colour is a SKU of its
+/// own: `products[].skus[]`, with the frame's description in its
+/// `tenant_metadata.collectibles.item`. A profile names the colour's SKU.
 abstract final class DiscordProfileFrames {
   /// How the frame [skuId] looks, or null where the answer does not
   /// describe it or describes it without a picture.
   static ProfileFrameConfig? read(Map<String, Object?> payload, String skuId) {
     for (final product in _maps(payload['products'])) {
-      for (final item in _maps(product['items'])) {
-        if (item['type'] != ProfileFrame.collectibleType ||
-            item['sku_id'] != skuId) {
-          continue;
+      for (final sku in _maps(product['skus'])) {
+        if (sku['id'] != skuId) continue;
+        final item = switch (sku['tenant_metadata']) {
+          {'collectibles': {'item': final Map<Object?, Object?> item}} =>
+            item.cast<String, Object?>(),
+          _ => null,
+        };
+        if (item == null || item['type'] != ProfileFrame.collectibleType) {
+          return null;
         }
         return _config(item, skuId);
       }

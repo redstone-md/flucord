@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/member_profile_controller.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
 
 /// The private note this account keeps on the user, editable in place.
 ///
@@ -103,20 +104,23 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
         if (_dirty && controller.isSupported)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              spacing: 8,
               children: [
-                TextButton(
+                FlucordButton(
                   key: const ValueKey('profile-note-discard'),
+                  label: 'Discard',
+                  kind: FlucordButtonKind.ghost,
                   onPressed: () {
                     _field.text = controller.note ?? '';
                     setState(() => _dirty = false);
                   },
-                  child: const Text('Discard'),
                 ),
-                FilledButton(
+                FlucordButton(
                   key: const ValueKey('profile-note-save'),
+                  label: controller.noteSaving ? 'Saving…' : 'Save note',
+                  kind: FlucordButtonKind.primary,
                   onPressed: controller.noteSaving
                       ? null
                       : () async {
@@ -125,7 +129,6 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
                             setState(() => _dirty = false);
                           }
                         },
-                  child: Text(controller.noteSaving ? 'Saving…' : 'Save note'),
                 ),
               ],
             ),

@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
 import 'application/connection_controller.dart';
@@ -49,6 +50,7 @@ class AppBootstrap {
     this.credentialVault,
     this.chatRepositoryFactory,
     this.clearChatImages,
+    this.profileAssetImage,
     this.desktopIntegration,
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
@@ -101,6 +103,10 @@ class AppBootstrap {
 
   /// Removes the pictures of chats from the disk at a sign-out.
   final Future<void> Function()? clearChatImages;
+
+  /// Where profile frame and effect pictures come from. Null keeps them in
+  /// the disk cache, which is what the app wants.
+  final ImageProvider Function(String url)? profileAssetImage;
   final DesktopIntegration? desktopIntegration;
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;

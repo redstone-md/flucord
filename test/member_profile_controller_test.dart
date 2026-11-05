@@ -28,6 +28,63 @@ void main() {
     });
 
     test(
+      'reopening somebody shows the profile held from before at once',
+      () async {
+        final profile = _FakeProfileRepository()
+          ..held = const OtherUserProfile(
+            userId: '222',
+            username: 'mira',
+            displayName: 'Mira',
+            discriminator: '0',
+            bio: 'held from before',
+          )
+          ..gate = Completer<void>();
+        final controller = MemberProfileController(
+          profileProvider: () => profile,
+          notesProvider: () => _FakeNotesRepository(),
+        );
+        addTearDown(controller.dispose);
+
+        final opening = controller.open('222');
+        expect(controller.profile?.bio, 'held from before');
+
+        profile.gate!.complete();
+        await opening;
+        expect(controller.profile?.bio, 'ships the parser');
+      },
+    );
+
+    test(
+      'a failed fetch keeps the profile held from before, with no error',
+      () async {
+        final profile = _FakeProfileRepository()
+          ..held = const OtherUserProfile(
+            userId: '222',
+            username: 'mira',
+            displayName: 'Mira',
+            discriminator: '0',
+            bio: 'held from before',
+          )
+          ..failNext = true;
+        final controller = MemberProfileController(
+          profileProvider: () => profile,
+          notesProvider: () => _FakeNotesRepository(),
+        );
+        addTearDown(controller.dispose);
+
+        await controller.open('222');
+
+        expect(controller.profile?.bio, 'held from before');
+        expect(controller.error, isNull);
+
+        await controller.open('222');
+
+        expect(profile.requestedIds, ['222', '222']);
+        expect(controller.profile?.bio, 'ships the parser');
+      },
+    );
+
+    test(
       'a refused profile renders the roster facts rather than an error',
       () async {
         final profile = _FakeProfileRepository()..answer = null;
@@ -215,6 +272,15 @@ void main() {
 final class _FakeProfileRepository implements UserProfileRepository {
   final List<String> requestedIds = [];
   bool failNext = false;
+
+  /// What [heldProfileOf] answers for anybody.
+  OtherUserProfile? held;
+
+  /// Holds [loadProfileOf] back until it completes.
+  Completer<void>? gate;
+
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) => held;
   OtherUserProfile? answer = const OtherUserProfile(
     userId: '222',
     username: 'mira',
@@ -244,6 +310,7 @@ final class _FakeProfileRepository implements UserProfileRepository {
     String? serverId,
   }) async {
     requestedIds.add(userId);
+    await gate?.future;
     if (failNext) {
       failNext = false;
       throw StateError('offline');

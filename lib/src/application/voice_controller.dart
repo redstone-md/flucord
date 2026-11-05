@@ -350,8 +350,18 @@ final class VoiceController extends ChangeNotifier
               ),
               ...playbackDevices,
             ];
-      _selectedInputId = _firstDeviceId(VoiceDeviceKind.audioInput);
+      _selectedInputId = _deviceIdFor(
+        VoiceDeviceKind.audioInput,
+        _processing.inputDevice,
+      );
       _selectedOutputId = _firstDeviceId(VoiceDeviceKind.audioOutput);
+      final output = _deviceIdFor(
+        VoiceDeviceKind.audioOutput,
+        _processing.outputDevice,
+      );
+      if (output != null && output != _selectedOutputId) {
+        await _playOn(output);
+      }
       _state = VoiceState.ready;
     } catch (error) {
       _error = error;
@@ -418,6 +428,26 @@ final class VoiceController extends ChangeNotifier
     } on Object catch (error) {
       _microphoneError = error;
     }
+  }
+
+  /// The device of [kind] that [choice] names: the one with its id, else
+  /// the one with its name, else the first the system lists.
+  String? _deviceIdFor(VoiceDeviceKind kind, VoiceDeviceChoice? choice) {
+    final devices = [
+      for (final device in _devices)
+        if (device.kind == kind) device,
+    ];
+    if (choice != null) {
+      for (final match in [
+        (VoiceDevice device) => device.id == choice.id,
+        (VoiceDevice device) => device.label == choice.label,
+      ]) {
+        if (devices.where(match).firstOrNull case final device?) {
+          return device.id;
+        }
+      }
+    }
+    return devices.firstOrNull?.id;
   }
 
   String? _firstDeviceId(VoiceDeviceKind kind) {

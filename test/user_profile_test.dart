@@ -189,6 +189,22 @@ void main() {
       expect(profile!.userId, '222222222222222222');
     });
 
+    test('holds the last answer per server until Discord refuses', () async {
+      const id = '222222222222222222';
+      final transport = _FakeTransport();
+      final repository = DiscordUserProfileRepository(transport);
+      addTearDown(repository.close);
+      expect(repository.heldProfileOf(id), isNull);
+
+      final profile = await repository.loadProfileOf(id);
+      expect(repository.heldProfileOf(id), same(profile));
+      expect(repository.heldProfileOf(id, serverId: '1'), isNull);
+
+      transport.refuseProfile = true;
+      await repository.loadProfileOf(id);
+      expect(repository.heldProfileOf(id), isNull);
+    });
+
     test('a refused or empty fetch answers null without throwing', () async {
       final refused = _FakeTransport()..refuseProfile = true;
       final repository = DiscordUserProfileRepository(refused);
@@ -494,7 +510,8 @@ final class _FakeTransport implements DiscordUserProfileTransport {
   }
 
   @override
-  Future<Map<String, Object?>> readProfileEffects() async => const {};
+  Future<Map<String, Object?>> readCollectiblesProduct(String skuId) async =>
+      const {};
 
   @override
   Future<Map<String, Object?>> readStoreProducts(List<String> skuIds) async =>

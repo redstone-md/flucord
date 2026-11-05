@@ -6,17 +6,23 @@ import 'package:flutter/widgets.dart';
 
 import '../../domain/profile_effect.dart';
 import 'motion_scope.dart';
+import 'pictures_ready.dart';
+import 'profile_asset_images.dart';
 
 /// A profile effect over a card, scaled to the card's width. Place it in a
 /// [Stack] over the card, which clips it.
 ///
-/// The layers follow Discord's timing from the moment the effect appears:
-/// the intro plays once, then the loop. The clock stops while the window is
-/// unfocused or suspended ([TickerMode]), so the effect resumes where it
-/// was. Reduced motion draws Discord's still picture instead.
+/// The effect waits for its pictures, then follows Discord's timing from
+/// there: the intro plays once, then the loop, with no gap while the loop
+/// loads. The clock stops while the window is unfocused or suspended
+/// ([TickerMode]), so the effect resumes where it was. Reduced motion draws
+/// Discord's still picture instead.
 class ProfileEffectOverlay extends StatefulWidget {
+  /// Keyed by [effect] and [endsAt], so another effect starts from its intro
+  /// and a new end time is the one kept. The shop is read once per effect,
+  /// so one effect is one object.
   ProfileEffectOverlay({required this.effect, this.endsAt})
-    : super(key: ValueKey('profile-effect-${effect.id}'));
+    : super(key: ValueKey((effect, endsAt)));
 
   final ProfileEffectConfig effect;
 
@@ -29,10 +35,61 @@ class ProfileEffectOverlay extends StatefulWidget {
 }
 
 class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
-  late final Ticker _ticker = Ticker(_tick);
-
   /// The picture each layer draws: its own, or one of its random ones.
+  /// Picked here, so only the pictures that are drawn are waited for.
   late final Map<ProfileEffectLayer, String> _sources = _pickSources();
+
+  Map<ProfileEffectLayer, String> _pickSources() {
+    final random = Random();
+    return Map.identity()..addAll({
+      for (final layer in widget.effect.layers)
+        layer: switch (layer.randomizedSources) {
+          final List<String> sources when sources.isNotEmpty =>
+            sources[random.nextInt(sources.length)],
+          _ => layer.src,
+        },
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final image = ProfileAssetImages.of(context);
+    return PicturesReady(
+      pictures: [
+        for (final url
+            in still ? [?widget.effect.stillSrc] : _sources.values.toSet())
+          image(url),
+      ],
+      child: _EffectPlayer(
+        effect: widget.effect,
+        endsAt: widget.endsAt,
+        sources: _sources,
+      ),
+    );
+  }
+}
+
+/// Plays [effect] from the moment it is built.
+class _EffectPlayer extends StatefulWidget {
+  const _EffectPlayer({
+    required this.effect,
+    required this.endsAt,
+    required this.sources,
+  });
+
+  final ProfileEffectConfig effect;
+  final DateTime? endsAt;
+
+  /// The picture each layer draws.
+  final Map<ProfileEffectLayer, String> sources;
+
+  @override
+  State<_EffectPlayer> createState() => _EffectPlayerState();
+}
+
+class _EffectPlayerState extends State<_EffectPlayer> {
+  late final Ticker _ticker = Ticker(_tick);
 
   /// Time played before the ticker's current run.
   Duration _played = Duration.zero;
@@ -53,18 +110,6 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
         setState(() => _ended = true);
       });
     }
-  }
-
-  Map<ProfileEffectLayer, String> _pickSources() {
-    final random = Random();
-    return Map.identity()..addAll({
-      for (final layer in widget.effect.layers)
-        layer: switch (layer.randomizedSources) {
-          final List<String> sources when sources.isNotEmpty =>
-            sources[random.nextInt(sources.length)],
-          _ => layer.src,
-        },
-    });
   }
 
   @override
@@ -99,6 +144,7 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
   Widget build(BuildContext context) {
     if (_ended) return const SizedBox.shrink();
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final image = ProfileAssetImages.of(context);
     return IgnorePointer(
       child: ExcludeSemantics(
         child: LayoutBuilder(
@@ -114,7 +160,7 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
                           left: 0,
                           top: 0,
                           width: box.maxWidth,
-                          child: _picture(src, BoxFit.fitWidth),
+                          child: _picture(image(src), BoxFit.fitWidth),
                         ),
                     ]
                   : [
@@ -124,7 +170,7 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
                           top: layer.y * scale,
                           width: layer.width * scale,
                           height: layer.height * scale,
-                          child: _picture(_sources[layer]!, BoxFit.fill),
+                          child: _picture(image(widget.sources[layer]!), BoxFit.fill),
                         ),
                     ],
             );
@@ -134,8 +180,8 @@ class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
     );
   }
 
-  static Widget _picture(String url, BoxFit fit) => Image.network(
-    url,
+  static Widget _picture(ImageProvider picture, BoxFit fit) => Image(
+    image: picture,
     fit: fit,
     gaplessPlayback: true,
     filterQuality: FilterQuality.medium,

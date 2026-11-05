@@ -6,23 +6,37 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _sku = '100000000000000401';
 
+/// The shop's answer with one product: another colour first, then [_sku]
+/// with [layers].
 Map<String, Object?> _answer(List<Map<String, Object?>> layers) => {
   'products': [
     {
-      'items': [
-        {'type': 1, 'sku_id': '100000000000000402'},
-        {
-          'type': 3,
-          'sku_id': _sku,
-          'layers': layers,
-          'inner_width': 1200,
-          'overflow_top': 211,
-          'overflow_bottom': 186,
-          'overflow_horizontal': 56,
-        },
+      'id': '100000000000000400',
+      'skus': [
+        _colour('100000000000000402', [
+          {'id': '100000000000000431', 'order': 'front', 'anchor': 'top'},
+        ]),
+        _colour(_sku, layers),
       ],
     },
   ],
+};
+
+Map<String, Object?> _colour(String sku, List<Map<String, Object?>> layers) => {
+  'id': sku,
+  'tenant_metadata': {
+    'collectibles': {
+      'item': {
+        'type': 3,
+        'sku_id': sku,
+        'layers': layers,
+        'inner_width': 1200,
+        'overflow_top': 211,
+        'overflow_bottom': 186,
+        'overflow_horizontal': 56,
+      },
+    },
+  },
 };
 
 void main() {

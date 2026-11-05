@@ -825,8 +825,13 @@ final class DiscordDesktopApiClient
   }
 
   @override
-  Future<Map<String, Object?>> readProfileEffects() =>
-      _rest.getObject('/user-profile-effects');
+  Future<Map<String, Object?>> readCollectiblesProduct(String skuId) =>
+      _rest.requestObject(
+        'GET',
+        '/collectibles-products/${Uri.encodeComponent(skuId)}',
+        // Discord's client names its language; the app's is English.
+        query: {'locale': 'en-US'},
+      );
 
   @override
   Future<Map<String, Object?>> readStoreProducts(List<String> skuIds) =>
@@ -850,22 +855,24 @@ final class DiscordDesktopApiClient
   }
 
   /// `PUT /users/@me/notes/{id}`. A null note key clears the note, which is
-  /// the shape Discord's own client sends.
+  /// the shape Discord's own client sends. A saved note comes back as 204
+  /// with no body.
   @override
-  Future<Object?> writeNote({
+  Future<bool> writeNote({
     required String userId,
     required Map<String, Object?> body,
   }) async {
     try {
-      return await _rest.request(
+      await _rest.request(
         'PUT',
         '/users/@me/notes/${Uri.encodeComponent(userId)}',
         body: body,
       );
+      return true;
     } on DiscordApiException catch (error) {
       // A note too long, or an account already holding the maximum number
       // of them. Both are answers about the request, not a fault in the client.
-      if (error.statusCode == 400 || error.statusCode == 403) return null;
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
       rethrow;
     }
   }

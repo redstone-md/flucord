@@ -9,7 +9,7 @@ final class DiscordCdn {
       _asset(['icons', guildId], hash, size: size);
 
   static String? guildBanner(String guildId, String? hash, {int size = 512}) =>
-      _asset(['banners', guildId], hash, size: size);
+      _banner(['banners', guildId], hash, size: size);
 
   /// A group DM's own picture.
   static String? channelIcon(
@@ -24,7 +24,7 @@ final class DiscordCdn {
       : _asset(['avatars', userId], hash, size: size);
 
   static String? userBanner(String userId, String? hash, {int size = 512}) =>
-      _asset(['banners', userId], hash, size: size);
+      _banner(['banners', userId], hash, size: size);
 
   /// An application's icon, as an invite's page shows it.
   static String? appIcon(
@@ -105,8 +105,11 @@ final class DiscordCdn {
     String userId,
     String? hash, {
     int size = 512,
-  }) =>
-      _asset(['guilds', guildId, 'users', userId, 'banners'], hash, size: size);
+  }) => _banner(
+    ['guilds', guildId, 'users', userId, 'banners'],
+    hash,
+    size: size,
+  );
 
   static String customEmoji(
     String emojiId, {
@@ -191,6 +194,20 @@ final class DiscordCdn {
       'cdn.discordapp.com',
       '/embed/avatars/$index.png',
     ).toString();
+  }
+
+  /// A banner. An animated one (`a_`) is an animated WebP, as Discord's
+  /// client loads it: the CDN does not serve every animated banner as a GIF.
+  static String? _banner(List<String> path, String? hash, {required int size}) {
+    final url = _asset(path, hash, size: size);
+    if (url == null || !hash!.startsWith('a_')) return url;
+    final uri = Uri.parse(url);
+    return uri
+        .replace(
+          path: '${uri.path.substring(0, uri.path.length - 4)}.webp',
+          queryParameters: {...uri.queryParameters, 'animated': 'true'},
+        )
+        .toString();
   }
 
   static String? _asset(List<String> path, String? hash, {required int size}) {

@@ -241,6 +241,9 @@ Future<void> _pump(WidgetTester tester, _FakeProfile repository) async {
 }
 
 final class _FakeProfile implements UserProfileRepository {
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) => null;
+
   final List<UserProfilePatch> applied = [];
   final StreamController<UserProfile> _updates = StreamController.broadcast();
   bool accept = true;

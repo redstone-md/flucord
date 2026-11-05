@@ -1,5 +1,6 @@
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/user_profile.dart';
+import 'package:flucord/src/presentation/widgets/art_tile.dart';
 import 'package:flucord/src/presentation/widgets/name_tags.dart';
 import 'package:flucord/src/presentation/widgets/profile_card.dart';
 import 'package:flucord/src/presentation/widgets/profile_card_data.dart';
@@ -86,17 +87,18 @@ List<CommunityRole> _manyRoles(int count) => [
 
 /// Where each role chip on screen sits.
 List<Rect> _shownRoleRects(WidgetTester tester) => [
-  for (final element in find
-      .byWidgetPredicate(
-        (widget) => switch (widget.key) {
-          ValueKey(:final String value) =>
-            value.startsWith('profile-card-role-') &&
-                !value.startsWith('profile-card-role-choice-') &&
-                !value.startsWith('profile-card-role-remove-'),
-          _ => false,
-        },
-      )
-      .evaluate())
+  for (final element
+      in find
+          .byWidgetPredicate(
+            (widget) => switch (widget.key) {
+              ValueKey(:final String value) =>
+                value.startsWith('profile-card-role-') &&
+                    !value.startsWith('profile-card-role-choice-') &&
+                    !value.startsWith('profile-card-role-remove-'),
+              _ => false,
+            },
+          )
+          .evaluate())
     tester.getRect(find.byWidget(element.widget)),
 ];
 
@@ -341,6 +343,34 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the art sits as far from the top and bottom as from the side', (
+    tester,
+  ) async {
+    // Spotify's shape: four lines of text, taller than the art's base size.
+    await _pump(
+      tester,
+      _with(
+        activity: UserActivity(
+          name: 'Spotify',
+          type: ActivityType.listening,
+          details: 'WILDFIRE',
+          state: 'FUZION; Zeli',
+          timestamps: ActivityTimestamps(
+            startMs: _now
+                .subtract(const Duration(minutes: 2))
+                .millisecondsSinceEpoch,
+          ),
+        ),
+      ),
+    );
+
+    final card = tester.getRect(_key('activity-card'));
+    final art = tester.getRect(find.byType(ArtTile));
+    final side = art.left - card.left;
+    expect(art.top - card.top, moreOrLessEquals(side));
+    expect(card.bottom - art.bottom, moreOrLessEquals(side));
   });
 
   testWidgets('roles show as chips; "+" only for someone who can add them', (

@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import '../../app_log.dart';
 import '../../domain/profile_effect.dart';
 import '../../domain/profile_frame.dart';
 import '../../domain/user_profile.dart';
 import 'discord_cdn.dart';
 import 'discord_mapper.dart';
+import 'discord_profile_effects.dart';
 import 'discord_profile_frames.dart';
 
 /// The REST surface a profile edit needs.
@@ -35,9 +37,9 @@ abstract interface class DiscordUserProfileTransport {
     String? guildId,
   });
 
-  /// `GET /user-profile-effects`: the catalogue of profile effects, as
-  /// `{profile_effect_configs: [...]}`.
-  Future<Map<String, Object?>> readProfileEffects();
+  /// `GET /collectibles-products/{skuId}`: the shop's product for one
+  /// item, as `{items: [...]}`.
+  Future<Map<String, Object?>> readCollectiblesProduct(String skuId);
 
   /// `GET /storefront/products/skus`: the shop's description of the items
   /// [skuIds] name, as `{products: [{items: [...]}]}`.
@@ -59,9 +61,13 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   UserProfile? _current;
   OtherUserProfile? _published;
 
-  /// The effect catalogue, read once per session by the first profile that
-  /// wears an effect.
-  Future<Map<String, ProfileEffectConfig>>? _effects;
+  /// How each effect looks, by SKU, read once per session per effect.
+  final Map<String, Future<ProfileEffectConfig?>> _effects = {};
+
+  /// The profiles [loadProfileOf] answered, by user and server, oldest
+  /// first. At most [_heldProfiles] stay.
+  final Map<(String, String?), OtherUserProfile> _held = {};
+  static const _heldProfiles = 200;
 
   /// How each frame looks, by SKU, read once per session per frame.
   final Map<String, Future<ProfileFrameConfig?>> _frames = {};
@@ -119,19 +125,66 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     String? serverId,
   }) async {
     if (userId.trim().isEmpty) return null;
+    final key = (userId, serverId);
     final payload = await _transport.readUserProfile(userId, guildId: serverId);
-    if (payload == null) return null;
+    final profile = payload == null
+        ? null
+        : await _withLooks(payload, serverId);
+    _held.remove(key);
+    if (profile != null) {
+      _held[key] = profile;
+      if (_held.length > _heldProfiles) _held.remove(_held.keys.first);
+    }
+    return profile;
+  }
+
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) =>
+      _held[(userId, serverId)];
+
+  /// The profile in [payload], with how its effect and frame look.
+  Future<OtherUserProfile?> _withLooks(
+    Map<String, Object?> payload,
+    String? serverId,
+  ) async {
     final profile = readOtherProfile(payload, serverId: serverId);
-    final effect = profile?.effectiveProfileEffect;
-    // An expired frame is never drawn, so the shop is not asked about it.
+    // An expired effect or frame is never drawn, so the shop is not asked
+    // about it.
+    final now = DateTime.now();
+    final effect = switch (profile?.effectiveProfileEffect) {
+      final worn? when worn.isWornAt(now) => worn,
+      _ => null,
+    };
     final frame = switch (profile?.profileFrame) {
-      final worn? when worn.isWornAt(DateTime.now()) => worn,
+      final worn? when worn.isWornAt(now) => worn,
       _ => null,
     };
     if (effect == null && frame == null) return profile;
     final (effectConfig, frameConfig) = await (
-      effect == null ? Future.value() : _effectConfig(effect.id),
-      frame == null ? Future.value() : _frameConfig(frame.skuId),
+      effect == null
+          ? Future.value()
+          : _described(
+              _effects,
+              effect.skuId,
+              () => _transport
+                  .readCollectiblesProduct(effect.skuId)
+                  .then(
+                    (product) =>
+                        DiscordProfileEffects.read(product, effect.skuId),
+                  ),
+            ),
+      frame == null
+          ? Future.value()
+          : _described(
+              _frames,
+              frame.skuId,
+              () => _transport
+                  .readStoreProducts([frame.skuId])
+                  .then(
+                    (payload) =>
+                        DiscordProfileFrames.read(payload, frame.skuId),
+                  ),
+            ),
     ).wait;
     return readOtherProfile(
       payload,
@@ -141,46 +194,26 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     );
   }
 
-  /// How the frame [skuId] looks, or null where the shop does not describe
-  /// it or could not be read. A failed read is tried again by the next
-  /// profile that wears the frame.
-  Future<ProfileFrameConfig?> _frameConfig(String skuId) async {
-    final frame = _frames[skuId] ??= _transport
-        .readStoreProducts([skuId])
-        .then((payload) => DiscordProfileFrames.read(payload, skuId));
+  /// How the item [skuId] looks, from [cache] or else from [read], which
+  /// asks the shop. Null where the shop does not describe it or could not be
+  /// read; a failed read is tried again by the next profile that wears it.
+  Future<T?> _described<T>(
+    Map<String, Future<T?>> cache,
+    String skuId,
+    Future<T?> Function() read,
+  ) async {
+    final described = cache[skuId] ??= read();
     try {
-      return await frame;
-    } on Object {
-      if (identical(_frames[skuId], frame)) _frames.remove(skuId);
+      return await described;
+    } on Object catch (error) {
+      _log('Reading the shop item $skuId failed: $error');
+      if (identical(cache[skuId], described)) cache.remove(skuId);
       return null;
     }
   }
 
-  /// How the effect [id] looks, or null where the catalogue lacks it or
-  /// could not be read. A failed read is tried again by the next profile.
-  Future<ProfileEffectConfig?> _effectConfig(String id) async {
-    final effects = _effects ??= _readEffects();
-    try {
-      return (await effects)[id];
-    } on Object {
-      if (identical(_effects, effects)) _effects = null;
-      return null;
-    }
-  }
-
-  /// The catalogue by effect id and by SKU id: a profile names an effect by
-  /// one or the other, depending on when it was bought.
-  Future<Map<String, ProfileEffectConfig>> _readEffects() async {
-    final payload = await _transport.readProfileEffects();
-    final configs = [
-      for (final entry in _objects(payload['profile_effect_configs']))
-        ?ProfileEffectConfig.fromJson(entry),
-    ];
-    return {
-      for (final config in configs) ?config.skuId: config,
-      for (final config in configs) config.id: config,
-    };
-  }
+  static void _log(String message) =>
+      AppLog.warning('discord.profile', message);
 
   /// Applies a `USER_UPDATE` dispatch, which is how a change made on another
   /// device reaches this one.

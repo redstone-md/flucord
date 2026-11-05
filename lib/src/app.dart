@@ -6,12 +6,14 @@ import 'application/chat_controller.dart';
 import 'application/voice_channel_surface.dart';
 import 'app_bootstrap.dart';
 import 'app_composition.dart';
+import 'data/profile_asset_cache.dart';
 import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/accessibility_dials.dart';
 import 'presentation/widgets/accessibility_scope.dart';
 import 'presentation/widgets/image_nameplate_videos.dart';
 import 'presentation/widgets/motion_scope.dart';
 import 'presentation/widgets/presence_scope.dart';
+import 'presentation/widgets/profile_asset_images.dart';
 import 'presentation/widgets/spell_check_scope.dart';
 import 'presentation/widgets/attachment_download_scope.dart';
 import 'presentation/widgets/captcha_scope.dart';
@@ -138,7 +140,12 @@ class _FlucordAppState extends State<FlucordApp> {
                     fonts: _composition.nameFonts,
                     child: CaptchaScope(
                       builder: widget.bootstrap.captcha,
-                      child: child!,
+                      child: ProfileAssetImages(
+                        image:
+                            widget.bootstrap.profileAssetImage ??
+                            ProfileAssetCache.image,
+                        child: child!,
+                      ),
                     ),
                   ),
                 ),

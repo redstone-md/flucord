@@ -7,7 +7,12 @@ part of 'voice_controller.dart';
 /// on the media service and republishes — and keeping it beside the join and
 /// leave paths made the file harder to follow than the two concerns are apart.
 extension VoiceControllerDevices on VoiceController {
+  /// Switches the microphone, for this session and the next.
+  ///
+  /// Marks the settings touched before it queues, so a startup load that
+  /// finishes while the microphone restarts cannot put the saved one back.
   Future<void> selectInput(String deviceId) async {
+    _processingTouched = true;
     await _run(() async {
       if (_selectedInputId == deviceId) return;
       _selectedInputId = deviceId;
@@ -17,27 +22,49 @@ extension VoiceControllerDevices on VoiceController {
         await _mediaService.setMicrophoneEnabled(!_isMuted);
       }
     });
+    await _rememberDevice(deviceId, input: true);
   }
 
+  /// Switches the speakers, for this session and the next.
   Future<void> selectOutput(String deviceId) async {
+    _processingTouched = true;
     await _run(() async {
       if (_selectedOutputId == deviceId) return;
-      final playbackService = _playbackService;
-      if (playbackService == null) {
-        await _mediaService.selectAudioOutput(deviceId);
-      } else {
-        await playbackService.selectOutput(deviceId);
-      }
-      _selectedOutputId = deviceId;
-      // Playback left the default for this output, so the echo stage
-      // listens to it too.
-      _audioPipeline?.setSpeakers(
-        outputDevices
-            .where((device) => device.id == deviceId)
-            .firstOrNull
-            ?.label,
-      );
+      await _playOn(deviceId);
     });
+    await _rememberDevice(deviceId, input: false);
+  }
+
+  /// Plays the room on [deviceId].
+  Future<void> _playOn(String deviceId) async {
+    final playbackService = _playbackService;
+    if (playbackService == null) {
+      await _mediaService.selectAudioOutput(deviceId);
+    } else {
+      await playbackService.selectOutput(deviceId);
+    }
+    _selectedOutputId = deviceId;
+    // Playback left the default for this output, so the echo stage
+    // listens to it too.
+    _audioPipeline?.setSpeakers(_labelOf(deviceId));
+  }
+
+  String? _labelOf(String deviceId) =>
+      _devices.where((device) => device.id == deviceId).firstOrNull?.label;
+
+  /// Saves [deviceId] as the chosen microphone, or the chosen speakers.
+  Future<void> _rememberDevice(String deviceId, {required bool input}) async {
+    final label = _labelOf(deviceId);
+    if (label == null) return;
+    final choice = VoiceDeviceChoice(id: deviceId, label: label);
+    if ((input ? _processing.inputDevice : _processing.outputDevice) ==
+        choice) {
+      return;
+    }
+    _processing = input
+        ? _processing.copyWith(inputDevice: choice)
+        : _processing.copyWith(outputDevice: choice);
+    await _saveProcessing();
   }
 
   Future<void> toggleMute() =>
@@ -152,6 +179,18 @@ extension VoiceControllerDevices on VoiceController {
       ),
     );
     unawaited(_applyParticipantVolumes());
+    // The devices opened before the settings came: move to the saved ones.
+    // Nothing saved keeps the first the system lists, and saves nothing.
+    if (_state == VoiceState.ready) {
+      if (loaded.inputDevice case final saved?) {
+        final input = _deviceIdFor(VoiceDeviceKind.audioInput, saved);
+        if (input != null) await selectInput(input);
+      }
+      if (loaded.outputDevice case final saved?) {
+        final output = _deviceIdFor(VoiceDeviceKind.audioOutput, saved);
+        if (output != null) await selectOutput(output);
+      }
+    }
     _notify();
   }
 

@@ -291,7 +291,9 @@ String peopleCount(int count) => count == 1 ? '1 person' : '$count people';
 /// block centred on the art by eye. [trailing] sits at the row's end.
 ///
 /// The art has [FlucordRadius.medium] corners 8 in, so the card is
-/// [FlucordRadius.framed] around it.
+/// [FlucordRadius.framed] around it. Where the text is taller than the art,
+/// the art grows to the text's height, so it stays 8 in on every side and
+/// the corners stay parallel.
 class ActivityFrame extends StatelessWidget {
   const ActivityFrame({
     required this.art,
@@ -330,39 +332,55 @@ class ActivityFrame extends StatelessWidget {
       decoration: BoxDecoration(
         color: surfaces.inset,
         borderRadius: FlucordRadius.framed,
+      ),
+      // Drawn over the card rather than around it, so the border does not
+      // push the art further in than 8.
+      foregroundDecoration: BoxDecoration(
+        borderRadius: FlucordRadius.framed,
         border: Border.all(color: surfaces.border),
       ),
-      child: Row(
-        children: [
-          art,
-          const SizedBox(width: 12),
-          Expanded(
-            child: OpticallyCentred(
-              lines: [
-                FlucordTextRole.caption,
-                FlucordTextRole.label,
-                for (final _ in lines) FlucordTextRole.caption,
-              ],
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  line(kind, caption),
-                  const SizedBox(height: 2),
-                  line(
-                    title,
-                    FlucordTextRole.label.strong.copyWith(color: surfaces.text),
-                  ),
-                  for (final text in lines) ...[
-                    const SizedBox(height: 2),
-                    line(text, caption),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(aspectRatio: 1, child: art),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OpticallyCentred(
+                  lines: [
+                    FlucordTextRole.caption,
+                    FlucordTextRole.label,
+                    for (final _ in lines) FlucordTextRole.caption,
                   ],
-                ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      line(kind, caption),
+                      const SizedBox(height: 2),
+                      line(
+                        title,
+                        FlucordTextRole.label.strong.copyWith(
+                          color: surfaces.text,
+                        ),
+                      ),
+                      for (final text in lines) ...[
+                        const SizedBox(height: 2),
+                        line(text, caption),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          if (trailing != null) ...[const SizedBox(width: 12), trailing],
-        ],
+            if (trailing != null) ...[
+              const SizedBox(width: 12),
+              Center(child: trailing),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -384,6 +402,8 @@ class _ActivityArtwork extends StatelessWidget {
     return SizedBox.square(
       dimension: size,
       child: Stack(
+        // The card may grow the art past [size]; the picture grows with it.
+        fit: StackFit.expand,
         clipBehavior: Clip.none,
         children: [
           Tooltip(
