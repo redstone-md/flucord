@@ -41,6 +41,23 @@ class DiscordMarkdown extends StatefulWidget {
   final DateTime? now;
   final TextStyle? textStyle;
 
+  /// How often the relative timestamps in [body] change their words, as of
+  /// [now]: every second while one is less than a minute away, since it then
+  /// reads in seconds, and every minute otherwise. Null when there are none.
+  static Duration? relativeRefresh(String body, DateTime now) {
+    final stamps = [
+      for (final match in _relativeStamp.allMatches(body))
+        DateTime.fromMillisecondsSinceEpoch(int.parse(match[1]!) * 1000),
+    ];
+    if (stamps.isEmpty) return null;
+    final soon = stamps.any(
+      (stamp) => stamp.difference(now).abs() < const Duration(minutes: 1),
+    );
+    return soon ? const Duration(seconds: 1) : const Duration(minutes: 1);
+  }
+
+  static final _relativeStamp = RegExp(r'<t:(\d+):R>');
+
   @override
   State<DiscordMarkdown> createState() => _DiscordMarkdownState();
 }
@@ -171,11 +188,13 @@ class _DiscordMarkdownState extends State<DiscordMarkdown> {
   void _configureRelativeTimestampTimer() {
     _relativeTimestampTimer?.cancel();
     _relativeTimestampTimer = null;
-    if (widget.now != null || !RegExp(r'<t:\d+:R>').hasMatch(widget.body)) {
-      return;
-    }
-    _relativeTimestampTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() => _relativeTimestampTick++);
+    if (widget.now != null) return;
+    final every = DiscordMarkdown.relativeRefresh(widget.body, DateTime.now());
+    if (every == null) return;
+    _relativeTimestampTimer = Timer(every, () {
+      if (!mounted) return;
+      setState(() => _relativeTimestampTick++);
+      _configureRelativeTimestampTimer();
     });
   }
 
