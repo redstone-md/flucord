@@ -743,9 +743,31 @@ class ConversationPaneState extends State<ConversationPane> {
     // A call that is already running is joined, not placed: the people in it
     // are there, and ringing the ones who declined would only be noise.
     final ongoing = controller.callFor(widget.channel.id);
+    final channelId = widget.channel.id;
     return ongoing != null && !ongoing.unavailable
-        ? () => unawaited(controller.joinOngoingCall(widget.channel.id))
-        : () => unawaited(controller.placeCall(widget.channel.id));
+        ? () => unawaited(
+            _reportCallFailure(
+              controller,
+              controller.joinOngoingCall(channelId),
+            ),
+          )
+        : () => unawaited(
+            _reportCallFailure(controller, controller.placeCall(channelId)),
+          );
+  }
+
+  /// Waits for a call action and says why it failed, if it did. A call button
+  /// that does nothing on a refusal reads as a broken button.
+  Future<void> _reportCallFailure(
+    DirectCallController controller,
+    Future<void> action,
+  ) async {
+    await action;
+    final error = controller.error;
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(callFailureReason(error))));
   }
 
   /// The one other person in a DM, or null for a channel or a group DM.

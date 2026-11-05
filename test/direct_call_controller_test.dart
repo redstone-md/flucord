@@ -33,8 +33,21 @@ void main() {
     expect(harness.controller.error, isNull);
   });
 
-  test('refuses to call a conversation the server will not ring', () async {
+  test('starts the call without ringing when nobody can be rung', () async {
     final harness = _Harness();
+    addTearDown(harness.dispose);
+    harness.controller.reconcileService();
+
+    await harness.controller.placeCall('dm-1');
+
+    expect(harness.service!.log, ['ringable:dm-1', 'join:dm-1']);
+    expect(harness.controller.activeCallChannelId, 'dm-1');
+    expect(harness.controller.isRinging('dm-1'), isFalse);
+    expect(harness.controller.error, isNull);
+  });
+
+  test('keeps the refusal of a caller who may not call at all', () async {
+    final harness = _Harness()..service!.refuseCalls = true;
     addTearDown(harness.dispose);
     harness.controller.reconcileService();
 
@@ -428,6 +441,7 @@ final class _FakeCallService implements DirectCallService {
   final StreamController<VoiceCallEvent> _events = StreamController.broadcast();
   final List<String> log = [];
   bool ringable = false;
+  bool refuseCalls = false;
   bool failRings = false;
   DirectCall? record;
   IncomingCall? _incomingCall;
@@ -459,6 +473,7 @@ final class _FakeCallService implements DirectCallService {
   @override
   Future<bool> isRingable(String channelId) async {
     log.add('ringable:$channelId');
+    if (refuseCalls) throw StateError('not eligible');
     return ringable;
   }
 

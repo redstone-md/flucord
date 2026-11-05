@@ -20,3 +20,14 @@ String sendFailureReason(Object? error) => switch (error) {
 /// [wait], whether that is a rate limit's answer or the composer's countdown.
 String sendingTooFast(String wait) =>
     'You are sending too fast. Try again in $wait.';
+
+/// Why a call could not start, in words for the person who pressed Call.
+///
+/// Discord's own refusal is the clear answer when it gave one, such as a DM
+/// with someone who does not take calls from this account.
+String callFailureReason(Object? error) => switch (error) {
+  DiscordApiException(statusCode: < 500, :final message)
+      when message.isNotEmpty =>
+    message,
+  _ => 'The call could not start. Try again.',
+};
