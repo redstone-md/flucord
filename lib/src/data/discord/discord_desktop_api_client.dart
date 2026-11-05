@@ -21,6 +21,7 @@ import 'discord_multipart_body.dart';
 import 'discord_safety_hub_repository.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_thread_directory.dart';
 import 'discord_application_command_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_message_component_service.dart';
@@ -62,6 +63,8 @@ final class DiscordDesktopApiClient
        );
 
   final DiscordRestClient _rest;
+
+  DiscordThreadRoutes get threads => DiscordThreadRoutes(_rest);
 
   /// The browser user agent the session presents, which a captcha view must
   /// present too.

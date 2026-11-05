@@ -12,9 +12,18 @@ void main() {
     await controller.load();
 
     await controller.openChannel('forge-forum');
-    expect(controller.archivedThreadsFor('forge-forum'), hasLength(1));
-    final archived = controller.archivedThreadsFor('forge-forum').single;
+    final posts = controller.threadsFor('forge-forum');
+    expect(posts.map((post) => post.id), {
+      'forge-forum-bootstrap',
+      'archived-forge-forum-1',
+    });
+    final archived = posts.singleWhere((post) => post.isArchived);
     expect(controller.workspace!.messagesFor(archived.id), isEmpty);
+
+    expect(controller.canLoadMoreThreads('forge-forum'), isTrue);
+    await controller.loadThreads('forge-forum');
+    expect(controller.threadsFor('forge-forum'), hasLength(3));
+    expect(controller.canLoadMoreThreads('forge-forum'), isFalse);
 
     await controller.loadForumPostPreview(archived.id);
 

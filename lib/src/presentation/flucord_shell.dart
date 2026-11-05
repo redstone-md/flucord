@@ -376,34 +376,27 @@ class FlucordShell extends StatelessWidget {
                               parentChannel: workspace.channelById(
                                 threadParentId,
                               ),
-                              activeThreads: channels
-                                  .where(
-                                    (item) =>
-                                        item.isThread &&
-                                        !item.isArchived &&
-                                        item.parentId == threadParentId,
-                                  )
-                                  .toList(growable: false),
-                              archivedThreads: chatController
-                                  .archivedThreadsFor(threadParentId),
-                              isLoading: chatController
-                                  .isLoadingArchivedThreads(threadParentId),
-                              error: chatController.archivedThreadsError(
+                              threads: chatController.threadsFor(
                                 threadParentId,
                               ),
-                              canLoadMore: chatController
-                                  .canLoadMoreArchivedThreads(threadParentId),
+                              isLoading: chatController.isLoadingThreads(
+                                threadParentId,
+                              ),
+                              error: chatController.threadsError(
+                                threadParentId,
+                              ),
+                              canLoadMore: chatController.canLoadMoreThreads(
+                                threadParentId,
+                              ),
                               onClose: workspaceController.toggleThreads,
                               onRefresh: () => unawaited(
-                                chatController.loadArchivedThreads(
+                                chatController.loadThreads(
                                   threadParentId,
                                   refresh: true,
                                 ),
                               ),
                               onLoadMore: () => unawaited(
-                                chatController.loadArchivedThreads(
-                                  threadParentId,
-                                ),
+                                chatController.loadThreads(threadParentId),
                               ),
                               onSelectThread: _selectChannel,
                             )

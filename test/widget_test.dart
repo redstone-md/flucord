@@ -121,17 +121,14 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('load-more-archived-threads')));
+    await tester.tap(find.byKey(const ValueKey('load-more-threads')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('thread-row-archived-forge-native-2')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('load-more-archived-threads')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('load-more-threads')), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey('thread-row-archived-forge-native-2')),
@@ -201,7 +198,9 @@ void main() {
       findsNothing,
     );
     await tester.tap(find.byKey(const ValueKey('forum-filter-tag-client')));
-    await tester.pump();
+    // Dropping the tag lists the forum again from its first page.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('load-more-forum-posts')));
     await tester.pump(const Duration(milliseconds: 300));

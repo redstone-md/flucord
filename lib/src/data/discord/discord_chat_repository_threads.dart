@@ -21,33 +21,6 @@ extension _DiscordChatRepositoryThreads on DiscordChatRepository {
     return thread;
   }
 
-  Future<ArchivedThreadPage> _loadArchivedThreads(
-    String parentChannelId, {
-    DateTime? before,
-  }) async {
-    final workspace = await _cache.readWorkspaceShell();
-    final parent = workspace?.channelOrNull(parentChannelId);
-    if (parent == null) throw StateError('Parent channel is not cached');
-    final payload = await _api.getPublicArchivedThreads(
-      parentChannelId,
-      before: before,
-    );
-    final threads = (payload['threads'] as List? ?? const [])
-        .whereType<Map>()
-        .map((raw) => _mapThread(raw.cast<String, Object?>(), parent.spaceId))
-        .toList(growable: false);
-    for (final thread in threads) {
-      await _cache.writeChannel(thread);
-    }
-    final requestedMore = payload['has_more'] == true;
-    final nextBefore = threads.lastOrNull?.archiveTimestamp;
-    return ArchivedThreadPage(
-      threads: threads,
-      hasMore: requestedMore && nextBefore != null,
-      nextBefore: nextBefore,
-    );
-  }
-
   ConversationChannel _mapThread(
     Map<String, Object?> payload,
     String fallbackGuildId,

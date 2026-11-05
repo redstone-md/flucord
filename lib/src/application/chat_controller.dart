@@ -151,7 +151,7 @@ final class ChatController extends ChangeNotifier {
   /// Hears each presence fold. Presence never notifies this controller.
   final PresenceChanges presenceChanges = PresenceChanges();
   final _typingSignal = _TypingSignal();
-  final _archivedThreadState = _ArchivedThreadState();
+  final _threadPages = _ThreadPages();
 
   /// Per space, the authors a member request has already asked about.
   final Map<String, Set<String>> _askedAuthors = {};
@@ -353,7 +353,7 @@ final class ChatController extends ChangeNotifier {
     // A new store, not a cleared one: a composer closing now, or a send failing
     // late, still writes to the store of the account it belongs to.
     _drafts = MemoryComposerDraftStore();
-    _archivedThreadState.clear();
+    _threadPages.clear();
     _askedAuthors.clear();
     _invitePreviews.clear();
     _clearTyping();
@@ -443,7 +443,9 @@ final class ChatController extends ChangeNotifier {
     if (channel?.kind == ChannelKind.forum ||
         channel?.kind == ChannelKind.media) {
       notifyListeners();
-      await loadArchivedThreads(channelId, refresh: refresh);
+      // Each visit lists the forum afresh and unfiltered, as the view
+      // opens with no tags picked.
+      await loadThreads(channelId, refresh: true, tagIds: const {});
       return;
     }
     final workspace = _workspace;

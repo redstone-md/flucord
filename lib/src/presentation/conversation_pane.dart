@@ -480,14 +480,15 @@ class ConversationPaneState extends State<ConversationPane> {
             ChannelKind.forum || ChannelKind.media => ForumChannelView(
               workspace: widget.workspace,
               channel: channel,
-              archivedPosts: chat.archivedThreadsFor(channel.id),
-              isLoading: chat.isLoadingArchivedThreads(channel.id),
-              error: chat.archivedThreadsError(channel.id),
-              canLoadMore: chat.canLoadMoreArchivedThreads(channel.id),
-              onRefresh: () => unawaited(
-                chat.loadArchivedThreads(channel.id, refresh: true),
-              ),
-              onLoadMore: () => unawaited(chat.loadArchivedThreads(channel.id)),
+              posts: chat.threadsFor(channel.id),
+              isLoading: chat.isLoadingThreads(channel.id),
+              error: chat.threadsError(channel.id),
+              canLoadMore: chat.canLoadMoreThreads(channel.id),
+              onRefresh: () =>
+                  unawaited(chat.loadThreads(channel.id, refresh: true)),
+              onLoadMore: () => unawaited(chat.loadThreads(channel.id)),
+              onFilterTags: (tagIds) =>
+                  unawaited(chat.loadThreads(channel.id, tagIds: tagIds)),
               onOpenPost: widget.onSelectChannel,
               onLoadPostPreview: (postId) =>
                   unawaited(chat.loadForumPostPreview(postId)),
@@ -574,7 +575,7 @@ class ConversationPaneState extends State<ConversationPane> {
                   final threadParentId = channel.threadParentId;
                   if (workspaceController.showThreads &&
                       threadParentId != null) {
-                    unawaited(chat.loadArchivedThreads(threadParentId));
+                    unawaited(chat.loadThreads(threadParentId, refresh: true));
                   }
                 }
               : null,

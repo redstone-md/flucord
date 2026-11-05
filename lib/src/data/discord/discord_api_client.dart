@@ -5,6 +5,7 @@ import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
 import 'discord_voice_message_payload.dart';
 import 'discord_rest_client.dart';
+import 'discord_thread_directory.dart';
 
 export 'discord_rest_client.dart';
 
@@ -32,6 +33,8 @@ final class DiscordApiClient {
   const DiscordApiClient._(this._rest);
 
   final DiscordRestClient _rest;
+
+  DiscordThreadRoutes get threads => DiscordThreadRoutes(_rest);
 
   Future<Map<String, Object?>> getCurrentUser() => _getObject('/users/@me');
 
@@ -68,47 +71,6 @@ final class DiscordApiClient {
     '/channels/$channelId/messages/$messageId/threads',
     body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
   );
-
-  Future<Map<String, Object?>> getPublicArchivedThreads(
-    String channelId, {
-    DateTime? before,
-    int limit = 50,
-  }) => _requestObject(
-    'GET',
-    '/channels/$channelId/threads/archived/public',
-    query: {
-      'limit': '$limit',
-      if (before != null) 'before': before.toUtc().toIso8601String(),
-    },
-  );
-
-  Future<Map<String, Object?>> createForumPost({
-    required String channelId,
-    required String name,
-    required String content,
-    required int autoArchiveDurationMinutes,
-    List<PendingAttachment> attachments = const [],
-    List<String> appliedTagIds = const [],
-  }) {
-    final payload = <String, Object?>{
-      'name': name,
-      'auto_archive_duration': autoArchiveDurationMinutes,
-      'message': {
-        'content': content,
-        if (attachments.isNotEmpty)
-          'attachments': [
-            for (var index = 0; index < attachments.length; index++)
-              {'id': index, 'filename': attachments[index].name},
-          ],
-      },
-      if (appliedTagIds.isNotEmpty) 'applied_tags': appliedTagIds,
-    };
-    final path = '/channels/$channelId/threads';
-    if (attachments.isEmpty) {
-      return _requestObject('POST', path, body: payload);
-    }
-    return _createMultipartObject(path, payload, attachments);
-  }
 
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');

@@ -120,7 +120,7 @@ void main() {
     final client = DiscordApiClient(botToken: 'token', transport: transport);
     addTearDown(client.close);
 
-    await client.createForumPost(
+    await client.threads.createForumPost(
       channelId: 'forum-1',
       name: 'native-capture',
       content: '',
