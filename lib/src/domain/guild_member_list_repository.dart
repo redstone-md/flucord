@@ -23,7 +23,8 @@ abstract interface class GuildMemberListRepository {
   /// Asks the guild for the members with these ids.
   ///
   /// A history page names its authors but not their roles. The answer arrives
-  /// the same way as for [searchGuildMembers]. At most 100 ids.
+  /// the same way as for [searchGuildMembers]. Any number of ids: they are
+  /// sent 100 at a time.
   void requestGuildMembers({
     required String guildId,
     required List<String> userIds,

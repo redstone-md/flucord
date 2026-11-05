@@ -168,6 +168,35 @@ void main() {
     });
 
     testSession(
+      'asks about 150 unknown authors 100 at a time',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        final asked = [
+          for (final frame in session.socket.frames)
+            if (frame['op'] == 8) (frame['d']! as Map)['user_ids']! as List,
+        ];
+        expect(asked.map((ids) => ids.length), [100, 50]);
+        expect(asked.expand((ids) => ids).toSet(), hasLength(150));
+      },
+      routes: (transport) => transport.on(
+        'GET',
+        '/api/v9/channels/${SessionHarness.channelId}/messages',
+        (_) => jsonResponse([
+          for (var index = 0; index < 50; index++)
+            rawMessage(
+              id: '${900000000000000100 + index}',
+              channelId: SessionHarness.channelId,
+              authorId: '${100000000000000500 + index}',
+              content:
+                  '<@${100000000000000600 + index}> '
+                  '<@${100000000000000700 + index}>',
+            ),
+        ]),
+      ),
+    );
+
+    testSession(
       'asks about each author once',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);

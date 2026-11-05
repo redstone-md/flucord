@@ -437,13 +437,22 @@ final class DiscordDesktopGatewayClient
     );
   }
 
-  /// Opcode 8 by id: asks the guild for exactly these members.
+  /// Opcode 8 by id: asks the guild for exactly these members, in frames of
+  /// at most 100 ids, which is as many as Discord takes in one.
   void requestGuildMembersByIds({
     required String guildId,
     required List<String> userIds,
   }) {
-    if (guildId.isEmpty || userIds.isEmpty) return;
-    _send(_protocol.requestGuildMembersByIds(guildId, userIds));
+    if (guildId.isEmpty) return;
+    for (var start = 0; start < userIds.length; start += 100) {
+      final end = min(start + 100, userIds.length);
+      _send(
+        _protocol.requestGuildMembersByIds(
+          guildId,
+          userIds.sublist(start, end),
+        ),
+      );
+    }
   }
 
   /// Subscribes a channel's member-list row ranges.
