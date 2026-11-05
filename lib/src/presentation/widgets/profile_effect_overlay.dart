@@ -17,11 +17,12 @@ import 'profile_asset_images.dart';
 /// loads. The clock stops while the window is unfocused or suspended
 /// ([TickerMode]), so the effect resumes where it was. Reduced motion draws
 /// Discord's still picture instead.
-class ProfileEffectOverlay extends StatelessWidget {
-  /// Keyed by [effect], so another effect starts from its intro. The shop
-  /// is read once per effect, so one effect is one object.
+class ProfileEffectOverlay extends StatefulWidget {
+  /// Keyed by [effect] and [endsAt], so another effect starts from its intro
+  /// and a new end time is the one kept. The shop is read once per effect,
+  /// so one effect is one object.
   ProfileEffectOverlay({required this.effect, this.endsAt})
-    : super(key: ObjectKey(effect));
+    : super(key: ValueKey((effect, endsAt)));
 
   final ProfileEffectConfig effect;
 
@@ -30,33 +31,58 @@ class ProfileEffectOverlay extends StatelessWidget {
   final DateTime? endsAt;
 
   @override
+  State<ProfileEffectOverlay> createState() => _ProfileEffectOverlayState();
+}
+
+class _ProfileEffectOverlayState extends State<ProfileEffectOverlay> {
+  /// The picture each layer draws: its own, or one of its random ones.
+  /// Picked here, so only the pictures that are drawn are waited for.
+  late final Map<ProfileEffectLayer, String> _sources = _pickSources();
+
+  Map<ProfileEffectLayer, String> _pickSources() {
+    final random = Random();
+    return Map.identity()..addAll({
+      for (final layer in widget.effect.layers)
+        layer: switch (layer.randomizedSources) {
+          final List<String> sources when sources.isNotEmpty =>
+            sources[random.nextInt(sources.length)],
+          _ => layer.src,
+        },
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final image = ProfileAssetImages.of(context);
     return PicturesReady(
       pictures: [
         for (final url
-            in still
-                ? [?effect.stillSrc]
-                : [
-                    for (final layer in effect.layers) ...[
-                      layer.src,
-                      ...layer.randomizedSources,
-                    ],
-                  ])
+            in still ? [?widget.effect.stillSrc] : _sources.values.toSet())
           image(url),
       ],
-      child: _EffectPlayer(effect: effect, endsAt: endsAt),
+      child: _EffectPlayer(
+        effect: widget.effect,
+        endsAt: widget.endsAt,
+        sources: _sources,
+      ),
     );
   }
 }
 
 /// Plays [effect] from the moment it is built.
 class _EffectPlayer extends StatefulWidget {
-  const _EffectPlayer({required this.effect, required this.endsAt});
+  const _EffectPlayer({
+    required this.effect,
+    required this.endsAt,
+    required this.sources,
+  });
 
   final ProfileEffectConfig effect;
   final DateTime? endsAt;
+
+  /// The picture each layer draws.
+  final Map<ProfileEffectLayer, String> sources;
 
   @override
   State<_EffectPlayer> createState() => _EffectPlayerState();
@@ -64,9 +90,6 @@ class _EffectPlayer extends StatefulWidget {
 
 class _EffectPlayerState extends State<_EffectPlayer> {
   late final Ticker _ticker = Ticker(_tick);
-
-  /// The picture each layer draws: its own, or one of its random ones.
-  late final Map<ProfileEffectLayer, String> _sources = _pickSources();
 
   /// Time played before the ticker's current run.
   Duration _played = Duration.zero;
@@ -87,18 +110,6 @@ class _EffectPlayerState extends State<_EffectPlayer> {
         setState(() => _ended = true);
       });
     }
-  }
-
-  Map<ProfileEffectLayer, String> _pickSources() {
-    final random = Random();
-    return Map.identity()..addAll({
-      for (final layer in widget.effect.layers)
-        layer: switch (layer.randomizedSources) {
-          final List<String> sources when sources.isNotEmpty =>
-            sources[random.nextInt(sources.length)],
-          _ => layer.src,
-        },
-    });
   }
 
   @override
@@ -159,7 +170,7 @@ class _EffectPlayerState extends State<_EffectPlayer> {
                           top: layer.y * scale,
                           width: layer.width * scale,
                           height: layer.height * scale,
-                          child: _picture(image(_sources[layer]!), BoxFit.fill),
+                          child: _picture(image(widget.sources[layer]!), BoxFit.fill),
                         ),
                     ],
             );
