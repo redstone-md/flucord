@@ -340,6 +340,27 @@ void main() {
       expect(bar.right, surface.right - 16);
     });
 
+    testSession('sits under what opens over the window', (
+      tester,
+      session,
+    ) async {
+      await _openTwoRows(session);
+      await _hover(tester, tester.getCenter(session.messageRow(_lowerId)));
+
+      final barOverlay = tester.state<OverlayState>(
+        find
+            .ancestor(
+              of: find.byType(MessageActionBar),
+              matching: find.byType(Overlay),
+            )
+            .first,
+      );
+      final rootOverlay = tester.state<OverlayState>(
+        find.byType(Overlay).first,
+      );
+      expect(barOverlay, isNot(same(rootOverlay)));
+    });
+
     testSession('stays inside the message list over the topmost message', (
       tester,
       session,

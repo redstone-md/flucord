@@ -42,7 +42,9 @@ Future<MessageMenuAction?> showMessageContextMenu({
   bool canMarkUnread = false,
   String selectedText = '',
 }) {
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final overlay =
+      Overlay.of(context, rootOverlay: true).context.findRenderObject()!
+          as RenderBox;
   final canDelete = isCurrentUser || capabilities.manageMessages;
   // What this account may do here. The copy rows below are always there.
   final actions = <PopupMenuEntry<MessageMenuAction>>[
@@ -177,7 +179,11 @@ class MessageMenuScope extends InheritedWidget {
 /// it. A message body inside it draws no selection area of its own, and a
 /// row's menu reads what is selected from here.
 class TimelineSelection extends InheritedWidget {
-  const TimelineSelection({required this.text, required super.child, super.key});
+  const TimelineSelection({
+    required this.text,
+    required super.child,
+    super.key,
+  });
 
   /// The text selected in the timeline now.
   final String Function() text;

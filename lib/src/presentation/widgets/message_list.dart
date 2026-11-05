@@ -628,91 +628,98 @@ class MessageListState extends State<MessageList>
     };
     int? rowIndex(Key key) =>
         key is _MessageRowKey ? rowIndexes[key.messageId] : null;
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: NotificationListener<ScrollMetricsNotification>(
-            key: ValueKey('messages-${widget.channel.id}'),
-            onNotification: _handleMetricsChange,
-            child: NotificationListener<ScrollEndNotification>(
-              onNotification: (_) {
-                _keepPositionAfterLayout();
-                return false;
-              },
-              child: LayoutBuilder(
-                builder: (context, constraints) => _TimelineSelectionArea(
-                  child: CustomScrollView(
-                    key: ValueKey(_viewportGeneration),
-                    controller: _scrollController,
-                    center: _centreKey,
-                    // At the end of the conversation, the gap under the newest
-                    // message fills the viewport below the centre. Offset zero is
-                    // then the end, with the gap on screen.
-                    anchor: centre.isBelowMessage
-                        ? (1 - _endGap / constraints.maxHeight).clamp(0.0, 1.0)
-                        : _anchorFor(constraints.maxHeight),
-                    slivers: [
-                      SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => index == centreIndex
-                              ? _channelHead()
-                              : _messageAt(messages, centreIndex - 1 - index),
-                          childCount: centreIndex + 1,
-                          findChildIndexCallback: (key) {
-                            if (key == _headKey) return centreIndex;
-                            final row = rowIndex(key);
-                            return row == null || row >= centreIndex
-                                ? null
-                                : centreIndex - 1 - row;
-                          },
+    // The rows' hover bars float in an overlay of the timeline's own, so a
+    // picker or menu opened over the window always stays on top of them.
+    return Overlay.wrap(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: NotificationListener<ScrollMetricsNotification>(
+              key: ValueKey('messages-${widget.channel.id}'),
+              onNotification: _handleMetricsChange,
+              child: NotificationListener<ScrollEndNotification>(
+                onNotification: (_) {
+                  _keepPositionAfterLayout();
+                  return false;
+                },
+                child: LayoutBuilder(
+                  builder: (context, constraints) => _TimelineSelectionArea(
+                    child: CustomScrollView(
+                      key: ValueKey(_viewportGeneration),
+                      controller: _scrollController,
+                      center: _centreKey,
+                      // At the end of the conversation, the gap under the newest
+                      // message fills the viewport below the centre. Offset zero is
+                      // then the end, with the gap on screen.
+                      anchor: centre.isBelowMessage
+                          ? (1 - _endGap / constraints.maxHeight).clamp(
+                              0.0,
+                              1.0,
+                            )
+                          : _anchorFor(constraints.maxHeight),
+                      slivers: [
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => index == centreIndex
+                                ? _channelHead()
+                                : _messageAt(messages, centreIndex - 1 - index),
+                            childCount: centreIndex + 1,
+                            findChildIndexCallback: (key) {
+                              if (key == _headKey) return centreIndex;
+                              final row = rowIndex(key);
+                              return row == null || row >= centreIndex
+                                  ? null
+                                  : centreIndex - 1 - row;
+                            },
+                          ),
                         ),
-                      ),
-                      SliverToBoxAdapter(
-                        key: _centreKey,
-                        child: const SizedBox(),
-                      ),
-                      SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) =>
-                              _messageAt(messages, centreIndex + index),
-                          childCount: messages.length - centreIndex,
-                          findChildIndexCallback: (key) {
-                            final row = rowIndex(key);
-                            return row == null || row < centreIndex
-                                ? null
-                                : row - centreIndex;
-                          },
+                        SliverToBoxAdapter(
+                          key: _centreKey,
+                          child: const SizedBox(),
                         ),
-                      ),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: _endGap),
-                      ),
-                    ],
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) =>
+                                _messageAt(messages, centreIndex + index),
+                            childCount: messages.length - centreIndex,
+                            findChildIndexCallback: (key) {
+                              final row = rowIndex(key);
+                              return row == null || row < centreIndex
+                                  ? null
+                                  : row - centreIndex;
+                            },
+                          ),
+                        ),
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: _endGap),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        // Offered only while the boundary is somewhere else: a list built
-        // around it is already showing it.
-        if (_unreadMessageId != null &&
-            !_didReachUnread &&
-            (centre.isBelowMessage || centre.message.id != _unreadMessageId))
-          Positioned(
-            top: 10,
-            right: 16,
-            child: JumpToUnreadButton(
-              onPressed: () => _jumpToUnread(_unreadMessageId!),
+          // Offered only while the boundary is somewhere else: a list built
+          // around it is already showing it.
+          if (_unreadMessageId != null &&
+              !_didReachUnread &&
+              (centre.isBelowMessage || centre.message.id != _unreadMessageId))
+            Positioned(
+              top: 10,
+              right: 16,
+              child: JumpToUnreadButton(
+                onPressed: () => _jumpToUnread(_unreadMessageId!),
+              ),
             ),
-          ),
-        if (!_isAtEnd || widget.hasNewerMessages)
-          Positioned(
-            bottom: 10,
-            right: 16,
-            child: JumpToPresentButton(onPressed: jumpToPresent),
-          ),
-      ],
+          if (!_isAtEnd || widget.hasNewerMessages)
+            Positioned(
+              bottom: 10,
+              right: 16,
+              child: JumpToPresentButton(onPressed: jumpToPresent),
+            ),
+        ],
+      ),
     );
   }
 
