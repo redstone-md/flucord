@@ -56,6 +56,21 @@ void main() {
     expect(_shown, findsOneWidget);
   });
 
+  testWidgets('other pictures are waited for again', (tester) async {
+    final old = _HeldPicture();
+    await _pump(tester, [old]);
+    await old.load(tester);
+    await _frames(tester);
+
+    final next = _HeldPicture();
+    await _pump(tester, [next]);
+    expect(_shown, findsNothing);
+
+    await next.load(tester);
+    await _frames(tester);
+    expect(_shown, findsOneWidget);
+  });
+
   testWidgets('a picture that fails counts as done', (tester) async {
     final top = _HeldPicture();
     final bottom = _HeldPicture();
