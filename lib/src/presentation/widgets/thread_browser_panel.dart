@@ -9,8 +9,7 @@ import '../../theme/flucord_type.dart';
 class ThreadBrowserPanel extends StatelessWidget {
   const ThreadBrowserPanel({
     required this.parentChannel,
-    required this.activeThreads,
-    required this.archivedThreads,
+    required this.threads,
     required this.isLoading,
     required this.error,
     required this.canLoadMore,
@@ -22,8 +21,10 @@ class ThreadBrowserPanel extends StatelessWidget {
   });
 
   final ConversationChannel parentChannel;
-  final List<ConversationChannel> activeThreads;
-  final List<ConversationChannel> archivedThreads;
+
+  /// The threads under [parentChannel], active and archived, newest
+  /// activity first.
+  final List<ConversationChannel> threads;
   final bool isLoading;
   final Object? error;
   final bool canLoadMore;
@@ -56,17 +57,25 @@ class ThreadBrowserPanel extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (isLoading && activeThreads.isEmpty && archivedThreads.isEmpty) {
+    final activeThreads = [
+      for (final thread in threads)
+        if (!thread.isArchived) thread,
+    ];
+    final archivedThreads = [
+      for (final thread in threads)
+        if (thread.isArchived) thread,
+    ];
+    if (isLoading && threads.isEmpty) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
-    if (error != null && activeThreads.isEmpty && archivedThreads.isEmpty) {
+    if (error != null && threads.isEmpty) {
       return _ThreadPanelState(
         icon: FlucordIcons.error,
         title: 'Threads unavailable',
         action: TextButton(onPressed: onRefresh, child: const Text('Retry')),
       );
     }
-    if (activeThreads.isEmpty && archivedThreads.isEmpty) {
+    if (threads.isEmpty) {
       return const _ThreadPanelState(
         icon: FlucordIcons.threads,
         title: 'No threads yet',
@@ -109,7 +118,7 @@ class ThreadBrowserPanel extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: TextButton.icon(
-              key: const ValueKey('load-more-archived-threads'),
+              key: const ValueKey('load-more-threads'),
               onPressed: onLoadMore,
               icon: const FlucordIcon(FlucordIcons.chevronDown, size: 18),
               label: const Text('Load more'),
@@ -324,7 +333,7 @@ class _InlineArchiveError extends StatelessWidget {
         const SizedBox(width: 8),
         const Expanded(
           child: Text(
-            'Archived threads unavailable',
+            'More threads unavailable',
             style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),

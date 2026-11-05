@@ -80,15 +80,18 @@ extension _MockChatRepositoryMutations on MockChatRepository {
     return CreatedForumPost(thread: thread, initialMessage: message);
   }
 
-  Future<ArchivedThreadPage> _loadArchivedThreadPage(
-    String parentChannelId, {
-    DateTime? before,
+  /// The parent's active threads and one archived thread on the first page,
+  /// and a second archived thread after that.
+  Future<ThreadPage> _loadThreadPage(
+    String parentId, {
+    required int offset,
+    required Set<String> tagIds,
   }) async {
     await _wait();
-    final parent = _workspace.channelById(parentChannelId);
-    final page = before == null ? 1 : 2;
+    final parent = _workspace.channelById(parentId);
+    final firstPage = offset == 0;
     ConversationChannel archivedThread(int index) => ConversationChannel(
-      id: 'archived-$parentChannelId-$index',
+      id: 'archived-$parentId-$index',
       spaceId: parent.spaceId,
       name: index == 1 ? 'release-retrospective' : 'transport-notes',
       topic: '',
@@ -100,9 +103,8 @@ extension _MockChatRepositoryMutations on MockChatRepository {
       archiveTimestamp: DateTime.utc(2026, 7, 23 - index, 1, 30),
       autoArchiveDurationMinutes: 1440,
     );
-
-    final threads = [archivedThread(1), if (page == 2) archivedThread(2)];
-    for (final thread in threads) {
+    final archived = [archivedThread(firstPage ? 1 : 2)];
+    for (final thread in archived) {
       final starter = ChatMessage(
         id: '${thread.id}-starter',
         channelId: thread.id,
@@ -112,10 +114,24 @@ extension _MockChatRepositoryMutations on MockChatRepository {
       );
       _workspace = _workspace.upsertChannel(thread).upsertMessage(starter);
     }
-    return ArchivedThreadPage(
-      threads: threads,
-      hasMore: page == 1,
-      nextBefore: threads.last.archiveTimestamp,
+    final threads = [
+      if (firstPage)
+        ..._workspace.channels.where(
+          (channel) =>
+              channel.isThread &&
+              !channel.isArchived &&
+              channel.parentId == parentId,
+        ),
+      ...archived,
+    ];
+    final matching = [
+      for (final thread in threads)
+        if (tagIds.isEmpty || thread.appliedTagIds.any(tagIds.contains)) thread,
+    ];
+    // An empty page moves no offset, so it must not offer another one.
+    return ThreadPage(
+      threads: matching,
+      hasMore: firstPage && matching.isNotEmpty,
     );
   }
 

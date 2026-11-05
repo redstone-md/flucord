@@ -50,8 +50,7 @@ Future<void> _pumpPanel(
         alignment: Alignment.centerRight,
         child: ThreadBrowserPanel(
           parentChannel: _parent,
-          activeThreads: const [],
-          archivedThreads: const [],
+          threads: const [],
           isLoading: isLoading,
           error: error,
           canLoadMore: false,

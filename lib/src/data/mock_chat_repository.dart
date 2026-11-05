@@ -69,7 +69,7 @@ final class MockChatRepository
         _MockChatRepositoryDirectMessages
     implements
         ChatRepository,
-        ArchivedThreadRepository,
+        ThreadListRepository,
         ForumPostRepository,
         PollRepository,
         ReactionRepository,
@@ -257,10 +257,11 @@ final class MockChatRepository
   );
 
   @override
-  Future<ArchivedThreadPage> loadArchivedThreads(
-    String parentChannelId, {
-    DateTime? before,
-  }) => _loadArchivedThreadPage(parentChannelId, before: before);
+  Future<ThreadPage> loadThreads(
+    String parentId, {
+    int offset = 0,
+    Set<String> tagIds = const {},
+  }) => _loadThreadPage(parentId, offset: offset, tagIds: tagIds);
 
   @override
   Future<CreatedForumPost> createForumPost({

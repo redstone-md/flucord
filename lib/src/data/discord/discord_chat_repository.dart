@@ -46,6 +46,7 @@ import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import '../../domain/voice_message_recorder.dart';
 import '../../domain/voice_message_repository.dart';
+import 'discord_thread_directory.dart';
 import 'discord_api_client.dart';
 import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
@@ -64,7 +65,6 @@ import 'discord_voice_socket_factory.dart';
 part 'discord_chat_repository_messages.dart';
 part 'discord_chat_repository_emojis.dart';
 part 'discord_chat_repository_threads.dart';
-part 'discord_chat_repository_forums.dart';
 part 'discord_chat_repository_pins.dart';
 part 'discord_chat_repository_polls.dart';
 part 'discord_chat_repository_reactions.dart';
@@ -85,7 +85,7 @@ final class DiscordChatRepository
         _DiscordChatRepositoryScheduledEvents
     implements
         ChatRepository,
-        ArchivedThreadRepository,
+        ThreadListRepository,
         ForumPostRepository,
         PollRepository,
         ReactionRepository,
@@ -146,6 +146,12 @@ final class DiscordChatRepository
     _cache,
     _mapper,
     _events.publish,
+  );
+  late final DiscordThreadDirectory _threads = DiscordThreadDirectory(
+    routes: _api.threads,
+    cache: _cache,
+    mapper: _mapper,
+    currentMemberId: () => _currentMemberId,
   );
   late final DiscordGuildMemberLoader _guildMemberLoader =
       DiscordGuildMemberLoader(_api);
@@ -270,10 +276,11 @@ final class DiscordChatRepository
   );
 
   @override
-  Future<ArchivedThreadPage> loadArchivedThreads(
-    String parentChannelId, {
-    DateTime? before,
-  }) => _loadArchivedThreads(parentChannelId, before: before);
+  Future<ThreadPage> loadThreads(
+    String parentId, {
+    int offset = 0,
+    Set<String> tagIds = const {},
+  }) => _threads.loadThreads(parentId, offset: offset, tagIds: tagIds);
 
   @override
   Future<CreatedForumPost> createForumPost({
@@ -283,7 +290,7 @@ final class DiscordChatRepository
     required int autoArchiveDurationMinutes,
     List<PendingAttachment> attachments = const [],
     List<String> appliedTagIds = const [],
-  }) => _createForumPost(
+  }) => _threads.createForumPost(
     channelId: channelId,
     name: name,
     content: content,

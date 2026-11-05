@@ -561,13 +561,19 @@ are excluded from the denominator and are never reported as implemented.
 - **UI surface**: channel sidebar, Threads panel, forum feed, the channel
   editor.
 - **Contract**: `GUILD_CREATE.channels/threads`,
-  `GET /channels/{id}/threads/archived/public`, forum thread creation,
+  `GET /channels/{id}/threads/search`, forum thread creation,
   `GET /channels/{id}/thread-members`,
   `POST`/`DELETE /channels/{id}/thread-members/@me`.
 - **Dependencies**: FBC-GATEWAY, FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: categories, positions, collapsible sidebar, active and
   archived threads, forum/media posts with tags, layouts, and attachments.
+  The forum feed and the Threads panel list threads through
+  `threads/search`, as the desktop client does: the gateway sends a user only
+  the threads they joined. One search returns active and archived threads
+  together, the opening message of each forum post, and this account's
+  membership of each listed thread. A tag filter goes to Discord as
+  `tag_setting=match_some`.
   Thread membership is joinable: the store is fed from the list route,
   `THREAD_MEMBER_UPDATE` — only ever about this account —
   `THREAD_MEMBERS_UPDATE` with its authoritative count, and the member object

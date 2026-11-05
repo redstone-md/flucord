@@ -39,7 +39,9 @@ import '../../domain/message_component.dart';
 import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
+import '../../domain/forum_repository.dart';
 import '../../domain/thread_membership.dart';
+import '../../domain/thread_repository.dart';
 import '../../domain/user_profile.dart';
 import '../../domain/user_notes.dart';
 import '../../domain/voice_connection.dart';
@@ -76,6 +78,7 @@ import 'discord_expression_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
+import 'discord_thread_directory.dart';
 import 'discord_thread_membership_service.dart';
 import 'discord_voice_signaling_service.dart';
 import 'discord_voice_socket_factory.dart';
@@ -90,6 +93,8 @@ part 'discord_desktop_chat_session.dart';
 final class DiscordDesktopChatRepository
     implements
         ChatRepository,
+        ThreadListRepository,
+        ForumPostRepository,
         GuildMemberListRepository,
         ScheduledEventRepository,
         VoiceMessageRepository {
@@ -174,6 +179,15 @@ final class DiscordDesktopChatRepository
   final DiscordReadStateRepository _readState;
   final DiscordVoiceSignalingService _voiceSignaling;
   final DiscordThreadMembershipService _threadMembership;
+  late final DiscordThreadDirectory _threads = DiscordThreadDirectory(
+    routes: _api.threads,
+    cache: _cache,
+    mapper: _mapper,
+    currentMemberId: () => _currentMemberId,
+    // A search lists this account's own membership of each thread it joined.
+    onSelfMember: (member) =>
+        _threadMembership.accept('THREAD_MEMBER_UPDATE', member),
+  );
   final DiscordStageService _stages;
   final DiscordSoundboardService _soundboard;
   final DiscordExpressionFavoritesRepository _favorites;
@@ -571,6 +585,30 @@ final class DiscordDesktopChatRepository
     _events.add(ChannelUpsertedEvent(channel));
     return channel;
   }
+
+  @override
+  Future<ThreadPage> loadThreads(
+    String parentId, {
+    int offset = 0,
+    Set<String> tagIds = const {},
+  }) => _threads.loadThreads(parentId, offset: offset, tagIds: tagIds);
+
+  @override
+  Future<CreatedForumPost> createForumPost({
+    required String channelId,
+    required String name,
+    required String content,
+    required int autoArchiveDurationMinutes,
+    List<PendingAttachment> attachments = const [],
+    List<String> appliedTagIds = const [],
+  }) => _threads.createForumPost(
+    channelId: channelId,
+    name: name,
+    content: content,
+    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    attachments: attachments,
+    appliedTagIds: appliedTagIds,
+  );
 
   @override
   Future<ChatMessage> sendMessage({

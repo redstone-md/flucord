@@ -11,12 +11,13 @@ class ForumChannelView extends StatefulWidget {
   const ForumChannelView({
     required this.workspace,
     required this.channel,
-    required this.archivedPosts,
+    required this.posts,
     required this.isLoading,
     required this.error,
     required this.canLoadMore,
     required this.onRefresh,
     required this.onLoadMore,
+    required this.onFilterTags,
     required this.onOpenPost,
     required this.onLoadPostPreview,
     required this.onCreatePost,
@@ -25,12 +26,17 @@ class ForumChannelView extends StatefulWidget {
 
   final ChatWorkspace workspace;
   final ConversationChannel channel;
-  final List<ConversationChannel> archivedPosts;
+
+  /// The forum's posts, active and archived, newest activity first.
+  final List<ConversationChannel> posts;
   final bool isLoading;
   final Object? error;
   final bool canLoadMore;
   final VoidCallback onRefresh;
   final VoidCallback onLoadMore;
+
+  /// Asks for the posts that carry any of the picked tags.
+  final ValueChanged<Set<String>> onFilterTags;
   final ValueChanged<String> onOpenPost;
   final ValueChanged<String> onLoadPostPreview;
   final CreateForumPostCallback onCreatePost;
@@ -48,21 +54,21 @@ class _ForumChannelViewState extends State<ForumChannelView> {
     if (oldWidget.channel.id != widget.channel.id) _selectedTagIds.clear();
   }
 
-  List<ConversationChannel> get _activePosts => widget.workspace.channels
-      .where(
-        (candidate) =>
-            candidate.isThread &&
-            !candidate.isArchived &&
-            candidate.parentId == widget.channel.id,
-      )
-      .where(_matchesTags)
+  List<ConversationChannel> _postsArchived(bool archived) => widget.posts
+      .where((post) => post.isArchived == archived && _matchesTags(post))
       .toList(growable: false);
 
-  List<ConversationChannel> get _archivedPosts =>
-      widget.archivedPosts.where(_matchesTags).toList(growable: false);
-
+  /// Any one picked tag is enough, as in Discord's forum filter.
   bool _matchesTags(ConversationChannel post) =>
-      _selectedTagIds.every(post.appliedTagIds.contains);
+      _selectedTagIds.isEmpty ||
+      post.appliedTagIds.any(_selectedTagIds.contains);
+
+  void _toggleTag(String tagId) {
+    setState(() {
+      if (!_selectedTagIds.add(tagId)) _selectedTagIds.remove(tagId);
+    });
+    widget.onFilterTags(Set.of(_selectedTagIds));
+  }
 
   Future<void> _createPost() => CreateForumPostDialog.show(
     context,
@@ -72,16 +78,14 @@ class _ForumChannelViewState extends State<ForumChannelView> {
 
   @override
   Widget build(BuildContext context) {
-    final active = _activePosts;
-    final archived = _archivedPosts;
+    final active = _postsArchived(false);
+    final archived = _postsArchived(true);
     return Column(
       children: [
         _ForumToolbar(
           channel: widget.channel,
           selectedTagIds: _selectedTagIds,
-          onToggleTag: (tagId) => setState(() {
-            if (!_selectedTagIds.add(tagId)) _selectedTagIds.remove(tagId);
-          }),
+          onToggleTag: _toggleTag,
           onCreatePost: _createPost,
         ),
         Expanded(
@@ -337,7 +341,7 @@ class _ForumFooter extends StatelessWidget {
           ? TextButton.icon(
               onPressed: onRefresh,
               icon: const FlucordIcon(FlucordIcons.refresh, size: 16),
-              label: const Text('Retry archived posts'),
+              label: const Text('Retry'),
             )
           : isLoading
           ? const SizedBox.square(
