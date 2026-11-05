@@ -55,7 +55,11 @@ void RepairStartMenuShortcut(const wchar_t* app_name) {
   }
 
   std::wstring directory(executable);
-  directory.resize(directory.find_last_of(L'\\'));
+  const size_t slash = directory.find_last_of(L'\\');
+  // A program at a drive's root keeps the backslash: "C:" alone means the
+  // current directory on drive C, not its root.
+  const bool at_root = slash == 2 && directory[1] == L':';
+  directory.resize(at_root ? slash + 1 : slash);
   if (FAILED(link->SetPath(executable)) ||
       FAILED(link->SetWorkingDirectory(directory.c_str())) ||
       FAILED(link->SetIconLocation(executable, 0)) ||
