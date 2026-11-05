@@ -56,10 +56,16 @@ final class FriendsController extends ChangeNotifier {
   /// Why Discord refused the last request, or null when it did not.
   /// Somebody with friend requests off is a fact about them, not a failure
   /// here.
-  RelationshipRefused? get refusal => _refusal;
+  RelationshipRefused? get refusal {
+    _bind();
+    return _refusal;
+  }
 
   /// The captcha Discord wants solved before it takes the last request.
-  DiscordRemoteAuthCaptchaChallenge? get captcha => _captcha;
+  DiscordRemoteAuthCaptchaChallenge? get captcha {
+    _bind();
+    return _captcha;
+  }
 
   List<DiscordRelationship> get all => _bind()?.relationships ?? const [];
 
@@ -167,6 +173,7 @@ final class FriendsController extends ChangeNotifier {
 
   /// Sends the request held for [captcha] again, with the solved [key].
   Future<bool> solveCaptcha(String key) async {
+    _bind();
     final request = _heldForCaptcha;
     final challenge = _captcha;
     if (request == null || challenge == null) return false;
@@ -215,11 +222,17 @@ final class FriendsController extends ChangeNotifier {
   }
 
   /// Rebinds when the session changed, so a sign-out does not leave the last
-  /// account's friends on screen.
+  /// account's friends on screen. What the last account was asked or told
+  /// goes with it: a captcha solved later must not send its request as the
+  /// new account.
   DesktopRelationshipRepository? _bind() {
     final repository = _repositoryProvider();
     if (identical(repository, _repository)) return _repository;
     _repository = repository;
+    _heldForCaptcha = null;
+    _captcha = null;
+    _refusal = null;
+    _error = null;
     unawaited(_updates?.cancel());
     _updates = repository?.relationshipUpdates.listen((_) => _notify());
     return repository;

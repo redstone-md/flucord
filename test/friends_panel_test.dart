@@ -86,6 +86,28 @@ void main() {
   });
 
   group('the controller', () {
+    test('drops a captcha held for an account it no longer acts for', () async {
+      final first = _FakeGraph(_graph)
+        ..wantsCaptcha = const DiscordRemoteAuthCaptchaChallenge(
+          siteKey: 'site',
+          service: 'hcaptcha',
+          userAgent: 'Flucord',
+        );
+      final second = _FakeGraph(_graph);
+      var current = first;
+      final controller = FriendsController(() => current);
+      addTearDown(controller.dispose);
+
+      expect(await controller.addFriendByUsername('mira'), isFalse);
+      expect(controller.captcha, isNotNull);
+
+      current = second;
+
+      expect(controller.captcha, isNull);
+      expect(await controller.solveCaptcha('solved'), isFalse);
+      expect(second.addedByName, isEmpty);
+    });
+
     test('splits the graph into what each part is for', () {
       final controller = FriendsController(() => _FakeGraph(_graph));
       addTearDown(controller.dispose);
@@ -616,6 +638,9 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   bool accept = true;
   bool failNext = false;
 
+  /// When set, a request without an answer is held for this captcha.
+  DiscordRemoteAuthCaptchaChallenge? wantsCaptcha;
+
   void push(List<DiscordRelationship> next) {
     _entries = next;
     _updates.add(next);
@@ -637,6 +662,9 @@ final class _FakeGraph implements DesktopRelationshipRepository {
       throw StateError('request failed');
     }
     if (!accept) return const RelationshipRefused(RelationshipRefusal.other);
+    if (wantsCaptcha case final challenge? when captcha == null) {
+      return RelationshipCaptchaRequired(challenge);
+    }
     switch (request) {
       case BefriendUser(:final userId):
         added.add(userId);
