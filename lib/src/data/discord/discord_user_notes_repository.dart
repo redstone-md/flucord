@@ -10,10 +10,10 @@ abstract interface class DiscordUserNotesTransport {
 
   /// `PUT /users/@me/notes/{userId}`.
   ///
-  /// Answers null when Discord refused the write, which the route does when
+  /// Answers false when Discord refused the write, which the route does when
   /// the note is too long or the account holds the maximum number of them.
   /// Which status codes those are is the transport's business.
-  Future<Object?> writeNote({
+  Future<bool> writeNote({
     required String userId,
     required Map<String, Object?> body,
   });
@@ -124,11 +124,11 @@ final class DiscordUserNotesRepository implements UserNotesRepository {
 
   Future<bool> _write(String userId, String note) async {
     try {
-      final answer = await _transport.writeNote(
+      final accepted = await _transport.writeNote(
         userId: userId,
         body: note.isEmpty ? {'note': null} : {'note': note},
       );
-      if (answer == null) {
+      if (!accepted) {
         // Refused, so the optimistic note is not on the account.
         await _reload();
         return false;
