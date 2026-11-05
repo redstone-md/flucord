@@ -76,6 +76,11 @@ void main() {
 
         expect(controller.profile?.bio, 'held from before');
         expect(controller.error, isNull);
+
+        await controller.open('222');
+
+        expect(profile.requestedIds, ['222', '222']);
+        expect(controller.profile?.bio, 'ships the parser');
       },
     );
 

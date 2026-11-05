@@ -149,7 +149,9 @@ final class MemberProfileController extends ChangeNotifier {
 
   Future<void> _fetchProfile(String userId, String? serverId) async {
     final profile = _profileProvider();
-    _answeredBy = profile;
+    // Set only once an answer comes: a failed fetch must not leave a held
+    // profile looking answered, or the next open would skip the retry.
+    _answeredBy = null;
     if (profile == null) {
       // A transport with no profile plane still shows the roster's answer,
       // which the popover draws from its own member row.
@@ -164,6 +166,7 @@ final class MemberProfileController extends ChangeNotifier {
       if (!_isOpenOn(userId, serverId)) return;
       _profile = fetched;
       _profileUnavailable = fetched == null;
+      _answeredBy = profile;
     } on Object catch (error) {
       if (!_isOpenOn(userId, serverId)) return;
       // A profile already on screen stays, so a failed refresh goes unseen.
