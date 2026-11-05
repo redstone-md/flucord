@@ -393,10 +393,14 @@ class FlucordShell extends StatelessWidget {
                                 chatController.loadThreads(
                                   threadParentId,
                                   refresh: true,
+                                  tagIds: const {},
                                 ),
                               ),
                               onLoadMore: () => unawaited(
-                                chatController.loadThreads(threadParentId),
+                                chatController.loadThreads(
+                                  threadParentId,
+                                  tagIds: const {},
+                                ),
                               ),
                               onSelectThread: _selectChannel,
                             )

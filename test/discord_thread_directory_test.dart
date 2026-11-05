@@ -77,6 +77,7 @@ Future<(DiscordThreadDirectory, SqliteChatCache)> _directory(
     inMemoryDatabasePath,
     factory: databaseFactoryFfi,
   );
+  addTearDown(cache.close);
   await cache.writeWorkspace(_workspace);
   final client = DiscordApiClient(botToken: 'token', transport: transport);
   addTearDown(client.close);

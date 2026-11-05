@@ -124,13 +124,14 @@ extension _MockChatRepositoryMutations on MockChatRepository {
         ),
       ...archived,
     ];
+    final matching = [
+      for (final thread in threads)
+        if (tagIds.isEmpty || thread.appliedTagIds.any(tagIds.contains)) thread,
+    ];
+    // An empty page moves no offset, so it must not offer another one.
     return ThreadPage(
-      threads: [
-        for (final thread in threads)
-          if (tagIds.isEmpty || thread.appliedTagIds.any(tagIds.contains))
-            thread,
-      ],
-      hasMore: firstPage,
+      threads: matching,
+      hasMore: firstPage && matching.isNotEmpty,
     );
   }
 

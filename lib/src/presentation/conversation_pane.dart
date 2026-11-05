@@ -575,7 +575,15 @@ class ConversationPaneState extends State<ConversationPane> {
                   final threadParentId = channel.threadParentId;
                   if (workspaceController.showThreads &&
                       threadParentId != null) {
-                    unawaited(chat.loadThreads(threadParentId, refresh: true));
+                    // The panel lists every thread, whatever tags the forum
+                    // view picked last for the same parent.
+                    unawaited(
+                      chat.loadThreads(
+                        threadParentId,
+                        refresh: true,
+                        tagIds: const {},
+                      ),
+                    );
                   }
                 }
               : null,
