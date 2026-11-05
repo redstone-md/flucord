@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/presentation/widgets/native_voice_message_player.dart';
 import 'package:flucord/src/presentation/widgets/voice_recording_waveform.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
 
 /// One drawn bar: its centre and its height.
 typedef _Bar = ({double x, double height});
@@ -26,17 +28,26 @@ void main() {
     }
   }
 
-  Future<void> pumpWaveform(WidgetTester tester) async {
+  Future<void> pumpWaveform(
+    WidgetTester tester, {
+    bool reducedMotion = false,
+  }) async {
     await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: Center(
-          child: SizedBox(
-            width: 200,
-            child: VoiceRecordingWaveform(
-              key: const ValueKey('waveform'),
-              levels: levels,
-              color: const Color(0xFFFF0000),
+      MediaQuery(
+        data: MediaQueryData(disableAnimations: reducedMotion),
+        child: Theme(
+          data: FlucordTheme.dark,
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Center(
+              child: SizedBox(
+                width: 200,
+                child: VoiceRecordingWaveform(
+                  key: const ValueKey('waveform'),
+                  levels: levels,
+                  color: const Color(0xFFFF0000),
+                ),
+              ),
             ),
           ),
         ),
@@ -108,5 +119,23 @@ void main() {
     final settled = [for (final bar in bars(tester).skip(3)) bar.height];
     expect(settled, isNotEmpty);
     expect(settled, everyElement(closeTo(36, 0.5)));
+  });
+
+  testWidgets('under reduced motion the bars hold still and still grow', (
+    tester,
+  ) async {
+    record(5, 0.5);
+    await pumpWaveform(tester, reducedMotion: true);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    List<double> samples() => tester
+        .widget<VoiceWaveformSurface>(find.byType(VoiceWaveformSurface))
+        .samples;
+    final before = samples().length;
+    record(10, 0.8);
+    await tester.pump();
+
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(samples(), hasLength(before + 10));
   });
 }

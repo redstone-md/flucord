@@ -6,7 +6,9 @@ import 'package:flutter/widgets.dart';
 
 import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_type.dart';
-import 'native_voice_message_player.dart' show formatVoiceDuration;
+import 'motion_scope.dart';
+import 'native_voice_message_player.dart'
+    show VoiceWaveformSurface, formatVoiceDuration;
 
 /// The levels of the recording in progress, one per 20 ms frame.
 ///
@@ -85,13 +87,30 @@ class _VoiceRecordingWaveformState extends State<VoiceRecordingWaveform>
     with SingleTickerProviderStateMixin {
   final _WaveformMotion _motion = _WaveformMotion();
   late final Ticker _ticker = createTicker(
-    (elapsed) => _motion.advance(elapsed, widget.levels.levels),
+    (elapsed) => _motion.advance(_startedAt + elapsed, widget.levels.levels),
   );
 
+  /// The recording's length when the waveform first moved, and where the
+  /// waveform's time stood when its ticker last started. A ticker counts
+  /// from zero again after a stop, so the bars pick up where the recording
+  /// is rather than where they stopped.
+  Duration? _origin;
+  Duration _startedAt = Duration.zero;
+
+  /// Under the motion rule; otherwise the bars stand still and only grow.
+  bool _moves = true;
+
   @override
-  void initState() {
-    super.initState();
-    _ticker.start();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _moves = MotionScope.allows(context);
+    if (_moves && !_ticker.isActive) {
+      final origin = _origin ??= widget.levels.duration;
+      _startedAt = widget.levels.duration - origin;
+      _ticker.start();
+    } else if (!_moves && _ticker.isActive) {
+      _ticker.stop();
+    }
   }
 
   @override
@@ -102,16 +121,29 @@ class _VoiceRecordingWaveformState extends State<VoiceRecordingWaveform>
   }
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Live voice recording waveform',
-    child: SizedBox(
-      height: 36,
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _LiveWaveformPainter(_motion, widget.color),
+  Widget build(BuildContext context) {
+    const label = 'Live voice recording waveform';
+    if (!_moves) {
+      return ListenableBuilder(
+        listenable: widget.levels,
+        builder: (context, _) => VoiceWaveformSurface(
+          samples: widget.levels.levels,
+          activeColor: widget.color,
+          semanticsLabel: label,
+        ),
+      );
+    }
+    return Semantics(
+      label: label,
+      child: SizedBox(
+        height: 36,
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: _LiveWaveformPainter(_motion, widget.color),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Where the waveform stands at the current frame: the time on screen and the
