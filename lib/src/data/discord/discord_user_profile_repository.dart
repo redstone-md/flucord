@@ -148,10 +148,15 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     String? serverId,
   ) async {
     final profile = readOtherProfile(payload, serverId: serverId);
-    final effect = profile?.effectiveProfileEffect;
-    // An expired frame is never drawn, so the shop is not asked about it.
+    // An expired effect or frame is never drawn, so the shop is not asked
+    // about it.
+    final now = DateTime.now();
+    final effect = switch (profile?.effectiveProfileEffect) {
+      final worn? when worn.isWornAt(now) => worn,
+      _ => null,
+    };
     final frame = switch (profile?.profileFrame) {
-      final worn? when worn.isWornAt(DateTime.now()) => worn,
+      final worn? when worn.isWornAt(now) => worn,
       _ => null,
     };
     if (effect == null && frame == null) return profile;
