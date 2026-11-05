@@ -25,13 +25,15 @@ class DiscordRelationshipAvatar extends StatelessWidget {
   final Color? presenceBorderColor;
 
   /// The status to badge, for a surface that reads presence from somewhere
-  /// other than [user]. Null badges [user]'s own status.
+  /// other than [user]. Null badges [user]'s own status. An unknown status
+  /// gets no badge, rather than one that says offline.
   final Presence? presence;
   final bool showPresence;
 
   @override
   Widget build(BuildContext context) {
     final statusSize = (size * 0.3).clamp(10.0, 18.0);
+    final status = presence ?? user.status.presence;
     return SizedBox.square(
       dimension: size,
       child: Stack(
@@ -54,14 +56,12 @@ class DiscordRelationshipAvatar extends StatelessWidget {
               ),
             ),
           ),
-          if (showPresence)
+          if (showPresence && status != Presence.unknown)
             Positioned(
               right: 0,
               bottom: 0,
               child: PresenceIndicator(
-                presence: UserPresence(
-                  status: presence ?? user.status.presence,
-                ),
+                presence: UserPresence(status: status),
                 size: statusSize,
                 borderColor: presenceBorderColor ?? context.surfaces.canvas,
                 borderWidth: size >= 60 ? 3 : 2,
