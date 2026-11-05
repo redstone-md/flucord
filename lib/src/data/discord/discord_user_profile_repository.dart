@@ -64,6 +64,11 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   /// How each effect looks, by SKU, read once per session per effect.
   final Map<String, Future<ProfileEffectConfig?>> _effects = {};
 
+  /// The profiles [loadProfileOf] answered, by user and server, oldest
+  /// first. At most [_heldProfiles] stay.
+  final Map<(String, String?), OtherUserProfile> _held = {};
+  static const _heldProfiles = 200;
+
   /// How each frame looks, by SKU, read once per session per frame.
   final Map<String, Future<ProfileFrameConfig?>> _frames = {};
 
@@ -120,8 +125,28 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     String? serverId,
   }) async {
     if (userId.trim().isEmpty) return null;
+    final key = (userId, serverId);
     final payload = await _transport.readUserProfile(userId, guildId: serverId);
-    if (payload == null) return null;
+    final profile = payload == null
+        ? null
+        : await _withLooks(payload, serverId);
+    _held.remove(key);
+    if (profile != null) {
+      _held[key] = profile;
+      if (_held.length > _heldProfiles) _held.remove(_held.keys.first);
+    }
+    return profile;
+  }
+
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) =>
+      _held[(userId, serverId)];
+
+  /// The profile in [payload], with how its effect and frame look.
+  Future<OtherUserProfile?> _withLooks(
+    Map<String, Object?> payload,
+    String? serverId,
+  ) async {
     final profile = readOtherProfile(payload, serverId: serverId);
     final effect = profile?.effectiveProfileEffect;
     // An expired frame is never drawn, so the shop is not asked about it.

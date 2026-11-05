@@ -403,6 +403,9 @@ void main() {
 }
 
 final class _FakeRepository implements UserProfileRepository {
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) => null;
+
   _FakeRepository({UserProfile? profile})
     : _current =
           profile ??

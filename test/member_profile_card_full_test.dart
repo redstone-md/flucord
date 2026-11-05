@@ -321,6 +321,9 @@ const _fullProfile = OtherUserProfile(
 );
 
 final class _FakeProfileRepository implements UserProfileRepository {
+  @override
+  OtherUserProfile? heldProfileOf(String userId, {String? serverId}) => null;
+
   _FakeProfileRepository({this.profile});
 
   final OtherUserProfile? profile;

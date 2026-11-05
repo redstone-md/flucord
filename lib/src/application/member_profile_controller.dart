@@ -75,8 +75,9 @@ final class MemberProfileController extends ChangeNotifier {
   /// Opens the popover on [userId] in [serverId], or outside a server when
   /// it is null, fetching the profile and the notes.
   ///
-  /// The answer held for the same user and server is kept rather than
-  /// refetched: the popover closes and reopens on the same person in a
+  /// A profile the repository holds from earlier in the session shows at
+  /// once and is replaced when the fresh one comes. The answer held for the
+  /// same user and server is kept rather than refetched: the popover closes and reopens on the same person in a
   /// session's lifetime, and the profile route is rate-limited. A refusal
   /// is kept too. A failure is not, so the next open tries again, and
   /// neither is an answer given to another account.
@@ -93,7 +94,8 @@ final class MemberProfileController extends ChangeNotifier {
     }
     _openUserId = userId;
     _openServerId = serverId;
-    _profile = null;
+    // What this session last saw of them, shown while the fresh answer comes.
+    _profile = _profileProvider()?.heldProfileOf(userId, serverId: serverId);
     _profileUnavailable = false;
     _error = null;
     _noteRefused = false;
@@ -164,7 +166,8 @@ final class MemberProfileController extends ChangeNotifier {
       _profileUnavailable = fetched == null;
     } on Object catch (error) {
       if (!_isOpenOn(userId, serverId)) return;
-      _error = error;
+      // A profile already on screen stays, so a failed refresh goes unseen.
+      if (_profile == null) _error = error;
     } finally {
       _isLoading = false;
       if (!_disposed) _notify();
