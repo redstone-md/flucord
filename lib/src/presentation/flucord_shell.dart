@@ -60,6 +60,7 @@ import 'widgets/active_now_column.dart';
 import 'widgets/member_profile_card.dart';
 import 'widgets/profile_card.dart';
 import 'widgets/profile_card_route.dart';
+import 'widgets/profile_opener_scope.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_search_panel.dart';
 import 'widgets/navigation_theme.dart';
@@ -253,7 +254,9 @@ class FlucordShell extends StatelessWidget {
               onOpenChannel: _openChannelFromHistory,
               child: Scaffold(
                 body: _withWorkspaceChrome(
+                  context,
                   workspace,
+                  space.id,
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final showChannels =

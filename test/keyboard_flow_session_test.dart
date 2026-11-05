@@ -574,6 +574,36 @@ void main() {
       routes: _historyWithOwn({own}),
     );
 
+    testSession(
+      'an edit of the newest message stays in view, and a key keeps it there',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(
+          location: tester.getCenter(session.messageRow(_idOf(_newest))),
+        );
+        addTearDown(mouse.removePointer);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Edit'));
+        await tester.pumpAndSettle();
+
+        void expectInView() {
+          final field = tester.getRect(_editField(_newest));
+          expect(
+            field.bottom,
+            lessThanOrEqualTo(tester.getTopLeft(_composer).dy),
+          );
+          expect(_jumpToPresent, findsNothing);
+        }
+
+        expectInView();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pumpAndSettle();
+        expectInView();
+      },
+      routes: _historyWithOwn({_newest}),
+    );
+
     testSession('saves on Numpad Enter too', (tester, session) async {
       final edits = _acceptEdits(session, own);
       await session.openChannel(SessionHarness.channelId);

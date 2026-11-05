@@ -11,6 +11,7 @@ import 'chat_scope.dart';
 import 'discord_markdown.dart';
 import 'guild_access_scope.dart';
 import 'message_context_menu.dart';
+import 'profile_opener_scope.dart';
 
 class MessageContentView extends StatefulWidget {
   const MessageContentView({
@@ -62,6 +63,7 @@ class _MessageContentViewState extends State<MessageContentView> {
       workspace: widget.workspace,
       spaceId: widget.spaceId,
       onSelectChannel: widget.onSelectChannel,
+      onOpenProfile: ProfileOpenerScope.of(context),
       now: widget.now,
       textStyle: widget.textStyle,
       onTapLink: (href) => unawaited(_openLink(context, href)),

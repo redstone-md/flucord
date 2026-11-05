@@ -94,7 +94,9 @@ Future<String?> showEmojiPickerAt({
   unawaited(favorites?.load());
   // Zoom scales everything under the overlay, and the position is in window
   // pixels.
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final overlay =
+      Overlay.of(context, rootOverlay: true).context.findRenderObject()!
+          as RenderBox;
   final local = overlay.globalToLocal(position);
   return showDialog<String>(
     context: context,

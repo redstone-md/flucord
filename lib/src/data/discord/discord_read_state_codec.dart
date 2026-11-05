@@ -44,9 +44,10 @@ abstract final class DiscordReadStateCodec {
           : CommunitySpace.directMessagesId,
       muted: entry['muted'] == true,
       muteConfig: muteConfig(entry['mute_config']),
+      // Absent or `3 NULL`: the guild's own default decides.
       messageNotifications: MessageNotificationLevel.fromWire(
         entry['message_notifications'],
-        orElse: MessageNotificationLevel.allMessages,
+        orElse: MessageNotificationLevel.inherit,
       ),
       suppressEveryone: entry['suppress_everyone'] == true,
       suppressRoles: entry['suppress_roles'] == true,

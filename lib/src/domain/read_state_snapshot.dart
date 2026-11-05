@@ -11,11 +11,13 @@ final class ReadStateSnapshot {
   ReadStateSnapshot({
     Map<String, ReadState> readStates = const {},
     Map<String, GuildNotificationSettings> settings = const {},
+    Map<String, MessageNotificationLevel> guildDefaults = const {},
     this.accountNotificationFlags = 0,
     this.readStateVersion = 0,
     this.userGuildSettingsVersion = 0,
   }) : readStates = Map.unmodifiable(readStates),
-       settings = Map.unmodifiable(settings);
+       settings = Map.unmodifiable(settings),
+       guildDefaults = Map.unmodifiable(guildDefaults);
 
   static final empty = ReadStateSnapshot();
 
@@ -26,6 +28,10 @@ final class ReadStateSnapshot {
   /// Notification settings by space id, with direct messages filed under
   /// [CommunitySpace.directMessagesId] exactly as Discord addresses them.
   final Map<String, GuildNotificationSettings> settings;
+
+  /// Each guild's `default_message_notifications`: the level in force where
+  /// the account never chose one. Large servers set "only mentions".
+  final Map<String, MessageNotificationLevel> guildDefaults;
 
   /// `READY.notification_settings.flags`.
   final int accountNotificationFlags;
@@ -66,6 +72,10 @@ final class ReadStateSnapshot {
   /// these from a snapshot: cursors reach it through the channels they fold into.
   bool sameSettingsAs(ReadStateSnapshot other) =>
       accountNotificationFlags == other.accountNotificationFlags &&
+      guildDefaults.length == other.guildDefaults.length &&
+      guildDefaults.entries.every(
+        (entry) => other.guildDefaults[entry.key] == entry.value,
+      ) &&
       settings.length == other.settings.length &&
       settings.entries.every(
         (entry) => identical(other.settings[entry.key], entry.value),
@@ -88,16 +98,31 @@ final class ReadStateSnapshot {
   /// The notification level in force for [channel].
   ///
   /// R04's resolution order: channel override, then the parent category or
-  /// forum, then the guild default, treating `3 NULL` as "ask the next level".
+  /// forum, then the account's guild setting, then the guild's own default,
+  /// treating `3 NULL` as "ask the next level".
   MessageNotificationLevel notificationLevelFor(ConversationChannel channel) {
     final space = settingsFor(channel.spaceId);
-    for (final candidate in [
+    return _firstSet([
       space.overrideFor(channel.id)?.messageNotifications,
       space.overrideFor(channel.parentId)?.messageNotifications,
       space.messageNotifications,
-    ]) {
-      if (candidate != null && candidate != MessageNotificationLevel.inherit) {
-        return candidate;
+      guildDefaults[channel.spaceId],
+    ]);
+  }
+
+  /// The level in force for a whole space: the account's setting, else the
+  /// guild's default.
+  MessageNotificationLevel spaceNotificationLevel(String spaceId) => _firstSet([
+    settingsFor(spaceId).messageNotifications,
+    guildDefaults[spaceId],
+  ]);
+
+  static MessageNotificationLevel _firstSet(
+    List<MessageNotificationLevel?> candidates,
+  ) {
+    for (final level in candidates) {
+      if (level != null && level != MessageNotificationLevel.inherit) {
+        return level;
       }
     }
     return MessageNotificationLevel.allMessages;
@@ -167,12 +192,14 @@ final class ReadStateSnapshot {
   ReadStateSnapshot copyWith({
     Map<String, ReadState>? readStates,
     Map<String, GuildNotificationSettings>? settings,
+    Map<String, MessageNotificationLevel>? guildDefaults,
     int? accountNotificationFlags,
     int? readStateVersion,
     int? userGuildSettingsVersion,
   }) => ReadStateSnapshot(
     readStates: readStates ?? this.readStates,
     settings: settings ?? this.settings,
+    guildDefaults: guildDefaults ?? this.guildDefaults,
     accountNotificationFlags:
         accountNotificationFlags ?? this.accountNotificationFlags,
     readStateVersion: readStateVersion ?? this.readStateVersion,

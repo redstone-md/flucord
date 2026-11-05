@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,8 @@ import 'package:flucord/src/data/native_external_link_launcher.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_content_view.dart';
+import 'package:flucord/src/presentation/widgets/profile_card_route.dart';
+import 'package:flucord/src/presentation/widgets/profile_opener_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
@@ -171,6 +174,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a person mention opens their card and lights up under the '
+      'pointer', (tester) async {
+    String? opened;
+    await tester.pumpWidget(
+      _host('<@100>', onOpenProfile: (userId, _) => opened = userId),
+    );
+    final mention = find.byKey(const ValueKey('discord-user-100'));
+    Color? fill() =>
+        (tester
+                    .widget<DecoratedBox>(
+                      find.descendant(
+                        of: mention,
+                        matching: find.byType(DecoratedBox),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .color;
+    final idle = fill();
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(mention));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    expect(fill(), isNot(idle));
+
+    await tester.tap(mention);
+    expect(opened, '100');
+  });
+
   testWidgets('opens HTTPS links and reports launcher failures', (
     tester,
   ) async {
@@ -247,6 +280,7 @@ Widget _host(
   DateTime? now,
   ExternalLinkLauncher? launcher,
   ValueChanged<String>? onSelectChannel,
+  OpenProfileCard? onOpenProfile,
   ThemeData? theme,
 }) => MaterialApp(
   theme: theme ?? FlucordTheme.dark,
@@ -255,18 +289,24 @@ Widget _host(
       alignment: Alignment.topLeft,
       child: SizedBox(
         width: 620,
-        child: MessageContentView(
-          body: body,
-          workspace: _workspace,
-          spaceId: null,
-          linkLauncher: launcher ?? _RecordingLinkLauncher(),
-          onSelectChannel: onSelectChannel ?? (_) {},
-          now: now,
+        child: _withOpener(
+          onOpenProfile,
+          MessageContentView(
+            body: body,
+            workspace: _workspace,
+            spaceId: null,
+            linkLauncher: launcher ?? _RecordingLinkLauncher(),
+            onSelectChannel: onSelectChannel ?? (_) {},
+            now: now,
+          ),
         ),
       ),
     ),
   ),
 );
+
+Widget _withOpener(OpenProfileCard? open, Widget child) =>
+    open == null ? child : ProfileOpenerScope(open: open, child: child);
 
 /// What a body draws, for comparing two bodies.
 ({

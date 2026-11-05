@@ -169,10 +169,7 @@ void main() {
       expect(settings.spaceId, CommunitySpace.directMessagesId);
       expect(settings.muted, isFalse);
       expect(settings.muteConfig, isNull);
-      expect(
-        settings.messageNotifications,
-        MessageNotificationLevel.allMessages,
-      );
+      expect(settings.messageNotifications, MessageNotificationLevel.inherit);
       expect(settings.mobilePush, isTrue);
       expect(settings.notifyHighlights, NotifyHighlights.unset);
       expect(settings.version, -1);
