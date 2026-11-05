@@ -161,6 +161,19 @@ void main() {
     routes: _routes(userEffect: {'id': _sakuraId, 'expires_at': null}),
   );
 
+  testSession(
+    'plays an effect the profile names only by its SKU',
+    (tester, session) async {
+      await _openCard(tester, session);
+
+      expect(_layers(tester, _card), [_sakuraIntro]);
+    },
+    // How a live profile sends it: no effect id, only the SKU.
+    routes: _routes(
+      userEffect: {'sku_id': '100000000000000311', 'expires_at': null},
+    ),
+  );
+
   testSession('plays over the full profile', (tester, session) async {
     await _openCard(tester, session);
     await tester.tap(find.byKey(const ValueKey('profile-card-avatar')));

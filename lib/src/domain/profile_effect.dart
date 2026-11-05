@@ -3,10 +3,14 @@
 final class ProfileEffect {
   const ProfileEffect({required this.id, this.expiresAt});
 
-  /// Reads a `profile_effect` object. Null for anything without an id.
+  /// Reads a `profile_effect` object. A live profile names the effect by
+  /// `sku_id` only, an older one by `id`. Null for one with neither.
   static ProfileEffect? fromJson(Object? json) {
     if (json is! Map) return null;
-    final id = json['id'];
+    final id = switch (json['id']) {
+      final String id when id.isNotEmpty => id,
+      _ => json['sku_id'],
+    };
     if (id is! String || id.isEmpty) return null;
     final expiresAt = json['expires_at'];
     return ProfileEffect(
@@ -18,7 +22,7 @@ final class ProfileEffect {
     );
   }
 
-  /// The effect's id in the catalogue.
+  /// The effect's id or its SKU id, which the catalogue both knows.
   final String id;
   final DateTime? expiresAt;
 
