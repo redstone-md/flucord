@@ -26,7 +26,6 @@ import '../application/voice_controller.dart';
 import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
-import '../domain/composer_draft.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/discord_relationship.dart';
 import '../domain/external_link_launcher.dart';

@@ -894,11 +894,9 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
-  /// Opens the DM with [recipientId] and sends [text] there, when given.
-  ///
-  /// The text is sent before the DM opens: a text Discord refuses goes into
-  /// the DM's draft, which the box shows when it opens, so it can be sent
-  /// again. A box already open would not read a draft written under it.
+  /// Opens the DM with [recipientId] and sends [text] there, when given. The
+  /// message shows in the DM at once, and one Discord refuses stays there with
+  /// Retry.
   Future<void> _openDirectConversation(
     BuildContext context,
     String recipientId, {
@@ -912,15 +910,9 @@ extension _FlucordShellNavigation on FlucordShell {
       );
       return;
     }
-    if (text.isNotEmpty &&
-        !await chatController.sendMessage(channelId: channelId, body: text)) {
-      final drafts = chatController.drafts;
-      drafts.write(
-        channelId,
-        drafts.read(channelId).withFailedSend(ComposerDraft(text: text)),
-      );
+    if (text.isNotEmpty) {
+      unawaited(chatController.sendMessage(channelId: channelId, body: text));
     }
-    if (!context.mounted) return;
     final channel = chatController.workspace!.channelById(channelId);
     _openDestination(spaceId: channel.spaceId, channelId: channel.id);
   }

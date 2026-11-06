@@ -45,12 +45,17 @@ final class MessageUpsertedEvent extends ChatRepositoryEvent {
     this.member,
     this.isNew = false,
     this.mentionsCurrentMember = false,
+    this.nonce,
   });
 
   final ChatMessage message;
   final Member? member;
   final bool isNew;
   final bool mentionsCurrentMember;
+
+  /// The nonce the sender gave. On this client's own message it names the
+  /// [OutgoingMessage] this one replaces.
+  final String? nonce;
 }
 
 /// Discord changed a message that already exists.
@@ -540,14 +545,20 @@ abstract interface class ChatRepository {
     required int autoArchiveDurationMinutes,
   });
 
+  /// Posts a message under [nonce], which Discord enforces: the same nonce
+  /// sent again within a few minutes gets the first message back, so a retry
+  /// never posts twice. [onUploadProgress] hears how much of [attachments]
+  /// has gone out, on a transport that can tell.
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   });
 
   Future<ChatMessage> editMessage({

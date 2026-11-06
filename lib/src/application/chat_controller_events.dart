@@ -154,6 +154,7 @@ extension _ChatControllerEvents on ChatController {
   }
 
   void _handleMessageUpsert(MessageUpsertedEvent event) {
+    _settleEcho(event);
     final message = event.mentionsCurrentMember
         ? event.message.copyWith(mentionsCurrentMember: true)
         : event.message;

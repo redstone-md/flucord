@@ -158,24 +158,41 @@ final class _EventRepository
     autoArchiveDurationMinutes: autoArchiveDurationMinutes,
   );
 
+  /// Answers each send in place of the delegate, when set.
+  Future<ChatMessage> Function(
+    String nonce,
+    UploadProgressListener? onUploadProgress,
+  )?
+  answerSend;
+
+  /// The nonce of each send, oldest first.
+  final List<String> sentNonces = [];
+
   @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
-  }) => _delegate.sendMessage(
-    channelId: channelId,
-    authorId: authorId,
-    body: body,
-    attachments: attachments,
-    replyToMessageId: replyToMessageId,
-    suppressNotifications: suppressNotifications,
-    textToSpeech: textToSpeech,
-  );
+    UploadProgressListener? onUploadProgress,
+  }) {
+    sentNonces.add(nonce);
+    if (answerSend case final answer?) return answer(nonce, onUploadProgress);
+    return _delegate.sendMessage(
+      channelId: channelId,
+      authorId: authorId,
+      body: body,
+      nonce: nonce,
+      attachments: attachments,
+      replyToMessageId: replyToMessageId,
+      suppressNotifications: suppressNotifications,
+      textToSpeech: textToSpeech,
+    );
+  }
 
   @override
   Future<ChatMessage> editMessage({

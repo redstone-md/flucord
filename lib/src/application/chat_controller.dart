@@ -73,6 +73,7 @@ part 'chat_controller_user_settings.dart';
 part 'chat_controller_guild_access.dart';
 part 'chat_controller_read_state.dart';
 part 'chat_controller_history_window.dart';
+part 'chat_controller_outgoing.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -110,6 +111,7 @@ final class ChatController extends ChangeNotifier {
   /// Channels with a send on its way. Each channel takes one send at a time,
   /// and a slow one does not hold the others.
   final Set<String> _sendingChannels = {};
+  final _outgoing = _OutgoingMessages();
   RepositoryConnectionStatus _connectionStatus =
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
@@ -761,33 +763,54 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
+  /// Shows the message in the timeline at once, as sending, and sends it after
+  /// the channel's earlier sends. Returns whether Discord has it. A failed
+  /// message stays in [outgoingIn], and [error] says why.
   Future<bool> sendMessage({
     required String channelId,
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
-  }) async {
+  }) {
     // A refusal below must not be read as the failure of some earlier action.
     _error = null;
     final workspace = _workspace;
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
     if (workspace == null || (content.isEmpty && attachments.isEmpty)) {
-      return false;
+      return Future.value(false);
     }
-    return _sendingIn(channelId, () async {
-      final message = await _repository.sendMessage(
-        channelId: channelId,
-        authorId: workspace.currentMemberId,
-        body: content,
-        attachments: attachments,
+    final answered = replyToMessageId == null
+        ? null
+        : workspace
+              .messagesFor(channelId)
+              .where((message) => message.id == replyToMessageId)
+              .firstOrNull;
+    return _queueSend(
+      OutgoingMessage(
+        message: ChatMessage(
+          id: _outgoing.nextNonce(),
+          channelId: channelId,
+          authorId: workspace.currentMemberId,
+          body: content,
+          sentAt: DateTime.now(),
+          reply: answered == null
+              ? null
+              : MessageReply(
+                  messageId: answered.id,
+                  authorId: answered.authorId,
+                  body: answered.body,
+                ),
+          flags: suppressNotifications
+              ? DiscordMessageFlag.suppressNotifications.bit
+              : 0,
+          isTextToSpeech: spoken.$1,
+        ),
         replyToMessageId: replyToMessageId,
-        suppressNotifications: suppressNotifications,
-        textToSpeech: spoken.$1,
-      );
-      _applySentMessage(message);
-    });
+        attachments: attachments,
+      ),
+    );
   }
 
   /// The spoken-aloud command: `/tts <message>` sends the message flagged to

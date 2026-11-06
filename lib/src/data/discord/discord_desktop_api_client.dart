@@ -569,7 +569,8 @@ final class DiscordDesktopApiClient
   /// `POST /channels/{id}/messages`, the one route every kind of send uses.
   ///
   /// A forward names its source in [forwardOf] and needs no content. Up to
-  /// three [stickerIds] may go with or without text.
+  /// three [stickerIds] may go with or without text. [onUploadProgress] hears
+  /// how much of [attachments] has gone out.
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
@@ -580,6 +581,7 @@ final class DiscordDesktopApiClient
     List<String> stickerIds = const [],
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
     if (stickerIds.length > 3) {
       throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
@@ -627,6 +629,9 @@ final class DiscordDesktopApiClient
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
       guardedByNonce: true,
+      onBodySent: onUploadProgress == null
+          ? null
+          : (sent) => onUploadProgress(sent / multipart.bytes.length),
     );
     if (response is! Map) {
       throw const DiscordApiException(

@@ -8,6 +8,7 @@ import '../application/direct_call_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
+import 'clipboard_attachments.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
@@ -155,11 +156,6 @@ class ConversationPane extends StatefulWidget {
 /// Public so the shell's keyboard map can reach the open conversation through a
 /// global key, as a form reaches its `FormState`.
 class ConversationPaneState extends State<ConversationPane> {
-  /// Holds a send failure's note clear of the composer, even with four lines
-  /// of text in it. A note at the window's edge would cover the restored text
-  /// and the Send button the user needs to try again.
-  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
-
   final _composerKey = GlobalKey<MessageComposerState>();
   final _timelineKey = GlobalKey<MessageListState>();
 
@@ -750,42 +746,22 @@ class ConversationPaneState extends State<ConversationPane> {
                   )
                 : null,
             onSend:
-                (
-                  body,
-                  attachments,
-                  replyToMessageId,
-                  suppressNotifications,
-                ) async {
-                  final messenger = ScaffoldMessenger.maybeOf(context);
-                  final sent = await chat.sendMessage(
+                (body, attachments, replyToMessageId, suppressNotifications) {
+                  // The message is in the timeline from here on, failed or
+                  // not, so the reply is done with.
+                  final sent = chat.sendMessage(
                     channelId: channel.id,
                     body: body,
                     attachments: attachments,
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!sent) {
-                    messenger?.showSnackBar(
-                      SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        margin: _aboveComposer,
-                        content: Text(
-                          'Your message to ${_composerHintPrefix(channel)}'
-                          '${channel.name} did not send. '
-                          '${sendFailureReason(chat.error)}',
-                        ),
-                      ),
-                    );
-                    return false;
-                  }
-                  // A reply picked while this send ran is not this send's.
-                  // The user may be in another channel by now.
                   final draft = chat.drafts.read(channel.id);
                   if (draft.replyTo?.id == replyToMessageId) {
                     chat.drafts.write(channel.id, draft.withReply(null));
-                    if (mounted) setState(() {});
+                    setState(() {});
                   }
-                  return true;
+                  return sent;
                 },
           ),
       ],
@@ -928,6 +904,7 @@ class ConversationPaneState extends State<ConversationPane> {
                 chat.hasNewerMessages(channel.id),
                 chat.historyWindowError(channel.id),
                 chat.lastSentMessageIdIn(channel.id),
+                chat.outgoingIn(channel.id),
                 chat.canLoadOlderMessages(channel.id),
                 chat.isLoadingOlderMessages(channel.id),
                 chat.olderMessagesError(channel.id),
@@ -989,6 +966,14 @@ class ConversationPaneState extends State<ConversationPane> {
     );
   }
 
+  /// A pasted picture stays on disk while its message may still be retried,
+  /// and goes once Discord has it.
+  Future<void> _retrySend(ChatController chat, OutgoingMessage message) async {
+    if (await chat.retrySend(message)) {
+      await ClipboardAttachments.release(message.attachments);
+    }
+  }
+
   Widget _timeline(
     ChatController chat,
     WorkspaceController workspaceController,
@@ -1010,6 +995,12 @@ class ConversationPaneState extends State<ConversationPane> {
       targetMessageId: workspaceController.targetMessageId,
       targetRequest: workspaceController.targetRequest,
       lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      outgoing: chat.outgoingIn(channel.id),
+      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
+      onDiscardSend: (message) {
+        chat.discardSend(message);
+        unawaited(ClipboardAttachments.release(message.attachments));
+      },
       hasNewerMessages: chat.hasNewerMessages(channel.id),
       windowError: chat.historyWindowError(channel.id),
       readingPositions: workspaceController.readingPositions,

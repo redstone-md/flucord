@@ -83,3 +83,7 @@ _Avoid_: participant, peer, member
 **Group DM**:
 A DM Discord made as a group. It stays a group when only one other person, or nobody, is left in it. It may have its own name and picture; with no name, it goes by its recipients' names.
 _Avoid_: group chat, group channel
+
+**Outgoing message**:
+A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place.
+_Avoid_: pending message, local echo

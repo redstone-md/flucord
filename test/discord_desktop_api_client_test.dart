@@ -1,10 +1,44 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+
+import 'support/fake_discord_wire.dart';
 
 void main() {
+  test('a message with files reports how much has gone out', () async {
+    final folder = await Directory.systemTemp.createTemp('flucord-upload');
+    addTearDown(() => folder.delete(recursive: true));
+    final file = File('${folder.path}/proof.txt')..writeAsStringSync('proof');
+    final transport = FakeDiscordTransport(
+      fallback: (_) => jsonResponse({'id': '100000000000000201'}),
+    );
+    final client = DiscordDesktopApiClient(
+      authorization: 'user-authorization',
+      headers: const {},
+      transport: transport,
+    );
+    addTearDown(client.close);
+    final progress = <double>[];
+
+    await client.createMessage(
+      channelId: '100000000000000301',
+      content: '',
+      nonce: '100000000000000401',
+      attachments: [
+        PendingAttachment(name: 'proof.txt', path: file.path, size: 5),
+      ],
+      onUploadProgress: progress.add,
+    );
+
+    expect(progress, hasLength(2));
+    expect(progress.first, inExclusiveRange(0, 1));
+    expect(progress.last, 1.0);
+  });
+
   test('uses raw user authorization and only desktop chat routes', () async {
     final transport = _DesktopTransport();
     final client = DiscordDesktopApiClient(
