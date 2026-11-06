@@ -7,6 +7,10 @@ import '../../domain/discord_snowflake.dart';
 /// snowflake's timestamp. The fallback chain behind the key is the part worth
 /// reproducing — a conversation nobody has written in still needs a stable
 /// place, so the channel id stands in for the message that never existed.
+///
+/// This only sets the order the workspace holds READY's channels in. The DM
+/// list on screen is sorted again by `ChannelSidebarOrder`, which follows
+/// every new message.
 abstract final class DiscordPrivateChannelOrder {
   /// The snowflake a channel's position in the DM list is computed from.
   ///
