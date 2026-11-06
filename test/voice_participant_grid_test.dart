@@ -21,8 +21,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Jack'), findsOneWidget);
-    expect(find.text('You'), findsOneWidget);
+    expect(find.text('Jack (you)'), findsOneWidget);
     expect(find.text('Unknown user 123456'), findsOneWidget);
     expect(find.byTooltip('Muted'), findsOneWidget);
     final tile = tester.widget<DecoratedBox>(
@@ -85,10 +84,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Stop watching'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-2')),
-      findsOneWidget,
-    );
   });
 
   testWidgets('every open stream is marked, not just one of them', (
@@ -107,15 +102,7 @@ void main() {
       ),
     );
 
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-2')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-3')),
-      findsOneWidget,
-    );
-    expect(find.text('Watch'), findsNothing);
+    expect(find.text('Watch stream'), findsNothing);
     expect(find.text('Stop watching'), findsNWidgets(2));
   });
 
@@ -208,11 +195,20 @@ class _TestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final streams = VoiceStreamControls(
+      isOpen: open.contains,
+      onWatch: onWatchStream,
+      onStopShare: onStopShare,
+    );
     return MaterialApp(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: VoiceParticipantGrid(
-          participants: participants,
+          tiles: VoiceParticipantGrid.tilesOf(
+            participants,
+            currentMemberId: 'member-1',
+            streams: streams,
+          ),
           members: const [
             Member(
               id: 'member-1',
@@ -226,11 +222,7 @@ class _TestApp extends StatelessWidget {
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
           onTapParticipant: onTapParticipant,
-          streams: VoiceStreamControls(
-            isOpen: open.contains,
-            onWatch: onWatchStream,
-            onStopShare: onStopShare,
-          ),
+          streams: streams,
         ),
       ),
     );

@@ -90,10 +90,7 @@ void main() {
           .scrollDirection,
       Axis.horizontal,
     );
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsOneWidget,
-    );
+    expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
     expect(find.text('Stop watching'), findsOneWidget);
 
     // Cancelling the packet subscription is real async work, which a
@@ -105,11 +102,8 @@ void main() {
     // is the stage now, with the card to open the stream again.
     expect(find.byType(GoLiveViewer), findsNothing);
     expect(find.byKey(const ValueKey('voice-stage-tile')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsNothing,
-    );
-    expect(find.text('Watch'), findsOneWidget);
+    expect(_onCard('friend-1', find.text('Stop watching')), findsNothing);
+    expect(find.text('Watch stream'), findsOneWidget);
   });
 
   testWidgets('a click puts a tile on the stage, and Escape takes it off', (
@@ -164,10 +158,7 @@ void main() {
     // pictures yet: keying the stage on the ask hid the participant grid for
     // the rest of every call Discord never answered.
     expect(harness.repository.watched, hasLength(1));
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsOneWidget,
-    );
+    expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
     expect(find.byType(GoLiveViewer), findsNothing);
     // The ask focused the sender, so their tile is the stage, saying the ask
     // is out; the stream itself takes the stage only once it arrives.
@@ -210,3 +201,9 @@ void main() {
     expect(harness.voice.isCallSession, isFalse);
   });
 }
+
+/// [matching], inside the tile of [userId]'s Stream.
+Finder _onCard(String userId, Finder matching) => find.descendant(
+  of: find.byKey(ValueKey('voice-stream-card-$userId')),
+  matching: matching,
+);

@@ -118,7 +118,7 @@ final class StreamRoomHarness {
             userId: seat.userId,
             guildId: channel.guildId,
             channelId: channel.id,
-            selfMuted: false,
+            selfMuted: seat.isMuted,
             selfDeafened: false,
             serverMuted: false,
             serverDeafened: false,
@@ -282,12 +282,18 @@ const streamRoomTransport = VoiceTransportSession(
   daveProtocolVersion: 0,
 );
 
-/// Somebody in the room, and whether they are sending a stream.
+/// Somebody in the room, whether they are sending a stream, and whether
+/// they muted themselves.
 final class StreamRoomSeat {
-  const StreamRoomSeat(this.userId, {this.isStreaming = false});
+  const StreamRoomSeat(
+    this.userId, {
+    this.isStreaming = false,
+    this.isMuted = false,
+  });
 
   final String userId;
   final bool isStreaming;
+  final bool isMuted;
 }
 
 /// The DM call the tests walk into: a room without a guild.

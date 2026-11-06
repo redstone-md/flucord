@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/chat_header.dart';
 import 'package:flucord/src/presentation/widgets/soundboard_picker.dart';
@@ -113,4 +114,159 @@ void main() {
       expect(room.voice.isConnected, isFalse);
     });
   });
+
+  group('tiles', () {
+    testWidgets('a name chip carries the name and the muted mark', (
+      tester,
+    ) async {
+      await pumpStreamRoom(
+        tester,
+        streamRoomVoiceChannel,
+        seats: const [
+          StreamRoomSeat('me'),
+          StreamRoomSeat('friend-2', isMuted: true),
+        ],
+      );
+
+      final mira = _chipOf('friend-2');
+      expect(
+        find.descendant(of: mira, matching: find.text('Mira')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: mira,
+          matching: findFlucordIcon(FlucordIcons.micOff),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: _chipOf('me'), matching: find.text('Me (you)')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: _chipOf('me'),
+          matching: findFlucordIcon(FlucordIcons.micOff),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('whoever speaks gets a green ring around their tile', (
+      tester,
+    ) async {
+      final room = await pumpStreamRoom(
+        tester,
+        streamRoomVoiceChannel,
+        seats: const [StreamRoomSeat('friend-1'), StreamRoomSeat('friend-2')],
+      );
+
+      room.signaling.emit(
+        const VoiceSpeakingEvent(userId: 'friend-1', ssrc: 7, speakingFlags: 1),
+      );
+      // One pump delivers the event, the next draws the ring.
+      await tester.pump();
+      await tester.pump();
+
+      expect(_ringOf(tester, 'friend-1'), _surfaces.success);
+      expect(_ringOf(tester, 'friend-2'), isNull);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a Stream nobody watches is a tile of its own, live, with '
+        'Watch stream', (tester) async {
+      await pumpStreamRoom(tester, streamRoomVoiceChannel);
+
+      final stream = find.byKey(const ValueKey('voice-stream-card-friend-1'));
+      expect(
+        find.byKey(const ValueKey('voice-participant-friend-1')),
+        findsOneWidget,
+      );
+      expect(stream, findsOneWidget);
+      expect(
+        find.descendant(of: stream, matching: find.text('LIVE')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: stream, matching: find.text('Watch stream')),
+        findsOneWidget,
+      );
+      // The person's own tile is not marked: their Stream is right there.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('voice-participant-friend-1')),
+          matching: find.text('LIVE'),
+        ),
+        findsNothing,
+      );
+    });
+  });
+
+  group('stage', () {
+    testWidgets('a Stream on the Stage leaves every person in the strip, '
+        'its Sender marked live', (tester) async {
+      final room = await pumpStreamRoom(
+        tester,
+        streamRoomVoiceChannel,
+        seats: const [
+          StreamRoomSeat('friend-1', isStreaming: true),
+          StreamRoomSeat('friend-2'),
+        ],
+      );
+      await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+      await tester.pump();
+      await tester.runAsync(
+        () => room.viewer.attach(
+          const GoLiveStreamKey.guild(
+            guildId: 'guild-1',
+            channelId: 'voice-1',
+            userId: 'friend-1',
+          ),
+          packets: const Stream.empty(),
+        ),
+      );
+      await tester.pump();
+
+      final strip = find.byKey(const ValueKey('voice-participant-grid'));
+      expect(tester.widget<GridView>(strip).scrollDirection, Axis.horizontal);
+      Finder inStrip(String key) =>
+          find.descendant(of: strip, matching: find.byKey(ValueKey(key)));
+      expect(inStrip('voice-participant-friend-1'), findsOneWidget);
+      expect(inStrip('voice-participant-friend-2'), findsOneWidget);
+      // The Stream is on the Stage, not in the strip a second time.
+      expect(inStrip('voice-stream-card-friend-1'), findsNothing);
+      expect(
+        find.descendant(
+          of: inStrip('voice-participant-friend-1'),
+          matching: find.text('LIVE'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('voice-stream-card-friend-1')),
+          matching: find.text('Stop watching'),
+        ),
+        findsOneWidget,
+      );
+      await tester.runAsync(room.viewer.stop);
+      await tester.pump();
+    });
+  });
+}
+
+/// The name chip on [userId]'s person tile.
+Finder _chipOf(String userId) => find.descendant(
+  of: find.byKey(ValueKey('voice-participant-$userId')),
+  matching: find.byKey(const ValueKey('voice-name-chip')),
+);
+
+/// The colour of the ring around [userId]'s person tile, or null for none.
+Color? _ringOf(WidgetTester tester, String userId) {
+  final tile = tester.widget<DecoratedBox>(
+    find.byKey(ValueKey('voice-participant-$userId')),
+  );
+  final border = (tile.decoration as BoxDecoration).border;
+  return border?.top.color;
 }

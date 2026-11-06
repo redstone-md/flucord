@@ -19,7 +19,7 @@ void main() {
 
     // The room header also says "Jack": the channel is the DM with them.
     expect(_onCard('friend-1', find.text('Jack')), findsOneWidget);
-    expect(_onCard('friend-1', find.text('Watch')), findsOneWidget);
+    expect(_onCard('friend-1', find.text('Watch stream')), findsOneWidget);
   });
 
   testWidgets('the card is there in a server voice room too', (tester) async {
@@ -30,7 +30,7 @@ void main() {
       findsOneWidget,
     );
     expect(_onCard('friend-1', find.text('Jack')), findsOneWidget);
-    expect(_onCard('friend-1', find.text('Watch')), findsOneWidget);
+    expect(_onCard('friend-1', find.text('Watch stream')), findsOneWidget);
   });
 
   testWidgets('the button opens the stream in a call', (tester) async {
@@ -72,7 +72,7 @@ void main() {
     // The pictures cross a connection Discord only opens when asked for, so
     // the ask is what the control is stopping here.
     expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
-    expect(find.text('Watch'), findsNothing);
+    expect(find.text('Watch stream'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
     await tester.pumpAndSettle();
@@ -87,7 +87,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(_onCard('friend-1', find.text('Watch')), findsOneWidget);
+    expect(_onCard('friend-1', find.text('Watch stream')), findsOneWidget);
   });
 
   testWidgets('whoever is being watched is marked on their tile', (
@@ -103,22 +103,13 @@ void main() {
       ],
     );
 
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsNothing,
-    );
+    expect(_onCard('friend-1', find.text('Stop watching')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-2')),
-      findsNothing,
-    );
+    expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
+    expect(_onCard('friend-2', find.text('Stop watching')), findsNothing);
   });
 
   testWidgets('a fifth stream is refused, and the room says why', (
@@ -180,14 +171,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Two open at once, and both marked: the mark cannot name one user.
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-1')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-friend-2')),
-      findsOneWidget,
-    );
+    expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
+    expect(_onCard('friend-2', find.text('Stop watching')), findsOneWidget);
   });
 
   testWidgets('a participant who is not streaming has no card', (tester) async {
@@ -226,8 +211,8 @@ void main() {
     expect(harness.repository.watched, isEmpty);
     expect(find.byKey(const ValueKey('voice-self-preview')), findsOneWidget);
     expect(find.byKey(const ValueKey('go-live-waiting')), findsOneWidget);
-    expect(_onCard('me', find.text('Live')), findsOneWidget);
-    expect(find.byKey(const ValueKey('voice-stream-open-me')), findsOneWidget);
+    expect(_onCard('me', find.text('LIVE')), findsOneWidget);
+    expect(_onCard('me', find.text('Stop sharing')), findsOneWidget);
     await harness.goLive.stop();
   });
 
@@ -254,7 +239,7 @@ void main() {
     expect(find.text('Self-preview unavailable'), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-self-preview')), findsNothing);
     // The share itself is fine.
-    expect(_onCard('me', find.text('Live')), findsOneWidget);
+    expect(_onCard('me', find.text('LIVE')), findsOneWidget);
     await harness.goLive.stop();
   });
 
@@ -290,7 +275,7 @@ void main() {
   });
 }
 
-/// [matching], inside the card on [userId]'s tile.
+/// [matching], inside the tile of [userId]'s Stream.
 Finder _onCard(String userId, Finder matching) => find.descendant(
   of: find.byKey(ValueKey('voice-stream-card-$userId')),
   matching: matching,

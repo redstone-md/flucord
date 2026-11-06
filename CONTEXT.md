@@ -36,8 +36,12 @@ _Avoid_: connection, socket, channel
 The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine onto a texture the interface draws. Not a watched session. Drawn only while its tile is on screen and the window is focused.
 _Avoid_: thumbnail, monitor, mirror
 
+**Tile**:
+One participant, or one stream, in the room's grid. A participant who sends a stream has two: their own and their stream's.
+_Avoid_: card, cell, box
+
 **Stage**:
-Where one tile is drawn large and the rest of the room is drawn small beside it. The tile can carry a stream, a self-preview, or only a participant.
+Where one tile is drawn large and the rest of the room is drawn small in a strip below it. The tile can carry a stream, a self-preview, or only a participant.
 _Avoid_: focus view, main view, theatre, spotlight
 
 **Focused**:

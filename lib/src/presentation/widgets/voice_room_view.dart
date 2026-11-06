@@ -254,10 +254,6 @@ class _VoiceChannelPreview extends StatelessWidget {
 }
 
 class _VoiceStage extends StatelessWidget {
-  /// How tall the strip of tiles under a stream on the stage is. One row,
-  /// small enough to leave the stream the room.
-  static const double _stripHeight = 128;
-
   const _VoiceStage({
     required this.streamViewer,
     required this.stageControls,
@@ -298,9 +294,9 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    Widget grid(List<VoiceParticipant> participants, {required bool compact}) =>
+    Widget grid(List<VoiceRoomTile> tiles, {required bool compact}) =>
         VoiceParticipantGrid(
-          participants: participants,
+          tiles: tiles,
           members: members,
           currentMemberId: currentMemberId,
           spaceId: spaceId,
@@ -310,39 +306,55 @@ class _VoiceStage extends StatelessWidget {
           onTapParticipant: onTapParticipant,
           compact: compact,
         );
-    // What the stage draws: the focused participant's stream when it is
-    // arriving, else their tile large (their preview, camera, or avatar, with
-    // the card to open their stream). A focus on somebody who has just left
-    // draws nothing until the room catches up.
+    final tiles = VoiceParticipantGrid.tilesOf(
+      controller.participants,
+      currentMemberId: currentMemberId,
+      streams: streams,
+    );
+    // What the Stage draws: the focused participant's Stream while it is
+    // arriving, else their own tile, large. A focus on somebody who has just
+    // left draws nothing until the room catches up.
     final focused = controller.participants
         .where((participant) => participant.userId == focusedUserId)
         .firstOrNull;
-    final onStage =
-        streamViewer ??
-        (focused == null
-            ? null
-            : Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: VoiceParticipantTile(
-                  key: const ValueKey('voice-stage-tile'),
-                  participant: focused,
-                  members: members,
-                  currentMemberId: currentMemberId,
-                  spaceId: spaceId,
-                  cameraTextureFor: cameraTextureFor,
-                  streams: streams,
-                  participantMenu: participantMenu,
-                  onTap: onTapParticipant,
-                  size: VoiceParticipantTileSize.stage,
-                ),
-              ));
-    // A tile on the stage carries its own card, so it leaves the strip; a
-    // stream on the stage does not, and its tile stays where "Stop watching"
-    // lives. A strip with nobody left in it is not drawn at all.
-    final strippedOf = streamViewer == null ? focused?.userId : null;
+    final VoiceRoomTile? onStage = focused == null
+        ? null
+        : (
+            participant: focused,
+            kind: streamViewer == null
+                ? VoiceTileKind.person
+                : VoiceTileKind.stream,
+          );
+    final stage = switch (onStage) {
+      null => null,
+      (:final participant, kind: VoiceTileKind.person) => VoiceParticipantTile(
+        key: const ValueKey('voice-stage-tile'),
+        participant: participant,
+        members: members,
+        currentMemberId: currentMemberId,
+        spaceId: spaceId,
+        cameraTextureFor: cameraTextureFor,
+        participantMenu: participantMenu,
+        onTap: onTapParticipant,
+        size: VoiceParticipantTileSize.stage,
+      ),
+      (:final participant, kind: VoiceTileKind.stream) => VoiceStreamTile(
+        participant: participant,
+        members: members,
+        currentMemberId: currentMemberId,
+        spaceId: spaceId,
+        streams: streams,
+        picture: streamViewer,
+        size: VoiceParticipantTileSize.stage,
+      ),
+    };
+    // Every other tile sits in the strip under the Stage. A strip with
+    // nothing left in it is not drawn at all.
     final strip = [
-      for (final participant in controller.participants)
-        if (participant.userId != strippedOf) participant,
+      for (final tile in tiles)
+        if (tile.participant.userId != onStage?.participant.userId ||
+            tile.kind != onStage?.kind)
+          tile,
     ];
     final onClearFocus = this.onClearFocus;
     final room = Column(
@@ -394,23 +406,23 @@ class _VoiceStage extends StatelessWidget {
           ),
         ?stageControls,
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // A stream on the stage pushes the grid into a strip rather
-              // than off the screen: the tile is where the mark and the
-              // control for that stream live, and a stage with no tiles has
-              // nowhere to put either.
-              if (onStage case final stage?) Expanded(child: stage),
-              if (onStage == null)
-                Expanded(child: grid(controller.participants, compact: false))
-              else if (strip.isNotEmpty)
-                SizedBox(
-                  height: _stripHeight,
-                  child: grid(strip, compact: true),
+          child: stage == null
+              ? grid(tiles, compact: false)
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 12,
+                    children: [
+                      Expanded(child: stage),
+                      if (strip.isNotEmpty)
+                        SizedBox(
+                          height: VoiceParticipantGrid.stripHeight,
+                          child: grid(strip, compact: true),
+                        ),
+                    ],
+                  ),
                 ),
-            ],
-          ),
         ),
       ],
     );
@@ -420,7 +432,7 @@ class _VoiceStage extends StatelessWidget {
     // when it appears.
     return CallbackShortcuts(
       bindings: {
-        if (onStage != null && onClearFocus != null)
+        if (stage != null && onClearFocus != null)
           const SingleActivator(LogicalKeyboardKey.escape): onClearFocus,
       },
       child: Focus(autofocus: true, child: room),
