@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/go_live_viewer.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
 import 'package:flucord/src/presentation/widgets/direct_call_band.dart';
@@ -145,6 +146,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.focus.userId, isNull);
     expect(find.byKey(const ValueKey('voice-stage-tile')), findsNothing);
+  });
+
+  testWidgets('Escape takes a Stream off the call Stage', (tester) async {
+    final harness = await pumpStreamRoom(tester, streamRoomCall);
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+    await tester.pump();
+    await tester.runAsync(
+      () => harness.viewer.attach(
+        const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1'),
+        packets: const Stream.empty(),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('call-stage')), findsOneWidget);
+
+    // The shell hands Escape to the pane wherever the keyboard focus is,
+    // the composer included.
+    tester
+        .state<ConversationPaneState>(find.byType(ConversationPane))
+        .handleEscape();
+    await tester.pump();
+
+    expect(harness.focus.userId, isNull);
+    expect(find.byKey(const ValueKey('call-stage')), findsNothing);
+    expect(find.byKey(const ValueKey('call-timeline')), findsOneWidget);
   });
 
   testWidgets('an ask Discord has not answered does not take the stage', (

@@ -220,10 +220,28 @@ class ConversationPaneState extends State<ConversationPane> {
       _setReply(chat, null);
       return;
     }
+    // A Stream on a DM call's Stage covers the messages, so it goes before
+    // the jump to the present. The guild Room handles Escape itself.
+    if (_hasCallStage) {
+      RoomFocusScope.read(context).clear();
+      return;
+    }
     final timeline = _timelineKey.currentState;
     if (timeline == null) return;
     chat.markChannelRead(channelId);
     timeline.jumpToPresent();
+  }
+
+  /// Whether this DM's call has a Stream on its Stage: one focused, in this
+  /// call, and arriving.
+  bool get _hasCallStage {
+    final channel = widget.channel;
+    final userId = RoomFocusScope.read(context).userId;
+    return userId != null &&
+        DirectCallScope.maybeOf(context)?.activeCallChannelId == channel.id &&
+        StreamViewerScope.read(
+          context,
+        ).isWatching(channel.streamKeyFor(userId));
   }
 
   /// Moves the timeline by most of a screen, if this channel has one.
