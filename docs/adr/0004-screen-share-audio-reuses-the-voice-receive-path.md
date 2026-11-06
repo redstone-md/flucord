@@ -4,11 +4,11 @@ The sound of a shared screen travels on the stream connection, not on the room's
 
 ## Status
 
-Accepted.
+Accepted. Amended 2026-11-06: per-Stream volume is no longer out of scope; it is kept per Sender (ADR-0012).
 
 ## Consequences
 
 - Every watched stream gets a decoder of its own, keyed by the sender, exactly as the call's audio is keyed by participant.
 - A stream's sound ends with its session. Watching is what gives it somewhere to play, so stopping a watch stops the sound.
-- Per-stream volume is out of scope for now; streams play at the room's level.
+- Per-stream volume is kept per Sender, with a mute (ADR-0012).
 - Receiving audio on a stream connection was never exercised end to end, so the wire format is assumed to be the room's own: Opus at 20 ms on the stream's audio SSRC, under whatever group cipher the room negotiated.

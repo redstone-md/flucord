@@ -9,6 +9,20 @@ Rect popupAnchorOf(BuildContext context) {
   return box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
 }
 
+/// Where a context menu opened from the widget at [context] goes: at
+/// [position], in global coordinates, for a click; in the widget's middle
+/// when null, as for the context-menu key.
+RelativeRect menuAt(BuildContext context, {Offset? position}) {
+  final overlay =
+      Overlay.of(context, rootOverlay: true).context.findRenderObject()!
+          as RenderBox;
+  final source = context.findRenderObject()! as RenderBox;
+  final at = overlay.globalToLocal(
+    position ?? source.localToGlobal(source.size.center(Offset.zero)),
+  );
+  return RelativeRect.fromRect(at & Size.zero, Offset.zero & overlay.size);
+}
+
 /// Where a menu opened from the widget at [context] goes: just under it.
 RelativeRect menuBelow(BuildContext context) {
   final anchor = popupAnchorOf(context);

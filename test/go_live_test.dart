@@ -37,6 +37,27 @@ void main() {
       expect(GoLiveStreamKey.parse(''), isNull);
     });
 
+    test('names the audio source of each watched session', () {
+      // Snowflake ids are numbers too, so the session number must not be
+      // mistaken for the user id, or the other way round.
+      const key = GoLiveStreamKey.guild(
+        guildId: '11',
+        channelId: '22',
+        userId: '33',
+      );
+
+      expect(key.audioSourceId(4), 'stream:guild:11:22:33:4');
+      expect(GoLiveStreamKey.ofAudioSource('stream:guild:11:22:33:4'), key);
+      expect(
+        GoLiveStreamKey.ofAudioSource('stream:call:c:u:1'),
+        const GoLiveStreamKey.call(channelId: 'c', userId: 'u'),
+      );
+      // A voice source is a bare user id, and a stream needs its session.
+      expect(GoLiveStreamKey.ofAudioSource('33'), isNull);
+      expect(GoLiveStreamKey.ofAudioSource('stream:guild:11:22:33'), isNull);
+      expect(GoLiveStreamKey.ofAudioSource('stream:call:c:u:x'), isNull);
+    });
+
     test('compares by what it names', () {
       const key = GoLiveStreamKey.call(channelId: 'c', userId: 'u');
 

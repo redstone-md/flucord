@@ -131,6 +131,7 @@ import 'domain/voice_message_recorder.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
+import 'platform/window_full_screen.dart';
 import 'platform/game_process_scanner.dart';
 
 /// Builds the application's object graph, and tears it down again.
@@ -233,6 +234,10 @@ final class AppComposition {
   late final RemoteCameraController remoteCameras;
   late final ThemeController theme;
   late final StreamerModeController streamerMode;
+
+  /// Full screen for a watched Stream, or null on a platform whose window
+  /// cannot go full screen. The Stream then fills the window alone.
+  late final WindowFullScreen? windowFullScreen;
   late final AccessibilityController accessibility;
   late final ScreenshotService screenshot;
   late final ClipRecorder clipRecorder;
@@ -663,6 +668,8 @@ final class AppComposition {
       ),
     );
     unawaited(streamerMode.load());
+    final appWindow = bootstrap.appWindow ?? _defaultAppWindow();
+    windowFullScreen = appWindow == null ? null : WindowFullScreen(appWindow);
     accessibility = _register(
       AccessibilityController(
         bootstrap.accessibilityRepository ?? FileAccessibilityRepository(),
@@ -885,6 +892,13 @@ final class AppComposition {
   static ApplicationAttenuation _defaultAttenuation() => Platform.isWindows
       ? WindowsApplicationAttenuation()
       : const UnavailableApplicationAttenuation();
+
+  /// The desktop window, or null where window_manager has no window to
+  /// drive.
+  static AppWindow? _defaultAppWindow() =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS
+      ? WindowManagerAppWindow()
+      : null;
 
   /// The shield this platform has, or one that plainly says it has none.
   static WindowCaptureShield _defaultCaptureShield() => Platform.isWindows

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/go_live_stream.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
@@ -174,6 +175,10 @@ final class VoiceController extends ChangeNotifier
   /// is dead, and once the map is past [_lastPcmMicrosLimit] the dead ones
   /// are swept as frames arrive.
   final Map<String, int> _lastPcmMicros = {};
+
+  /// The playback sources of each Sender's watched sessions that are live
+  /// now, so a new Stream volume reaches them at once (ADR-0012).
+  final Map<String, Set<String>> _streamSources = {};
   static const int _lastPcmMicrosLimit = 64;
   static final Duration _lastPcmIdle = Duration(minutes: 5);
 
@@ -953,6 +958,7 @@ final class VoiceController extends ChangeNotifier
     if (_disposed) return;
     _pendingPcmFrames.removeWhere((frame) => frame.sourceId == sourceId);
     _lastPcmMicros.remove(sourceId);
+    _closeStreamSource(sourceId);
     final playbackService = _playbackService;
     if (playbackService == null) return;
     unawaited(_removePlaybackSource(playbackService, sourceId));
@@ -1030,7 +1036,11 @@ final class VoiceController extends ChangeNotifier
   void _handleRemotePcm(VoiceRemotePcmFrame frame) {
     if (_disposed) return;
     _noteArrival(frame);
-    if (frame.sourceId == frame.userId) _heard(frame.userId);
+    if (frame.sourceId == frame.userId) {
+      _heard(frame.userId);
+    } else {
+      _openStreamSource(frame.sourceId);
+    }
     final playbackService = _playbackService;
     // Sound that comes while deafened is dropped, not held: on undeafen it
     // would play late. Screen-share audio comes this way too (ADR-0004).

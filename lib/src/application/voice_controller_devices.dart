@@ -178,7 +178,7 @@ extension VoiceControllerDevices on VoiceController {
         automaticGainControl: loaded.automaticGainControl,
       ),
     );
-    unawaited(_applyParticipantVolumes());
+    unawaited(_applyListeningVolumes());
     // The devices opened before the settings came: move to the saved ones.
     // Nothing saved keeps the first the system lists, and saves nothing.
     if (_state == VoiceState.ready) {

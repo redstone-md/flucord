@@ -529,7 +529,7 @@ final class StreamViewerController extends ChangeNotifier {
           : (
               frames: audio,
               decoderFactory: audioDecoders,
-              sourceId: 'stream:${key.value}:${++_audioSources}',
+              sourceId: key.audioSourceId(++_audioSources),
             ),
       // The first picture is news to the room: the stream went from arriving
       // to showing. Every picture after it is not, and telling the room about

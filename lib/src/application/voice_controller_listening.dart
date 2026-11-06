@@ -1,8 +1,8 @@
 part of 'voice_controller.dart';
 
-/// The listening half of the controller: how loud each participant is, who
-/// is muted for this client, and what happens to other applications while
-/// this account speaks.
+/// The listening half of the controller: how loud each participant and each
+/// Stream is, who is muted for this client, and what happens to other
+/// applications while this account speaks.
 ///
 /// Split out for the same reason the device half is: none of it touches the
 /// connection state machine, and each edit here would otherwise have to be
@@ -61,38 +61,99 @@ extension VoiceControllerListening on VoiceController {
 
   /// Mutes or unmutes one participant's soundboard sounds, for this session
   /// and the next. Their voice is not touched.
-  Future<void> setSoundboardMuted(String participant, bool muted) async {
-    // A change the user made is a change the startup load must not undo.
-    _processingTouched = true;
-    _processing = _processing.copyWith(
-      listening: _processing.listening.withSoundboardMuted(participant, muted),
-    );
-    _notify();
-    await _saveProcessing();
-  }
+  Future<void> setSoundboardMuted(String participant, bool muted) =>
+      _changeListening(
+        _processing.listening.withSoundboardMuted(participant, muted),
+        const {},
+      );
 
-  /// Takes on [listening] as the user's choice for [participant], sets their
-  /// source to the level it now plays at, and saves.
+  /// How loud [sender]'s Stream plays, 0 to 1. Apart from their voice.
+  double streamVolumeFor(String sender) =>
+      _processing.listening.streamVolumeFor(sender);
+
+  /// Whether [sender]'s Stream sound is muted for this client.
+  bool isStreamMuted(String sender) =>
+      _processing.listening.mutedStreams.contains(sender);
+
+  /// Sets how loud [sender]'s Stream plays, for the sessions playing now and
+  /// every later one. Clamped to 0 to 1; their voice is not touched.
+  Future<void> setStreamVolume(String sender, double volume) => _changeStream(
+    sender,
+    _processing.listening.withStreamVolume(sender, volume),
+  );
+
+  /// Mutes or unmutes [sender]'s Stream sound. The picture plays on, and
+  /// the level is kept for unmuting.
+  Future<void> setStreamMuted(String sender, bool muted) => _changeStream(
+    sender,
+    _processing.listening.withStreamMuted(sender, muted),
+  );
+
   Future<void> _changeParticipant(
     String participant,
     VoiceListeningSettings listening,
+  ) => _changeListening(listening, {
+    participant: listening.playedVolumeFor(participant),
+  });
+
+  Future<void> _changeStream(String sender, VoiceListeningSettings listening) {
+    final level = listening.playedStreamVolumeFor(sender);
+    return _changeListening(listening, {
+      for (final source in _streamSources[sender] ?? const <String>{})
+        source: level,
+    });
+  }
+
+  /// Takes on [listening] as the user's choice, sets each of [levels]'
+  /// sources to the level it now plays at, and saves.
+  Future<void> _changeListening(
+    VoiceListeningSettings listening,
+    Map<String, double> levels,
   ) async {
     // A change the user made is a change the startup load must not undo.
     _processingTouched = true;
     _processing = _processing.copyWith(listening: listening);
-    final playbackService = _playbackService;
-    if (playbackService != null) {
-      try {
-        await playbackService.setSourceVolume(
-          participant,
-          listening.playedVolumeFor(participant),
-        );
-      } on Object catch (error) {
-        _reportBackgroundError(error);
-      }
-    }
+    await _setSourceVolumes(levels);
     _notify();
     await _saveProcessing();
+  }
+
+  /// Notes the first frame of a watched session's source and starts it at
+  /// its Sender's level. Called for every frame that is not a voice.
+  ///
+  /// The level is set before the frame reaches playback, so the session
+  /// does not play a moment at full level. A Sender at full level needs no
+  /// entry at all: a source plays at full level by default.
+  void _openStreamSource(String sourceId) {
+    final sender = GoLiveStreamKey.ofAudioSource(sourceId)?.userId;
+    if (sender == null) return;
+    if (!(_streamSources[sender] ??= {}).add(sourceId)) return;
+    final level = _processing.listening.playedStreamVolumeFor(sender);
+    if (level != 1) unawaited(_setSourceVolumes({sourceId: level}));
+  }
+
+  /// Forgets a watched session's source once its sound has ended.
+  void _closeStreamSource(String sourceId) {
+    final sender = GoLiveStreamKey.ofAudioSource(sourceId)?.userId;
+    final sources = _streamSources[sender];
+    if (sources == null) return;
+    sources.remove(sourceId);
+    if (sources.isEmpty) _streamSources.remove(sender);
+  }
+
+  /// Sets each source to its level in the playback service. A failure is
+  /// reported, not thrown: it is the wrong volume, not a broken room.
+  Future<void> _setSourceVolumes(Map<String, double> levels) async {
+    final playbackService = _playbackService;
+    if (playbackService == null || levels.isEmpty) return;
+    try {
+      await Future.wait([
+        for (final MapEntry(key: source, value: level) in levels.entries)
+          playbackService.setSourceVolume(source, level),
+      ]);
+    } on Object catch (error) {
+      _reportBackgroundError(error);
+    }
   }
 
   /// Switches attenuation of other applications, for this session and the
@@ -180,31 +241,27 @@ extension VoiceControllerListening on VoiceController {
     }
   }
 
-  /// Applies every remembered participant level and mute to the playback
+  /// Applies every remembered participant level and mute, and the Stream
+  /// level of every watched session already playing, to the playback
   /// service.
   ///
   /// Called when the saved preferences arrive, which is once at startup and
   /// once more never: a level changed after that reaches the service from
   /// its own setter. A muted participant at full level has no volume entry,
   /// so the mutes are walked as well.
-  Future<void> _applyParticipantVolumes() async {
-    final playbackService = _playbackService;
-    if (playbackService == null) return;
+  Future<void> _applyListeningVolumes() {
     final listening = _processing.listening;
     final participants = {
       ...listening.participantVolumes.keys,
       ...listening.mutedParticipants,
     };
-    try {
-      await Future.wait([
-        for (final participant in participants)
-          playbackService.setSourceVolume(
-            participant,
-            listening.playedVolumeFor(participant),
-          ),
-      ]);
-    } on Object catch (error) {
-      _reportBackgroundError(error);
-    }
+    return _setSourceVolumes({
+      for (final participant in participants)
+        participant: listening.playedVolumeFor(participant),
+      for (final MapEntry(key: sender, value: sources)
+          in _streamSources.entries)
+        for (final source in sources)
+          source: listening.playedStreamVolumeFor(sender),
+    });
   }
 }

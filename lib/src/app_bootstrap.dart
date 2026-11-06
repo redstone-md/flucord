@@ -28,6 +28,7 @@ import 'platform/desktop_integration.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
+import 'platform/window_full_screen.dart';
 import 'platform/game_process_scanner.dart';
 import 'data/theme/file_theme_store.dart';
 import 'data/video/clip_recorder.dart';
@@ -71,6 +72,7 @@ class AppBootstrap {
     this.voiceProcessingRepository,
     this.applicationAttenuation,
     this.windowCaptureShield,
+    this.appWindow,
     this.gameProcessScanner,
     this.globalKeyboardHook,
     this.screenshotService,
@@ -157,6 +159,10 @@ class AppBootstrap {
   /// Keeps the window out of screen recordings. Injected so a test does not
   /// reach for the real window list.
   final WindowCaptureShield? windowCaptureShield;
+
+  /// The app's window, for full screen. Injected so a test never reaches
+  /// window_manager's plugin channel.
+  final AppWindow? appWindow;
 
   /// The processes running on this machine, for game detection. Injected so
   /// a test does not walk the real process list.

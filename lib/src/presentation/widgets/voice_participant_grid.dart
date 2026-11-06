@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
@@ -11,9 +10,11 @@ import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
 import 'camera_picture.dart';
+import 'context_menu_target.dart';
 import 'go_live_viewer.dart';
 import 'member_avatar.dart';
 import 'participant_menu.dart';
+import 'stream_full_screen.dart';
 import 'voice_stream_controls.dart';
 
 /// What one tile of the Room shows: a participant, or the Stream they send.
@@ -250,25 +251,10 @@ class VoiceParticipantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final menu = participantMenu;
     if (menu == null) return _tile(context, focused: false);
-    void openMenu([Offset? position]) =>
-        unawaited(menu.open(context, participant.userId, position: position));
-    // Focusable so the keyboard reaches the menu too. The keys are bound
-    // above the tile's focus, where its key presses pass on their way up;
-    // Escape is not bound here, so it still reaches the Room's binding.
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.contextMenu): openMenu,
-        const SingleActivator(LogicalKeyboardKey.f10, shift: true): openMenu,
-      },
-      child: Focus(
-        child: Builder(
-          builder: (context) => GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onSecondaryTapUp: (details) => openMenu(details.globalPosition),
-            child: _tile(context, focused: Focus.of(context).hasFocus),
-          ),
-        ),
-      ),
+    return ContextMenuTarget(
+      onOpen: (context, position) =>
+          unawaited(menu.open(context, participant.userId, position: position)),
+      builder: (context, focused) => _tile(context, focused: focused),
     );
   }
 
@@ -347,8 +333,9 @@ class VoiceParticipantTile extends StatelessWidget {
 /// in the bottom-right corner. On the Stage, [picture] is the watched
 /// session's viewer.
 ///
-/// The tile's [GestureDetector] is the one place a pointer reaches the
-/// Stream, so a menu or a double click attaches there.
+/// Somebody else's Stream opens the Stream menu on a right click, the
+/// context-menu key or Shift+F10. On the Stage, a double click or the
+/// corner button opens it full screen.
 class VoiceStreamTile extends StatelessWidget {
   const VoiceStreamTile({
     required this.participant,
@@ -398,58 +385,97 @@ class VoiceStreamTile extends StatelessWidget {
             )
           : null,
     );
-    final onTap = this.onTap;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap == null ? null : () => onTap(_userId),
-      child: Semantics(
-        label: "$name's stream",
-        child: DecoratedBox(
-          key: ValueKey('voice-stream-card-$_userId'),
-          decoration: BoxDecoration(
-            color: FlucordFixedColors.media,
-            borderRadius: size._radius,
-          ),
-          child: ClipRRect(
-            borderRadius: size._radius,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (picture case final picture?)
-                  picture
-                else if (selfPreview case final preview?)
-                  _SelfPreview(
-                    key: ValueKey('voice-self-preview-$_userId'),
-                    preview: preview,
-                  ),
+    // This account's own Stream has no menu: it does not watch itself.
+    final menu = _isOwn ? null : streams?.menu;
+    final fullScreen = menu == null || !onStage
+        ? null
+        : () => unawaited(
+            menu.fullScreen.open(context, menu.streamKeyFor(_userId)),
+          );
+    final controls = _control(
+      context,
+      name: name,
+      isOpen: isOpen,
+      fullScreen: fullScreen,
+    );
+    // With a double click on the tile, its buttons sit beside the tile's
+    // gestures rather than inside them, so a press does not wait to learn
+    // whether a second click follows.
+    final controlsInside = fullScreen == null;
+    Widget tile(bool focused) => Semantics(
+      label: "$name's stream",
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: FlucordFixedColors.media,
+          border: focused
+              ? Border.all(color: context.surfaces.focusRing, width: 2)
+              : null,
+          borderRadius: size._radius,
+        ),
+        child: ClipRRect(
+          borderRadius: size._radius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (picture case final picture?)
+                picture
+              else if (selfPreview case final preview?)
+                _SelfPreview(
+                  key: ValueKey('voice-self-preview-$_userId'),
+                  preview: preview,
+                ),
+              Positioned(
+                top: inset,
+                left: inset,
+                right: inset,
+                child: Row(
+                  spacing: 6,
+                  children: [
+                    const _LiveBadge(),
+                    if (onStage) Flexible(child: chip),
+                  ],
+                ),
+              ),
+              if (!onStage)
                 Positioned(
-                  top: inset,
                   left: inset,
                   right: inset,
-                  child: Row(
-                    spacing: 6,
-                    children: [
-                      const _LiveBadge(),
-                      if (onStage) Flexible(child: chip),
-                    ],
+                  bottom: inset,
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: chip,
                   ),
                 ),
-                if (!onStage)
-                  Positioned(
-                    left: inset,
-                    right: inset,
-                    bottom: inset,
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: chip,
-                    ),
-                  ),
-                ..._control(context, name: name, isOpen: isOpen),
-              ],
-            ),
+              if (controlsInside) ...controls,
+            ],
           ),
         ),
       ),
+    );
+    final onTap = this.onTap;
+    Widget tappable(bool focused) => onTap == null
+        ? tile(focused)
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onTap(_userId),
+            child: tile(focused),
+          );
+    final target = menu == null
+        ? tappable(false)
+        : ContextMenuTarget(
+            key: onStage ? const ValueKey('stage-stream') : null,
+            onOpen: (context, position) =>
+                unawaited(menu.open(context, _userId, position: position)),
+            // The Stage has no single tap, so a double click costs it no
+            // delay.
+            onDoubleTap: fullScreen,
+            builder: (_, focused) => tappable(focused),
+          );
+    return KeyedSubtree(
+      key: ValueKey('voice-stream-card-$_userId'),
+      child: controlsInside
+          ? target
+          : Stack(fit: StackFit.expand, children: [target, ...controls]),
     );
   }
 
@@ -458,6 +484,7 @@ class VoiceStreamTile extends StatelessWidget {
     BuildContext context, {
     required String name,
     required bool isOpen,
+    VoidCallback? fullScreen,
   }) {
     final streams = this.streams;
     final stop = switch ((_isOwn, isOpen)) {
@@ -482,7 +509,24 @@ class VoiceStreamTile extends StatelessWidget {
       (false, false) => null,
     };
     if (stop != null) {
-      return [Positioned(right: size._inset, bottom: size._inset, child: stop)];
+      return [
+        Positioned(
+          right: size._inset,
+          bottom: size._inset,
+          child: Row(
+            spacing: 6,
+            children: [
+              if (fullScreen != null)
+                FullScreenButton(
+                  key: const ValueKey('stage-stream-full-screen'),
+                  isFullScreen: false,
+                  onPressed: fullScreen,
+                ),
+              stop,
+            ],
+          ),
+        ),
+      ];
     }
     final hasFailed = streams?.hasFailed?.call(_userId) ?? false;
     return [

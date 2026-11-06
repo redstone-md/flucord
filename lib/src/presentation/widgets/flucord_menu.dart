@@ -7,6 +7,24 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
+/// A row that closes the menu and then does [action], disabled when it is
+/// null. The row answers with its action, so a menu built of these needs no
+/// list of choices to switch on: call what [showMenu] returns.
+FlucordMenuItem<VoidCallback> flucordMenuAction(
+  String key,
+  String label,
+  FlucordIconData icon,
+  VoidCallback? action, {
+  bool danger = false,
+}) => FlucordMenuItem(
+  key: ValueKey(key),
+  value: action,
+  icon: icon,
+  label: label,
+  danger: danger,
+  enabled: action != null,
+);
+
 /// A row in any Flucord menu: a leading mark, a label, and an optional
 /// trailing mark.
 ///
