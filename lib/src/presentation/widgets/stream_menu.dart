@@ -78,7 +78,11 @@ final class StreamMenu {
           open ? 'stream-menu-stop-watching' : 'stream-menu-watch',
           open ? 'Stop watching' : 'Watch stream',
           open ? FlucordIcons.stop : FlucordIcons.streaming,
-          () => onToggleWatch(sender),
+          // The watch may have changed while the menu was open: a stale row
+          // must not toggle it the other way.
+          () {
+            if (viewer.isOpen(key) == open) onToggleWatch(sender);
+          },
           danger: open,
         ),
       ],

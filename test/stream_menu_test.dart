@@ -130,6 +130,21 @@ void main() {
     expect(harness.viewer.isWatching(_key), isFalse);
   });
 
+  testWidgets('a stale Stop watching row does not start watching again', (
+    tester,
+  ) async {
+    final harness = await _watchedRoom(tester);
+    await _rightClick(tester, find.byKey(_stage));
+
+    // The session ends while the menu is still open.
+    await tester.runAsync(() => harness.viewer.stop(_key));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('stream-menu-stop-watching')));
+    await _open(tester);
+
+    expect(harness.viewer.isOpen(_key), isFalse);
+  });
+
   testWidgets('Stream volume and mute set the sound, not the picture', (
     tester,
   ) async {
