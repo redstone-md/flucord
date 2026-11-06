@@ -47,6 +47,12 @@ extension _FlucordShellConversation on FlucordShell {
         unawaited(_openMemberCard(context, space.id, userId, anchor)),
     onMessageMember: (userId) =>
         unawaited(_openDirectConversation(context, userId)),
+    onAddToGroup: chatController.canManageDirectMessages
+        ? (group) => unawaited(_addToGroup(context, group))
+        : null,
+    onOpenGroupSettings: chatController.canManageDirectMessages
+        ? (group) => unawaited(_editGroup(context, group.id))
+        : null,
   );
 
   /// Runs [text] against the server and opens the results panel.

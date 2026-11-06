@@ -28,6 +28,7 @@ final class ConversationChannel {
     this.recipientIds = const [],
     this.isGroupDirectMessage = false,
     this.iconUrl,
+    this.ownerId,
     this.isMessageRequest = false,
     this.messageRequestedAt,
     this.unread = false,
@@ -80,6 +81,10 @@ final class ConversationChannel {
 
   /// A group DM's own picture, or null for the group avatar.
   final String? iconUrl;
+
+  /// Who runs a group DM, the one person who may remove others from it.
+  /// Null outside a group, and on a group read from the local cache.
+  final String? ownerId;
 
   /// A direct message the account has not answered yet, so it belongs in the
   /// message-request folder rather than the DM list.
@@ -262,6 +267,7 @@ final class ConversationChannel {
     recipientIds: recipientIds,
     isGroupDirectMessage: isGroupDirectMessage,
     iconUrl: iconUrl,
+    ownerId: ownerId,
     isMessageRequest: isMessageRequest ?? this.isMessageRequest,
     messageRequestedAt:
         identical(messageRequestedAt, _keepMessageRequestTimestamp)

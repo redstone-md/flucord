@@ -49,6 +49,8 @@ class ChatHeader extends StatelessWidget {
     this.isInCall = false,
     this.callLabel,
     this.onToggleCall,
+    this.onAddToGroup,
+    this.onOpenGroupSettings,
     super.key,
   });
 
@@ -128,6 +130,10 @@ class ChatHeader extends StatelessWidget {
   final VoidCallback? onTogglePins;
   final VoidCallback? onToggleThreads;
   final VoidCallback? onOpenInbox;
+
+  /// A group DM's own actions, or null outside one.
+  final VoidCallback? onAddToGroup;
+  final VoidCallback? onOpenGroupSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +289,24 @@ class ChatHeader extends StatelessWidget {
       if (threadMembership case final membership?) ...[
         const SizedBox(width: _buttonGap),
         membership,
+      ],
+      if (onAddToGroup != null) ...[
+        const SizedBox(width: _buttonGap),
+        FlucordIconButton(
+          key: const ValueKey('group-dm-add'),
+          onPressed: onAddToGroup,
+          tooltip: 'Add friends to group',
+          icon: FlucordIcons.addFriend,
+        ),
+      ],
+      if (onOpenGroupSettings != null) ...[
+        const SizedBox(width: _buttonGap),
+        FlucordIconButton(
+          key: const ValueKey('group-dm-settings'),
+          onPressed: onOpenGroupSettings,
+          tooltip: 'Group settings',
+          icon: FlucordIcons.settings,
+        ),
       ],
       if (onToggleCall != null) ...[
         const SizedBox(width: _buttonGap),
