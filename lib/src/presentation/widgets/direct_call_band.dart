@@ -111,39 +111,42 @@ class DirectCallBand extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 40,
-              runSpacing: 16,
-              children: [
-                for (final userId in _people(participants.keys))
-                  _CallPerson(
-                    key: ValueKey('call-band-$userId'),
-                    member: voiceMemberOf(members, userId),
-                    participant: participants[userId],
-                    isSelf: userId == currentMemberId,
-                    calling: calling,
-                    spaceId: channel.spaceId,
-                    menu: participantMenu,
-                  ),
-                for (final (:participant, kind: _) in streamTiles)
-                  SizedBox(
-                    width: VoiceParticipantGrid.stripTileWidth,
-                    height: VoiceParticipantGrid.stripHeight,
-                    child: VoiceStreamTile(
-                      participant: participant,
-                      members: members,
-                      currentMemberId: currentMemberId,
+          // One row that scrolls sideways, so a group DM never makes the
+          // band taller than the window can give it.
+          Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 40,
+                children: [
+                  for (final userId in _people(participants.keys))
+                    _CallPerson(
+                      key: ValueKey('call-band-$userId'),
+                      member: voiceMemberOf(members, userId),
+                      participant: participants[userId],
+                      isSelf: userId == currentMemberId,
+                      calling: calling,
                       spaceId: channel.spaceId,
-                      streams: streams,
-                      onTap: onTapStream,
-                      size: VoiceParticipantTileSize.compact,
+                      menu: participantMenu,
                     ),
-                  ),
-              ],
+                  for (final (:participant, kind: _) in streamTiles)
+                    SizedBox(
+                      width: VoiceParticipantGrid.stripTileWidth,
+                      height: VoiceParticipantGrid.stripHeight,
+                      child: VoiceStreamTile(
+                        participant: participant,
+                        members: members,
+                        currentMemberId: currentMemberId,
+                        spaceId: channel.spaceId,
+                        streams: streams,
+                        onTap: onTapStream,
+                        size: VoiceParticipantTileSize.compact,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           VoiceRoomControls(
@@ -188,7 +191,7 @@ class _CallPerson extends StatelessWidget {
   static const _slot = 104.0;
 
   /// How far the two ringing rings reach past [_slot].
-  static const _ringingSpread = [8.0, 16.0];
+  static const _ringingSpread = [4.0, 12.0];
 
   /// The badge on the avatar: what is wrong with their microphone, or that
   /// this client muted them.
@@ -220,7 +223,7 @@ class _CallPerson extends StatelessWidget {
     );
     Widget person(bool focused) => Column(
       mainAxisSize: MainAxisSize.min,
-      spacing: 8,
+      spacing: 16,
       children: [
         SizedBox.square(
           dimension: _slot,
