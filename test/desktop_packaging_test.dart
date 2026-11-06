@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flucord/src/domain/call_sounds.dart';
+import 'package:flucord/src/domain/client_sounds.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -95,14 +95,11 @@ void main() {
     );
   });
 
-  test('every sound a call names is bundled in the assets list', () {
+  test('every fallback sound is bundled in the assets list', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
-    for (final asset in [
-      const CallSounds().ring,
-      const CallSounds().accept,
-      const CallSounds().hangUp,
-    ]) {
+    for (final asset in ClientSound.values.map((s) => s.fallbackAsset)) {
+      if (asset == null) continue;
       // The asset string carries the scheme the playback layer routes by;
       // the bundling list names the file beneath it.
       final path = asset.replaceFirst('asset://', '');

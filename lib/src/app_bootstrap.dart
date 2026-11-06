@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'application/connection_controller.dart';
 import 'domain/accessibility.dart';
+import 'domain/client_sounds.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
@@ -60,6 +61,8 @@ class AppBootstrap {
     this.attachmentDownloadService,
     this.externalLinkLauncher,
     this.soundboardAudioPlayer,
+    this.clientSoundLibrary,
+    this.clientSoundSettingsRepository,
     this.messageSpeechPlayer,
     this.videoEncoderService,
     this.keybindRepository,
@@ -119,6 +122,11 @@ class AppBootstrap {
 
   /// Overridden in tests, which have no audio device to open.
   final SoundboardAudioPlayer? soundboardAudioPlayer;
+
+  /// Where Discord's client sounds are fetched and kept. Overridden in tests,
+  /// which must not reach Discord.
+  final ClientSoundLibrary? clientSoundLibrary;
+  final ClientSoundSettingsRepository? clientSoundSettingsRepository;
 
   /// Reads spoken-aloud messages out loud, or null on a machine with no
   /// speech synthesiser, in which case they arrive as ordinary text.
