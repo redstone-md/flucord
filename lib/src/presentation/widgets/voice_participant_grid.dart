@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
@@ -10,6 +13,7 @@ import '../../theme/flucord_type.dart';
 import 'camera_picture.dart';
 import 'go_live_viewer.dart';
 import 'member_avatar.dart';
+import 'participant_menu.dart';
 import 'voice_stream_controls.dart';
 
 class VoiceParticipantGrid extends StatelessWidget {
@@ -22,7 +26,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     this.streams,
     this.onTapParticipant,
     this.compact = false,
-    this.listening,
+    this.participantMenu,
     super.key,
   });
 
@@ -42,9 +46,9 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// them. Null where the room was drawn without a stream plane at all.
   final VoiceStreamControls? streams;
 
-  /// The per-participant volume controls the tiles offer. Null where the
-  /// room was drawn without a voice controller behind it.
-  final VoiceListeningControls? listening;
+  /// What a right click on a tile opens. Null where the room was drawn
+  /// without a voice controller behind it.
+  final ParticipantMenu? participantMenu;
 
   /// Whether the grid is a strip under a stream on the stage rather than the
   /// whole room. Same tiles, smaller, reading left to right.
@@ -109,7 +113,7 @@ class VoiceParticipantGrid extends StatelessWidget {
           currentMemberId: currentMemberId,
           spaceId: spaceId,
           streams: streams,
-          listening: listening,
+          participantMenu: participantMenu,
           onTap: onTapParticipant,
           size: compact
               ? VoiceParticipantTileSize.compact
@@ -134,7 +138,7 @@ class VoiceParticipantTile extends StatelessWidget {
     required this.spaceId,
     this.cameraTextureFor,
     this.streams,
-    this.listening,
+    this.participantMenu,
     this.onTap,
     this.size = VoiceParticipantTileSize.regular,
     super.key,
@@ -147,15 +151,13 @@ class VoiceParticipantTile extends StatelessWidget {
   final VideoTexture? Function(String userId)? cameraTextureFor;
   final VoiceStreamControls? streams;
 
-  /// This participant's volume control, or null where the tile has no room
-  /// behind it to hand a level to.
-  final VoiceListeningControls? listening;
+  /// What a right click, the context-menu key or Shift+F10 opens on this
+  /// tile, or null where the tile has no room behind it.
+  final ParticipantMenu? participantMenu;
   final void Function(String userId)? onTap;
   final VoiceParticipantTileSize size;
 
   bool get isCurrentUser => participant.userId == currentMemberId;
-
-  bool get compact => size == VoiceParticipantTileSize.compact;
 
   Member get member =>
       members.where((member) => member.id == participant.userId).firstOrNull ??
@@ -201,19 +203,48 @@ class VoiceParticipantTile extends StatelessWidget {
       participant.isStreaming ||
       (isCurrentUser && streams?.onStopShare != null);
 
-  /// What is wrong with the participant's microphone, if anything.
+  /// What is wrong with the participant's microphone, if anything, and
+  /// whether this client has muted them.
   List<Widget> get _stateIcons => [
     if (participant.isDeafened)
       const _StateIcon(icon: FlucordIcons.headphonesOff, label: 'Deafened')
     else if (participant.isMuted)
       const _StateIcon(icon: FlucordIcons.micOff, label: 'Muted'),
+    if (participantMenu?.isMutedForYou(participant.userId) ?? false)
+      const _StateIcon(icon: FlucordIcons.volumeOff, label: 'Muted for you'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final menu = participantMenu;
+    if (menu == null) return _tile(context, focused: false);
+    void openMenu([Offset? position]) =>
+        unawaited(menu.open(context, participant.userId, position: position));
+    // Focusable so the keyboard reaches the menu too. The keys are bound
+    // above the tile's focus, where its key presses pass on their way up;
+    // Escape is not bound here, so it still reaches the Room's binding.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.contextMenu): openMenu,
+        const SingleActivator(LogicalKeyboardKey.f10, shift: true): openMenu,
+      },
+      child: Focus(
+        child: Builder(
+          builder: (context) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onSecondaryTapUp: (details) => openMenu(details.globalPosition),
+            child: _tile(context, focused: Focus.of(context).hasFocus),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tile(BuildContext context, {required bool focused}) {
+    final surfaces = context.surfaces;
     final borderColor = participant.isSpeaking
-        ? context.surfaces.success
-        : context.surfaces.border;
+        ? surfaces.success
+        : surfaces.border;
     final onTap = this.onTap;
     return GestureDetector(
       // The card's buttons sit on top and take their own presses; anywhere
@@ -226,10 +257,10 @@ class VoiceParticipantTile extends StatelessWidget {
         child: DecoratedBox(
           key: ValueKey('voice-participant-${participant.userId}'),
           decoration: BoxDecoration(
-            color: context.surfaces.inset,
+            color: surfaces.inset,
             border: Border.all(
-              color: borderColor,
-              width: participant.isSpeaking ? 2 : 1,
+              color: focused ? surfaces.focusRing : borderColor,
+              width: participant.isSpeaking || focused ? 2 : 1,
             ),
             borderRadius: FlucordRadius.medium,
           ),
@@ -284,7 +315,7 @@ class VoiceParticipantTile extends StatelessWidget {
                     onStopShare: isCurrentUser ? streams?.onStopShare : null,
                   ),
                 )
-              else ...[
+              else
                 Positioned(
                   left: 10,
                   right: 10,
@@ -308,25 +339,6 @@ class VoiceParticipantTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                // The room's own volume knob for this one participant. Not
-                // offered for this account, whose voice this client does
-                // not play, nor on the stage tile, which is already large
-                // enough to reach a control elsewhere.
-                if (!isCurrentUser &&
-                    !compact &&
-                    listening != null &&
-                    size != VoiceParticipantTileSize.stage)
-                  Positioned(
-                    left: 8,
-                    right: 8,
-                    top: 6,
-                    child: _TileVolumeSlider(
-                      key: ValueKey('voice-volume-${participant.userId}'),
-                      controls: listening!,
-                      participant: participant,
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
@@ -582,88 +594,6 @@ class _StateIcon extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: FlucordIcon(icon, size: 15, color: context.surfaces.danger),
-      ),
-    );
-  }
-}
-
-/// What the tiles need to know about the room's listening controls.
-///
-/// One value rather than three arguments, for the same reason the stream
-/// controls are: the pane that owns the voice controller builds this, and
-/// neither the grid nor the room below it owns that.
-final class VoiceListeningControls {
-  const VoiceListeningControls({
-    required this.volumeFor,
-    required this.onVolumeChanged,
-  });
-
-  /// The level [participant] plays at, as a fraction of the room's level.
-  final double Function(String participant) volumeFor;
-
-  /// Sets one participant's level. The fraction is of the room's level, 0 to
-  /// 1, matching what the slider shows.
-  final void Function(String participant, double volume) onVolumeChanged;
-}
-
-/// One participant's volume, read compactly over their tile.
-///
-/// Hover only: a room is looked at, not touched, and a slider permanently
-/// under every name is six of them fighting for the same hover the stream
-/// controls already use.
-class _TileVolumeSlider extends StatelessWidget {
-  const _TileVolumeSlider({
-    required this.controls,
-    required this.participant,
-    super.key,
-  });
-
-  final VoiceListeningControls controls;
-  final VoiceParticipant participant;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        height: 24,
-        decoration: BoxDecoration(
-          color: context.surfaces.raised.withValues(alpha: 0.92),
-          borderRadius: FlucordRadius.small,
-          border: Border.all(color: context.surfaces.border),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            const FlucordIcon(FlucordIcons.volume, size: 14),
-            const SizedBox(width: 6),
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 6,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 10,
-                  ),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final value = controls
-                        .volumeFor(participant.userId)
-                        .clamp(0.0, 1.0);
-                    return Slider(
-                      value: value,
-                      onChanged: (volume) =>
-                          controls.onVolumeChanged(participant.userId, volume),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

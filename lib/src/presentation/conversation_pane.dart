@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
-import '../application/voice_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/direct_call_controller.dart';
 import '../application/inbox_catalog.dart';
@@ -58,7 +57,7 @@ import 'widgets/thread_membership_scope.dart';
 import 'widgets/timeline_dependencies.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
-import 'widgets/voice_participant_grid.dart' show VoiceListeningControls;
+import 'widgets/participant_menu.dart';
 import 'widgets/voice_room_view.dart';
 import 'widgets/voice_scope.dart';
 import 'widgets/voice_stream_controls.dart';
@@ -93,6 +92,7 @@ class ConversationPane extends StatefulWidget {
     this.onSubmitQuery,
     required this.onOpenInbox,
     this.onOpenMemberProfile,
+    this.onMessageMember,
     super.key,
   });
 
@@ -136,6 +136,9 @@ class ConversationPane extends StatefulWidget {
 
   /// Opens the profile of a message's author beside their name.
   final OpenProfileCard? onOpenMemberProfile;
+
+  /// Opens the direct message with a member, from the participant menu.
+  final ValueChanged<String>? onMessageMember;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();
@@ -182,6 +185,23 @@ class ConversationPaneState extends State<ConversationPane> {
   /// channel has no composer to type in.
   bool typeInComposer(String text) =>
       _composerKey.currentState?.typeText(text) ?? false;
+
+  /// Puts a mention of [userId] in the composer. A Room has no composer, so
+  /// the channel's chat is opened first; a channel with no chat at all
+  /// takes nothing.
+  void mention(String userId) {
+    final text = '<@$userId> ';
+    if (typeInComposer(text)) return;
+    final channel = widget.channel;
+    if (!channel.hasMessageTimeline) return;
+    WorkspaceScope.of(
+      context,
+    ).selectVoiceSurface(channel.id, VoiceChannelSurface.chat);
+    // The composer is there once the chat has been drawn.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) typeInComposer(text);
+    });
+  }
 
   /// Esc takes one step back: a reply being written goes first. With none, the
   /// reader is done here, so the channel is read and the list goes to the end.
@@ -411,12 +431,15 @@ class ConversationPaneState extends State<ConversationPane> {
       selfPreview: selfPreview(),
     );
 
-    // How loud each participant plays. Read straight off the controller, so
-    // a level changed on one tile reaches every other tile showing them.
-    VoiceListeningControls listeningControls() => VoiceListeningControls(
-      volumeFor: voice.volumeFor,
-      onVolumeChanged: (participant, volume) =>
-          unawaited(voice.setParticipantVolume(participant, volume)),
+    // What a right click on a participant opens, the same on every tile.
+    ParticipantMenu participantMenu() => ParticipantMenu(
+      voice: voice,
+      currentMemberId: widget.workspace.currentMemberId,
+      actions: ParticipantMenuActions(
+        onOpenProfile: widget.onOpenMemberProfile,
+        onMessage: widget.onMessageMember,
+        onMention: mention,
+      ),
     );
 
     Widget room() => inCall && !showsMessages
@@ -424,7 +447,7 @@ class ConversationPaneState extends State<ConversationPane> {
             // A call has no guild; the DM pseudo-space still supplies avatars.
             guildId: null,
             spaceId: channel.spaceId,
-            listening: listeningControls(),
+            participantMenu: participantMenu(),
             // Watching is asked for, never assumed: the pictures cross a
             // second connection Discord only opens when told to, and a room
             // that dialled every stream in it would be paying for pictures
@@ -450,7 +473,7 @@ class ConversationPaneState extends State<ConversationPane> {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
               streams: streamControls(),
               streamViewer: streamViewer(),
-              listening: listeningControls(),
+              participantMenu: participantMenu(),
               focusedUserId: focus.userId,
               onTapParticipant: focus.toggle,
               onClearFocus: focus.clear,

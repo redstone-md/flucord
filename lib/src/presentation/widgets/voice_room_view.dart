@@ -16,6 +16,7 @@ import 'voice_room_status.dart';
 import 'voice_stream_controls.dart';
 import '../../domain/voice_connection.dart';
 import 'member_avatar.dart';
+import 'participant_menu.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({
@@ -31,7 +32,7 @@ class VoiceRoomView extends StatefulWidget {
     this.camera,
     this.streamViewer,
     this.streams,
-    this.listening,
+    this.participantMenu,
     this.cameraTextureFor,
     this.focusedUserId,
     this.onTapParticipant,
@@ -85,9 +86,9 @@ class VoiceRoomView extends StatefulWidget {
   /// them.
   final VoiceStreamControls? streams;
 
-  /// The per-participant volume controls the tiles offer, or null where
-  /// the pane behind the room has no voice controller to hand them to.
-  final VoiceListeningControls? listening;
+  /// What a right click on a tile opens, or null where the pane behind the
+  /// room has no voice controller to hand it.
+  final ParticipantMenu? participantMenu;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -146,7 +147,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
                 streams: widget.streams,
-                listening: widget.listening,
+                participantMenu: widget.participantMenu,
                 focusedUserId: widget.focusedUserId,
                 onTapParticipant: widget.onTapParticipant,
                 onClearFocus: widget.onClearFocus,
@@ -271,7 +272,7 @@ class _VoiceStage extends StatelessWidget {
     required this.spaceId,
     this.cameraTextureFor,
     this.streams,
-    this.listening,
+    this.participantMenu,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
@@ -293,7 +294,7 @@ class _VoiceStage extends StatelessWidget {
   final Widget? goLive;
   final Widget? streamViewer;
   final VoiceStreamControls? streams;
-  final VoiceListeningControls? listening;
+  final ParticipantMenu? participantMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -313,7 +314,7 @@ class _VoiceStage extends StatelessWidget {
           spaceId: spaceId,
           cameraTextureFor: cameraTextureFor,
           streams: streams,
-          listening: listening,
+          participantMenu: participantMenu,
           onTapParticipant: onTapParticipant,
           compact: compact,
         );
@@ -338,6 +339,7 @@ class _VoiceStage extends StatelessWidget {
                   spaceId: spaceId,
                   cameraTextureFor: cameraTextureFor,
                   streams: streams,
+                  participantMenu: participantMenu,
                   onTap: onTapParticipant,
                   size: VoiceParticipantTileSize.stage,
                 ),
