@@ -88,9 +88,6 @@ class VoiceRoomView extends StatefulWidget {
   /// room has no voice controller to hand it.
   final ParticipantMenu? participantMenu;
 
-  /// Which space's per-guild avatars to render: the guild's own.
-  String get spaceId => guildId;
-
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
 }
@@ -121,7 +118,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             seated:
                 widget.controller.seatedByChannel[widget.channelId] ?? const [],
             members: widget.members,
-            spaceId: widget.spaceId,
+            spaceId: widget.guildId,
             isBusy: widget.controller.isBusy,
             onJoin: () => unawaited(_connect()),
           );
@@ -144,7 +141,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 controller: widget.controller,
                 members: widget.members,
                 currentMemberId: widget.currentMemberId,
-                spaceId: widget.spaceId,
+                spaceId: widget.guildId,
                 cameraTextureFor: widget.cameraTextureFor,
               ),
             ),

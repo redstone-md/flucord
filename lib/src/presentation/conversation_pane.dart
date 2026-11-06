@@ -476,7 +476,9 @@ class ConversationPaneState extends State<ConversationPane> {
       ),
     );
 
-    Widget room() => switch (channel.kind) {
+    // What the channel shows under its header: the voice Room, a forum's
+    // posts, or the timeline.
+    Widget channelBody() => switch (channel.kind) {
       ChannelKind.voice when !showsMessages => VoiceRoomView(
         streams: streamControls(),
         streamViewer: streamViewer(),
@@ -544,7 +546,7 @@ class ConversationPaneState extends State<ConversationPane> {
     if (showsRoom) {
       conversation = ListenableBuilder(
         listenable: Listenable.merge([goLive, viewer]),
-        builder: (_, _) => room(),
+        builder: (_, _) => channelBody(),
       );
     } else if (inCall) {
       // A DM call is a band above the messages. The timeline is built once,
@@ -554,7 +556,7 @@ class ConversationPaneState extends State<ConversationPane> {
       // messages. The keys keep the timeline's state when it comes and goes.
       conversation = ListenableBuilder(
         listenable: Listenable.merge([goLive, viewer]),
-        child: room(),
+        child: channelBody(),
         builder: (_, timeline) => Column(
           children: [
             DirectCallBand(
@@ -598,7 +600,7 @@ class ConversationPaneState extends State<ConversationPane> {
         ),
       );
     } else {
-      conversation = room();
+      conversation = channelBody();
     }
     return Column(
       children: [
