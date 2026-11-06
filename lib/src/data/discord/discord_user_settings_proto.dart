@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../domain/guild_folders.dart';
 import '../../domain/user_settings.dart';
 import '../proto/proto_message.dart';
 import '../proto/proto_wire.dart';
@@ -25,6 +26,21 @@ abstract final class PreloadedUserSettingsField {
   static const status = 11;
   static const localization = 12;
   static const appearance = 13;
+  static const guildFolders = 14;
+}
+
+abstract final class GuildFoldersField {
+  static const folders = 1;
+
+  /// The flat server order older clients read. Written with [folders].
+  static const guildPositions = 2;
+}
+
+abstract final class GuildFolderField {
+  static const guildIds = 1;
+  static const id = 2;
+  static const name = 3;
+  static const colour = 4;
 }
 
 abstract final class VoiceAndVideoField {
@@ -150,6 +166,9 @@ abstract final class DiscordUserSettingsProto {
     voiceAndVideo: _voiceAndVideo(
       root.messageAt(PreloadedUserSettingsField.voiceAndVideo),
     ),
+    guildFolders: _guildFolders(
+      root.messageAt(PreloadedUserSettingsField.guildFolders),
+    ),
     dataVersion:
         root
             .messageAt(PreloadedUserSettingsField.versions)
@@ -274,4 +293,18 @@ abstract final class DiscordUserSettingsProto {
       afkTimeoutSeconds: group.intWrapperAt(VoiceAndVideoField.afkTimeout),
     );
   }
+
+  static List<GuildFolder> _guildFolders(ProtoMessage? group) => [
+    if (group != null)
+      for (final folder in group.messagesAt(GuildFoldersField.folders))
+        GuildFolder(
+          guildIds: [
+            for (final id in folder.fixed64ListAt(GuildFolderField.guildIds))
+              '$id',
+          ],
+          id: folder.intWrapperAt(GuildFolderField.id),
+          name: folder.stringWrapperAt(GuildFolderField.name),
+          colour: folder.intWrapperAt(GuildFolderField.colour),
+        ),
+  ];
 }
