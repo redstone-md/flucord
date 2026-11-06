@@ -26,8 +26,8 @@ class MessageActionBar extends StatelessWidget {
     required this.onReactionPickerToggled,
     required this.onShowReactionDetails,
     required this.onCreateThread,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.onEdit,
     required this.onTogglePin,
     required this.onDelete,
@@ -58,8 +58,13 @@ class MessageActionBar extends StatelessWidget {
   final ValueChanged<bool> onReactionPickerToggled;
   final ValueChanged<MessageReaction> onShowReactionDetails;
   final VoidCallback onCreateThread;
-  final VoidCallback onForward;
-  final VoidCallback onToggleSuppressEmbeds;
+
+  /// Null where the session cannot forward, and then there is no button.
+  final VoidCallback? onForward;
+
+  /// Null where the session cannot change the flag, and then there is no
+  /// button.
+  final VoidCallback? onToggleSuppressEmbeds;
   final VoidCallback onEdit;
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
@@ -121,15 +126,16 @@ class MessageActionBar extends StatelessWidget {
               tooltip: 'View reactions',
               onPressed: () => onShowReactionDetails(message.reactions.first),
             ),
-          if (message.canForward)
+          if (onForward case final forward? when message.canForward)
             _ActionButton(
               buttonKey: ValueKey('forward-message-${message.id}'),
               icon: FlucordIcons.forward,
               tooltip: 'Forward',
-              onPressed: onForward,
+              onPressed: forward,
             ),
-          if ((message.embeds.isNotEmpty || message.suppressesEmbeds) &&
-              canModerate)
+          if (onToggleSuppressEmbeds case final toggle?
+              when (message.embeds.isNotEmpty || message.suppressesEmbeds) &&
+                  canModerate)
             _ActionButton(
               buttonKey: ValueKey('suppress-embeds-${message.id}'),
               icon: message.suppressesEmbeds
@@ -138,7 +144,7 @@ class MessageActionBar extends StatelessWidget {
               tooltip: message.suppressesEmbeds
                   ? 'Show embeds'
                   : 'Suppress embeds',
-              onPressed: onToggleSuppressEmbeds,
+              onPressed: toggle,
             ),
           if (isCurrentUser && message.canEdit)
             _ActionButton(

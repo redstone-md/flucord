@@ -70,8 +70,8 @@ class MessageItem extends StatefulWidget {
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
@@ -133,8 +133,14 @@ class MessageItem extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
-  final ForwardMessageCallback onForward;
-  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
+
+  /// Forwards a message, or null where the session cannot. Then the action
+  /// is not offered at all.
+  final ForwardMessageCallback? onForward;
+
+  /// Suppresses or restores a message's embeds, or null where the session
+  /// cannot. Then the action is not offered at all.
+  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -813,6 +819,7 @@ class _MessageItemState extends State<MessageItem> {
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
       canMarkUnread: widget.onMarkUnread != null,
+      canForward: widget.onForward != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
@@ -891,9 +898,11 @@ class _MessageItemState extends State<MessageItem> {
     },
     onShowReactionDetails: _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
-    onForward: _showForwardDialog,
-    onToggleSuppressEmbeds: () =>
-        unawaited(widget.onToggleSuppressEmbeds(widget.message)),
+    onForward: widget.onForward == null ? null : _showForwardDialog,
+    onToggleSuppressEmbeds: switch (widget.onToggleSuppressEmbeds) {
+      final toggle? => () => unawaited(toggle(widget.message)),
+      null => null,
+    },
     onEdit: () => widget.onEditingChanged?.call(true),
     onTogglePin: () => widget.onTogglePin(widget.message),
     onResolveAlert: widget.onResolveAlert == null
@@ -929,12 +938,14 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   void _showForwardDialog() {
+    final forward = widget.onForward;
+    if (forward == null) return;
     unawaited(
       MessageForwardDialog.show(
         context,
         message: widget.message,
         workspace: _workspaceNow,
-        onForward: widget.onForward,
+        onForward: forward,
       ),
     );
   }
