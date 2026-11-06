@@ -37,7 +37,7 @@ void main() {
       final headers = transport.requests.first.headers;
       expect(headers['authorization'], 'Bot secret-token');
       expect(headers['accept'], 'application/json');
-      expect(headers['content-type'], 'application/json');
+      expect(headers, isNot(contains('content-type')));
       expect(headers, isNot(contains('x-super-properties')));
       expect(headers, isNot(contains('x-fingerprint')));
     });

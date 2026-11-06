@@ -72,6 +72,9 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
     Future<DiscordHttpResponse> attempt() async {
       request = await _client.openUrl(method, uri);
       headers.forEach(request!.headers.set);
+      // A fixed length rather than Dart's default chunked encoding, so the
+      // body arrives whole and framed the way a browser sends it.
+      request!.contentLength = body?.length ?? 0;
       if (body != null) request!.add(body);
       final response = await request!.close();
       final responseHeaders = <String, String>{};
@@ -599,7 +602,13 @@ final class DiscordRestClient {
     method,
     path,
     query: query,
-    headers: {..._headers(contentType, auditLogReason), ...headers},
+    headers: {
+      ..._headers(
+        contentType: encodedBody == null ? null : contentType,
+        auditLogReason: auditLogReason,
+      ),
+      ...headers,
+    },
     body: encodedBody,
     guardedByNonce: guardedByNonce,
   );
@@ -625,12 +634,16 @@ final class DiscordRestClient {
     Map<String, Object?>? query,
   }) => _executor.send(method, path, query: query, headers: _headers());
 
-  Map<String, String> _headers([
-    String contentType = 'application/json',
+  /// A request without a body carries no content type, as the desktop client
+  /// sends it. Discord parses the body of a request that names JSON, and an
+  /// empty one is refused as invalid JSON (code 50109) on routes such as
+  /// `GET /channels/{id}/call`.
+  Map<String, String> _headers({
+    String? contentType,
     String? auditLogReason,
-  ]) => {
+  }) => {
     HttpHeaders.acceptHeader: 'application/json',
-    HttpHeaders.contentTypeHeader: contentType,
+    HttpHeaders.contentTypeHeader: ?contentType,
     HttpHeaders.userAgentHeader: _userAgent,
     ..._additionalHeaders,
     // Percent-encoded whole, the way the desktop client does it. A reason is
