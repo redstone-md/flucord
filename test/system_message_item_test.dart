@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/system_message_item.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets('renders system copy and routes pin and thread actions', (
@@ -59,6 +62,30 @@ void main() {
     );
     expect(selectedChannelId, 'thread-1');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a call start is a line with a green phone mark', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: SystemMessageItem(
+            message: _message(id: 'call', type: DiscordMessageType.call),
+            member: _member,
+            workspace: _workspace,
+            onJumpToMessage: (_) {},
+            onSelectChannel: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Jack started a call.'), findsOneWidget);
+    final mark = tester.widget<FlucordIcon>(findFlucordIcon(FlucordIcons.call));
+    expect(
+      mark.color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.success,
+    );
   });
 }
 

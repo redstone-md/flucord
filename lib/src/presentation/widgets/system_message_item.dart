@@ -50,7 +50,14 @@ class SystemMessageItem extends StatelessWidget {
                 border: Border.all(color: context.surfaces.border),
                 borderRadius: FlucordRadius.full,
               ),
-              child: FlucordIcon(descriptor.icon, size: 16),
+              // A call start is marked green, as Discord marks it.
+              child: FlucordIcon(
+                descriptor.icon,
+                size: 16,
+                color: message.type == DiscordMessageType.call
+                    ? context.surfaces.success
+                    : null,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
