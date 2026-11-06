@@ -270,6 +270,38 @@ extension _FlucordShellNavigation on FlucordShell {
   bool _canOpenSettings(GuildAdminCapabilities administration) =>
       administration.hasAnySurface && chatController.guildManagement != null;
 
+  /// Whether Invite people has a channel the account may invite to. Gated on
+  /// CREATE_INSTANT_INVITE per channel, not on admin rights.
+  bool _canInvitePeople(GuildAdminCapabilities administration) =>
+      chatController.guildManagement != null &&
+      administration.invitableChannels.isNotEmpty;
+
+  /// Opens Invite people for [space], with a link into the channel on
+  /// screen when the account may invite there, else into the first one it
+  /// may.
+  Future<void> _invitePeople(
+    BuildContext context,
+    CommunitySpace space,
+    GuildAdminCapabilities administration,
+  ) async {
+    final repository = chatController.guildManagement;
+    final channels = administration.invitableChannels;
+    if (repository == null || channels.isEmpty) return;
+    final selected = workspaceController.selectedChannelId;
+    final channel =
+        channels.where((item) => item.id == selected).firstOrNull ??
+        channels.first;
+    await showInvitePeopleDialog(
+      context,
+      space: space,
+      channel: channel,
+      createInvite: (options) => repository.createChannelInvite(
+        channelId: channel.id,
+        options: options,
+      ),
+    );
+  }
+
   /// The menu of a server on the rail, which may not be the one on screen. It
   /// holds what the server's header offers, and Mark as read up front.
   Future<void> _openSpaceMenu(
@@ -288,6 +320,7 @@ extension _FlucordShellNavigation on FlucordShell {
         ServerMenuAction.markRead,
         ServerMenuAction.notifications,
       },
+      if (_canInvitePeople(administration)) ServerMenuAction.invite,
       if (_canOpenSettings(administration)) ServerMenuAction.settings,
       if (chatController.moderation != null) ServerMenuAction.report,
       if (chatController.guildManagement != null) ServerMenuAction.leave,
@@ -309,6 +342,8 @@ extension _FlucordShellNavigation on FlucordShell {
     switch (action) {
       case ServerMenuAction.markRead:
         await chatController.markSpaceRead(space.id);
+      case ServerMenuAction.invite:
+        await _invitePeople(context, space, administration);
       case ServerMenuAction.settings:
         await _openGuildSettings(context, space, administration);
       case ServerMenuAction.notifications:

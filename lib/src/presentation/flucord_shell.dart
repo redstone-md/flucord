@@ -69,6 +69,7 @@ import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/presence_scope.dart';
+import 'widgets/invite_people_dialog.dart';
 import 'widgets/leave_server_dialog.dart';
 import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
@@ -231,6 +232,8 @@ class FlucordShell extends StatelessWidget {
             final administration = permissions.administrationOf(spaceId);
             final canOpenSettings =
                 !space.isDirectMessages && _canOpenSettings(administration);
+            final canInvitePeople =
+                !space.isDirectMessages && _canInvitePeople(administration);
 
             /// Joining, creating and leaving need the guild-management plane;
             /// without it the rail hides its plus rather than opening a
@@ -529,6 +532,7 @@ class FlucordShell extends StatelessWidget {
                                     friends,
                                     friendsOpen,
                                     canOpenSettings,
+                                    canInvitePeople,
                                     chatController
                                         .scheduledEventsFor(spaceId)
                                         .length,
@@ -615,6 +619,15 @@ class FlucordShell extends StatelessWidget {
                                           .scheduledEventsError(space.id),
                                       onOpenEvents: () =>
                                           _openScheduledEvents(context, space),
+                                      onInvitePeople: canInvitePeople
+                                          ? () => unawaited(
+                                              _invitePeople(
+                                                context,
+                                                space,
+                                                administration,
+                                              ),
+                                            )
+                                          : null,
                                       onOpenServerSettings: canOpenSettings
                                           ? () => unawaited(
                                               _openGuildSettings(
