@@ -28,6 +28,7 @@ import 'create_thread_dialog.dart';
 import 'destructive_confirmation.dart';
 import 'display_name.dart';
 import 'forwarded_message_view.dart';
+import 'leaving_site_dialog.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
 import 'motion_scope.dart';
@@ -632,8 +633,7 @@ class _MessageItemState extends State<MessageItem> {
               messageId: message.id,
               applicationId: message.authorId,
               messageFlags: message.flags,
-              onOpenLink: (url) =>
-                  unawaited(widget.linkLauncher.open(Uri.parse(url))),
+              onOpenLink: (url) => unawaited(_openButtonLink(url)),
               directoryEntries: (component) => ComponentDirectory.entriesFor(
                 component,
                 workspace: _workspaceNow,
@@ -987,6 +987,14 @@ class _MessageItemState extends State<MessageItem> {
     onDelete: _confirmDelete,
     onMore: (position) => unawaited(_openContextMenu(context, position)),
   );
+
+  /// A link button an application put on the message. It leaves the app
+  /// like any other link in a message, so it asks the same way.
+  Future<void> _openButtonLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !await confirmLeavingFor(context, uri)) return;
+    await widget.linkLauncher.open(uri);
+  }
 
   void _showReactionDetails(MessageReaction reaction) {
     final load = widget.onLoadReactionUsers;
