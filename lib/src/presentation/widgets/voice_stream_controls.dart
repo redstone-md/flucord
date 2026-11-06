@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../../domain/video_decoder.dart';
+import 'stream_menu.dart';
 
 /// The picture this account sees of its own stream.
 ///
@@ -32,6 +33,7 @@ final class VoiceStreamControls {
     this.onWatch,
     this.onStopShare,
     this.selfPreview,
+    this.menu,
   });
 
   /// Whether [userId]'s stream is open here: asked for, or arriving. Asked-for
@@ -56,4 +58,8 @@ final class VoiceStreamControls {
   /// The stream this account receives back while sharing, or null before the
   /// share has a key. It replaces the sender's avatar tile, not the room stage.
   final VoiceSelfPreview? selfPreview;
+
+  /// What a right click on somebody else's Stream opens. Null where the room
+  /// was drawn without a voice controller behind it.
+  final StreamMenu? menu;
 }

@@ -11,6 +11,7 @@ import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
 import 'camera_picture.dart';
+import 'context_menu_target.dart';
 import 'go_live_viewer.dart';
 import 'member_avatar.dart';
 import 'participant_menu.dart';
@@ -240,6 +241,18 @@ class VoiceParticipantTile extends StatelessWidget {
     );
   }
 
+  /// The Stream card of somebody else's Stream, with the Stream menu on it.
+  /// This account's own Stream has no menu: it does not watch itself.
+  Widget _withStreamMenu(Widget card) {
+    final menu = streams?.menu;
+    if (menu == null || isCurrentUser) return card;
+    return ContextMenuTarget(
+      onOpen: (context, position) =>
+          unawaited(menu.open(context, participant.userId, position: position)),
+      builder: (context, _) => card,
+    );
+  }
+
   Widget _tile(BuildContext context, {required bool focused}) {
     final surfaces = context.surfaces;
     final borderColor = participant.isSpeaking
@@ -303,16 +316,18 @@ class VoiceParticipantTile extends StatelessWidget {
                   left: 8,
                   right: 8,
                   bottom: 8,
-                  child: _StreamCard(
-                    userId: participant.userId,
-                    name: member.displayNameFor(spaceId),
-                    stateIcons: _stateIcons,
-                    isOpen: isOpen,
-                    hasFailed:
-                        streams?.hasFailed?.call(participant.userId) ?? false,
-                    isOwn: isCurrentUser,
-                    onWatch: isCurrentUser ? null : streams?.onWatch,
-                    onStopShare: isCurrentUser ? streams?.onStopShare : null,
+                  child: _withStreamMenu(
+                    _StreamCard(
+                      userId: participant.userId,
+                      name: member.displayNameFor(spaceId),
+                      stateIcons: _stateIcons,
+                      isOpen: isOpen,
+                      hasFailed:
+                          streams?.hasFailed?.call(participant.userId) ?? false,
+                      isOwn: isCurrentUser,
+                      onWatch: isCurrentUser ? null : streams?.onWatch,
+                      onStopShare: isCurrentUser ? streams?.onStopShare : null,
+                    ),
                   ),
                 )
               else

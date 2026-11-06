@@ -50,6 +50,8 @@ import 'widgets/stage_controls.dart';
 import 'widgets/stage_scope.dart';
 import 'widgets/status_views.dart';
 import 'widgets/room_focus_scope.dart';
+import 'widgets/stream_full_screen.dart';
+import 'widgets/stream_menu.dart';
 import 'widgets/stream_viewer_scope.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/thread_membership_button.dart';
@@ -61,6 +63,7 @@ import 'widgets/participant_menu.dart';
 import 'widgets/voice_room_view.dart';
 import 'widgets/voice_scope.dart';
 import 'widgets/voice_stream_controls.dart';
+import 'widgets/window_full_screen_scope.dart';
 import 'widgets/workspace_scope.dart';
 
 /// The conversation surface for one channel: the header, the room or the
@@ -378,15 +381,31 @@ class ConversationPaneState extends State<ConversationPane> {
     // Asked-for is not on the stage: an endpoint that never comes must not
     // take the room away.
     final focus = RoomFocusScope.of(context);
+    // What a right click on a Stream opens, on its tile and on the Stage.
+    StreamMenu streamMenu() => StreamMenu(
+      voice: voice,
+      viewer: viewer,
+      fullScreen: StreamFullScreen(
+        viewer: viewer,
+        window: WindowFullScreenScope.maybeOf(context),
+      ),
+      streamKeyFor: channel.streamKeyFor,
+      onToggleWatch: _toggleWatch,
+    );
+
     Widget? streamViewer() {
       final userId = focus.userId;
       if (userId == null) return null;
       final key = channel.streamKeyFor(userId);
       if (!viewer.isWatching(key)) return null;
-      return GoLiveViewer(
-        textures: viewer.texturesFor(key),
-        label: userId,
-        error: viewer.errorFor(key),
+      return StageStream(
+        sender: userId,
+        menu: streamMenu(),
+        child: GoLiveViewer(
+          textures: viewer.texturesFor(key),
+          label: userId,
+          error: viewer.errorFor(key),
+        ),
       );
     }
 
@@ -429,6 +448,7 @@ class ConversationPaneState extends State<ConversationPane> {
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
       selfPreview: selfPreview(),
+      menu: streamMenu(),
     );
 
     // What a right click on a participant opens, the same on every tile.

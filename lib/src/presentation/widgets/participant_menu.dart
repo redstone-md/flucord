@@ -59,13 +59,6 @@ final class ParticipantMenu {
     String userId, {
     Offset? position,
   }) async {
-    final overlay =
-        Overlay.of(context, rootOverlay: true).context.findRenderObject()!
-            as RenderBox;
-    final source = context.findRenderObject()! as RenderBox;
-    final at = overlay.globalToLocal(
-      position ?? source.localToGlobal(source.size.center(Offset.zero)),
-    );
     // Taken now: the profile card opens beside the widget once the menu has
     // closed.
     final anchor = popupAnchorOf(context);
@@ -76,13 +69,10 @@ final class ParticipantMenu {
     final profile = actions.onOpenProfile;
     final chosen = await showMenu<VoidCallback>(
       context: context,
-      position: RelativeRect.fromRect(
-        at & Size.zero,
-        Offset.zero & overlay.size,
-      ),
+      position: menuAt(context, position: position),
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
       items: [
-        _action(
+        flucordMenuAction(
           'participant-menu-profile',
           'Profile',
           FlucordIcons.profile,
@@ -90,13 +80,13 @@ final class ParticipantMenu {
         ),
         // Nobody writes to themselves, as on their profile card.
         if (!isSelf)
-          _action(
+          flucordMenuAction(
             'participant-menu-message',
             'Message',
             FlucordIcons.directMessages,
             bound(actions.onMessage),
           ),
-        _action(
+        flucordMenuAction(
           'participant-menu-mention',
           'Mention',
           FlucordIcons.mention,
@@ -131,7 +121,7 @@ final class ParticipantMenu {
           ),
         ],
         const FlucordMenuDivider(),
-        _action(
+        flucordMenuAction(
           'participant-menu-copy-id',
           copyId.label,
           copyId.icon,
@@ -141,19 +131,4 @@ final class ParticipantMenu {
     );
     chosen?.call();
   }
-
-  /// A row that closes the menu and then does [action]. The row answers
-  /// with its action, so the menu needs no list of choices to switch on.
-  static FlucordMenuItem<VoidCallback> _action(
-    String key,
-    String label,
-    FlucordIconData icon,
-    VoidCallback? action,
-  ) => FlucordMenuItem(
-    key: ValueKey(key),
-    value: action,
-    icon: icon,
-    label: label,
-    enabled: action != null,
-  );
 }
