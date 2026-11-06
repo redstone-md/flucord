@@ -1,15 +1,20 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
+import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
+import 'package:flucord/src/presentation/widgets/participant_menu.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/flucord_icon_finder.dart';
+import 'support/stream_room_harness.dart';
 
 void main() {
   testWidgets('collapses categories but retains selected and unread channels', (
@@ -77,6 +82,8 @@ void main() {
   ) async {
     final opened = <String>[];
     final controller = WorkspaceController()..reconcile(_workspace);
+    final voice = VoiceController(StreamRoomMedia());
+    addTearDown(voice.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
@@ -98,10 +105,25 @@ void main() {
               onToggleCategory: controller.toggleCategory,
               onNewDirectMessage: () {},
               onOpenMemberProfile: (userId, _) => opened.add(userId),
+              participantMenu: ParticipantMenu(
+                voice: voice,
+                currentMemberId: _workspace.currentMemberId,
+              ),
               seatedByChannel: const {
                 'the-lodge': [
                   VoiceParticipantStateEvent(
                     userId: 'bot-1',
+                    channelId: 'the-lodge',
+                    guildId: 'guild-1',
+                    selfMuted: false,
+                    selfDeafened: false,
+                    serverMuted: false,
+                    serverDeafened: false,
+                    isStreaming: false,
+                    isVideoEnabled: false,
+                  ),
+                  VoiceParticipantStateEvent(
+                    userId: 'friend-1',
                     channelId: 'the-lodge',
                     guildId: 'guild-1',
                     selfMuted: false,
@@ -126,11 +148,23 @@ void main() {
       findsOneWidget,
     );
 
-    // And they open. Discord opens a profile from these rows with either
-    // mouse button; ours were labels.
+    // And they open: the left button opens the profile, as on Discord.
     await tester.tap(find.byKey(const ValueKey('voice-seat-the-lodge-bot-1')));
     await tester.pumpAndSettle();
     expect(opened, ['bot-1']);
+
+    // The right button opens the participant menu, the same one a tile has.
+    await tester.tap(
+      find.byKey(const ValueKey('voice-seat-the-lodge-friend-1')),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+    expect(opened, ['bot-1']);
+    await tester.drag(find.byType(Slider), const Offset(-1000, 0));
+    await tester.pumpAndSettle();
+    expect(voice.volumeFor('friend-1'), 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
     await tester.pump();

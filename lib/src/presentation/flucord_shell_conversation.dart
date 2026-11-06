@@ -45,6 +45,8 @@ extension _FlucordShellConversation on FlucordShell {
     onOpenInbox: () => _openInbox(context),
     onOpenMemberProfile: (userId, anchor) =>
         unawaited(_openMemberCard(context, space.id, userId, anchor)),
+    onMessageMember: (userId) =>
+        unawaited(_openDirectConversation(context, userId)),
   );
 
   /// Runs [text] against the server and opens the results panel.

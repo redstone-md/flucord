@@ -726,6 +726,7 @@ class VoiceSeatRow extends StatelessWidget {
     this.speaking = false,
     this.indented = false,
     this.onOpenProfile,
+    this.participantMenu,
     super.key,
   });
 
@@ -737,9 +738,13 @@ class VoiceSeatRow extends StatelessWidget {
   final bool speaking;
   final bool indented;
 
-  /// Opens whoever this row is. Discord opens a profile from these rows with
-  /// either button, and a row that answers neither reads as a label.
+  /// Opens whoever this row is, on the left button. A row that answers no
+  /// button reads as a label.
   final OpenProfileCard? onOpenProfile;
+
+  /// What the right button opens: the participant menu, as on a tile. The
+  /// profile, without one.
+  final ParticipantMenu? participantMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -790,13 +795,22 @@ class VoiceSeatRow extends StatelessWidget {
       ),
     );
     final open = onOpenProfile;
-    if (open == null) return row;
+    final menu = participantMenu;
+    if (open == null && menu == null) return row;
+    void openProfile() => open?.call(state.userId, popupAnchorOf(context));
     return InkWell(
-      onTap: () => open(state.userId, popupAnchorOf(context)),
-      // The right button too: Discord opens the same card from it, and a row
-      // that ignores it is the one place in the app where the mouse stops
-      // working.
-      onSecondaryTap: () => open(state.userId, popupAnchorOf(context)),
+      onTap: open == null ? null : openProfile,
+      // The right button too: a row that ignores it is the one place in the
+      // app where the mouse stops working.
+      onSecondaryTapUp: menu == null
+          ? (_) => openProfile()
+          : (details) => unawaited(
+              menu.open(
+                context,
+                state.userId,
+                position: details.globalPosition,
+              ),
+            ),
       borderRadius: FlucordRadius.control,
       child: row,
     );
