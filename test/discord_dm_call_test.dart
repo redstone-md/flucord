@@ -161,6 +161,8 @@ void main() {
     expect(await calls.isRingable('dm-1'), isTrue);
     expect(transport.requests.last.$1, 'GET');
     expect(transport.requests.last.$2, endsWith('/channels/dm-1/call'));
+    // A body-less request that names JSON is refused as invalid JSON.
+    expect(transport.headers.last, isNot(contains('content-type')));
 
     socket.receive(const {
       'op': 0,
@@ -176,6 +178,7 @@ void main() {
       'recipients': null,
       'analytics_location': 'dm_invite',
     });
+    expect(transport.headers.last['content-type'], 'application/json');
 
     await calls.stopRinging('dm-1');
     expect(
@@ -344,6 +347,7 @@ Future<void> _settle() async {
 
 final class _CallTransport implements DiscordHttpTransport {
   final List<(String, String, Map<String, Object?>)> requests = [];
+  final List<Map<String, String>> headers = [];
   bool ringable = false;
 
   @override
@@ -357,6 +361,7 @@ final class _CallTransport implements DiscordHttpTransport {
         ? const <String, Object?>{}
         : (jsonDecode(utf8.decode(body)) as Map).cast<String, Object?>();
     requests.add((method, uri.path, decoded));
+    this.headers.add(headers);
     if (uri.path.endsWith('/gateway')) {
       return const DiscordHttpResponse(
         statusCode: 200,
