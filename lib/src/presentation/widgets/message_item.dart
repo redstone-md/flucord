@@ -57,6 +57,7 @@ class MessageItem extends StatefulWidget {
     required this.workspace,
     required this.grouped,
     required this.isCurrentUser,
+    this.quotesBlockedAuthor = false,
     this.capabilities = ChannelCapabilities.unrestricted,
     required this.onReply,
     required this.onEdit,
@@ -70,8 +71,8 @@ class MessageItem extends StatefulWidget {
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
@@ -111,6 +112,10 @@ class MessageItem extends StatefulWidget {
   final bool grouped;
   final bool isCurrentUser;
 
+  /// Whether the message this one replies to is from somebody the account
+  /// blocked. The reply line then hides the quote until the reader asks.
+  final bool quotesBlockedAuthor;
+
   /// Which actions this channel's permissions allow. Unrestricted by default
   /// so a host with no permission data keeps the toolbar it had.
   final ChannelCapabilities capabilities;
@@ -133,8 +138,14 @@ class MessageItem extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
-  final ForwardMessageCallback onForward;
-  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
+
+  /// Forwards a message, or null where the session cannot. Then the action
+  /// is not offered at all.
+  final ForwardMessageCallback? onForward;
+
+  /// Suppresses or restores a message's embeds, or null where the session
+  /// cannot. Then the action is not offered at all.
+  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -154,6 +165,9 @@ class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
   bool _barHovered = false;
   bool _reactionPickerOpen = false;
+
+  /// The reader asked to see a quote from a blocked person.
+  bool _blockedQuoteShown = false;
 
   /// The toolbar floats in the overlay. It reaches above the row, and a part
   /// of a row outside its own bounds would get no clicks.
@@ -209,6 +223,10 @@ class _MessageItemState extends State<MessageItem> {
   @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A new block hides the quote again.
+    if (widget.quotesBlockedAuthor && !oldWidget.quotesBlockedAuthor) {
+      _blockedQuoteShown = false;
+    }
     if (widget.isEditing && !oldWidget.isEditing) {
       _editOpenedFromRow = _rowFocus.hasFocus;
       // Words given up last time do not come back.
@@ -752,6 +770,7 @@ class _MessageItemState extends State<MessageItem> {
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final open = widget.onOpenMessage;
     final author = widget.workspace.memberOrNull(reply.authorId);
+    final concealed = widget.quotesBlockedAuthor && !_blockedQuoteShown;
     return Row(
       children: [
         const MessageReplySpine(
@@ -761,10 +780,17 @@ class _MessageItemState extends State<MessageItem> {
         Expanded(
           child: _clickable(
             key: const ValueKey('message-reply-preview'),
-            label: 'Go to the replied message',
-            onTap: open == null ? null : () => open(reply.messageId),
+            label: concealed
+                ? 'Show the blocked message'
+                : 'Go to the replied message',
+            onTap: concealed
+                ? () => setState(() => _blockedQuoteShown = true)
+                : open == null
+                ? null
+                : () => open(reply.messageId),
             child: MessageReplyPreview(
               reply: reply,
+              concealed: concealed,
               author: author,
               workspace: widget.workspace,
               nameColor: author == null ? null : _nameColor(author),
@@ -813,6 +839,7 @@ class _MessageItemState extends State<MessageItem> {
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
       canMarkUnread: widget.onMarkUnread != null,
+      canForward: widget.onForward != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
@@ -891,9 +918,11 @@ class _MessageItemState extends State<MessageItem> {
     },
     onShowReactionDetails: _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
-    onForward: _showForwardDialog,
-    onToggleSuppressEmbeds: () =>
-        unawaited(widget.onToggleSuppressEmbeds(widget.message)),
+    onForward: widget.onForward == null ? null : _showForwardDialog,
+    onToggleSuppressEmbeds: switch (widget.onToggleSuppressEmbeds) {
+      final toggle? => () => unawaited(toggle(widget.message)),
+      null => null,
+    },
     onEdit: () => widget.onEditingChanged?.call(true),
     onTogglePin: () => widget.onTogglePin(widget.message),
     onResolveAlert: widget.onResolveAlert == null
@@ -929,12 +958,14 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   void _showForwardDialog() {
+    final forward = widget.onForward;
+    if (forward == null) return;
     unawaited(
       MessageForwardDialog.show(
         context,
         message: widget.message,
         workspace: _workspaceNow,
-        onForward: widget.onForward,
+        onForward: forward,
       ),
     );
   }

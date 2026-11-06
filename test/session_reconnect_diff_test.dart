@@ -268,7 +268,7 @@ void main() {
       expect(_spaceRow(_guildId), findsOneWidget);
     }, ready: _readyBefore());
 
-    // READY lists DMs newest first, and each gained one goes on top in turn.
+    // A gained DM nobody wrote in counts from its channel id (FLUCORD-120).
     testSession('gained DMs go above the ones already held', (
       tester,
       session,
@@ -276,8 +276,8 @@ void main() {
       await _identifyAgain(session, _readyAfter());
 
       expect(_rowsTopToBottom(tester, _dms), [
-        _gainedDmA,
         _gainedDmB,
+        _gainedDmA,
         _dmChannelId,
       ]);
     }, ready: _readyBefore());

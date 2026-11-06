@@ -16,6 +16,7 @@ class MessageReplyPreview extends StatelessWidget {
     required this.workspace,
     this.nameColor,
     this.spaceId,
+    this.concealed = false,
     super.key,
   });
 
@@ -41,24 +42,51 @@ class MessageReplyPreview extends StatelessWidget {
   /// The server the reply is in, for the author's server avatar.
   final String? spaceId;
 
+  /// The quote is from somebody the account blocked, so neither they nor
+  /// what they wrote shows.
+  final bool concealed;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final author = this.author;
     final label = FlucordTextRole.label.style;
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        color: surfaces.control,
+        shape: BoxShape.circle,
+      ),
+      child: const SizedBox.square(dimension: _avatarSize),
+    );
+    if (concealed) {
+      return SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            placeholder,
+            const SizedBox(width: _gap),
+            Expanded(
+              child: Text(
+                'Blocked message',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: label.copyWith(
+                  color: surfaces.captionText,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return SizedBox(
       height: height,
       child: LayoutBuilder(
         builder: (context, constraints) => Row(
           children: [
             if (author == null)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: surfaces.control,
-                  shape: BoxShape.circle,
-                ),
-                child: const SizedBox.square(dimension: _avatarSize),
-              )
+              placeholder
             else
               MemberAvatar(
                 member: author,

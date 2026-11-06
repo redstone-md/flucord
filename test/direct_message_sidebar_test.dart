@@ -220,6 +220,57 @@ void main() {
 
     expect(_row('dm-jack'), findsOneWidget);
   });
+
+  testWidgets('the open DM stays in view when a message moves it up', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // Thirty conversations, the oldest last; the open one is that oldest.
+    final crowded = _workspace.copyWith(
+      channels: [
+        for (var index = 30; index > 0; index--)
+          _dm(
+            'p$index',
+          ).copyWith(lastMessageId: '${500000000000000000 + index}'),
+      ],
+    );
+    await _pumpSidebar(tester, workspace: crowded, selectedChannelId: 'dm-p1');
+    await tester.ensureVisible(_row('dm-p1'));
+    await tester.pumpAndSettle();
+    expect(_isInView(tester, 'dm-p30'), isFalse);
+
+    await _pumpSidebar(
+      tester,
+      workspace: crowded.recordLatestMessage('dm-p1', '600000000000000000'),
+      selectedChannelId: 'dm-p1',
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(_row('dm-p1')).dy,
+      lessThan(tester.getTopLeft(_row('dm-p30')).dy),
+      reason: 'the new message moved the open DM to the top',
+    );
+    expect(_isInView(tester, 'dm-p1'), isTrue);
+  });
+}
+
+final _sidebarList = find.descendant(
+  of: find.descendant(
+    of: find.byKey(const ValueKey('channel-sidebar')),
+    matching: find.byType(ListView),
+  ),
+  matching: find.byType(Scrollable),
+);
+
+/// Whether the row of [channelId] is built and inside the sidebar's list.
+bool _isInView(WidgetTester tester, String channelId) {
+  if (_row(channelId).evaluate().isEmpty) return false;
+  final list = tester.getRect(_sidebarList);
+  final row = tester.getRect(_row(channelId));
+  return row.top >= list.top && row.bottom <= list.bottom;
 }
 
 Finder _row(String channelId) => find.byKey(ValueKey('channel-$channelId'));
@@ -240,12 +291,13 @@ Future<void> _pumpSidebar(
   ChatWorkspace? workspace,
   FriendsController? friends,
   VoidCallback? onNewDirectMessage,
+  String selectedChannelId = 'dm-jack',
 }) async {
   final shown = workspace ?? _workspace;
   Widget sidebar() => ChannelSidebar(
     space: shown.spaceById(CommunitySpace.directMessagesId),
     channels: shown.channelsFor(CommunitySpace.directMessagesId),
-    selectedChannelId: 'dm-jack',
+    selectedChannelId: selectedChannelId,
     onSelectChannel: (_) {},
     sessionMode: SessionMode.discord,
     connectionStatus: RepositoryConnectionStatus.connected,

@@ -115,17 +115,26 @@ class _ServerHeader extends StatelessWidget {
 /// or opening the conversation) closes it. Swapping the list in place keeps
 /// the question and its conversation one gesture apart, the way the official
 /// client does.
+///
+/// The conversations reorder as messages arrive. When the open one moves, the
+/// list scrolls just enough to keep it in view.
 class _DirectMessagesFolder extends StatefulWidget {
   const _DirectMessagesFolder({
     required this.requests,
-    required this.conversationRows,
+    required this.conversations,
+    required this.conversationRow,
     required this.requestRows,
+    required this.selectedChannelId,
     this.labelTrailing,
   });
 
   final List<ConversationChannel> requests;
-  final List<Widget> conversationRows;
+
+  /// The conversations in the order [ChannelSidebarOrder] gives them.
+  final List<ConversationChannel> conversations;
+  final Widget Function(ConversationChannel channel) conversationRow;
   final List<Widget> requestRows;
+  final String? selectedChannelId;
 
   /// What sits at the end of the "Direct messages" label, if anything.
   final Widget? labelTrailing;
@@ -137,12 +146,43 @@ class _DirectMessagesFolder extends StatefulWidget {
 class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
   bool _showingRequests = false;
 
-  // With the last request answered the toggle goes, so the folder closes:
-  // otherwise nothing would lead back to the conversations.
+  /// One key per conversation, so a row keeps its element when it moves and
+  /// the open one can be found to scroll to.
+  final Map<String, GlobalKey> _rowKeys = {};
+
   @override
   void didUpdateWidget(_DirectMessagesFolder oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // With the last request answered the toggle goes, so the folder closes:
+    // otherwise nothing would lead back to the conversations.
     if (widget.requests.isEmpty) _showingRequests = false;
+    final ids = {for (final channel in widget.conversations) channel.id};
+    _rowKeys.removeWhere((id, _) => !ids.contains(id));
+    _keepSelectedInView(oldWidget);
+  }
+
+  void _keepSelectedInView(_DirectMessagesFolder oldWidget) {
+    final selectedId = widget.selectedChannelId;
+    if (_showingRequests ||
+        selectedId == null ||
+        selectedId != oldWidget.selectedChannelId) {
+      return;
+    }
+    int indexIn(List<ConversationChannel> list) =>
+        list.indexWhere((channel) => channel.id == selectedId);
+    final before = indexIn(oldWidget.conversations);
+    final after = indexIn(widget.conversations);
+    if (before < 0 || after < 0 || before == after) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final row = _rowKeys[selectedId]?.currentContext;
+      if (row == null || !row.mounted) return;
+      Scrollable.ensureVisible(
+        row,
+        alignmentPolicy: after < before
+            ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+            : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
   }
 
   @override
@@ -166,7 +206,14 @@ class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
             onPressed: () =>
                 setState(() => _showingRequests = !_showingRequests),
           ),
-        ...(_showingRequests ? widget.requestRows : widget.conversationRows),
+        if (_showingRequests)
+          ...widget.requestRows
+        else
+          for (final channel in widget.conversations)
+            KeyedSubtree(
+              key: _rowKeys.putIfAbsent(channel.id, GlobalKey.new),
+              child: widget.conversationRow(channel),
+            ),
       ],
     );
   }

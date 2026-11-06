@@ -32,7 +32,8 @@ enum MessageMenuAction {
 /// Opens the menu at [position], answering what was chosen, or null.
 ///
 /// A non-empty [selectedText] adds a Copy item for that text. [canMarkUnread]
-/// says whether this transport keeps read state at all.
+/// says whether this transport keeps read state at all, and [canForward]
+/// whether it can forward.
 Future<MessageMenuAction?> showMessageContextMenu({
   required BuildContext context,
   required Offset position,
@@ -40,6 +41,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
   required ChannelCapabilities capabilities,
   required bool isCurrentUser,
   bool canMarkUnread = false,
+  bool canForward = false,
   String selectedText = '',
 }) {
   final overlay =
@@ -76,7 +78,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
         icon: FlucordIcons.pin,
         label: message.isPinned ? 'Unpin message' : 'Pin message',
       ),
-    if (capabilities.sendMessages)
+    if (canForward && capabilities.sendMessages && message.canForward)
       const FlucordMenuItem(
         key: ValueKey('message-menu-forward'),
         value: MessageMenuAction.forward,

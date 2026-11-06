@@ -1,6 +1,9 @@
 part of 'chat_controller.dart';
 
 extension ChatControllerStickers on ChatController {
+  /// Whether this session's transport can send stickers at all.
+  bool get canSendStickers => _repository is StickerRepository;
+
   Future<bool> sendStickers({
     required String channelId,
     required List<String> stickerIds,
