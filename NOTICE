@@ -42,3 +42,9 @@ The Golos Text font in assets/fonts/golos_text is Copyright 2019 The Golos Text
 Project Authors (https://github.com/googlefonts/golos-text). It is licensed
 under the SIL Open Font License, Version 1.1, whose full text is in
 assets/fonts/golos_text/OFL.txt and ships inside the app with the font.
+
+Discord's client sounds are not part of Flucord and are not in this
+repository or in any build. Flucord fetches them from Discord's own asset
+host at run time, the way Discord's web client does, and keeps them in a
+local cache. The sounds in assets/sounds are Flucord's own, made by
+tool/generate_call_sounds.py.
