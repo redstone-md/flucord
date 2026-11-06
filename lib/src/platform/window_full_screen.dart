@@ -95,13 +95,14 @@ final class WindowFullScreen {
   Future<void> leave() => _then(() async {
     final before = _before;
     if (before == null) return;
-    _before = null;
     await _window.setFullScreen(false);
     if (before.maximized) {
       await _window.maximize();
     } else {
       await _window.setBounds(before.bounds);
     }
+    // Forgotten only once restored, so a leave that failed can be retried.
+    _before = null;
   });
 
   /// Runs [step] after the steps before it. Its failure goes to its own

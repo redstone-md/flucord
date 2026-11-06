@@ -69,4 +69,21 @@ void main() {
     expect(window.calls, isEmpty);
     expect(window.fullScreen, isTrue);
   });
+
+  test('a failed leave can be asked for again', () async {
+    final window = FakeAppWindow(bounds: before);
+    final fullScreen = WindowFullScreen(window);
+    await fullScreen.enter();
+
+    final gate = window.leaveGate = Completer<void>();
+    final leaving = fullScreen.leave();
+    gate.completeError(StateError('denied'));
+    await expectLater(leaving, throwsStateError);
+    window.leaveGate = null;
+    window.bounds = const Rect.fromLTWH(0, 0, 1920, 1080);
+    await fullScreen.leave();
+
+    expect(window.fullScreen, isFalse);
+    expect(window.bounds, before);
+  });
 }
