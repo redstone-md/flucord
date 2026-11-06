@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/application/client_sounds_controller.dart';
 import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/client_sounds.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
+import 'package:flucord/src/presentation/widgets/client_sounds_scope.dart';
 import 'package:flucord/src/presentation/widgets/flucord_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
@@ -445,6 +448,47 @@ void main() {
       findsOneWidget,
     );
   });
+  testWidgets('the sounds switch turns client sounds off', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final sounds = ClientSoundsController(
+      library: _NoSounds(),
+      repository: _NoSounds(),
+      playerFactory: () => throw StateError('nothing plays here'),
+    );
+    addTearDown(sounds.dispose);
+    final controller = UserSettingsController(() => _Repository());
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        builder: (_, child) =>
+            ClientSoundsScope(controller: sounds, child: child!),
+        home: Scaffold(body: UserSettingsDialog(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openSection(tester, 'notifications');
+
+    await _tapSetting(tester, 'setting-client-sounds');
+
+    expect(sounds.enabled, isFalse);
+  });
+}
+
+final class _NoSounds
+    implements ClientSoundLibrary, ClientSoundSettingsRepository {
+  @override
+  Future<String?> localUrl(ClientSound sound) async => null;
+
+  @override
+  Future<void> fetchAll() async {}
+
+  @override
+  Future<bool> loadEnabled() async => true;
+
+  @override
+  Future<void> saveEnabled({required bool enabled}) async {}
 }
 
 /// Scrolls the row into view before tapping it: the sections are longer than
