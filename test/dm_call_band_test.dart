@@ -172,6 +172,25 @@ void main() {
     );
   });
 
+  testWidgets('a right click on a Stream tile opens the Stream menu', (
+    tester,
+  ) async {
+    await _pumpCall(
+      tester,
+      seats: const [StreamRoomSeat('friend-1', isStreaming: true)],
+    );
+
+    await tester.tap(
+      _inBand(find.byKey(const ValueKey('voice-stream-card-friend-1'))),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('stream-menu-volume')), findsOneWidget);
+    expect(find.byKey(const ValueKey('stream-menu-watch')), findsOneWidget);
+    expect(find.byKey(const ValueKey('participant-menu-volume')), findsNothing);
+  });
+
   testWidgets('a Stream is a tile in the band, and watched it sits between '
       'the band and the messages', (tester) async {
     final call = await _pumpCall(
