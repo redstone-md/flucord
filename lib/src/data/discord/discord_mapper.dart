@@ -173,6 +173,7 @@ final class DiscordMapper {
         recipientIds: [for (final recipient in recipients) recipient.id],
         isGroupDirectMessage: type == 3,
         iconUrl: DiscordCdn.channelIcon(id, payload['icon'] as String?),
+        ownerId: type == 3 ? payload['owner_id'] as String? : null,
         isMessageRequest: payload['is_message_request'] as bool? ?? false,
         messageRequestedAt: _messageRequestTimestamp(
           payload['is_message_request_timestamp'],

@@ -23,11 +23,13 @@ import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/self_video_controller.dart';
 import '../application/voice_controller.dart';
+import '../application/voice_moderation.dart';
 import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
 import '../domain/composer_draft.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/direct_message_management.dart';
 import '../domain/discord_relationship.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
@@ -50,7 +52,9 @@ import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/disconnected_workspace_view.dart';
+import 'widgets/friend_picker_dialog.dart';
 import 'widgets/friends_panel.dart';
+import 'widgets/group_direct_message_settings_dialog.dart';
 import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
@@ -81,6 +85,7 @@ import 'widgets/voice_connection_bar.dart';
 part 'flucord_shell_navigation.dart';
 part 'flucord_shell_conversation.dart';
 part 'flucord_shell_canvas.dart';
+part 'flucord_shell_direct_messages.dart';
 
 /// The workspace chrome: the rail, the channel sidebar, the member and search
 /// panels, and the conversation pane in the middle.
@@ -236,6 +241,16 @@ class FlucordShell extends StatelessWidget {
             /// without it the rail hides its plus rather than opening a
             /// dialog whose every button would fail.
             final canManageServers = chatController.guildManagement != null;
+            final canManageDirectMessages =
+                chatController.canManageDirectMessages;
+            // From the same resolver, so a seat and a tile offer the same.
+            final voiceModeration = switch (chatController.guildManagement) {
+              final members? => VoiceModeration(
+                members: members,
+                permissions: permissions,
+              ),
+              null => null,
+            };
             // Friends live in the DM space only. Absent on a session that is
             // never told a friend graph, such as the bot session and the demo
             // workspace.
@@ -570,6 +585,7 @@ class FlucordShell extends StatelessWidget {
                                                 context,
                                               )?.currentState?.mention(userId),
                                         ),
+                                        moderation: voiceModeration,
                                       ),
                                       // A voice connection outlives the room view, so
                                       // leaving it has to stay reachable from wherever
@@ -593,6 +609,21 @@ class FlucordShell extends StatelessWidget {
                                           workspaceController.toggleCategory,
                                       onNewDirectMessage: () =>
                                           _openDirectMessage(context),
+                                      onNewGroupDirectMessage:
+                                          canManageDirectMessages
+                                          ? () => unawaited(
+                                              _newGroupDirectMessage(context),
+                                            )
+                                          : null,
+                                      onCloseDirectMessage:
+                                          canManageDirectMessages
+                                          ? (channel) => unawaited(
+                                              _closeDirectMessage(
+                                                context,
+                                                channel,
+                                              ),
+                                            )
+                                          : null,
                                       onAcceptMessageRequest: (channelId) =>
                                           unawaited(
                                             chatController.acceptMessageRequest(
@@ -682,6 +713,8 @@ class FlucordShell extends StatelessWidget {
                                                   allowThreadPanel:
                                                       allowThreadPanel,
                                                   canSearch: canSearch,
+                                                  voiceModeration:
+                                                      voiceModeration,
                                                 ),
                                         ),
                                         if (friends != null && friendsOpen)

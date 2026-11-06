@@ -9,6 +9,8 @@ import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/platform/desktop_integration_flow.dart';
 import 'package:flucord/src/platform/desktop_protocol_intake.dart';
 
+import 'support/fake_desktop_notifications.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -171,6 +173,47 @@ void main() {
     expect(surface.activeCalls, [false]);
   });
 
+  test('a call ringing in the tray comes to the front on a click', () async {
+    final gateway = FakeDesktopNotificationGateway();
+    final attention = FakeWindowAttention();
+    final flow = DesktopIntegrationFlow(
+      protocolIntake: _FakeIntake(const []),
+      notificationGateway: gateway,
+      attention: attention,
+    );
+    addTearDown(flow.dispose);
+    await flow.initialize();
+    final surface = FakeDesktopAppSurface();
+    addTearDown(surface.dispose);
+    flow.attach(surface);
+    await sendWindowEvent('close');
+    windowCalls.clear();
+
+    const link = ChannelLink(spaceId: '@me', channelId: 'dm-mira');
+    surface.ringingCall = const DesktopRingingCall(
+      identifier: 'flucord-call-dm-mira',
+      title: 'Incoming call',
+      body: 'Mira is calling',
+      link: link,
+      showsToast: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(attention.calls, ['flash']);
+
+    await gateway.requests.single.onClick();
+
+    expect(
+      windowCalls.map((call) => call.method),
+      containsAllInOrder(['isMinimized', 'show', 'focus']),
+    );
+    expect(surface.openedLinks, [link]);
+
+    surface.ringingCall = null;
+    await Future<void>.delayed(Duration.zero);
+    expect(gateway.dismissed, ['flucord-call-dm-mira']);
+    expect(attention.calls, ['flash', 'stop']);
+  });
+
   test('dispose tears the sub-modules down once', () async {
     final intake = _FakeIntake(const []);
     final flow = DesktopIntegrationFlow(protocolIntake: intake);
@@ -216,6 +259,9 @@ final class _RecordingSurface extends ChangeNotifier
   @override
   Stream<DesktopMessageNotification> get messageNotifications =>
       const Stream.empty();
+
+  @override
+  DesktopRingingCall? get ringingCall => null;
 
   @override
   void openChannelLink(ChannelLink link) => openedChannels.add(link.channelId);

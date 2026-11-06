@@ -77,4 +77,18 @@ void main() {
       );
     },
   );
+
+  test('dismiss takes down the toast with that identifier only', () async {
+    final gateway = LocalDesktopNotificationGateway();
+    addTearDown(gateway.dispose);
+    await gateway.initialize();
+    await show(gateway, 'flucord-call-dm-mira');
+    await show(gateway, 'flucord-message-1');
+
+    await gateway.dismiss('flucord-call-dm-mira');
+    // Gone already: a second dismiss reaches nothing native.
+    await gateway.dismiss('flucord-call-dm-mira');
+
+    expect(closed, ['flucord-call-dm-mira']);
+  });
 }

@@ -6,14 +6,17 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../platform/desktop_integration.dart';
 import '../domain/channel_link.dart';
+import '../domain/streamer_mode.dart';
 import 'chat_controller.dart';
+import 'direct_call_controller.dart';
+import 'ringing_call_notice.dart';
 import 'system_message_text.dart';
 import 'window_visible.dart';
 import 'workspace_controller.dart';
 
 /// The application side of the desktop seam ([DesktopAppSurface]): the chat,
-/// workspace, and protocol surfaces of the running app presented as the state
-/// desktop chrome reads and the actions it triggers.
+/// workspace, call, and protocol surfaces of the running app presented as the
+/// state desktop chrome reads and the actions it triggers.
 ///
 /// Constructed with the app's controllers and handed to the platform layer at
 /// attach time; no platform file reads a controller.
@@ -23,13 +26,21 @@ final class FlucordAppSurface extends ChangeNotifier
     required ChatController chat,
     required WorkspaceController workspace,
     required WindowVisible visible,
+    required DirectCallController directCall,
+
+    /// Streamer mode's switches, read when a ring starts: the mode can go on
+    /// at any moment.
+    required StreamerModeSettings Function() streamerMode,
     required void Function(Uri uri) onProtocolUri,
     Stream<MessageUpsertedEvent>? incomingMessages,
   }) : _chat = chat,
        _workspace = workspace,
        _visible = visible,
+       _directCall = directCall,
+       _streamerMode = streamerMode,
        _onProtocolUri = onProtocolUri {
     _chat.addListener(_chatChanged);
+    _directCall.addListener(notifyListeners);
     _messages = incomingMessages ?? chat.incomingMessages;
     _messageSubscription = _messages.listen(
       (event) => unawaited(_notify(event)),
@@ -39,6 +50,8 @@ final class FlucordAppSurface extends ChangeNotifier
   final ChatController _chat;
   final WorkspaceController _workspace;
   final WindowVisible _visible;
+  final DirectCallController _directCall;
+  final StreamerModeSettings Function() _streamerMode;
   final void Function(Uri uri) _onProtocolUri;
   late final Stream<MessageUpsertedEvent> _messages;
   late final StreamSubscription<MessageUpsertedEvent> _messageSubscription;
@@ -59,6 +72,23 @@ final class FlucordAppSurface extends ChangeNotifier
   @override
   Stream<DesktopMessageNotification> get messageNotifications =>
       _notifications.stream;
+
+  /// A ring honours the account's in-app notification setting and streamer
+  /// mode, as message toasts do. Streamer mode can still let the toast
+  /// through, and then it hides who is calling.
+  @override
+  DesktopRingingCall? get ringingCall {
+    final call = _directCall.incomingCall;
+    if (call == null) return null;
+    final streamer = _streamerMode();
+    return ringingCallNotice(
+      call,
+      _chat.workspace,
+      hidesNames: streamer.hidesPersonalInformation,
+      showsToast:
+          _chat.showsInAppNotifications && !streamer.silencesNotifications,
+    );
+  }
 
   @override
   void openChannelLink(ChannelLink link) {
@@ -180,6 +210,7 @@ final class FlucordAppSurface extends ChangeNotifier
     if (_disposed) return;
     _disposed = true;
     _chat.removeListener(_chatChanged);
+    _directCall.removeListener(notifyListeners);
     await _messageSubscription.cancel();
     await _notifications.close();
     super.dispose();

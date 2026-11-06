@@ -4,10 +4,12 @@ import 'desktop_integration.dart';
 import 'desktop_integration_flow.dart';
 import 'desktop_protocol_intake.dart';
 import 'desktop_tray_coordinator.dart';
+import 'window_attention.dart';
 import '../app_log.dart';
 
-/// Windows: updates through a WinSparkle appcast, and a tray that offers
-/// them. Everything else is the shared desktop flow.
+/// Windows: updates through a WinSparkle appcast, a tray that offers them,
+/// and a taskbar button that flashes for a ringing call. Everything else is
+/// the shared desktop flow.
 final class WindowsDesktopIntegration implements DesktopIntegration {
   WindowsDesktopIntegration({AutoDesktopUpdater? updater})
     : this._(updater ?? AutoDesktopUpdater());
@@ -20,6 +22,7 @@ final class WindowsDesktopIntegration implements DesktopIntegration {
           includeUpdateAction: true,
           updateActionEnabled: updater.hasValidFeedUrl,
         ),
+        attention: WindowsWindowAttention(),
       );
 
   final DesktopIntegrationFlow _flow;
