@@ -40,6 +40,7 @@ import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
 import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
+import 'widgets/guild_join_gate_dialogs.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
@@ -709,6 +710,18 @@ class ConversationPaneState extends State<ConversationPane> {
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
+        else if (showsMessages && widget.workspace.isPendingIn(channel.spaceId))
+          PendingMemberNotice(
+            onReadRules: chat.canAnswerJoinGate
+                ? () => unawaited(
+                    showGuildRulesDialog(
+                      context,
+                      chat: chat,
+                      spaceId: channel.spaceId,
+                    ),
+                  )
+                : null,
+          )
         else if (showsMessages && !widget.capabilities.sendMessages)
           const ReadOnlyChannelNotice()
         else if (showsMessages)
