@@ -65,7 +65,7 @@ do not count as desktop-user chat parity.
 | Streamer mode | Ready | All six switches: invite links, the account name, sounds, notifications, the window's presence in a recording, and the overlay; follows Go Live automatically |
 | In-game overlay | Partial | A layered click-through window showing who is in the room, over any windowed or borderless-fullscreen game; exclusive fullscreen needs an injected overlay, which this client does not do |
 | Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store and rendered above the timeline; selecting one jumps to the message it starts at; Discord still decides per account whether it sends any |
-| App updates | Not ready | The Windows updater runs only when a feed address is built in, and release builds carry none and no appcast is published, so an installed build never learns of a newer one (FLUCORD-118). macOS and Linux have no updater |
+| App updates | Built, unverified on a release | Windows release builds carry a fixed feed address, and each release signs its setup and publishes `appcast.xml` next to it, so the tray's Check for updates and the daily check offer a newer release (FLUCORD-118). Until the signing secret is added a release ships without an appcast. No release has been updated through it yet. macOS and Linux have no updater |
 | Interface language | Not ready | English only; there is no localisation layer |
 | Embedded activities, store and Nitro | Not ready | Activities are a separate transport; commerce is outside a chat client's remit |
 | ETF Gateway framing | Implemented, not default | Live-checked against a real `HELLO`; a full authenticated `READY` has not been decoded, so the shipped default is JSON |
