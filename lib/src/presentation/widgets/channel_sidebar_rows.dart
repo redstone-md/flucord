@@ -53,6 +53,8 @@ abstract final class _SidebarMetrics {
 class _ServerHeader extends StatelessWidget {
   const _ServerHeader({
     required this.title,
+    required this.onInvite,
+    required this.onEditProfile,
     required this.onOpenSettings,
     required this.onLeave,
     required this.onReport,
@@ -60,6 +62,8 @@ class _ServerHeader extends StatelessWidget {
   });
 
   final Widget title;
+  final VoidCallback? onInvite;
+  final VoidCallback? onEditProfile;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onLeave;
   final VoidCallback? onReport;
@@ -71,8 +75,10 @@ class _ServerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = serverMenuItems({
+      if (onInvite != null) ServerMenuAction.invite,
       if (onOpenSettings != null) ServerMenuAction.settings,
       if (onOpenNotifications != null) ServerMenuAction.notifications,
+      if (onEditProfile != null) ServerMenuAction.editProfile,
       if (onReport != null) ServerMenuAction.report,
       if (onLeave != null) ServerMenuAction.leave,
     });
@@ -101,10 +107,14 @@ class _ServerHeader extends StatelessWidget {
 
   void _perform(BuildContext context, ServerMenuAction action) {
     switch (action) {
+      case ServerMenuAction.invite:
+        onInvite?.call();
       case ServerMenuAction.settings:
         onOpenSettings?.call();
       case ServerMenuAction.notifications:
         onOpenNotifications?.call(context, menuBelow(context));
+      case ServerMenuAction.editProfile:
+        onEditProfile?.call();
       case ServerMenuAction.report:
         onReport?.call();
       case ServerMenuAction.leave:

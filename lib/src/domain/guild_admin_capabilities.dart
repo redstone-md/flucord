@@ -70,6 +70,24 @@ final class GuildAdminCapabilities {
   bool canInviteToChannel(ConversationChannel channel) =>
       _permissions.can(DiscordPermissions.createInstantInvite, channel);
 
+  /// The text channels of this guild an invite may point at, in workspace
+  /// order. Empty means the account may not invite anybody here.
+  ///
+  /// Empty too while the guild's permissions are unknown: a channel answer
+  /// fails open then, so that the sidebar still lists channels, and an
+  /// invite row offered on that guess would only be refused.
+  List<ConversationChannel> get invitableChannels => _bits == null
+      ? const []
+      : _permissions._workspace
+            .channelsFor(spaceId)
+            .where(
+              (channel) =>
+                  !channel.isThread &&
+                  channel.kind == ChannelKind.text &&
+                  canInviteToChannel(channel),
+            )
+            .toList(growable: false);
+
   bool canGrant(BigInt permission) =>
       isOwner || _has(DiscordPermissions.administrator) || _has(permission);
 
