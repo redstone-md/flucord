@@ -18,6 +18,8 @@ import 'discord_mfa_repository.dart';
 import 'discord_moderation_repository.dart';
 import 'discord_expression_service.dart';
 import 'discord_multipart_body.dart';
+import 'discord_poll_codec.dart';
+import 'discord_poll_routes.dart';
 import 'discord_safety_hub_repository.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
@@ -65,6 +67,8 @@ final class DiscordDesktopApiClient
   final DiscordRestClient _rest;
 
   DiscordThreadRoutes get threads => DiscordThreadRoutes(_rest);
+
+  DiscordPollRoutes get polls => DiscordPollRoutes(_rest);
 
   /// The browser user agent the session presents, which a captcha view must
   /// present too.
@@ -569,7 +573,8 @@ final class DiscordDesktopApiClient
   /// `POST /channels/{id}/messages`, the one route every kind of send uses.
   ///
   /// A forward names its source in [forwardOf] and needs no content. Up to
-  /// three [stickerIds] may go with or without text.
+  /// three [stickerIds] may go with or without text. A [poll] needs no
+  /// content either.
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
@@ -578,6 +583,7 @@ final class DiscordDesktopApiClient
     String? replyToMessageId,
     ({String channelId, String messageId})? forwardOf,
     List<String> stickerIds = const [],
+    PendingPoll? poll,
     bool suppressNotifications = false,
     bool textToSpeech = false,
   }) async {
@@ -606,6 +612,7 @@ final class DiscordDesktopApiClient
       else if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
       if (stickerIds.isNotEmpty) 'sticker_ids': stickerIds,
+      if (poll != null) 'poll': DiscordPollCodec.request(poll),
       if (attachments.isNotEmpty)
         'attachments': [
           for (var index = 0; index < attachments.length; index++)
