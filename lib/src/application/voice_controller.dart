@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/go_live_stream.dart';
@@ -147,6 +148,7 @@ final class VoiceController extends ChangeNotifier
   String? _connectedGuildId;
   String? _connectedChannelId;
   bool _isCallSession = false;
+  DateTime? _joinedAt;
   VoiceTransportSession? _transportSession;
   Duration? _roundTrip;
   final Map<String, VoiceParticipant> _participants = {};
@@ -231,6 +233,10 @@ final class VoiceController extends ChangeNotifier
   String? get selectedOutputId => _selectedOutputId;
   String? get connectedGuildId => _connectedGuildId;
   String? get connectedChannelId => _connectedChannelId;
+
+  /// When this account walked into the Room it is in, or null outside one.
+  /// A DM call's length counts from here: nothing else records a start.
+  DateTime? get joinedAt => _joinedAt;
   VoiceTransportSession? get transportSession => _transportSession;
 
   /// Who is in the room on screen.
@@ -516,6 +522,7 @@ final class VoiceController extends ChangeNotifier
             : _connectedGuildId != guildId);
     if (movedSession) await _leaveActiveSession();
     if (_connectedChannelId == null) await _openMicrophone();
+    if (_connectedChannelId != channelId) _joinedAt = clock.now();
     _connectedGuildId = guildId;
     _connectedChannelId = channelId;
     _isCallSession = isCall;
@@ -633,6 +640,7 @@ final class VoiceController extends ChangeNotifier
       } finally {
         _connectedGuildId = null;
         _connectedChannelId = null;
+        _joinedAt = null;
         _isCallSession = false;
         _connectionStatus = VoiceConnectionStatus.disconnected;
         _transportSession = null;

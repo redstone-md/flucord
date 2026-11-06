@@ -132,7 +132,7 @@ class VoiceParticipantGrid extends StatelessWidget {
             // One row: the strip is exactly one tile tall.
             ? const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: stripHeight,
-                mainAxisExtent: 176,
+                mainAxisExtent: stripTileWidth,
                 crossAxisSpacing: _gap,
                 mainAxisSpacing: _gap,
               )
@@ -174,8 +174,9 @@ class VoiceParticipantGrid extends StatelessWidget {
     );
   }
 
-  /// How tall the strip under the Stage is.
+  /// How tall the strip under the Stage is, and how wide a tile in it.
   static const stripHeight = 104.0;
+  static const stripTileWidth = 176.0;
   static const _gap = 8.0;
 }
 
@@ -232,7 +233,7 @@ class VoiceParticipantTile extends StatelessWidget {
 
   bool get isCurrentUser => participant.userId == currentMemberId;
 
-  Member get member => _memberOf(members, participant.userId);
+  Member get member => voiceMemberOf(members, participant.userId);
 
   VideoTexture? get cameraTexture => cameraTextureFor?.call(participant.userId);
 
@@ -366,7 +367,7 @@ class VoiceStreamTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final member = _memberOf(members, _userId);
+    final member = voiceMemberOf(members, _userId);
     final name = member.displayNameFor(spaceId);
     final streams = this.streams;
     final isOpen = streams?.isOpen(_userId) ?? false;
@@ -572,7 +573,9 @@ class VoiceStreamTile extends StatelessWidget {
   }
 }
 
-Member _memberOf(List<Member> members, String userId) =>
+/// The member [userId] names, or a stand-in for somebody this client has not
+/// loaded.
+Member voiceMemberOf(List<Member> members, String userId) =>
     members.where((member) => member.id == userId).firstOrNull ??
     _unknownMember(userId);
 

@@ -11,24 +11,19 @@ enum VoiceChannelSurface { room, chat }
 /// A voice channel only behaves like a text channel while its chat surface is
 /// the one on screen: the room has no timeline to search, pin, or type into.
 /// Forum and media channels never qualify, because their messages live in
-/// posts.
-///
-/// A DM in a call earns the same two surfaces for the same reason. The call is
-/// a room hanging off a channel that also has a timeline, which is exactly the
-/// shape a voice channel has, so it reuses this rule rather than inventing a
-/// second way to say "show me the room".
+/// posts. A DM always does: its call is a band above the messages, not a
+/// surface of its own.
 bool showsMessageTimeline(
   ConversationChannel channel,
-  VoiceChannelSurface voiceSurface, {
-  bool inCall = false,
-}) =>
+  VoiceChannelSurface voiceSurface,
+) =>
     channel.hasMessageTimeline &&
-    ((channel.kind != ChannelKind.voice && !inCall) ||
+    (channel.kind != ChannelKind.voice ||
         voiceSurface == VoiceChannelSurface.chat);
 
 /// Whether [channel] shows the room-or-chat switch at all.
-bool hasVoiceSurfaces(ConversationChannel channel, {required bool inCall}) =>
-    channel.kind == ChannelKind.voice || inCall;
+bool hasVoiceSurfaces(ConversationChannel channel) =>
+    channel.kind == ChannelKind.voice;
 
 /// Remembers, per voice channel, which surface was last shown.
 ///

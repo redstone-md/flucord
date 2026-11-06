@@ -5,7 +5,7 @@ A desktop Discord client. Its domain is the rooms a user sits in and the streams
 ## Language
 
 **Room**:
-A voice channel or a call, with the participants in it. A DM call is a room without a guild.
+A voice channel or a call, with the participants in it. A DM call is a room without a guild, drawn as a band above the DM's messages.
 _Avoid_: channel, call, conference
 
 **Participant**:

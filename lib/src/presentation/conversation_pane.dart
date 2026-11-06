@@ -16,12 +16,14 @@ import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
+import '../domain/voice_connection.dart';
 import 'widgets/account_entitlements_scope.dart';
 import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/chat_scope.dart';
 import 'widgets/conversation_summaries.dart';
 import 'widgets/direct_message_views.dart';
+import 'widgets/direct_call_band.dart';
 import 'widgets/direct_call_scope.dart';
 import 'widgets/emoji_picker.dart';
 import 'widgets/expression_favorites_scope.dart';
@@ -60,6 +62,7 @@ import 'widgets/timeline_dependencies.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
 import 'widgets/participant_menu.dart';
+import 'widgets/voice_participant_grid.dart';
 import 'widgets/voice_room_view.dart';
 import 'widgets/voice_room_status.dart';
 import 'widgets/voice_scope.dart';
@@ -354,11 +357,7 @@ class ConversationPaneState extends State<ConversationPane> {
     final replyTo = chat.drafts.read(channel.id).replyTo;
     final inCall = callController?.activeCallChannelId == channel.id;
     final voiceSurface = workspaceController.voiceSurfaceOf(channel.id);
-    final showsMessages = showsMessageTimeline(
-      channel,
-      voiceSurface,
-      inCall: inCall,
-    );
+    final showsMessages = showsMessageTimeline(channel, voiceSurface);
     final locked = channel.isThread && channel.isArchived && channel.isLocked;
     // Read and not watched: the viewer announces every decoded unit, and
     // several streams at once announce one each. The room below is what
@@ -459,108 +458,130 @@ class ConversationPaneState extends State<ConversationPane> {
       ),
     );
 
-    Widget room() => inCall && !showsMessages
-        ? VoiceRoomView(
-            // A call has no guild; the DM pseudo-space still supplies avatars.
-            guildId: null,
-            spaceId: channel.spaceId,
-            participantMenu: participantMenu(),
-            // Watching is asked for, never assumed: the pictures cross a
-            // second connection Discord only opens when told to, and a room
-            // that dialled every stream in it would be paying for pictures
-            // nobody is looking at.
-            streams: streamControls(),
-            // What is on the stage, which is only a stream that is actually
-            // arriving. Keying this on the ask meant a request Discord never
-            // answered hid the participant grid for the rest of the call.
-            streamViewer: streamViewer(),
-            focusedUserId: focus.userId,
-            onTapParticipant: focus.toggle,
-            onClearFocus: focus.clear,
-            goLive: goLiveControl(),
-            camera: camera,
+    Widget room() => switch (channel.kind) {
+      ChannelKind.voice when !showsMessages => VoiceRoomView(
+        streams: streamControls(),
+        streamViewer: streamViewer(),
+        participantMenu: participantMenu(),
+        focusedUserId: focus.userId,
+        onTapParticipant: focus.toggle,
+        onClearFocus: focus.clear,
+        goLive: goLiveControl(),
+        camera: camera,
+        soundboard: ListenableBuilder(
+          listenable: soundboard,
+          builder: (_, _) =>
+              SoundboardButton(controller: soundboard, channelId: channel.id),
+        ),
+        stageControls: channel.isStage
+            ? ListenableBuilder(
+                listenable: stage,
+                builder: (_, _) => StageControls(controller: stage),
+              )
+            : null,
+        guildId: channel.guildId,
+        channelId: channel.id,
+        channelName: channel.name,
+        controller: voice,
+        cameraTextureFor: cameras.textureFor,
+        members: widget.workspace.members,
+        currentMemberId: widget.workspace.currentMemberId,
+      ),
+      ChannelKind.forum || ChannelKind.media => ForumChannelView(
+        workspace: widget.workspace,
+        channel: channel,
+        posts: chat.threadsFor(channel.id),
+        isLoading: chat.isLoadingThreads(channel.id),
+        error: chat.threadsError(channel.id),
+        canLoadMore: chat.canLoadMoreThreads(channel.id),
+        onRefresh: () => unawaited(chat.loadThreads(channel.id, refresh: true)),
+        onLoadMore: () => unawaited(chat.loadThreads(channel.id)),
+        onFilterTags: (tagIds) =>
+            unawaited(chat.loadThreads(channel.id, tagIds: tagIds)),
+        onOpenPost: widget.onSelectChannel,
+        onLoadPostPreview: (postId) =>
+            unawaited(chat.loadForumPostPreview(postId)),
+        onCreatePost: (name, content, attachments, duration, tagIds) async {
+          final thread = await chat.createForumPost(
             channelId: channel.id,
-            channelName: channel.name,
-            controller: voice,
-            cameraTextureFor: cameras.textureFor,
-            members: widget.workspace.members,
-            currentMemberId: widget.workspace.currentMemberId,
-          )
-        : switch (channel.kind) {
-            ChannelKind.voice when !showsMessages => VoiceRoomView(
-              streams: streamControls(),
-              streamViewer: streamViewer(),
-              participantMenu: participantMenu(),
-              focusedUserId: focus.userId,
-              onTapParticipant: focus.toggle,
-              onClearFocus: focus.clear,
-              goLive: goLiveControl(),
-              camera: camera,
-              soundboard: ListenableBuilder(
-                listenable: soundboard,
-                builder: (_, _) => SoundboardButton(
-                  controller: soundboard,
-                  channelId: channel.id,
-                ),
-              ),
-              stageControls: channel.isStage
-                  ? ListenableBuilder(
-                      listenable: stage,
-                      builder: (_, _) => StageControls(controller: stage),
-                    )
-                  : null,
-              guildId: channel.guildId,
-              channelId: channel.id,
-              channelName: channel.name,
-              controller: voice,
-              cameraTextureFor: cameras.textureFor,
-              members: widget.workspace.members,
-              currentMemberId: widget.workspace.currentMemberId,
-            ),
-            ChannelKind.forum || ChannelKind.media => ForumChannelView(
-              workspace: widget.workspace,
-              channel: channel,
-              posts: chat.threadsFor(channel.id),
-              isLoading: chat.isLoadingThreads(channel.id),
-              error: chat.threadsError(channel.id),
-              canLoadMore: chat.canLoadMoreThreads(channel.id),
-              onRefresh: () =>
-                  unawaited(chat.loadThreads(channel.id, refresh: true)),
-              onLoadMore: () => unawaited(chat.loadThreads(channel.id)),
-              onFilterTags: (tagIds) =>
-                  unawaited(chat.loadThreads(channel.id, tagIds: tagIds)),
-              onOpenPost: widget.onSelectChannel,
-              onLoadPostPreview: (postId) =>
-                  unawaited(chat.loadForumPostPreview(postId)),
-              onCreatePost:
-                  (name, content, attachments, duration, tagIds) async {
-                    final thread = await chat.createForumPost(
-                      channelId: channel.id,
-                      name: name,
-                      content: content,
-                      autoArchiveDurationMinutes: duration,
-                      attachments: attachments,
-                      appliedTagIds: tagIds,
-                    );
-                    if (thread == null) return false;
-                    widget.onSelectChannel(thread.id);
-                    return true;
-                  },
-            ),
-            ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
-          };
+            name: name,
+            content: content,
+            autoArchiveDurationMinutes: duration,
+            attachments: attachments,
+            appliedTagIds: tagIds,
+          );
+          if (thread == null) return false;
+          widget.onSelectChannel(thread.id);
+          return true;
+        },
+      ),
+      ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
+    };
 
     // Only the room is rebuilt when this account's own share starts or stops,
     // or when a stream opens, closes or hands the stage to another: a text
     // channel has no tile to carry a share on.
-    final showsRoom =
-        !showsMessages && (inCall || channel.kind == ChannelKind.voice);
-    final conversation = showsRoom
-        ? ListenableBuilder(
-            listenable: Listenable.merge([goLive, viewer]),
-            builder: (_, _) => room(),
-          )
-        : room();
+    final showsRoom = !showsMessages && channel.kind == ChannelKind.voice;
+    final Widget conversation;
+    if (showsRoom) {
+      conversation = ListenableBuilder(
+        listenable: Listenable.merge([goLive, viewer]),
+        builder: (_, _) => room(),
+      );
+    } else if (inCall) {
+      // A DM call is a band above the messages. The timeline is built once,
+      // here, and handed to the builder, so a Stream change redraws the band
+      // and not the messages. A Stream in a DM call has no design of its own:
+      // the focused one, while it arrives, sits between the band and the
+      // messages. The keys keep the timeline's state when it comes and goes.
+      conversation = ListenableBuilder(
+        listenable: Listenable.merge([goLive, viewer]),
+        child: room(),
+        builder: (_, timeline) => Column(
+          children: [
+            DirectCallBand(
+              channel: channel,
+              controller: voice,
+              members: widget.workspace.members,
+              currentMemberId: widget.workspace.currentMemberId,
+              ringing: callController?.isRinging(channel.id) ?? false,
+              camera: camera,
+              goLive: goLiveControl(),
+              participantMenu: participantMenu(),
+              streams: streamControls(),
+              onTapStream: focus.toggle,
+            ),
+            if ((focus.userId, streamViewer()) case (
+              final userId?,
+              final picture?,
+            ))
+              Expanded(
+                key: const ValueKey('call-stage'),
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: VoiceStreamTile(
+                    participant: VoiceParticipant(userId: userId),
+                    members: widget.workspace.members,
+                    currentMemberId: widget.workspace.currentMemberId,
+                    spaceId: channel.spaceId,
+                    streams: streamControls(),
+                    picture: picture,
+                    size: VoiceParticipantTileSize.stage,
+                  ),
+                ),
+              ),
+            Expanded(
+              key: const ValueKey('call-timeline'),
+              flex: 2,
+              child: timeline!,
+            ),
+          ],
+        ),
+      );
+    } else {
+      conversation = room();
+    }
     return Column(
       children: [
         ChatHeader(
@@ -590,7 +611,7 @@ class ConversationPaneState extends State<ConversationPane> {
           showCompactPicker: widget.compact,
           showsMessages: showsMessages,
           voiceSurface: voiceSurface,
-          showVoiceSurfaces: hasVoiceSurfaces(channel, inCall: inCall),
+          showVoiceSurfaces: hasVoiceSurfaces(channel),
           isInCall: inCall,
           callLabel: _callLabel(callController, inCall),
           onToggleCall: _callToggle(callController, inCall),

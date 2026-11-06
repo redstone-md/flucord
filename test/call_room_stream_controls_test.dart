@@ -5,21 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/presentation/widgets/go_live_viewer.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
-import 'package:flucord/src/presentation/widgets/voice_room_view.dart';
+import 'package:flucord/src/presentation/widgets/direct_call_band.dart';
 
 import 'support/stream_room_harness.dart';
 
-/// A call is a room without a guild, and these are the controls a server voice
-/// room already had. The one thing that could go wrong is the key: a stream is
-/// addressed by room and sender, so a room that passed the DM pseudo-space as
-/// a guild would ask Discord for a server no account is in.
+/// A call is a room without a guild, drawn as a band, with the Stream controls
+/// a server voice room already had. The one thing that could go wrong is the
+/// key: a stream is addressed by room and sender, so a room that passed the DM
+/// pseudo-space as a guild would ask Discord for a server no account is in.
 void main() {
-  testWidgets('a call room offers the stream somebody else is sending', (
+  testWidgets('a call offers the stream somebody else is sending', (
     tester,
   ) async {
     await pumpStreamRoom(tester, streamRoomCall);
 
-    expect(find.byType(VoiceRoomView), findsOneWidget);
+    expect(find.byType(DirectCallBand), findsOneWidget);
     expect(find.byKey(const ValueKey('go-live-toggle')), findsOneWidget);
     // The icon alone was all a call used to show.
     expect(find.byKey(const ValueKey('voice-watch-friend-1')), findsOneWidget);
@@ -62,10 +62,11 @@ void main() {
   testWidgets('the stream takes the stage, and the tiles stay under it', (
     tester,
   ) async {
-    final harness = await pumpStreamRoom(tester, streamRoomCall);
+    final harness = await pumpStreamRoom(tester, streamRoomVoiceChannel);
 
-    const streamKey = GoLiveStreamKey.call(
-      channelId: 'dm-1',
+    const streamKey = GoLiveStreamKey.guild(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
       userId: 'friend-1',
     );
     // Pressing "Watch" is wanting to look: it asks, and it focuses.
@@ -111,7 +112,7 @@ void main() {
   ) async {
     final harness = await pumpStreamRoom(
       tester,
-      streamRoomCall,
+      streamRoomVoiceChannel,
       seats: const [StreamRoomSeat('friend-1'), StreamRoomSeat('friend-2')],
     );
     expect(find.byKey(const ValueKey('voice-stage-tile')), findsNothing);
@@ -155,14 +156,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // The ask is out and the tile says so, but no connection is carrying
-    // pictures yet: keying the stage on the ask hid the participant grid for
-    // the rest of every call Discord never answered.
+    // pictures yet: a Stage keyed on the ask would push the messages away
+    // for the rest of every call Discord never answered.
     expect(harness.repository.watched, hasLength(1));
     expect(_onCard('friend-1', find.text('Stop watching')), findsOneWidget);
     expect(find.byType(GoLiveViewer), findsNothing);
-    // The ask focused the sender, so their tile is the stage, saying the ask
-    // is out; the stream itself takes the stage only once it arrives.
-    expect(find.byKey(const ValueKey('voice-stage-tile')), findsOneWidget);
+    expect(find.byKey(const ValueKey('call-stage')), findsNothing);
   });
 
   testWidgets('a server voice room still asks for a guild stream key', (
