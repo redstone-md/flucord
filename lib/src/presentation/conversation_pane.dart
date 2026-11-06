@@ -101,6 +101,8 @@ class ConversationPane extends StatefulWidget {
     required this.onOpenInbox,
     this.onOpenMemberProfile,
     this.onMessageMember,
+    this.onAddToGroup,
+    this.onOpenGroupSettings,
     super.key,
   });
 
@@ -147,6 +149,11 @@ class ConversationPane extends StatefulWidget {
 
   /// Opens the direct message with a member, from the participant menu.
   final ValueChanged<String>? onMessageMember;
+
+  /// Adds friends to a group DM, and opens its settings. Null on a session
+  /// that cannot run a group.
+  final ValueChanged<ConversationChannel>? onAddToGroup;
+  final ValueChanged<ConversationChannel>? onOpenGroupSettings;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();
@@ -673,6 +680,16 @@ class ConversationPaneState extends State<ConversationPane> {
                 }
               : null,
           onOpenInbox: widget.onOpenInbox,
+          onAddToGroup: switch (widget.onAddToGroup) {
+            final add? when channel.isGroupDirectMessage => () => add(channel),
+            _ => null,
+          },
+          onOpenGroupSettings: switch (widget.onOpenGroupSettings) {
+            final open? when channel.isGroupDirectMessage => () => open(
+              channel,
+            ),
+            _ => null,
+          },
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)

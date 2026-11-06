@@ -27,6 +27,14 @@ abstract final class _SidebarMetrics {
   static const labelIconSize = 14.0;
   static const labelButtonSize = 18.0;
 
+  /// The button around a [labelIconSize] icon.
+  static final labelButtonStyle = IconButton.styleFrom(
+    fixedSize: const Size.square(labelButtonSize),
+    minimumSize: const Size.square(labelButtonSize),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   /// The DM search in the header.
   static const searchHeight = 28.0;
 
@@ -546,6 +554,7 @@ class _ChannelRow extends StatelessWidget {
     this.showsUnread = false,
     this.notificationLevel = MessageNotificationLevel.allMessages,
     this.onNotificationRequest,
+    this.onClose,
   });
 
   final ConversationChannel channel;
@@ -557,6 +566,10 @@ class _ChannelRow extends StatelessWidget {
   final bool showsUnread;
   final MessageNotificationLevel notificationLevel;
   final ValueChanged<NotificationMenuRequest>? onNotificationRequest;
+
+  /// Closes the DM or leaves the group, from a cross that shows while the
+  /// row is hovered or open.
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -685,7 +698,28 @@ class _ChannelRow extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          MotionHoverRegion(child: row),
+          MotionHoverRegion(
+            child: onClose == null
+                ? row
+                : Stack(
+                    children: [
+                      row,
+                      PositionedDirectional(
+                        end: _SidebarMetrics.rowPadding / 2,
+                        top: 0,
+                        bottom: 0,
+                        child: _CloseButton(
+                          key: ValueKey('close-direct-message-${channel.id}'),
+                          shown: selected,
+                          tooltip: channel.isGroupDirectMessage
+                              ? 'Leave group'
+                              : 'Close DM',
+                          onPressed: onClose!,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           // The selected row is read the moment it opens, so only the others
           // carry the marker.
           if (showsUnread && !selected)
@@ -737,6 +771,36 @@ class _ChannelRow extends StatelessWidget {
       isSpaceScope: false,
     );
     if (request != null) onNotificationRequest?.call(request);
+  }
+}
+
+/// A DM row's cross. Shows while the row is hovered, or always when [shown].
+class _CloseButton extends StatelessWidget {
+  const _CloseButton({
+    required this.shown,
+    required this.tooltip,
+    required this.onPressed,
+    super.key,
+  });
+
+  final bool shown;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!shown && MotionHoverRegion.hoveredOf(context) != true) {
+      return const SizedBox.shrink();
+    }
+    return Center(
+      child: IconButton(
+        tooltip: tooltip,
+        iconSize: _SidebarMetrics.labelIconSize,
+        style: _SidebarMetrics.labelButtonStyle,
+        icon: FlucordIcon(FlucordIcons.clear, color: context.surfaces.muted),
+        onPressed: onPressed,
+      ),
+    );
   }
 }
 

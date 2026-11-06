@@ -67,6 +67,14 @@ final class DiscordDirectMessages {
     String currentUserId,
   ) async {
     final payload = await _createChannel(recipientId);
+    return adoptOpened(payload, currentUserId);
+  }
+
+  /// Adopts the DM a route answered with, such as a new group DM.
+  Future<DirectConversation> adoptOpened(
+    Map<String, Object?> payload,
+    String currentUserId,
+  ) {
     final conversation = _mapper.directMessage(payload, currentUserId);
     if (conversation == null) {
       throw const DiscordApiException(
@@ -75,6 +83,14 @@ final class DiscordDirectMessages {
       );
     }
     return _adopt(conversation, payload);
+  }
+
+  /// Removes a DM the account just closed or a group it just left, without
+  /// waiting for the `CHANNEL_DELETE` that follows.
+  Future<void> close(String channelId) async {
+    forget(channelId);
+    _publish(ChannelDeletedEvent(channelId));
+    await _cache.deleteChannel(channelId);
   }
 
   Future<void> acceptChannel(
