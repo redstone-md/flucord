@@ -7,7 +7,6 @@ import '../../application/voice_controller.dart';
 import '../../domain/go_live_stream.dart';
 import '../../theme/flucord_icons.dart';
 import 'flucord_menu.dart';
-import 'popup_anchor.dart';
 import 'stream_full_screen.dart';
 
 /// Flucord's menu for one Stream: what a right click on a Stream tile or on
@@ -46,10 +45,9 @@ final class StreamMenu {
   }) async {
     final key = streamKeyFor(sender);
     final open = viewer.isOpen(key);
-    final chosen = await showMenu<VoidCallback>(
-      context: context,
-      position: menuAt(context, position: position),
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
+    await showFlucordActionMenu(
+      context,
+      position: position,
       items: [
         if (open) ...[
           flucordMenuAction(
@@ -83,6 +81,5 @@ final class StreamMenu {
         ),
       ],
     );
-    chosen?.call();
   }
 }

@@ -6,6 +6,7 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'popup_anchor.dart';
 
 /// A row that closes the menu and then does [action], disabled when it is
 /// null. The row answers with its action, so a menu built of these needs no
@@ -24,6 +25,26 @@ FlucordMenuItem<VoidCallback> flucordMenuAction(
   danger: danger,
   enabled: action != null,
 );
+
+/// Opens a context menu of [flucordMenuAction] rows from the widget at
+/// [context], placed as [menuAt] places it, and runs the chosen row's action.
+///
+/// The action runs after the menu has closed, when the widget at [context]
+/// may be gone: an action that needs a navigator or an anchor takes it before
+/// the menu opens.
+Future<void> showFlucordActionMenu(
+  BuildContext context, {
+  required List<PopupMenuEntry<VoidCallback>> items,
+  Offset? position,
+}) async {
+  final chosen = await showMenu<VoidCallback>(
+    context: context,
+    position: menuAt(context, position: position),
+    constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
+    items: items,
+  );
+  chosen?.call();
+}
 
 /// A row in any Flucord menu: a leading mark, a label, and an optional
 /// trailing mark.

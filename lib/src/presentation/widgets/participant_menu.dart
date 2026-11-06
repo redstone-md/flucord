@@ -67,10 +67,9 @@ final class ParticipantMenu {
     VoidCallback? bound(ValueChanged<String>? action) =>
         action == null ? null : () => action(userId);
     final profile = actions.onOpenProfile;
-    final chosen = await showMenu<VoidCallback>(
-      context: context,
-      position: menuAt(context, position: position),
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
+    await showFlucordActionMenu(
+      context,
+      position: position,
       items: [
         flucordMenuAction(
           'participant-menu-profile',
@@ -129,6 +128,5 @@ final class ParticipantMenu {
         ),
       ],
     );
-    chosen?.call();
   }
 }
