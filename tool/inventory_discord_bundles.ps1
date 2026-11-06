@@ -12,6 +12,9 @@
   Output is a deterministic JSON document plus an exit code that fails when the
   bundle exposes a capability segment or Gateway dispatch event that
   docs/DISCORD_BUNDLE_COVERAGE.md has not classified yet.
+
+  The chunk cache it fills also refreshes the pinned client sound list:
+  dart run tool/pin_discord_sounds.dart --bundles <CacheDirectory>
 #>
 [CmdletBinding()]
 param(
