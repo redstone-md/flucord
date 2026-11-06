@@ -13,7 +13,7 @@ Somebody in a room, including this account.
 _Avoid_: member, user, peer
 
 **Stream**:
-One participant's screen, sent into a room over a connection of its own.
+One participant's screen or one of their windows, sent into a room over a connection of its own.
 _Avoid_: share, screen share, broadcast, go-live
 
 **Stream key**:
@@ -61,7 +61,7 @@ Another window has the keyboard focus. The self-preview is not decoded while the
 _Avoid_: inactive, background, blurred
 
 **Capture**:
-The machine's one source of pictures, a display or a camera. Only one runs at a time.
+The machine's one source of pictures, a display, one window or a camera. Only one runs at a time.
 _Avoid_: source, device, input, recorder
 
 **Picture**:

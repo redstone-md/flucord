@@ -29,6 +29,21 @@ owned by the encoder service: frame buffers are copied before release, the
 callback closes only after the capture thread joins, and a finalizer closes a
 handle nobody stopped.
 
+A share can also be one window. The same module opens it with
+`flucord_video_open_window`, which captures through Windows.Graphics.Capture
+instead of Desktop Duplication (`window_capture.cpp`, the only file that uses
+C++/WinRT). Its objects are made, polled and stopped on the capture thread;
+everything after the capture (scaling, encoding, delivery) is the display
+path's. The window keeps its shape inside the stream, with black bars, and a
+resize rebuilds the frame pool. A window that closes ends the capture with an
+empty frame and stage 10, which the share reports as "The shared window was
+closed." The picker lists the windows Alt+Tab would (`WindowsShareSourceCatalog`,
+straight FFI against `user32`), and its thumbnails come from the screenshot
+path for screens and `PrintWindow` for windows, taken on isolates of their
+own. Every display capture behind a thumbnail is closed before the picker
+answers, so the share that follows finds its display free. Window audio is
+still the whole system output.
+
 A share's size (480p to 1440p) and frame rate (15, 30, 60) are picked from
 the menu next to the share button and kept in `StreamQualitySettings` with
 the bitrates; the bitrate slider names a 720p30 share and other shapes scale
