@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flucord/src/domain/conversation_summary.dart';
+import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
@@ -449,6 +450,9 @@ final class _PermissionRepository implements ChatRepository {
 
   @override
   Future<void> close() async => _events.close();
+
+  @override
+  DesktopRelationshipRepository? get relationships => null;
 
   @override
   Never noSuchMethod(Invocation invocation) => throw UnimplementedError(
