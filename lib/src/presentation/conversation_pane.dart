@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
-import '../application/voice_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/direct_call_controller.dart';
 import '../application/inbox_catalog.dart';
@@ -17,12 +16,14 @@ import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
+import '../domain/voice_connection.dart';
 import 'widgets/account_entitlements_scope.dart';
 import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/chat_scope.dart';
 import 'widgets/conversation_summaries.dart';
 import 'widgets/direct_message_views.dart';
+import 'widgets/direct_call_band.dart';
 import 'widgets/direct_call_scope.dart';
 import 'widgets/emoji_picker.dart';
 import 'widgets/expression_favorites_scope.dart';
@@ -51,6 +52,8 @@ import 'widgets/stage_controls.dart';
 import 'widgets/stage_scope.dart';
 import 'widgets/status_views.dart';
 import 'widgets/room_focus_scope.dart';
+import 'widgets/stream_full_screen.dart';
+import 'widgets/stream_menu.dart';
 import 'widgets/stream_viewer_scope.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/thread_membership_button.dart';
@@ -58,10 +61,13 @@ import 'widgets/thread_membership_scope.dart';
 import 'widgets/timeline_dependencies.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
-import 'widgets/voice_participant_grid.dart' show VoiceListeningControls;
+import 'widgets/participant_menu.dart';
+import 'widgets/voice_participant_grid.dart';
 import 'widgets/voice_room_view.dart';
+import 'widgets/voice_room_status.dart';
 import 'widgets/voice_scope.dart';
 import 'widgets/voice_stream_controls.dart';
+import 'widgets/window_full_screen_scope.dart';
 import 'widgets/workspace_scope.dart';
 
 /// The conversation surface for one channel: the header, the room or the
@@ -93,6 +99,7 @@ class ConversationPane extends StatefulWidget {
     this.onSubmitQuery,
     required this.onOpenInbox,
     this.onOpenMemberProfile,
+    this.onMessageMember,
     super.key,
   });
 
@@ -136,6 +143,9 @@ class ConversationPane extends StatefulWidget {
 
   /// Opens the profile of a message's author beside their name.
   final OpenProfileCard? onOpenMemberProfile;
+
+  /// Opens the direct message with a member, from the participant menu.
+  final ValueChanged<String>? onMessageMember;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();
@@ -183,6 +193,23 @@ class ConversationPaneState extends State<ConversationPane> {
   bool typeInComposer(String text) =>
       _composerKey.currentState?.typeText(text) ?? false;
 
+  /// Puts a mention of [userId] in the composer. A Room has no composer, so
+  /// the channel's chat is opened first; a channel with no chat at all
+  /// takes nothing.
+  void mention(String userId) {
+    final text = '<@$userId> ';
+    if (typeInComposer(text)) return;
+    final channel = widget.channel;
+    if (!channel.hasMessageTimeline) return;
+    WorkspaceScope.of(
+      context,
+    ).selectVoiceSurface(channel.id, VoiceChannelSurface.chat);
+    // The composer is there once the chat has been drawn.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) typeInComposer(text);
+    });
+  }
+
   /// Esc takes one step back: a reply being written goes first. With none, the
   /// reader is done here, so the channel is read and the list goes to the end.
   /// A room has no timeline to be done with.
@@ -193,10 +220,28 @@ class ConversationPaneState extends State<ConversationPane> {
       _setReply(chat, null);
       return;
     }
+    // A Stream on a DM call's Stage covers the messages, so it goes before
+    // the jump to the present. The guild Room handles Escape itself.
+    if (_hasCallStage) {
+      RoomFocusScope.read(context).clear();
+      return;
+    }
     final timeline = _timelineKey.currentState;
     if (timeline == null) return;
     chat.markChannelRead(channelId);
     timeline.jumpToPresent();
+  }
+
+  /// Whether this DM's call has a Stream on its Stage: one focused, in this
+  /// call, and arriving.
+  bool get _hasCallStage {
+    final channel = widget.channel;
+    final userId = RoomFocusScope.read(context).userId;
+    return userId != null &&
+        DirectCallScope.maybeOf(context)?.activeCallChannelId == channel.id &&
+        StreamViewerScope.read(
+          context,
+        ).isWatching(channel.streamKeyFor(userId));
   }
 
   /// Moves the timeline by most of a screen, if this channel has one.
@@ -330,11 +375,7 @@ class ConversationPaneState extends State<ConversationPane> {
     final replyTo = chat.drafts.read(channel.id).replyTo;
     final inCall = callController?.activeCallChannelId == channel.id;
     final voiceSurface = workspaceController.voiceSurfaceOf(channel.id);
-    final showsMessages = showsMessageTimeline(
-      channel,
-      voiceSurface,
-      inCall: inCall,
-    );
+    final showsMessages = showsMessageTimeline(channel, voiceSurface);
     final locked = channel.isThread && channel.isArchived && channel.isLocked;
     // Read and not watched: the viewer announces every decoded unit, and
     // several streams at once announce one each. The room below is what
@@ -358,6 +399,18 @@ class ConversationPaneState extends State<ConversationPane> {
     // Asked-for is not on the stage: an endpoint that never comes must not
     // take the room away.
     final focus = RoomFocusScope.of(context);
+    // What a right click on a Stream opens, on its tile and on the Stage.
+    StreamMenu streamMenu() => StreamMenu(
+      voice: voice,
+      viewer: viewer,
+      fullScreen: StreamFullScreen(
+        viewer: viewer,
+        window: WindowFullScreenScope.maybeOf(context),
+      ),
+      streamKeyFor: channel.streamKeyFor,
+      onToggleWatch: _toggleWatch,
+    );
+
     Widget? streamViewer() {
       final userId = focus.userId;
       if (userId == null) return null;
@@ -409,118 +462,146 @@ class ConversationPaneState extends State<ConversationPane> {
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
       selfPreview: selfPreview(),
+      menu: streamMenu(),
     );
 
-    // How loud each participant plays. Read straight off the controller, so
-    // a level changed on one tile reaches every other tile showing them.
-    VoiceListeningControls listeningControls() => VoiceListeningControls(
-      volumeFor: voice.volumeFor,
-      onVolumeChanged: (participant, volume) =>
-          unawaited(voice.setParticipantVolume(participant, volume)),
+    // What a right click on a participant opens, the same on every tile.
+    ParticipantMenu participantMenu() => ParticipantMenu(
+      voice: voice,
+      currentMemberId: widget.workspace.currentMemberId,
+      actions: ParticipantMenuActions(
+        onOpenProfile: widget.onOpenMemberProfile,
+        onMessage: widget.onMessageMember,
+        onMention: mention,
+      ),
     );
 
-    Widget room() => inCall && !showsMessages
-        ? VoiceRoomView(
-            // A call has no guild; the DM pseudo-space still supplies avatars.
-            guildId: null,
-            spaceId: channel.spaceId,
-            listening: listeningControls(),
-            // Watching is asked for, never assumed: the pictures cross a
-            // second connection Discord only opens when told to, and a room
-            // that dialled every stream in it would be paying for pictures
-            // nobody is looking at.
-            streams: streamControls(),
-            // What is on the stage, which is only a stream that is actually
-            // arriving. Keying this on the ask meant a request Discord never
-            // answered hid the participant grid for the rest of the call.
-            streamViewer: streamViewer(),
-            focusedUserId: focus.userId,
-            onTapParticipant: focus.toggle,
-            onClearFocus: focus.clear,
-            goLive: goLiveControl(),
-            camera: camera,
+    // What the channel shows under its header: the voice Room, a forum's
+    // posts, or the timeline.
+    Widget channelBody() => switch (channel.kind) {
+      ChannelKind.voice when !showsMessages => VoiceRoomView(
+        streams: streamControls(),
+        streamViewer: streamViewer(),
+        participantMenu: participantMenu(),
+        focusedUserId: focus.userId,
+        onTapParticipant: focus.toggle,
+        onClearFocus: focus.clear,
+        goLive: goLiveControl(),
+        camera: camera,
+        soundboard: ListenableBuilder(
+          listenable: soundboard,
+          builder: (_, _) =>
+              SoundboardButton(controller: soundboard, channelId: channel.id),
+        ),
+        stageControls: channel.isStage
+            ? ListenableBuilder(
+                listenable: stage,
+                builder: (_, _) => StageControls(controller: stage),
+              )
+            : null,
+        guildId: channel.spaceId,
+        channelId: channel.id,
+        channelName: channel.name,
+        controller: voice,
+        cameraTextureFor: cameras.textureFor,
+        members: widget.workspace.members,
+        currentMemberId: widget.workspace.currentMemberId,
+      ),
+      ChannelKind.forum || ChannelKind.media => ForumChannelView(
+        workspace: widget.workspace,
+        channel: channel,
+        posts: chat.threadsFor(channel.id),
+        isLoading: chat.isLoadingThreads(channel.id),
+        error: chat.threadsError(channel.id),
+        canLoadMore: chat.canLoadMoreThreads(channel.id),
+        onRefresh: () => unawaited(chat.loadThreads(channel.id, refresh: true)),
+        onLoadMore: () => unawaited(chat.loadThreads(channel.id)),
+        onFilterTags: (tagIds) =>
+            unawaited(chat.loadThreads(channel.id, tagIds: tagIds)),
+        onOpenPost: widget.onSelectChannel,
+        onLoadPostPreview: (postId) =>
+            unawaited(chat.loadForumPostPreview(postId)),
+        onCreatePost: (name, content, attachments, duration, tagIds) async {
+          final thread = await chat.createForumPost(
             channelId: channel.id,
-            channelName: channel.name,
-            controller: voice,
-            cameraTextureFor: cameras.textureFor,
-            members: widget.workspace.members,
-            currentMemberId: widget.workspace.currentMemberId,
-          )
-        : switch (channel.kind) {
-            ChannelKind.voice when !showsMessages => VoiceRoomView(
-              streams: streamControls(),
-              streamViewer: streamViewer(),
-              listening: listeningControls(),
-              focusedUserId: focus.userId,
-              onTapParticipant: focus.toggle,
-              onClearFocus: focus.clear,
-              goLive: goLiveControl(),
-              camera: camera,
-              soundboard: ListenableBuilder(
-                listenable: soundboard,
-                builder: (_, _) => SoundboardButton(
-                  controller: soundboard,
-                  channelId: channel.id,
-                ),
-              ),
-              stageControls: channel.isStage
-                  ? ListenableBuilder(
-                      listenable: stage,
-                      builder: (_, _) => StageControls(controller: stage),
-                    )
-                  : null,
-              guildId: channel.guildId,
-              channelId: channel.id,
-              channelName: channel.name,
-              controller: voice,
-              cameraTextureFor: cameras.textureFor,
-              members: widget.workspace.members,
-              currentMemberId: widget.workspace.currentMemberId,
-            ),
-            ChannelKind.forum || ChannelKind.media => ForumChannelView(
-              workspace: widget.workspace,
-              channel: channel,
-              posts: chat.threadsFor(channel.id),
-              isLoading: chat.isLoadingThreads(channel.id),
-              error: chat.threadsError(channel.id),
-              canLoadMore: chat.canLoadMoreThreads(channel.id),
-              onRefresh: () =>
-                  unawaited(chat.loadThreads(channel.id, refresh: true)),
-              onLoadMore: () => unawaited(chat.loadThreads(channel.id)),
-              onFilterTags: (tagIds) =>
-                  unawaited(chat.loadThreads(channel.id, tagIds: tagIds)),
-              onOpenPost: widget.onSelectChannel,
-              onLoadPostPreview: (postId) =>
-                  unawaited(chat.loadForumPostPreview(postId)),
-              onCreatePost:
-                  (name, content, attachments, duration, tagIds) async {
-                    final thread = await chat.createForumPost(
-                      channelId: channel.id,
-                      name: name,
-                      content: content,
-                      autoArchiveDurationMinutes: duration,
-                      attachments: attachments,
-                      appliedTagIds: tagIds,
-                    );
-                    if (thread == null) return false;
-                    widget.onSelectChannel(thread.id);
-                    return true;
-                  },
-            ),
-            ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
-          };
+            name: name,
+            content: content,
+            autoArchiveDurationMinutes: duration,
+            attachments: attachments,
+            appliedTagIds: tagIds,
+          );
+          if (thread == null) return false;
+          widget.onSelectChannel(thread.id);
+          return true;
+        },
+      ),
+      ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
+    };
 
     // Only the room is rebuilt when this account's own share starts or stops,
     // or when a stream opens, closes or hands the stage to another: a text
     // channel has no tile to carry a share on.
-    final showsRoom =
-        !showsMessages && (inCall || channel.kind == ChannelKind.voice);
-    final conversation = showsRoom
-        ? ListenableBuilder(
-            listenable: Listenable.merge([goLive, viewer]),
-            builder: (_, _) => room(),
-          )
-        : room();
+    final showsRoom = !showsMessages && channel.kind == ChannelKind.voice;
+    final Widget conversation;
+    if (showsRoom) {
+      conversation = ListenableBuilder(
+        listenable: Listenable.merge([goLive, viewer]),
+        builder: (_, _) => channelBody(),
+      );
+    } else if (inCall) {
+      // A DM call is a band above the messages. The timeline is built once,
+      // here, and handed to the builder, so a Stream change redraws the band
+      // and not the messages. A Stream in a DM call has no design of its own:
+      // the focused one, while it arrives, sits between the band and the
+      // messages. The keys keep the timeline's state when it comes and goes.
+      conversation = ListenableBuilder(
+        listenable: Listenable.merge([goLive, viewer]),
+        child: channelBody(),
+        builder: (_, timeline) => Column(
+          children: [
+            DirectCallBand(
+              channel: channel,
+              controller: voice,
+              members: widget.workspace.members,
+              currentMemberId: widget.workspace.currentMemberId,
+              ringing: callController?.isRinging(channel.id) ?? false,
+              camera: camera,
+              goLive: goLiveControl(),
+              participantMenu: participantMenu(),
+              streams: streamControls(),
+              onTapStream: focus.toggle,
+            ),
+            if ((focus.userId, streamViewer()) case (
+              final userId?,
+              final picture?,
+            ))
+              Expanded(
+                key: const ValueKey('call-stage'),
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: VoiceStreamTile(
+                    participant: VoiceParticipant(userId: userId),
+                    members: widget.workspace.members,
+                    currentMemberId: widget.workspace.currentMemberId,
+                    spaceId: channel.spaceId,
+                    streams: streamControls(),
+                    picture: picture,
+                    size: VoiceParticipantTileSize.stage,
+                  ),
+                ),
+              ),
+            Expanded(
+              key: const ValueKey('call-timeline'),
+              flex: 2,
+              child: timeline!,
+            ),
+          ],
+        ),
+      );
+    } else {
+      conversation = channelBody();
+    }
     return Column(
       children: [
         ChatHeader(
@@ -533,6 +614,9 @@ class ConversationPaneState extends State<ConversationPane> {
             ),
             null => null,
           },
+          status: showsRoom
+              ? VoiceRoomStatusLine(controller: voice, channelId: channel.id)
+              : null,
           // Only a thread has a membership to join; every other channel gets
           // nothing rather than a control that would have nothing to act on.
           threadMembership: channel.isThread
@@ -547,7 +631,7 @@ class ConversationPaneState extends State<ConversationPane> {
           showCompactPicker: widget.compact,
           showsMessages: showsMessages,
           voiceSurface: voiceSurface,
-          showVoiceSurfaces: hasVoiceSurfaces(channel, inCall: inCall),
+          showVoiceSurfaces: hasVoiceSurfaces(channel),
           isInCall: inCall,
           callLabel: _callLabel(callController, inCall),
           onToggleCall: _callToggle(callController, inCall),

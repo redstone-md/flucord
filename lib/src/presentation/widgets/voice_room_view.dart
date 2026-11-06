@@ -10,12 +10,13 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
-import 'voice_control.dart';
 import 'voice_participant_grid.dart';
+import 'voice_room_controls.dart';
 import 'voice_room_status.dart';
 import 'voice_stream_controls.dart';
 import '../../domain/voice_connection.dart';
 import 'member_avatar.dart';
+import 'participant_menu.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({
@@ -31,19 +32,17 @@ class VoiceRoomView extends StatefulWidget {
     this.camera,
     this.streamViewer,
     this.streams,
-    this.listening,
+    this.participantMenu,
     this.cameraTextureFor,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
-    this._spaceId,
     super.key,
   });
 
-  /// Null for a call in a DM or group DM, which has no guild. The room is
-  /// otherwise identical — same grid, same devices, same toolbar — so the two
-  /// share this widget instead of a second copy that could drift.
-  final String? guildId;
+  /// The guild of the voice channel. A DM call is not drawn here: it is a
+  /// band above the DM's messages.
+  final String guildId;
   final String channelId;
   final String channelName;
   final VoiceController controller;
@@ -85,16 +84,9 @@ class VoiceRoomView extends StatefulWidget {
   /// them.
   final VoiceStreamControls? streams;
 
-  /// The per-participant volume controls the tiles offer, or null where
-  /// the pane behind the room has no voice controller to hand them to.
-  final VoiceListeningControls? listening;
-
-  /// Which space's per-guild avatars to render. Defaults to [guildId] because
-  /// for guild voice they are the same thing; a DM call has to supply the DM
-  /// pseudo-space itself.
-  final String? _spaceId;
-
-  String get spaceId => _spaceId ?? guildId ?? '';
+  /// What a right click on a tile opens, or null where the pane behind the
+  /// room has no voice controller to hand it.
+  final ParticipantMenu? participantMenu;
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -110,15 +102,10 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   bool get _isInThisChannel =>
       widget.controller.connectedChannelId == widget.channelId;
 
-  Future<void> _connect() {
-    final guildId = widget.guildId;
-    return guildId == null
-        ? widget.controller.connectToCall(channelId: widget.channelId)
-        : widget.controller.connect(
-            guildId: guildId,
-            channelId: widget.channelId,
-          );
-  }
+  Future<void> _connect() => widget.controller.connect(
+    guildId: widget.guildId,
+    channelId: widget.channelId,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +118,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             seated:
                 widget.controller.seatedByChannel[widget.channelId] ?? const [],
             members: widget.members,
-            spaceId: widget.spaceId,
+            spaceId: widget.guildId,
             isBusy: widget.controller.isBusy,
             onJoin: () => unawaited(_connect()),
           );
@@ -146,25 +133,23 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
                 streams: widget.streams,
-                listening: widget.listening,
+                participantMenu: widget.participantMenu,
                 focusedUserId: widget.focusedUserId,
                 onTapParticipant: widget.onTapParticipant,
                 onClearFocus: widget.onClearFocus,
-                goLive: widget.goLive,
-                soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
-                channelName: widget.channelName,
                 controller: widget.controller,
                 members: widget.members,
                 currentMemberId: widget.currentMemberId,
-                spaceId: widget.spaceId,
+                spaceId: widget.guildId,
                 cameraTextureFor: widget.cameraTextureFor,
               ),
             ),
-            _VoiceToolbar(
+            VoiceRoomControls(
               controller: widget.controller,
               camera: widget.camera,
               goLive: widget.goLive,
+              soundboard: widget.soundboard,
             ),
           ],
         );
@@ -255,23 +240,16 @@ class _VoiceChannelPreview extends StatelessWidget {
 }
 
 class _VoiceStage extends StatelessWidget {
-  /// How tall the strip of tiles under a stream on the stage is. One row,
-  /// small enough to leave the stream the room.
-  static const double _stripHeight = 128;
-
   const _VoiceStage({
     required this.streamViewer,
-    required this.goLive,
-    required this.soundboard,
     required this.stageControls,
-    required this.channelName,
     required this.controller,
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
     this.cameraTextureFor,
     this.streams,
-    this.listening,
+    this.participantMenu,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
@@ -283,17 +261,14 @@ class _VoiceStage extends StatelessWidget {
   final void Function(String userId)? onTapParticipant;
   final VoidCallback? onClearFocus;
 
-  final String channelName;
   final VoiceController controller;
   final List<Member> members;
   final String currentMemberId;
   final String spaceId;
   final Widget? stageControls;
-  final Widget? soundboard;
-  final Widget? goLive;
   final Widget? streamViewer;
   final VoiceStreamControls? streams;
-  final VoiceListeningControls? listening;
+  final ParticipantMenu? participantMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -305,87 +280,60 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    Widget grid(List<VoiceParticipant> participants, {required bool compact}) =>
-        VoiceParticipantGrid(
-          participants: participants,
-          members: members,
-          currentMemberId: currentMemberId,
-          spaceId: spaceId,
-          cameraTextureFor: cameraTextureFor,
-          streams: streams,
-          listening: listening,
-          onTapParticipant: onTapParticipant,
-          compact: compact,
-        );
-    // What the stage draws: the focused participant's stream when it is
-    // arriving, else their tile large (their preview, camera, or avatar, with
-    // the card to open their stream). A focus on somebody who has just left
-    // draws nothing until the room catches up.
+    VoiceParticipantGrid grid(
+      List<VoiceRoomTile> tiles, {
+      required bool compact,
+    }) => VoiceParticipantGrid(
+      tiles: tiles,
+      members: members,
+      currentMemberId: currentMemberId,
+      spaceId: spaceId,
+      cameraTextureFor: cameraTextureFor,
+      streams: streams,
+      participantMenu: participantMenu,
+      onTapParticipant: onTapParticipant,
+      compact: compact,
+    );
+    final tiles = VoiceParticipantGrid.tilesOf(
+      controller.participants,
+      currentMemberId: currentMemberId,
+      streams: streams,
+    );
+    // What the Stage draws: the focused participant's Stream while it is
+    // arriving, else their own tile, large. A focus on somebody who has just
+    // left draws nothing until the room catches up.
     final focused = controller.participants
         .where((participant) => participant.userId == focusedUserId)
         .firstOrNull;
-    final onStage =
-        streamViewer ??
-        (focused == null
-            ? null
-            : Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: VoiceParticipantTile(
-                  key: const ValueKey('voice-stage-tile'),
-                  participant: focused,
-                  members: members,
-                  currentMemberId: currentMemberId,
-                  spaceId: spaceId,
-                  cameraTextureFor: cameraTextureFor,
-                  streams: streams,
-                  onTap: onTapParticipant,
-                  size: VoiceParticipantTileSize.stage,
-                ),
-              ));
-    // A tile on the stage carries its own card, so it leaves the strip; a
-    // stream on the stage does not, and its tile stays where "Stop watching"
-    // lives. A strip with nobody left in it is not drawn at all.
-    final strippedOf = streamViewer == null ? focused?.userId : null;
-    final strip = [
-      for (final participant in controller.participants)
-        if (participant.userId != strippedOf) participant,
-    ];
+    final VoiceRoomTile? onStage = focused == null
+        ? null
+        : (
+            participant: focused,
+            kind: streamViewer == null
+                ? VoiceTileKind.person
+                : VoiceTileKind.stream,
+          );
+    // Every other tile sits in the strip under the Stage. A strip with
+    // nothing left in it is not drawn at all.
+    final strip = grid([
+      for (final tile in tiles)
+        if (tile.participant.userId != onStage?.participant.userId ||
+            tile.kind != onStage?.kind)
+          tile,
+    ], compact: true);
+    // Drawn as the strip draws its tiles, only larger.
+    final stage = onStage == null
+        ? null
+        : strip.tileFor(
+            onStage,
+            key: const ValueKey('voice-stage-tile'),
+            size: VoiceParticipantTileSize.stage,
+            picture: streamViewer,
+          );
     final onClearFocus = this.onClearFocus;
     final room = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  channelName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.heading.style,
-                ),
-              ),
-              ?soundboard,
-              const SizedBox(width: 12),
-              // Shares the row with the name on a narrow window, rather than
-              // pushing past its edge.
-              Flexible(
-                child: Text(
-                  voiceRoomStatusLabel(controller),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: controller.isTransportReady
-                        ? context.surfaces.success
-                        : context.surfaces.muted,
-                    fontSize: FlucordType.caption,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
         // What is wrong, rather than the old fixed sentence: a room that says
         // nothing is indistinguishable from one that is simply quiet.
         if (voiceRoomWarning(controller) case final warning?)
@@ -432,23 +380,23 @@ class _VoiceStage extends StatelessWidget {
           ),
         ?stageControls,
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // A stream on the stage pushes the grid into a strip rather
-              // than off the screen: the tile is where the mark and the
-              // control for that stream live, and a stage with no tiles has
-              // nowhere to put either.
-              if (onStage case final stage?) Expanded(child: stage),
-              if (onStage == null)
-                Expanded(child: grid(controller.participants, compact: false))
-              else if (strip.isNotEmpty)
-                SizedBox(
-                  height: _stripHeight,
-                  child: grid(strip, compact: true),
+          child: stage == null
+              ? grid(tiles, compact: false)
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 12,
+                    children: [
+                      Expanded(child: stage),
+                      if (strip.tiles.isNotEmpty)
+                        SizedBox(
+                          height: VoiceParticipantGrid.stripHeight,
+                          child: strip,
+                        ),
+                    ],
+                  ),
                 ),
-            ],
-          ),
         ),
       ],
     );
@@ -458,94 +406,10 @@ class _VoiceStage extends StatelessWidget {
     // when it appears.
     return CallbackShortcuts(
       bindings: {
-        if (onStage != null && onClearFocus != null)
+        if (stage != null && onClearFocus != null)
           const SingleActivator(LogicalKeyboardKey.escape): onClearFocus,
       },
       child: Focus(autofocus: true, child: room),
     );
   }
-}
-
-class _VoiceToolbar extends StatelessWidget {
-  const _VoiceToolbar({required this.controller, this.camera, this.goLive});
-
-  final VoiceController controller;
-  final SelfVideoController? camera;
-
-  /// The Go Live control, which is the room's only share button.
-  final Widget? goLive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: context.surfaces.surface,
-        border: Border(top: BorderSide(color: context.surfaces.border)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _controlButton(
-            context,
-            const ValueKey('voice-mute'),
-            VoiceControl.mute(controller),
-          ),
-          const SizedBox(width: 12),
-          _controlButton(
-            context,
-            const ValueKey('voice-deafen'),
-            VoiceControl.deafen(controller),
-          ),
-          if (camera case final camera? when camera.isSupported) ...[
-            const SizedBox(width: 12),
-            // Its own listener: the Room rebuilds with the voice controller,
-            // and the camera finishes turning on after that has announced it.
-            ListenableBuilder(
-              listenable: camera,
-              builder: (context, _) => _controlButton(
-                context,
-                const ValueKey('voice-camera'),
-                VoiceControl.camera(camera),
-              ),
-            ),
-          ],
-          // One share control, not two. The room used to carry a local
-          // capture button here and a Go Live button in the header, which
-          // looked like a choice and was not one: only Go Live puts a picture
-          // in the channel.
-          if (goLive case final control?) ...[
-            const SizedBox(width: 12),
-            control,
-          ],
-          const SizedBox(width: 12),
-          IconButton.filled(
-            key: const ValueKey('voice-disconnect'),
-            onPressed: controller.isConnected ? controller.disconnect : null,
-            tooltip: 'Disconnect',
-            style: IconButton.styleFrom(
-              backgroundColor: context.surfaces.danger,
-              foregroundColor: FlucordFixedColors.onFill,
-            ),
-            icon: const FlucordIcon(FlucordIcons.hangUp),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _controlButton(BuildContext context, Key key, VoiceControl control) =>
-      IconButton(
-        key: key,
-        onPressed: control.onPressed,
-        tooltip: control.tooltip,
-        style: IconButton.styleFrom(
-          backgroundColor: context.surfaces.raised,
-          foregroundColor: control.danger
-              ? context.surfaces.danger
-              : Theme.of(context).colorScheme.onSurface,
-          side: BorderSide(color: context.surfaces.border),
-        ),
-        icon: FlucordIcon(control.icon),
-      );
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
@@ -55,8 +56,9 @@ void main() {
     expect(controller.volumeFor('user-1'), 0.25);
     expect(controller.volumeFor('user-2'), 1);
 
-    await controller.setParticipantVolume('user-2', 0.9);
-    expect(playback.sourceVolumes, {'user-1': 0.25, 'user-2': 0.9});
+    await controller.setParticipantVolume('user-2', 1.5);
+    expect(playback.sourceVolumes, {'user-1': 0.25, 'user-2': 1.5});
+    expect(controller.volumeFor('user-2'), 1.5);
   });
 
   test(
@@ -67,17 +69,21 @@ void main() {
       addTearDown(harness.dispose);
       final controller = harness.controller;
 
-      await controller.setParticipantVolume('user-1', 2);
-      expect(controller.volumeFor('user-1'), 1);
+      await controller.setParticipantVolume('user-1', 3);
+      expect(controller.volumeFor('user-1'), 2);
 
       await controller.setParticipantVolume('user-2', -0.5);
       expect(controller.volumeFor('user-2'), 0);
 
+      await controller.setParticipantVolume('user-3', 1);
+
       final saved = repository.saved;
       expect(saved, isNotNull);
       // Full level is stored as no entry: it is the room's default.
-      expect(saved!.listening.participantVolumes, {'user-2': 0.0});
-      expect(controller.volumeFor('user-1'), 1);
+      expect(saved!.listening.participantVolumes, {
+        'user-1': 2.0,
+        'user-2': 0.0,
+      });
     },
   );
 
@@ -105,6 +111,228 @@ void main() {
       expect(playback.sourceVolumes['user-1'], 1);
     },
   );
+
+  test('muting a participant silences them and keeps their level', () async {
+    final repository = MemoryVoiceProcessingRepository();
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+    await controller.setParticipantVolume('user-1', 1.5);
+
+    await controller.setParticipantMuted('user-1', true);
+
+    expect(controller.isParticipantMuted('user-1'), isTrue);
+    expect(controller.isParticipantMuted('user-2'), isFalse);
+    expect(playback.sourceVolumes['user-1'], 0);
+    expect(controller.volumeFor('user-1'), 1.5);
+    expect(repository.saved!.listening.mutedParticipants, {'user-1'});
+
+    // A level chosen while muted is saved but not heard yet.
+    await controller.setParticipantVolume('user-1', 0.5);
+    expect(playback.sourceVolumes['user-1'], 0);
+
+    await controller.setParticipantMuted('user-1', false);
+
+    expect(playback.sourceVolumes['user-1'], 0.5);
+    expect(repository.saved!.listening.mutedParticipants, isEmpty);
+    expect(repository.saved!.listening.participantVolumes, {'user-1': 0.5});
+  });
+
+  test('a saved mute silences the participant on load', () async {
+    // Muted at full level: there is no volume entry for them at all.
+    final repository = MemoryVoiceProcessingRepository(
+      const VoiceProcessingSettings(
+        listening: VoiceListeningSettings(
+          participantVolumes: {'user-2': 0.4},
+          mutedParticipants: {'user-1', 'user-2'},
+        ),
+      ),
+    );
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+
+    await controller.loadProcessingSettings();
+
+    expect(controller.isParticipantMuted('user-1'), isTrue);
+    expect(playback.sourceVolumes, {'user-1': 0, 'user-2': 0});
+    expect(controller.volumeFor('user-2'), 0.4);
+  });
+
+  test('soundboard mute is saved without touching the voice', () async {
+    final repository = MemoryVoiceProcessingRepository();
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+
+    await controller.setSoundboardMuted('user-1', true);
+
+    expect(controller.isSoundboardMuted('user-1'), isTrue);
+    expect(controller.isSoundboardMuted('user-2'), isFalse);
+    expect(controller.isParticipantMuted('user-1'), isFalse);
+    expect(playback.sourceVolumes, isEmpty);
+    expect(repository.saved!.listening.soundboardMutedParticipants, {'user-1'});
+
+    await controller.setSoundboardMuted('user-1', false);
+    expect(controller.isSoundboardMuted('user-1'), isFalse);
+  });
+
+  group('stream volume', () {
+    const sender = 'friend-1';
+    const key = GoLiveStreamKey.guild(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      userId: sender,
+    );
+
+    VoiceRemotePcmFrame streamFrame(int session) => VoiceRemotePcmFrame(
+      userId: sender,
+      sourceId: key.audioSourceId(session),
+      samples: Int16List(1920),
+    );
+
+    test('a new watched session starts at the Sender\'s level', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+
+      await controller.setStreamVolume(sender, 0.3);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      expect(controller.streamVolumeFor(sender), 0.3);
+      expect(playback.startedAt[key.audioSourceId(1)], 0.3);
+    });
+
+    test('a change reaches every session already playing', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio
+        ..add(streamFrame(1))
+        ..add(streamFrame(2));
+      await _flushEvents();
+
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0.6);
+      expect(playback.sourceVolumes[key.audioSourceId(2)], 0.6);
+    });
+
+    test('a session that ended is no longer set', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+      harness.streamAudioEnded.add(key.audioSourceId(1));
+      await _flushEvents();
+      playback.sourceVolumes.clear();
+
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes, isEmpty);
+    });
+
+    test('leaving the Room forgets its sessions', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      await controller.disconnect();
+      await _connect(harness);
+      playback.sourceVolumes.clear();
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes, isEmpty);
+    });
+
+    test('the level stays between 0 and 100 %', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+
+      await controller.setStreamVolume(sender, 1.7);
+      expect(controller.streamVolumeFor(sender), 1);
+      await controller.setStreamVolume(sender, -1);
+      expect(controller.streamVolumeFor(sender), 0);
+    });
+
+    test('mute silences the Stream and keeps its level', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      await controller.setStreamVolume(sender, 0.4);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      await controller.setStreamMuted(sender, true);
+
+      expect(controller.isStreamMuted(sender), isTrue);
+      expect(controller.streamVolumeFor(sender), 0.4);
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0);
+
+      harness.streamAudio.add(streamFrame(2));
+      await _flushEvents();
+      expect(playback.startedAt[key.audioSourceId(2)], 0);
+
+      await controller.setStreamMuted(sender, false);
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0.4);
+      expect(playback.sourceVolumes[key.audioSourceId(2)], 0.4);
+    });
+
+    test('the Sender\'s voice is left alone', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await controller.setParticipantVolume(sender, 1.5);
+
+      await controller.setStreamVolume(sender, 0.2);
+      await controller.setStreamMuted(sender, true);
+
+      expect(controller.volumeFor(sender), 1.5);
+      expect(controller.isParticipantMuted(sender), isFalse);
+      expect(playback.sourceVolumes[sender], 1.5);
+    });
+
+    test('level and mute are saved and read back', () async {
+      final repository = MemoryVoiceProcessingRepository();
+      final first = _Harness(repository: repository);
+      await first.controller.setStreamVolume(sender, 0.25);
+      await first.controller.setStreamMuted('friend-2', true);
+      await first.dispose();
+
+      final written = repository.saved!.listening;
+      final restarted = MemoryVoiceProcessingRepository(
+        VoiceProcessingSettings.fromJson(repository.saved!.toJson()),
+      );
+      final second = _Harness(repository: restarted);
+      addTearDown(second.dispose);
+      await second.controller.loadProcessingSettings();
+
+      expect(written.streamVolumes, {sender: 0.25});
+      expect(second.controller.streamVolumeFor(sender), 0.25);
+      expect(second.controller.isStreamMuted('friend-2'), isTrue);
+      expect(second.controller.isStreamMuted(sender), isFalse);
+      expect(second.controller.streamVolumeFor('friend-2'), 1);
+    });
+  });
 
   test('speech turns other applications down and back up', () async {
     final attenuation = _RecordingAttenuation();
@@ -275,15 +503,20 @@ void main() {
     // A level that is not a number keeps the room's default; unknown keys
     // are left where a newer build put them.
     final read = VoiceListeningSettings.fromJson({
-      'participant_volumes': {'user-1': 0.3, 'user-2': 'loud'},
+      'participant_volumes': {'user-1': 0.3, 'user-2': 'loud', 'user-3': 5},
       'attenuate_applications': true,
       'attenuation_level': 1.5,
+      'muted_participants': ['user-1', 7],
+      'soundboard_muted_participants': 'everyone',
     });
 
     expect(read.volumeFor('user-1'), 0.3);
     expect(read.volumeFor('user-2'), 1);
+    expect(read.volumeFor('user-3'), 2);
     expect(read.attenuateApplications, isTrue);
     expect(read.attenuationLevel, 1);
+    expect(read.mutedParticipants, {'user-1'});
+    expect(read.soundboardMutedParticipants, isEmpty);
 
     // Round trip: what is saved is what loads back.
     final restored = VoiceListeningSettings.fromJson(read.toJson());
@@ -294,7 +527,9 @@ void main() {
     const settings = VoiceProcessingSettings(
       noiseSuppression: true,
       listening: VoiceListeningSettings(
-        participantVolumes: {'user-1': 0.2},
+        participantVolumes: {'user-1': 0.2, 'user-2': 1.8},
+        mutedParticipants: {'user-2'},
+        soundboardMutedParticipants: {'user-3'},
         attenuateApplications: true,
         attenuationLevel: 0.6,
       ),
@@ -302,6 +537,25 @@ void main() {
     final restored = VoiceProcessingSettings.fromJson(settings.toJson());
 
     expect(restored, settings);
+    expect(restored.listening.mutedParticipants, {'user-2'});
+    expect(restored.listening.soundboardMutedParticipants, {'user-3'});
+    // A mute alone is a different document from no mute.
+    expect(
+      restored.listening,
+      isNot(settings.listening.copyWith(mutedParticipants: const {})),
+    );
+  });
+
+  test('a file written before mutes existed still loads', () {
+    final read = VoiceListeningSettings.fromJson({
+      'participant_volumes': {'user-1': 0.3},
+      'attenuate_applications': false,
+      'attenuation_level': 0.8,
+    });
+
+    expect(read.volumeFor('user-1'), 0.3);
+    expect(read.mutedParticipants, isEmpty);
+    expect(read.soundboardMutedParticipants, isEmpty);
   });
 
   test('capture settings keep all four through one document', () {
@@ -390,6 +644,8 @@ final class _Harness {
       signalingServiceProvider: () => signaling,
       audioCodecFactory: FakeVoiceOpusCodecFactory(),
       playbackService: playback,
+      streamAudio: streamAudio.stream,
+      streamAudioEnded: streamAudioEnded.stream,
       processingRepository: repository,
       applicationAttenuation: attenuation,
     );
@@ -398,16 +654,26 @@ final class _Harness {
   final _FakeMedia media = _FakeMedia();
   final _FakeSignaling signaling = _FakeSignaling();
 
+  /// Sound from watched sessions, as the stream viewer hands it over.
+  final StreamController<VoiceRemotePcmFrame> streamAudio = StreamController();
+  final StreamController<String> streamAudioEnded = StreamController();
+
   late final VoiceController controller;
 
   Future<void> dispose() async {
     controller.dispose();
     await signaling.close();
+    await streamAudio.close();
+    await streamAudioEnded.close();
   }
 }
 
 final class _RecordingPlayback implements VoiceAudioPlaybackService {
   final Map<String, double> sourceVolumes = {};
+
+  /// The level each source had when its first frame came, which is the level
+  /// it starts playing at.
+  final Map<String, double?> startedAt = {};
   bool enabled = false;
 
   @override
@@ -423,7 +689,11 @@ final class _RecordingPlayback implements VoiceAudioPlaybackService {
   Future<void> setEnabled(bool value) async => enabled = value;
 
   @override
-  void addPcmFrame(VoiceRemotePcmFrame frame) {}
+  void addPcmFrame(VoiceRemotePcmFrame frame) {
+    if (!startedAt.containsKey(frame.sourceId)) {
+      startedAt[frame.sourceId] = sourceVolumes[frame.sourceId];
+    }
+  }
 
   @override
   Future<void> removeSource(String sourceId) async {}

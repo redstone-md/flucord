@@ -114,4 +114,76 @@ void main() {
     );
     semantics.dispose();
   });
+
+  testWidgets('a checkbox row flips and keeps the menu open', (tester) async {
+    final changes = <bool>[];
+    await openMenu(tester, [
+      FlucordMenuCheckbox(label: 'Mute', value: false, onChanged: changes.add),
+    ]);
+
+    await tester.tap(find.text('Mute'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mute'));
+    await tester.pumpAndSettle();
+
+    expect(changes, [true, false]);
+    expect(find.text('Mute'), findsOneWidget);
+  });
+
+  testWidgets('a checkbox row reads as a checked menu item', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await openMenu(tester, [
+      FlucordMenuCheckbox(label: 'Mute', value: true, onChanged: (_) {}),
+    ]);
+
+    final row = tester.getSemantics(find.text('Mute'));
+    expect(row.role, SemanticsRole.menuItemCheckbox);
+    expect(row, isSemantics(label: 'Mute', isChecked: true));
+    semantics.dispose();
+  });
+
+  testWidgets('a slider row shows its percentage and keeps the menu open', (
+    tester,
+  ) async {
+    final changes = <double>[];
+    await openMenu(tester, [
+      FlucordMenuSlider(
+        label: 'User volume',
+        value: 1,
+        max: 2,
+        mark: 1,
+        onChanged: changes.add,
+      ),
+    ]);
+    expect(find.text('100%'), findsOneWidget);
+    expect(find.byKey(const ValueKey('flucord-menu-slider-mark')), findsOne);
+
+    // Dragged past the end of the track is the maximum.
+    await tester.drag(find.byType(Slider), const Offset(1000, 0));
+    await tester.pumpAndSettle();
+
+    expect(changes.last, 2);
+    expect(find.text('200%'), findsOneWidget);
+    expect(find.text('User volume'), findsOneWidget);
+  });
+
+  testWidgets('the slider mark sits under the thumb at its value', (
+    tester,
+  ) async {
+    await openMenu(tester, [
+      FlucordMenuSlider(
+        label: 'User volume',
+        value: 1,
+        max: 2,
+        mark: 1,
+        onChanged: (_) {},
+      ),
+    ]);
+
+    final mark = tester.getCenter(
+      find.byKey(const ValueKey('flucord-menu-slider-mark')),
+    );
+    // At half of the range, the middle of the slider is the mark.
+    expect(mark.dx, closeTo(tester.getCenter(find.byType(Slider)).dx, 0.5));
+  });
 }

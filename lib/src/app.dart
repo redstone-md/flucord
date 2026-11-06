@@ -63,6 +63,7 @@ import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'theme/flucord_theme.dart';
+import 'presentation/widgets/window_full_screen_scope.dart';
 
 /// The application widget.
 ///
@@ -144,7 +145,10 @@ class _FlucordAppState extends State<FlucordApp> {
                         image:
                             widget.bootstrap.profileAssetImage ??
                             ProfileAssetCache.image,
-                        child: child!,
+                        child: WindowFullScreenScope(
+                          fullScreen: _composition.windowFullScreen,
+                          child: child!,
+                        ),
                       ),
                     ),
                   ),

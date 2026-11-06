@@ -169,18 +169,6 @@ void main() {
       expect(showsMessageTimeline(voice, VoiceChannelSurface.chat), isTrue);
     });
 
-    test('a call swaps the timeline for the room on any channel', () {
-      final dm = channel(ChannelKind.text);
-      expect(
-        showsMessageTimeline(dm, VoiceChannelSurface.room, inCall: true),
-        isFalse,
-      );
-      expect(
-        showsMessageTimeline(dm, VoiceChannelSurface.chat, inCall: true),
-        isTrue,
-      );
-    });
-
     test('forum and media channels never show a timeline', () {
       for (final kind in [ChannelKind.forum, ChannelKind.media]) {
         expect(
@@ -192,7 +180,7 @@ void main() {
   });
 
   group('hasVoiceSurfaces', () {
-    test('only voice channels and active calls get the switch', () {
+    test('only voice channels get the switch', () {
       const voice = ConversationChannel(
         id: 'v',
         spaceId: 'forge',
@@ -208,9 +196,8 @@ void main() {
         kind: ChannelKind.text,
       );
 
-      expect(hasVoiceSurfaces(voice, inCall: false), isTrue);
-      expect(hasVoiceSurfaces(text, inCall: false), isFalse);
-      expect(hasVoiceSurfaces(text, inCall: true), isTrue);
+      expect(hasVoiceSurfaces(voice), isTrue);
+      expect(hasVoiceSurfaces(text), isFalse);
     });
   });
 }

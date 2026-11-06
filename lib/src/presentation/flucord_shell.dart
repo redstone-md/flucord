@@ -58,6 +58,7 @@ import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
 import 'widgets/active_now_column.dart';
 import 'widgets/member_profile_card.dart';
+import 'widgets/participant_menu.dart';
 import 'widgets/profile_card.dart';
 import 'widgets/profile_card_route.dart';
 import 'widgets/profile_opener_scope.dart';
@@ -493,6 +494,15 @@ class FlucordShell extends StatelessWidget {
                                 final currentMember = workspace.memberById(
                                   workspace.currentMemberId,
                                 );
+                                void openProfile(String userId, Rect anchor) =>
+                                    unawaited(
+                                      _openMemberCard(
+                                        context,
+                                        spaceId,
+                                        userId,
+                                        anchor,
+                                      ),
+                                    );
                                 return CachedSubtree(
                                   dependencies: [
                                     space,
@@ -539,17 +549,28 @@ class FlucordShell extends StatelessWidget {
                                       channelOf: _channelOf,
                                       seatedByChannel: seats,
                                       speakingUserIds: speaking,
-                                      // Discord opens a profile from these rows with
-                                      // either mouse button. Ours were labels.
-                                      onOpenMemberProfile: (userId, anchor) =>
-                                          unawaited(
-                                            _openMemberCard(
+                                      // The left button opens a seat's profile,
+                                      // the right one the participant menu.
+                                      onOpenMemberProfile: openProfile,
+                                      participantMenu: ParticipantMenu(
+                                        voice: voiceController,
+                                        currentMemberId:
+                                            workspace.currentMemberId,
+                                        actions: ParticipantMenuActions(
+                                          onOpenProfile: openProfile,
+                                          onMessage: (userId) => unawaited(
+                                            _openDirectConversation(
                                               context,
-                                              spaceId,
                                               userId,
-                                              anchor,
                                             ),
                                           ),
+                                          // Into the open channel's composer.
+                                          onMention: (userId) =>
+                                              ShellKeyboard.paneKeyOf(
+                                                context,
+                                              )?.currentState?.mention(userId),
+                                        ),
+                                      ),
                                       // A voice connection outlives the room view, so
                                       // leaving it has to stay reachable from wherever
                                       // the user has navigated to since.

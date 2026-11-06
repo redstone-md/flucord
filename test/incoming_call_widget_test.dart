@@ -8,8 +8,6 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/presentation/widgets/incoming_call_overlay.dart';
-import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
-import 'package:flucord/src/presentation/widgets/voice_room_view.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 const _accept = ValueKey('incoming-call-accept');
@@ -90,81 +88,6 @@ void main() {
     // The ring stops with the surface, before the binding checks for
     // timers left pending.
     harness.stopRinging();
-  });
-
-  testWidgets('the room shows the people in it while nobody is watched', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(900, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final harness = _Harness();
-    addTearDown(harness.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: FlucordTheme.dark,
-        home: Scaffold(
-          body: VoiceRoomView(
-            guildId: null,
-            spaceId: 'direct-messages',
-            channelId: 'dm-1',
-            channelName: 'Jack',
-            controller: harness.voice,
-            members: const [_jack],
-            currentMemberId: 'me',
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
-    await tester.pumpAndSettle();
-
-    // The room gets as far as the grid: no stream is on the stage, and an
-    // empty box handed over as one would read as a stream and take the room.
-    expect(
-      find.byKey(const ValueKey('voice-participants-empty')),
-      findsWidgets,
-    );
-  });
-
-  testWidgets('the room joins a call when there is no guild', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(900, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final harness = _Harness();
-    addTearDown(harness.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: FlucordTheme.dark,
-        home: Scaffold(
-          body: VoiceRoomView(
-            guildId: null,
-            spaceId: 'direct-messages',
-            channelId: 'dm-1',
-            channelName: 'Jack',
-            controller: harness.voice,
-            members: const [_jack],
-            currentMemberId: 'me',
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // Opening a call channel does not dial it, the same way opening a voice
-    // channel does not join one.
-    expect(harness.service.log, isEmpty);
-    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
-    await tester.pumpAndSettle();
-
-    // The same room, the same grid: a call reuses them rather than forking.
-    expect(harness.service.log, ['join:dm-1']);
-    expect(harness.voice.isCallSession, isTrue);
-    expect(harness.voice.connectedGuildId, isNull);
-    expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
-    expect(find.byType(VoiceParticipantGrid), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 }
 

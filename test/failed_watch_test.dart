@@ -66,7 +66,7 @@ void main() {
     expect(_failedMark, findsOneWidget);
     expect(find.text('Stream unavailable'), findsOneWidget);
     expect(find.text('Stop watching'), findsNothing);
-    expect(find.text('Watch'), findsOneWidget);
+    expect(find.text('Watch stream'), findsOneWidget);
   });
 
   testWidgets('watching again withdraws first, and pictures flow', (
@@ -119,7 +119,7 @@ void main() {
     expect(harness.viewer.isOpen(_key), isFalse);
     // The next time here is a new start, not last time's failure.
     expect(_failedMark, findsNothing);
-    expect(find.text('Watch'), findsOneWidget);
+    expect(find.text('Watch stream'), findsOneWidget);
   });
 
   testWidgets('a recovery that gives up before ready is a failed watch', (
@@ -168,7 +168,7 @@ Future<void> _exhaustRecovery(
 void _expectGaveUp(StreamRoomHarness harness) {
   expect(_failedMark, findsOneWidget);
   expect(find.text('Stop watching'), findsNothing);
-  expect(find.text('Watch'), findsOneWidget);
+  expect(find.text('Watch stream'), findsOneWidget);
   expect(harness.streamClients.every((client) => client.closed), isTrue);
   expect(harness.repository.watchFrames.last, 'STREAM_DELETE ${_key.value}');
 }

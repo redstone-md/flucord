@@ -13,7 +13,7 @@ import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
 const _friend = 'friend-1';
-const _streamSource = 'stream:guild:guild-1:voice-1:friend-1';
+const _streamSource = 'stream:guild:guild-1:voice-1:friend-1:1';
 
 const _session = VoiceTransportSession(
   guildId: 'guild-1',
@@ -111,7 +111,6 @@ void main() {
 
       expect(find.byTooltip('Undeafen'), findsOneWidget);
       expect(findFlucordIcon(FlucordIcons.headphonesOff), findsOneWidget);
-      expect(find.text('Voice connected, deafened'), findsOneWidget);
     });
 
     testWidgets('undeafening afterwards brings the sound back', (tester) async {
@@ -194,6 +193,28 @@ void main() {
       await _receive(tester, harness, _friend);
 
       expect(_heardAt(harness), 0.2);
+    });
+
+    testWidgets('plays above the room level', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 1.5);
+      await _receive(tester, harness, _friend);
+
+      expect(_heardAt(harness), 1.5);
+    });
+
+    testWidgets('is silent while muted and back after unmuting', (
+      tester,
+    ) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 1.5);
+      await harness.voice.setParticipantMuted(_friend, true);
+      await _receive(tester, harness, _friend);
+      expect(_heardAt(harness), 0);
+
+      await harness.voice.setParticipantMuted(_friend, false);
+
+      expect(_heardAt(harness), 1.5);
     });
 
     testWidgets('is gone once it is reset', (tester) async {

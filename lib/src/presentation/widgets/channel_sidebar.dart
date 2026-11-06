@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../application/channel_sidebar_order.dart';
@@ -17,9 +19,11 @@ import 'activity_label.dart';
 import 'activity_views.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
+import 'participant_menu.dart';
 import 'motion_scope.dart';
 import 'presence_scope.dart';
 import 'nameplate_backdrop.dart';
+import 'context_menu_target.dart';
 import 'count_badge.dart';
 import 'direct_message_views.dart';
 import 'display_name.dart';
@@ -48,6 +52,7 @@ class ChannelSidebar extends StatelessWidget {
     required this.selectedChannelId,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
+    this.participantMenu,
     required this.sessionMode,
     required this.connectionStatus,
     required this.categories,
@@ -100,6 +105,9 @@ class ChannelSidebar extends StatelessWidget {
   /// Opens somebody sitting in a voice channel. Absent on a surface with
   /// nowhere to show a profile.
   final OpenProfileCard? onOpenMemberProfile;
+
+  /// What a right click on somebody sitting in a voice channel opens.
+  final ParticipantMenu? participantMenu;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
 
@@ -485,6 +493,7 @@ class ChannelSidebar extends StatelessWidget {
         speaking: speakingUserIds.contains(seat.userId),
         indented: indented,
         onOpenProfile: onOpenMemberProfile,
+        participantMenu: participantMenu,
       ),
   ];
 

@@ -17,12 +17,15 @@ final class SoundboardPlaybackController extends ChangeNotifier {
     required String? Function() connectedChannelId,
     required SoundboardAudioPlayer player,
     bool Function()? isSilenced,
+    bool Function(String userId)? isSenderMuted,
   }) : _repositoryProvider = repositoryProvider,
        _connectedChannelId = connectedChannelId,
        _player = player,
-       _isSilenced = isSilenced ?? _neverSilenced;
+       _isSilenced = isSilenced ?? _neverSilenced,
+       _isSenderMuted = isSenderMuted ?? _noSenderMuted;
 
   static bool _neverSilenced() => false;
+  static bool _noSenderMuted(String userId) => false;
 
   final SoundboardRepository? Function() _repositoryProvider;
   final String? Function() _connectedChannelId;
@@ -30,6 +33,10 @@ final class SoundboardPlaybackController extends ChangeNotifier {
 
   /// Whether something — streamer mode — is holding the speakers quiet.
   final bool Function() _isSilenced;
+
+  /// Whether this client has muted the soundboard of the person who played
+  /// a sound.
+  final bool Function(String userId) _isSenderMuted;
 
   SoundboardRepository? _repository;
   StreamSubscription<SoundboardPlayback>? _effects;
@@ -68,7 +75,8 @@ final class SoundboardPlaybackController extends ChangeNotifier {
     // Recorded and then not played: the room still shows who pressed what,
     // which is information, while the sound itself is what would go out over
     // somebody's stream.
-    if (_isSilenced()) return;
+    // A sender whose soundboard this client muted is recorded the same way.
+    if (_isSilenced() || _isSenderMuted(playback.userId)) return;
     if (sound == null) return;
     try {
       await _player.play(sound.url, volume: sound.volume);

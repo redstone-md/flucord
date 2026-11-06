@@ -31,10 +31,12 @@ import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
+import 'package:flucord/src/platform/window_full_screen.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'pane_harness.dart';
 
+import 'fake_app_window.dart';
 import 'fake_stream_client.dart';
 import 'fake_video_encoder.dart';
 
@@ -118,7 +120,7 @@ final class StreamRoomHarness {
             userId: seat.userId,
             guildId: channel.guildId,
             channelId: channel.id,
-            selfMuted: false,
+            selfMuted: seat.isMuted,
             selfDeafened: false,
             serverMuted: false,
             serverDeafened: false,
@@ -188,6 +190,10 @@ final class StreamRoomHarness {
   /// in this room, and would clear the focus the first time it spoke.
   final RoomFocus focus = RoomFocus();
 
+  /// The app's window, as full screen drives it.
+  final FakeAppWindow window = FakeAppWindow();
+  late final WindowFullScreen fullScreen = WindowFullScreen(window);
+
   /// Walks into the room, which is where the grid and its stream controls
   /// live. Left to a test that wants the unjoined preview instead.
   Future<void> joinRoom() => channel.isDirectMessage
@@ -218,6 +224,7 @@ final class StreamRoomHarness {
         streamViewer: viewer,
         camera: camera,
         focus: focus,
+        fullScreen: fullScreen,
       ),
     ),
   );
@@ -282,12 +289,18 @@ const streamRoomTransport = VoiceTransportSession(
   daveProtocolVersion: 0,
 );
 
-/// Somebody in the room, and whether they are sending a stream.
+/// Somebody in the room, whether they are sending a stream, and whether
+/// they muted themselves.
 final class StreamRoomSeat {
-  const StreamRoomSeat(this.userId, {this.isStreaming = false});
+  const StreamRoomSeat(
+    this.userId, {
+    this.isStreaming = false,
+    this.isMuted = false,
+  });
 
   final String userId;
   final bool isStreaming;
+  final bool isMuted;
 }
 
 /// The DM call the tests walk into: a room without a guild.

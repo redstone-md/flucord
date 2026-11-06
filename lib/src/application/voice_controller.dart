@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/go_live_stream.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
@@ -146,7 +148,9 @@ final class VoiceController extends ChangeNotifier
   String? _connectedGuildId;
   String? _connectedChannelId;
   bool _isCallSession = false;
+  DateTime? _joinedAt;
   VoiceTransportSession? _transportSession;
+  Duration? _roundTrip;
   final Map<String, VoiceParticipant> _participants = {};
   String? _selfUserId;
 
@@ -173,6 +177,10 @@ final class VoiceController extends ChangeNotifier
   /// is dead, and once the map is past [_lastPcmMicrosLimit] the dead ones
   /// are swept as frames arrive.
   final Map<String, int> _lastPcmMicros = {};
+
+  /// The playback sources of each Sender's watched sessions that are live
+  /// now, so a new Stream volume reaches them at once (ADR-0012).
+  final Map<String, Set<String>> _streamSources = {};
   static const int _lastPcmMicrosLimit = 64;
   static final Duration _lastPcmIdle = Duration(minutes: 5);
 
@@ -225,6 +233,10 @@ final class VoiceController extends ChangeNotifier
   String? get selectedOutputId => _selectedOutputId;
   String? get connectedGuildId => _connectedGuildId;
   String? get connectedChannelId => _connectedChannelId;
+
+  /// When this account walked into the Room it is in, or null outside one.
+  /// A DM call's length counts from here: nothing else records a start.
+  DateTime? get joinedAt => _joinedAt;
   VoiceTransportSession? get transportSession => _transportSession;
 
   /// Who is in the room on screen.
@@ -311,6 +323,10 @@ final class VoiceController extends ChangeNotifier
   /// on every speaking change, so a list of people listens here instead.
   Listenable get seats => _seats;
   bool get isTransportReady => _transportSession != null;
+
+  /// The voice server's last heartbeat round trip, while the transport is
+  /// up and one has been measured.
+  Duration? get roundTrip => isTransportReady ? _roundTrip : null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
   bool get isMuted => _isMuted;
@@ -506,11 +522,13 @@ final class VoiceController extends ChangeNotifier
             : _connectedGuildId != guildId);
     if (movedSession) await _leaveActiveSession();
     if (_connectedChannelId == null) await _openMicrophone();
+    if (_connectedChannelId != channelId) _joinedAt = clock.now();
     _connectedGuildId = guildId;
     _connectedChannelId = channelId;
     _isCallSession = isCall;
     _participants.clear();
     _transportSession = null;
+    _roundTrip = null;
     await _audioPipeline?.setEnabled(false);
     await _setPlaybackEnabled(false);
     // Only a session that is actually being established says "joining". A
@@ -622,6 +640,7 @@ final class VoiceController extends ChangeNotifier
       } finally {
         _connectedGuildId = null;
         _connectedChannelId = null;
+        _joinedAt = null;
         _isCallSession = false;
         _connectionStatus = VoiceConnectionStatus.disconnected;
         _transportSession = null;
@@ -717,6 +736,8 @@ final class VoiceController extends ChangeNotifier
           _clearParticipants();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
+      case VoiceRoundTripEvent():
+        _roundTrip = event.roundTrip;
       case VoiceTransportReadyEvent():
         _transportSession = event.session;
         unawaited(
@@ -945,6 +966,7 @@ final class VoiceController extends ChangeNotifier
     if (_disposed) return;
     _pendingPcmFrames.removeWhere((frame) => frame.sourceId == sourceId);
     _lastPcmMicros.remove(sourceId);
+    _closeStreamSource(sourceId);
     final playbackService = _playbackService;
     if (playbackService == null) return;
     unawaited(_removePlaybackSource(playbackService, sourceId));
@@ -969,6 +991,8 @@ final class VoiceController extends ChangeNotifier
     _speakingTimers.clear();
     _pendingPcmFrames.clear();
     _lastPcmMicros.clear();
+    // A Room left can end its sessions without their end reaching here.
+    _streamSources.clear();
   }
 
   /// Drops participants the seated roster no longer lists.
@@ -1022,7 +1046,11 @@ final class VoiceController extends ChangeNotifier
   void _handleRemotePcm(VoiceRemotePcmFrame frame) {
     if (_disposed) return;
     _noteArrival(frame);
-    if (frame.sourceId == frame.userId) _heard(frame.userId);
+    if (frame.sourceId == frame.userId) {
+      _heard(frame.userId);
+    } else {
+      _openStreamSource(frame.sourceId);
+    }
     final playbackService = _playbackService;
     // Sound that comes while deafened is dropped, not held: on undeafen it
     // would play late. Screen-share audio comes this way too (ADR-0004).

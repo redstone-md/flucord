@@ -21,8 +21,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Jack'), findsOneWidget);
-    expect(find.text('You'), findsOneWidget);
+    expect(find.text('Jack (you)'), findsOneWidget);
     expect(find.text('Unknown user 123456'), findsOneWidget);
     expect(find.byTooltip('Muted'), findsOneWidget);
     final tile = tester.widget<DecoratedBox>(
@@ -85,10 +84,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Stop watching'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-2')),
-      findsOneWidget,
-    );
   });
 
   testWidgets('every open stream is marked, not just one of them', (
@@ -107,15 +102,7 @@ void main() {
       ),
     );
 
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-2')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('voice-stream-open-member-3')),
-      findsOneWidget,
-    );
-    expect(find.text('Watch'), findsNothing);
+    expect(find.text('Watch stream'), findsNothing);
     expect(find.text('Stop watching'), findsNWidgets(2));
   });
 
@@ -174,40 +161,6 @@ void main() {
     expect(watched, ['member-2']);
   });
 
-  testWidgets('a slider on a tile changes that participant alone', (
-    tester,
-  ) async {
-    var changedFor = '';
-    var changedTo = -1.0;
-    await tester.binding.setSurfaceSize(const Size(760, 520));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      _TestApp(
-        participants: const [
-          VoiceParticipant(userId: 'member-1'),
-          VoiceParticipant(userId: 'member-2'),
-        ],
-        onVolumeChanged: (participant, volume) {
-          changedFor = participant;
-          changedTo = volume;
-        },
-      ),
-    );
-
-    final slider = find.byKey(const ValueKey('voice-volume-member-2'));
-    expect(slider, findsOneWidget);
-    // Only the other participant's tile carries one: this account's voice is
-    // not played here.
-    expect(find.byKey(const ValueKey('voice-volume-member-1')), findsNothing);
-
-    await tester.drag(slider, const Offset(60, 0));
-    await tester.pumpAndSettle();
-
-    expect(changedFor, 'member-2');
-    expect(changedTo, greaterThan(0));
-    expect(changedTo, lessThan(1));
-  });
-
   testWidgets('a participant who is not streaming has no card', (tester) async {
     await tester.pumpWidget(
       _TestApp(
@@ -229,7 +182,6 @@ class _TestApp extends StatelessWidget {
     this.onWatchStream,
     this.onStopShare,
     this.onTapParticipant,
-    this.onVolumeChanged,
     this.open = const {},
   });
 
@@ -238,20 +190,25 @@ class _TestApp extends StatelessWidget {
   final void Function(String userId)? onTapParticipant;
   final VoidCallback? onStopShare;
 
-  /// Where a tile's volume slider hands a level. Null where the room was
-  /// drawn without a voice controller behind it.
-  final void Function(String participant, double volume)? onVolumeChanged;
-
   /// Whose stream this client has open, asked of the grid one tile at a time.
   final Set<String> open;
 
   @override
   Widget build(BuildContext context) {
+    final streams = VoiceStreamControls(
+      isOpen: open.contains,
+      onWatch: onWatchStream,
+      onStopShare: onStopShare,
+    );
     return MaterialApp(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: VoiceParticipantGrid(
-          participants: participants,
+          tiles: VoiceParticipantGrid.tilesOf(
+            participants,
+            currentMemberId: 'member-1',
+            streams: streams,
+          ),
           members: const [
             Member(
               id: 'member-1',
@@ -265,17 +222,7 @@ class _TestApp extends StatelessWidget {
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
           onTapParticipant: onTapParticipant,
-          listening: onVolumeChanged == null
-              ? null
-              : VoiceListeningControls(
-                  volumeFor: (_) => 0.5,
-                  onVolumeChanged: onVolumeChanged!,
-                ),
-          streams: VoiceStreamControls(
-            isOpen: open.contains,
-            onWatch: onWatchStream,
-            onStopShare: onStopShare,
-          ),
+          streams: streams,
         ),
       ),
     );

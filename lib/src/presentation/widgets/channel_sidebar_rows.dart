@@ -726,6 +726,7 @@ class VoiceSeatRow extends StatelessWidget {
     this.speaking = false,
     this.indented = false,
     this.onOpenProfile,
+    this.participantMenu,
     super.key,
   });
 
@@ -737,9 +738,13 @@ class VoiceSeatRow extends StatelessWidget {
   final bool speaking;
   final bool indented;
 
-  /// Opens whoever this row is. Discord opens a profile from these rows with
-  /// either button, and a row that answers neither reads as a label.
+  /// Opens whoever this row is, on the left button. A row that answers no
+  /// button reads as a label.
   final OpenProfileCard? onOpenProfile;
+
+  /// What the right button opens: the participant menu, as on a tile. The
+  /// profile, without one.
+  final ParticipantMenu? participantMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -790,15 +795,22 @@ class VoiceSeatRow extends StatelessWidget {
       ),
     );
     final open = onOpenProfile;
-    if (open == null) return row;
-    return InkWell(
-      onTap: () => open(state.userId, popupAnchorOf(context)),
-      // The right button too: Discord opens the same card from it, and a row
-      // that ignores it is the one place in the app where the mouse stops
-      // working.
-      onSecondaryTap: () => open(state.userId, popupAnchorOf(context)),
-      borderRadius: FlucordRadius.control,
-      child: row,
+    final menu = participantMenu;
+    if (open == null && menu == null) return row;
+    void openProfile() => open?.call(state.userId, popupAnchorOf(context));
+    // The right button and the menu keys too: a row that ignores them is the
+    // one place in the app where they stop working.
+    return ContextMenuTarget(
+      onOpen: (context, position) => menu == null
+          ? openProfile()
+          : unawaited(menu.open(context, state.userId, position: position)),
+      // The row takes the focus itself while it opens the profile.
+      focusable: open == null,
+      builder: (_, _) => InkWell(
+        onTap: open == null ? null : openProfile,
+        borderRadius: FlucordRadius.control,
+        child: row,
+      ),
     );
   }
 }

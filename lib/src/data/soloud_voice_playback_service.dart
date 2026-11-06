@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../app_log.dart';
+import '../domain/go_live_stream.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
+import '../domain/voice_processing.dart';
 
 final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
   static const int _sampleRate = 48000;
@@ -150,20 +152,25 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
 
   @override
   Future<void> removeSource(String sourceId) async {
+    // A Watched session's source id is never used again, so its level goes
+    // with it. A participant's level stays for when they return.
+    if (GoLiveStreamKey.ofAudioSource(sourceId) != null) {
+      _sourceVolumes.remove(sourceId);
+    }
     final playing = _sources.remove(sourceId);
     if (playing != null) await _player.disposeSource(playing.source);
   }
 
   @override
   Future<void> setSourceVolume(String sourceId, double volume) {
-    if (!_initialized || !_enabled) {
-      // Asked for before playback is on: kept rather than thrown at, because
-      // a level can be chosen from a tile while the room is still joining.
-      _sourceVolumes[sourceId] = volume.clamp(0.0, 1.0);
-      return Future<void>.value();
-    }
-    final level = volume.clamp(0.0, 1.0);
+    final level = volume.clamp(
+      0.0,
+      VoiceListeningSettings.maxParticipantVolume,
+    );
     _sourceVolumes[sourceId] = level;
+    // Asked for before playback is on: kept rather than thrown at, because
+    // a level can be chosen from the menu while the room is still joining.
+    if (!_initialized || !_enabled) return Future<void>.value();
     final playing = _sources[sourceId];
     if (playing == null) return Future<void>.value();
     _player.setVolume(playing.handle, level);

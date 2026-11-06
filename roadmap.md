@@ -367,7 +367,11 @@ browser runtime or dependency on Discord's private user API.
     through every call snapshot, reject self and stale participant targets, and
     expose independent mute/unmute progress, failure retry, and accessible
     state in the compact participant panel without suppressing speaking state.
-    Keep local volume state memory-only and isolated from self mute/deafen.
+    Local audio state is kept apart from self mute/deafen. Since FLUCORD-110
+    and FLUCORD-113 it is saved and kept across a restart: each participant's
+    volume (0 to 200 %), Mute and Mute soundboard, and each Sender's Stream
+    volume (0 to 100 %) and Mute stream, which leave the Sender's voice alone
+    (ADR-0012).
 68. Completed: statically inventory the installed Discord desktop 1.0.9249
     renderer protocol without reading account storage or message bodies. Add
     isolated, deterministic Dart builders for the observed REST headers and

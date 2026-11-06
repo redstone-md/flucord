@@ -125,6 +125,14 @@ final class VoiceCredentialsNeededEvent extends VoiceSignalingEvent {
   const VoiceCredentialsNeededEvent();
 }
 
+/// How long the voice server took to answer the last heartbeat. The Room
+/// header shows it next to the connection state.
+final class VoiceRoundTripEvent extends VoiceSignalingEvent {
+  const VoiceRoundTripEvent(this.roundTrip);
+
+  final Duration roundTrip;
+}
+
 final class VoiceTransportReadyEvent extends VoiceSignalingEvent {
   const VoiceTransportReadyEvent(this.session);
 

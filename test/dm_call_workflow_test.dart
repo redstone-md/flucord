@@ -42,11 +42,10 @@ import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
 const _call = ValueKey('toggle-call');
-const _room = ValueKey('voice-surface-room');
-const _chat = ValueKey('voice-surface-chat');
+const _band = ValueKey('call-band');
 
 void main() {
-  testWidgets('places a DM call and swaps the timeline for the room', (
+  testWidgets('places a DM call, drawn as a band above the messages', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
@@ -59,7 +58,7 @@ void main() {
     // A DM offers a call; a guild text channel does not.
     expect(find.byKey(_call), findsOneWidget);
     expect(find.byTooltip('Start call'), findsOneWidget);
-    expect(find.byKey(_room), findsNothing);
+    expect(find.byKey(_band), findsNothing);
     // Opening the conversation is what subscribes to its call.
     expect(repository.calls.log, contains('watch:dm-mira'));
 
@@ -75,22 +74,13 @@ void main() {
         'ring:dm-mira',
       ]),
     );
-    // The room is the existing voice room, not a second one built for calls.
+    // The band carries the Room's control row, and the conversation stays
+    // under it: there is no switch between the two.
+    expect(find.byKey(_band), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
-    expect(find.byKey(const ValueKey('message-composer')), findsNothing);
-    expect(find.byTooltip('Leave call'), findsOneWidget);
-
-    // A DM in a call earns the same room-or-chat switch a voice channel has.
-    await tester.tap(find.byKey(_chat));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
-    expect(find.byKey(const ValueKey('voice-mute')), findsNothing);
-
-    await tester.tap(find.byKey(_room));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-surface-room')), findsNothing);
+    expect(find.byTooltip('Leave call'), findsOneWidget);
 
     await tester.tap(find.byKey(_call));
     await tester.pump(const Duration(milliseconds: 300));
@@ -98,7 +88,7 @@ void main() {
 
     expect(repository.calls.log, contains('leave:dm-mira'));
     expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
-    expect(find.byKey(_room), findsNothing);
+    expect(find.byKey(_band), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

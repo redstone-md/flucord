@@ -1,5 +1,11 @@
+import 'package:flutter/material.dart';
+
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'chat_header.dart';
 
 String voiceRoomStatusLabel(VoiceController controller) {
   if (!controller.isConnected) return 'Disconnected';
@@ -18,6 +24,93 @@ String voiceRoomStatusLabel(VoiceController controller) {
     VoiceConnectionStatus.reconnecting => 'Reconnecting...',
     VoiceConnectionStatus.failure => 'Could not connect',
   };
+}
+
+/// The Room header's words: "Connected" and the ping once the connection is
+/// up, else the same words as everywhere else. Muted and deafened are left
+/// to the control row, which shows them on its buttons.
+String voiceRoomHeaderLabel(VoiceController controller) {
+  if (controller.connectionStatus != VoiceConnectionStatus.ready ||
+      !controller.isConnected) {
+    return voiceRoomStatusLabel(controller);
+  }
+  return switch (controller.roundTrip) {
+    final roundTrip? => 'Connected · ${roundTrip.inMilliseconds} ms',
+    null => 'Connected',
+  };
+}
+
+/// The voice channel Room's connection state, for the channel header.
+/// Draws nothing while this account is not in [channelId]: there is no
+/// connection of this channel's to report.
+class VoiceRoomStatusLine extends StatelessWidget {
+  const VoiceRoomStatusLine({
+    required this.controller,
+    required this.channelId,
+    super.key,
+  });
+
+  final VoiceController controller;
+  final String channelId;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      if (controller.connectedChannelId != channelId) {
+        return const SizedBox.shrink();
+      }
+      return Row(
+        key: const ValueKey('voice-room-status'),
+        children: [
+          const ChatHeaderDivider(),
+          const SizedBox(width: 12),
+          Flexible(
+            child: VoiceSignalLine(
+              isUp: controller.isTransportReady,
+              text: TextSpan(text: voiceRoomHeaderLabel(controller)),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// A Room's connection state on one line: the signal mark, green while the
+/// transport is up, then [text]. The voice channel header and the DM call
+/// band both draw it, so the two read alike.
+class VoiceSignalLine extends StatelessWidget {
+  const VoiceSignalLine({required this.isUp, required this.text, super.key});
+
+  final bool isUp;
+  final InlineSpan text;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 6,
+      children: [
+        FlucordIcon(
+          FlucordIcons.signal,
+          size: 14,
+          color: isUp ? surfaces.success : surfaces.muted,
+        ),
+        Flexible(
+          child: Text.rich(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: surfaces.muted,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// The one thing most worth saying about a room that is not working, or null.

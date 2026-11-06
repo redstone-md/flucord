@@ -869,6 +869,39 @@ void main() {
       expect(statuses.last.error.toString(), contains('heartbeat'));
     });
 
+    test('an acknowledged heartbeat reports the round trip', () {
+      fakeAsync((async) {
+        final socket = _FakeVoiceWebSocket();
+        var now = Duration.zero;
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: _FakeVoiceUdpTransport(),
+          now: () => now,
+        );
+        final roundTrips = <Duration>[];
+        client.events.listen((event) {
+          if (event is VoiceRoundTripEvent) roundTrips.add(event.roundTrip);
+        });
+
+        unawaited(client.connect());
+        async.flushMicrotasks();
+        socket.addJson({
+          'op': 8,
+          'd': {'heartbeat_interval': 60},
+        });
+        async.elapse(const Duration(milliseconds: 60));
+        now += const Duration(milliseconds: 24);
+        socket.addJson({'op': 6, 'd': null});
+        async.flushMicrotasks();
+
+        expect(roundTrips, [const Duration(milliseconds: 24)]);
+        unawaited(client.close());
+        async.flushMicrotasks();
+      });
+    });
+
     test('a session Discord ended waits to be handed a new one', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);

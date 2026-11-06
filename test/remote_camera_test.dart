@@ -345,7 +345,9 @@ void main() {
                 children: [
                   Expanded(
                     child: VoiceParticipantGrid(
-                      participants: const [VoiceParticipant(userId: 'user-a')],
+                      tiles: VoiceParticipantGrid.tilesOf(const [
+                        VoiceParticipant(userId: 'user-a'),
+                      ], currentMemberId: 'user-b'),
                       members: const [
                         Member(
                           id: 'user-a',
