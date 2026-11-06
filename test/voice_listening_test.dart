@@ -111,6 +111,74 @@ void main() {
     },
   );
 
+  test('muting a participant silences them and keeps their level', () async {
+    final repository = MemoryVoiceProcessingRepository();
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+    await controller.setParticipantVolume('user-1', 1.5);
+
+    await controller.setParticipantMuted('user-1', true);
+
+    expect(controller.isParticipantMuted('user-1'), isTrue);
+    expect(controller.isParticipantMuted('user-2'), isFalse);
+    expect(playback.sourceVolumes['user-1'], 0);
+    expect(controller.volumeFor('user-1'), 1.5);
+    expect(repository.saved!.listening.mutedParticipants, {'user-1'});
+
+    // A level chosen while muted is saved but not heard yet.
+    await controller.setParticipantVolume('user-1', 0.5);
+    expect(playback.sourceVolumes['user-1'], 0);
+
+    await controller.setParticipantMuted('user-1', false);
+
+    expect(playback.sourceVolumes['user-1'], 0.5);
+    expect(repository.saved!.listening.mutedParticipants, isEmpty);
+    expect(repository.saved!.listening.participantVolumes, {'user-1': 0.5});
+  });
+
+  test('a saved mute silences the participant on load', () async {
+    // Muted at full level: there is no volume entry for them at all.
+    final repository = MemoryVoiceProcessingRepository(
+      const VoiceProcessingSettings(
+        listening: VoiceListeningSettings(
+          participantVolumes: {'user-2': 0.4},
+          mutedParticipants: {'user-1', 'user-2'},
+        ),
+      ),
+    );
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+
+    await controller.loadProcessingSettings();
+
+    expect(controller.isParticipantMuted('user-1'), isTrue);
+    expect(playback.sourceVolumes, {'user-1': 0, 'user-2': 0});
+    expect(controller.volumeFor('user-2'), 0.4);
+  });
+
+  test('soundboard mute is saved without touching the voice', () async {
+    final repository = MemoryVoiceProcessingRepository();
+    final playback = _RecordingPlayback();
+    final harness = _Harness(playback: playback, repository: repository);
+    addTearDown(harness.dispose);
+    final controller = harness.controller;
+
+    await controller.setSoundboardMuted('user-1', true);
+
+    expect(controller.isSoundboardMuted('user-1'), isTrue);
+    expect(controller.isSoundboardMuted('user-2'), isFalse);
+    expect(controller.isParticipantMuted('user-1'), isFalse);
+    expect(playback.sourceVolumes, isEmpty);
+    expect(repository.saved!.listening.soundboardMutedParticipants, {'user-1'});
+
+    await controller.setSoundboardMuted('user-1', false);
+    expect(controller.isSoundboardMuted('user-1'), isFalse);
+  });
+
   test('speech turns other applications down and back up', () async {
     final attenuation = _RecordingAttenuation();
     final harness = _Harness(
@@ -280,15 +348,20 @@ void main() {
     // A level that is not a number keeps the room's default; unknown keys
     // are left where a newer build put them.
     final read = VoiceListeningSettings.fromJson({
-      'participant_volumes': {'user-1': 0.3, 'user-2': 'loud'},
+      'participant_volumes': {'user-1': 0.3, 'user-2': 'loud', 'user-3': 5},
       'attenuate_applications': true,
       'attenuation_level': 1.5,
+      'muted_participants': ['user-1', 7],
+      'soundboard_muted_participants': 'everyone',
     });
 
     expect(read.volumeFor('user-1'), 0.3);
     expect(read.volumeFor('user-2'), 1);
+    expect(read.volumeFor('user-3'), 2);
     expect(read.attenuateApplications, isTrue);
     expect(read.attenuationLevel, 1);
+    expect(read.mutedParticipants, {'user-1'});
+    expect(read.soundboardMutedParticipants, isEmpty);
 
     // Round trip: what is saved is what loads back.
     final restored = VoiceListeningSettings.fromJson(read.toJson());
@@ -299,7 +372,9 @@ void main() {
     const settings = VoiceProcessingSettings(
       noiseSuppression: true,
       listening: VoiceListeningSettings(
-        participantVolumes: {'user-1': 0.2},
+        participantVolumes: {'user-1': 0.2, 'user-2': 1.8},
+        mutedParticipants: {'user-2'},
+        soundboardMutedParticipants: {'user-3'},
         attenuateApplications: true,
         attenuationLevel: 0.6,
       ),
@@ -307,6 +382,25 @@ void main() {
     final restored = VoiceProcessingSettings.fromJson(settings.toJson());
 
     expect(restored, settings);
+    expect(restored.listening.mutedParticipants, {'user-2'});
+    expect(restored.listening.soundboardMutedParticipants, {'user-3'});
+    // A mute alone is a different document from no mute.
+    expect(
+      restored.listening,
+      isNot(settings.listening.copyWith(mutedParticipants: const {})),
+    );
+  });
+
+  test('a file written before mutes existed still loads', () {
+    final read = VoiceListeningSettings.fromJson({
+      'participant_volumes': {'user-1': 0.3},
+      'attenuate_applications': false,
+      'attenuation_level': 0.8,
+    });
+
+    expect(read.volumeFor('user-1'), 0.3);
+    expect(read.mutedParticipants, isEmpty);
+    expect(read.soundboardMutedParticipants, isEmpty);
   });
 
   test('capture settings keep all four through one document', () {

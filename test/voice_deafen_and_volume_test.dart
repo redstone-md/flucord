@@ -204,6 +204,20 @@ void main() {
       expect(_heardAt(harness), 1.5);
     });
 
+    testWidgets('is silent while muted and back after unmuting', (
+      tester,
+    ) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 1.5);
+      await harness.voice.setParticipantMuted(_friend, true);
+      await _receive(tester, harness, _friend);
+      expect(_heardAt(harness), 0);
+
+      await harness.voice.setParticipantMuted(_friend, false);
+
+      expect(_heardAt(harness), 1.5);
+    });
+
     testWidgets('is gone once it is reset', (tester) async {
       final harness = await _connectedRoom(tester);
       await harness.voice.setParticipantVolume(_friend, 0.2);

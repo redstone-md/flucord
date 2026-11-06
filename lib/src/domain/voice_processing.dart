@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart';
+
 /// What is done to the microphone before it is encoded, and how the room's
 /// sound is listened to.
 ///
@@ -159,15 +161,18 @@ final class VoiceDeviceChoice {
   int get hashCode => Object.hash(id, label);
 }
 
-/// The room-listening preferences: how loud each participant is, and what
-/// happens to other applications while this account speaks.
+/// The room-listening preferences: how loud each participant is, who is
+/// muted for this client, and what happens to other applications while this
+/// account speaks.
 ///
-/// Per-participant volume is keyed by participant: the level travels with the
+/// Per-participant choices are keyed by participant: they travel with the
 /// person, so a room joined tomorrow starts where today's left off. A
-/// participant with no entry plays at the room's level.
+/// participant with no entry plays at the room's level and is not muted.
 final class VoiceListeningSettings {
   const VoiceListeningSettings({
     this.participantVolumes = const {},
+    this.mutedParticipants = const {},
+    this.soundboardMutedParticipants = const {},
     this.attenuateApplications = false,
     this.attenuationLevel = defaultAttenuationLevel,
   });
@@ -181,6 +186,14 @@ final class VoiceListeningSettings {
 
   final Map<String, double> participantVolumes;
 
+  /// Participants silenced for this client only. Their level is kept, so
+  /// unmuting brings back the level chosen before.
+  final Set<String> mutedParticipants;
+
+  /// Participants whose soundboard sounds this client does not play. Their
+  /// voice is not touched.
+  final Set<String> soundboardMutedParticipants;
+
   /// Whether other applications are turned down while this account speaks.
   final bool attenuateApplications;
 
@@ -188,19 +201,29 @@ final class VoiceListeningSettings {
   final double attenuationLevel;
 
   /// The level [participant] plays at, or the room's level when none was
-  /// chosen for them.
+  /// chosen for them. A mute does not change it.
   double volumeFor(String participant) {
     final held = participantVolumes[participant];
     if (held == null) return 1;
     return held.clamp(0.0, maxParticipantVolume);
   }
 
+  /// The level the playback source of [participant] is set to: silent while
+  /// they are muted, their chosen level otherwise.
+  double playedVolumeFor(String participant) =>
+      mutedParticipants.contains(participant) ? 0 : volumeFor(participant);
+
   VoiceListeningSettings copyWith({
     Map<String, double>? participantVolumes,
+    Set<String>? mutedParticipants,
+    Set<String>? soundboardMutedParticipants,
     bool? attenuateApplications,
     double? attenuationLevel,
   }) => VoiceListeningSettings(
     participantVolumes: participantVolumes ?? this.participantVolumes,
+    mutedParticipants: mutedParticipants ?? this.mutedParticipants,
+    soundboardMutedParticipants:
+        soundboardMutedParticipants ?? this.soundboardMutedParticipants,
     attenuateApplications: attenuateApplications ?? this.attenuateApplications,
     attenuationLevel: attenuationLevel ?? this.attenuationLevel,
   );
@@ -223,18 +246,41 @@ final class VoiceListeningSettings {
     return copyWith(participantVolumes: volumes);
   }
 
+  /// The same preferences with [participant] muted or unmuted for this
+  /// client.
+  VoiceListeningSettings withParticipantMuted(String participant, bool muted) =>
+      copyWith(
+        mutedParticipants: _toggled(mutedParticipants, participant, muted),
+      );
+
+  /// The same preferences with [participant]'s soundboard muted or not.
+  VoiceListeningSettings withSoundboardMuted(String participant, bool muted) =>
+      copyWith(
+        soundboardMutedParticipants: _toggled(
+          soundboardMutedParticipants,
+          participant,
+          muted,
+        ),
+      );
+
+  static Set<String> _toggled(Set<String> ids, String id, bool present) =>
+      present ? {...ids, id} : ({...ids}..remove(id));
+
   Map<String, Object?> toJson() => {
     'participant_volumes': {
       for (final entry in participantVolumes.entries)
         if (entry.value != 1) entry.key: entry.value,
     },
+    'muted_participants': mutedParticipants.toList(),
+    'soundboard_muted_participants': soundboardMutedParticipants.toList(),
     'attenuate_applications': attenuateApplications,
     'attenuation_level': attenuationLevel,
   };
 
   /// Reads stored preferences, falling back per field: a hand-edited file
   /// must not stop the client, and a volume that is not a number keeps the
-  /// room's level.
+  /// room's level. A file written before mutes existed reads as nobody
+  /// muted.
   static VoiceListeningSettings fromJson(Object? value) {
     if (value is! Map) return const VoiceListeningSettings();
     final volumes = value['participant_volumes'];
@@ -250,6 +296,10 @@ final class VoiceListeningSettings {
     final level = value['attenuation_level'];
     return VoiceListeningSettings(
       participantVolumes: heldVolumes,
+      mutedParticipants: _idsFrom(value['muted_participants']),
+      soundboardMutedParticipants: _idsFrom(
+        value['soundboard_muted_participants'],
+      ),
       attenuateApplications: attenuate is bool && attenuate,
       attenuationLevel: level is num
           ? level.toDouble().clamp(0.0, 1.0)
@@ -257,26 +307,33 @@ final class VoiceListeningSettings {
     );
   }
 
+  /// The participant ids in a stored list; anything that is not a string is
+  /// dropped.
+  static Set<String> _idsFrom(Object? value) =>
+      value is List ? value.whereType<String>().toSet() : const {};
+
+  static const _volumesEquality = MapEquality<String, double>();
+  static const _idsEquality = SetEquality<String>();
+
   @override
   bool operator ==(Object other) =>
       other is VoiceListeningSettings &&
       other.attenuateApplications == attenuateApplications &&
       other.attenuationLevel == attenuationLevel &&
-      _sameVolumes(other.participantVolumes);
-
-  bool _sameVolumes(Map<String, double> other) {
-    if (other.length != participantVolumes.length) return false;
-    for (final entry in participantVolumes.entries) {
-      if (other[entry.key] != entry.value) return false;
-    }
-    return true;
-  }
+      _volumesEquality.equals(other.participantVolumes, participantVolumes) &&
+      _idsEquality.equals(other.mutedParticipants, mutedParticipants) &&
+      _idsEquality.equals(
+        other.soundboardMutedParticipants,
+        soundboardMutedParticipants,
+      );
 
   @override
   int get hashCode => Object.hash(
     attenuateApplications,
     attenuationLevel,
-    participantVolumes.length,
+    _volumesEquality.hash(participantVolumes),
+    _idsEquality.hash(mutedParticipants),
+    _idsEquality.hash(soundboardMutedParticipants),
   );
 }
 
