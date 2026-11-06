@@ -32,9 +32,11 @@ import '../domain/discord_permissions.dart';
 import '../domain/direct_message_management.dart';
 import '../domain/discord_relationship.dart';
 import '../domain/external_link_launcher.dart';
+import '../domain/guild_folders.dart';
 import '../domain/message_search.dart';
 import '../domain/monogram.dart';
 import '../domain/moderation_report.dart';
+import '../domain/user_settings_repository.dart';
 import '../domain/voice_connection.dart';
 import '../domain/workspace_activity.dart';
 import '../domain/workspace_permissions.dart';
@@ -80,6 +82,7 @@ import 'widgets/rail_tile.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
+import 'widgets/user_settings_scope.dart';
 import 'widgets/voice_connection_bar.dart';
 
 part 'flucord_shell_navigation.dart';
@@ -230,6 +233,11 @@ class FlucordShell extends StatelessWidget {
             final activityBySpaceId = workspace.activityBySpace(
               readState: chatController.readState,
             );
+            // The account's folders and server order. Another device's change
+            // arrives through the scope and redraws the rail.
+            final userSettings = UserSettingsScope.maybeOf(context);
+            final guildFolders =
+                userSettings?.settings?.guildFolders ?? const <GuildFolder>[];
             // Computed once per frame alongside the channel filter, from the
             // same resolver: the settings door and the buttons inside it must
             // not answer differently about the same account.
@@ -457,6 +465,8 @@ class FlucordShell extends StatelessWidget {
                           CachedSubtree(
                             dependencies: [
                               workspace.spaces,
+                              guildFolders,
+                              userSettings?.canEdit,
                               activityBySpaceId,
                               spaceId,
                               connectionController.mode,
@@ -466,6 +476,16 @@ class FlucordShell extends StatelessWidget {
                               child: ServerRail(
                                 spaces: workspace.spaces,
                                 activity: activityBySpaceId,
+                                folders: guildFolders,
+                                onArrange: userSettings?.canEdit ?? false
+                                    ? (folders) => unawaited(
+                                        userSettings!.apply(
+                                          UserSettingsPatch(
+                                            guildFolders: folders,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
                                 selectedSpaceId: spaceId,
                                 onSelectSpace: _selectSpace,
                                 onToggleTheme: onToggleTheme,
