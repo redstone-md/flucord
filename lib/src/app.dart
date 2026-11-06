@@ -11,6 +11,7 @@ import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/accessibility_dials.dart';
 import 'presentation/widgets/client_sounds_scope.dart';
 import 'presentation/widgets/accessibility_scope.dart';
+import 'presentation/widgets/trusted_domains_scope.dart';
 import 'presentation/widgets/image_nameplate_videos.dart';
 import 'presentation/widgets/motion_scope.dart';
 import 'presentation/widgets/presence_scope.dart';
@@ -148,9 +149,12 @@ class _FlucordAppState extends State<FlucordApp> {
                             ProfileAssetCache.image,
                         child: WindowFullScreenScope(
                           fullScreen: _composition.windowFullScreen,
-                          child: ClientSoundsScope(
-                            controller: _composition.clientSounds,
-                            child: child!,
+                          child: TrustedDomainsScope(
+                            controller: _composition.trustedDomains,
+                            child: ClientSoundsScope(
+                              controller: _composition.clientSounds,
+                              child: child!,
+                            ),
                           ),
                         ),
                       ),

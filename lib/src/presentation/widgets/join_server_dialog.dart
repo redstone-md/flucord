@@ -12,6 +12,7 @@ import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
+import 'guild_join_gate_dialogs.dart';
 
 /// Discord's join-a-server dialog: an invite link or code in, a preview of
 /// the server out, and a join that lands the user inside it.
@@ -278,16 +279,23 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
 }
 
 /// Opens the join dialog for [code], which may be null when the user opened
-/// the add-server surface by hand. Answers the joined space's id.
+/// the add-server surface by hand. Answers the joined space's id, once the
+/// server's onboarding and rules have been offered.
 Future<String?> showJoinServerDialog(
   BuildContext context, {
   required ChatController chat,
   String? code,
-}) => showDialog<String>(
-  context: context,
-  builder: (_) => JoinServerDialog(
-    chat: chat,
-    workspace: chat.workspace!,
-    initialCode: code,
-  ),
-);
+}) async {
+  final spaceId = await showDialog<String>(
+    context: context,
+    builder: (_) => JoinServerDialog(
+      chat: chat,
+      workspace: chat.workspace!,
+      initialCode: code,
+    ),
+  );
+  if (spaceId != null && context.mounted) {
+    await showGuildJoinSteps(context, chat: chat, spaceId: spaceId);
+  }
+  return spaceId;
+}

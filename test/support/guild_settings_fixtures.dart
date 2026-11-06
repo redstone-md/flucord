@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/guild_membership.dart';
 import 'package:flucord/src/domain/permission_overwrite.dart';
+import 'package:flucord/src/domain/user_profile.dart';
 import 'fake_automod_routes.dart';
 
 /// Fixtures shared by the guild-settings controller and widget tests.
@@ -410,6 +411,56 @@ final class FakeGuildManagementRepository
     memberProfiles[userId] = updated;
     return updated;
   }
+
+  /// What `loadOwnServerProfile` answers, and what a save changes.
+  OwnServerProfile ownServerProfile = const OwnServerProfile(
+    guildId: guildId,
+    userId: moderatorId,
+  );
+
+  /// Every server profile edit saved, in order.
+  final List<ServerProfileEdit> savedServerProfiles = [];
+
+  /// Thrown by the next save, then cleared.
+  ServerProfileRefusal? nextServerProfileRefusal;
+
+  @override
+  Future<OwnServerProfile> loadOwnServerProfile(String guildId) async {
+    _record('loadOwnServerProfile');
+    return ownServerProfile;
+  }
+
+  @override
+  Future<OwnServerProfile> saveOwnServerProfile({
+    required String guildId,
+    required ServerProfileEdit edit,
+  }) async {
+    _record('saveOwnServerProfile');
+    if (nextServerProfileRefusal case final refusal?) {
+      nextServerProfileRefusal = null;
+      throw refusal;
+    }
+    savedServerProfiles.add(edit);
+    final json = edit.toJson();
+    final current = ownServerProfile;
+    return ownServerProfile = OwnServerProfile(
+      guildId: guildId,
+      userId: current.userId,
+      nickname: json.containsKey('nick')
+          ? json['nick'] as String?
+          : current.nickname,
+      avatarHash: _savedImage(edit.avatar, current.avatarHash),
+      bannerHash: _savedImage(edit.banner, current.bannerHash),
+      bio: json.containsKey('bio') ? json['bio'] as String? ?? '' : current.bio,
+    );
+  }
+
+  static String? _savedImage(ProfileImage image, String? current) =>
+      image.isUntouched
+      ? current
+      : image.dataUri == null
+      ? null
+      : 'saved';
 
   @override
   Future<void> grantMemberRole({

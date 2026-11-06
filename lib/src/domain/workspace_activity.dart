@@ -10,6 +10,13 @@ final class SpaceActivity {
 
   static const none = SpaceActivity(unread: false, mentionCount: 0);
 
+  /// What a closed folder shows for its servers: unread when any is, with
+  /// all their mentions counted together.
+  factory SpaceActivity.folded(Iterable<SpaceActivity> spaces) => SpaceActivity(
+    unread: spaces.any((space) => space.unread),
+    mentionCount: spaces.fold(0, (sum, space) => sum + space.mentionCount),
+  );
+
   final bool unread;
   final int mentionCount;
 

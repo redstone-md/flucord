@@ -1,3 +1,4 @@
+import '../../domain/guild_folders.dart';
 import '../../domain/user_settings_repository.dart';
 import '../proto/proto_message.dart';
 import 'discord_user_settings_proto.dart';
@@ -40,6 +41,12 @@ abstract final class DiscordUserSettingsPatch {
       result.setMessage(
         PreloadedUserSettingsField.status,
         _status(root, patch),
+      );
+    }
+    if (patch.guildFolders case final folders?) {
+      result.setMessage(
+        PreloadedUserSettingsField.guildFolders,
+        _guildFolders(root, folders),
       );
     }
     return result;
@@ -217,5 +224,33 @@ abstract final class DiscordUserSettingsPatch {
       }
     }
     return custom;
+  }
+
+  static ProtoMessage _guildFolders(
+    ProtoMessage root,
+    List<GuildFolder> folders,
+  ) {
+    final group = _group(root, PreloadedUserSettingsField.guildFolders)
+      ..clearField(GuildFoldersField.folders);
+    for (final folder in folders) {
+      final entry = ProtoMessage()
+        ..setFixed64List(
+          GuildFolderField.guildIds,
+          folder.guildIds.map(int.parse),
+        );
+      if (folder.id case final id?) {
+        entry.setIntWrapper(GuildFolderField.id, id);
+      }
+      if (folder.name case final name?) {
+        entry.setStringWrapper(GuildFolderField.name, name);
+      }
+      if (folder.colour case final colour?) {
+        entry.setIntWrapper(GuildFolderField.colour, colour);
+      }
+      group.addMessage(GuildFoldersField.folders, entry);
+    }
+    return group..setFixed64List(GuildFoldersField.guildPositions, [
+      for (final folder in folders) ...folder.guildIds.map(int.parse),
+    ]);
   }
 }

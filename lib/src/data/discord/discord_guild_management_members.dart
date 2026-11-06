@@ -4,7 +4,8 @@ part of 'discord_guild_management_repository.dart';
 ///
 /// Nickname and timeout are one partial patch route; roles have a route of
 /// their own per role, which is what keeps two moderators ticking two boxes
-/// from erasing each other's work.
+/// from erasing each other's work. The `@me` routes are the account's own
+/// server profile, which any member may edit.
 mixin _DiscordGuildMemberAdministration {
   DiscordRestClient get _rest;
 
@@ -63,4 +64,56 @@ mixin _DiscordGuildMemberAdministration {
     '${_memberBase(guildId, userId)}/roles/${_segment(roleId)}',
     auditLogReason: reason,
   );
+
+  String _ownBase(String guildId) => '/guilds/${_segment(guildId)}/members/@me';
+
+  /// `GET /guilds/{id}/members/@me`, the private member object, which is the
+  /// one that carries the server bio and banner.
+  Future<OwnServerProfile> loadOwnServerProfile(String guildId) async =>
+      DiscordGuildAdminMapper.ownServerProfile(
+        await _rest.getObject(_ownBase(guildId)),
+        guildId: guildId,
+      );
+
+  /// `PATCH /guilds/{id}/members/@me` with only the touched fields.
+  Future<OwnServerProfile> saveOwnServerProfile({
+    required String guildId,
+    required ServerProfileEdit edit,
+  }) async {
+    try {
+      return DiscordGuildAdminMapper.ownServerProfile(
+        await _rest.requestObject(
+          'PATCH',
+          _ownBase(guildId),
+          body: edit.toJson(),
+        ),
+        guildId: guildId,
+      );
+    } on DiscordApiException catch (error) {
+      if (error.isForbidden) {
+        throw const ServerProfileRefusal(
+          'This server does not let you change that.',
+        );
+      }
+      if (error.statusCode != 400) rethrow;
+      final reason = _firstFieldError(error.responsePayload?['errors']);
+      throw ServerProfileRefusal(
+        'Discord did not save your server profile: '
+        '${reason ?? error.message}',
+      );
+    }
+  }
+
+  /// The first `_errors[].message` in a 50035 answer's error tree, which
+  /// names the field that failed, such as a nickname that is too long.
+  static String? _firstFieldError(Object? tree) {
+    if (tree is! Map) return null;
+    if (tree['_errors'] case [{'message': final String message}, ...]) {
+      return message;
+    }
+    for (final child in tree.values) {
+      if (_firstFieldError(child) case final message?) return message;
+    }
+    return null;
+  }
 }

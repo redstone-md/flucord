@@ -72,7 +72,7 @@ void main() {
         allowMultiselect: true,
       ),
     );
-    await client.endPoll(channelId: 'channel-1', messageId: 'poll-1');
+    await client.polls.endPoll(channelId: 'channel-1', messageId: 'poll-1');
 
     expect(transport.requests.first.method, 'POST');
     expect(
@@ -170,6 +170,69 @@ void main() {
     );
     expect(removed?.message.poll?.answers.last.count, 2);
     expect(removed?.message.poll?.answers.last.votedByCurrentUser, isFalse);
+  });
+
+  test(
+    'the account\'s own vote, already counted, is not counted twice',
+    () async {
+      final cache = await SqliteChatCache.openAt(
+        inMemoryDatabasePath,
+        factory: databaseFactoryFfi,
+      );
+      addTearDown(cache.close);
+      // The account voted for "Stable" already, as the vote route counted it.
+      await cache.writeMessage(
+        DiscordMapper().message(_messagePayload(count: 4)),
+      );
+      final handler = DiscordPollVoteHandler(cache, () => 'bot-1');
+
+      final echoed = await handler.apply(
+        const DiscordGatewayDispatch(
+          name: 'MESSAGE_POLL_VOTE_ADD',
+          data: {'message_id': 'poll-1', 'answer_id': 1, 'user_id': 'bot-1'},
+        ),
+      );
+      final held = await cache.readMessage('poll-1');
+
+      expect(echoed, isNull);
+      expect(held?.poll?.answers.first.count, 4);
+    },
+  );
+
+  test('a bot lists the voters of an answer', () async {
+    final transport = _RecordingTransport([
+      DiscordHttpResponse(
+        statusCode: 200,
+        headers: const {},
+        body: jsonEncode({
+          'users': [
+            {'id': 'user-2', 'username': 'ivy'},
+          ],
+        }),
+      ),
+    ]);
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      FakeChatGateway(),
+      cache,
+    );
+    addTearDown(repository.close);
+
+    final page = await repository.loadPollVoters(
+      channelId: 'channel-1',
+      messageId: 'poll-1',
+      answerId: 2,
+    );
+
+    final uri = transport.requests.single.uri;
+    expect(uri.path, '/api/v10/channels/channel-1/polls/poll-1/answers/2');
+    expect(uri.queryParameters, {'limit': '100'});
+    expect(page.users.single.displayName, 'ivy');
+    expect(page.hasMore, isFalse);
   });
 }
 

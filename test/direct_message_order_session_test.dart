@@ -14,7 +14,7 @@ const _friendId = SessionHarness.friendId;
 const _groupId = '400000000000000031';
 
 /// Between the two, for a conversation created during the session.
-const _newDmId = '350000000000000031';
+const _newDmId = '300000000000000051';
 
 const _friend = {
   'id': _friendId,
@@ -150,7 +150,7 @@ void main() {
     },
     ready: _readyWithGroup(
       dmLastMessageId: '500000000000000031',
-      dmAckedId: '310000000000000031',
+      dmAckedId: '300000000000000021',
     ),
   );
 

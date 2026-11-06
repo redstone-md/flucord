@@ -9,6 +9,7 @@ import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
+import '../application/voice_moderation.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
@@ -39,6 +40,7 @@ import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
 import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
+import 'widgets/guild_join_gate_dialogs.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
@@ -101,10 +103,17 @@ class ConversationPane extends StatefulWidget {
     required this.onOpenInbox,
     this.onOpenMemberProfile,
     this.onMessageMember,
+    this.onAddToGroup,
+    this.onOpenGroupSettings,
+    this.voiceModeration,
     super.key,
   });
 
   final ChatWorkspace workspace;
+
+  /// What a voice moderator may do from the participant menu, or null on a
+  /// session that cannot moderate.
+  final VoiceModeration? voiceModeration;
 
   /// What the account may do in [channel], resolved from its permissions.
   final ChannelCapabilities capabilities;
@@ -147,6 +156,11 @@ class ConversationPane extends StatefulWidget {
 
   /// Opens the direct message with a member, from the participant menu.
   final ValueChanged<String>? onMessageMember;
+
+  /// Adds friends to a group DM, and opens its settings. Null on a session
+  /// that cannot run a group.
+  final ValueChanged<ConversationChannel>? onAddToGroup;
+  final ValueChanged<ConversationChannel>? onOpenGroupSettings;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();
@@ -475,6 +489,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onMessage: widget.onMessageMember,
         onMention: mention,
       ),
+      moderation: widget.voiceModeration,
     );
 
     // What the channel shows under its header: the voice Room, a forum's
@@ -673,6 +688,16 @@ class ConversationPaneState extends State<ConversationPane> {
                 }
               : null,
           onOpenInbox: widget.onOpenInbox,
+          onAddToGroup: switch (widget.onAddToGroup) {
+            final add? when channel.isGroupDirectMessage => () => add(channel),
+            _ => null,
+          },
+          onOpenGroupSettings: switch (widget.onOpenGroupSettings) {
+            final open? when channel.isGroupDirectMessage => () => open(
+              channel,
+            ),
+            _ => null,
+          },
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
@@ -685,6 +710,18 @@ class ConversationPaneState extends State<ConversationPane> {
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
+        else if (showsMessages && widget.workspace.isPendingIn(channel.spaceId))
+          PendingMemberNotice(
+            onReadRules: chat.canAnswerJoinGate
+                ? () => unawaited(
+                    showGuildRulesDialog(
+                      context,
+                      chat: chat,
+                      spaceId: channel.spaceId,
+                    ),
+                  )
+                : null,
+          )
         else if (showsMessages && !widget.capabilities.sendMessages)
           const ReadOnlyChannelNotice()
         else if (showsMessages)
@@ -802,6 +839,16 @@ class ConversationPaneState extends State<ConversationPane> {
     return (entitlements?.premiumTier ?? PremiumTier.none)
         .messageCharacterLimit;
   }
+
+  /// Whether this session and account may send super reactions. Until the
+  /// account's entitlements arrive the answer is no, so nothing is offered
+  /// that Discord would refuse.
+  bool _sendsSuperReactions(ChatController chat) =>
+      chat.canSendSuperReactions &&
+      (AccountEntitlementsScope.maybeOf(
+            context,
+          )?.entitlements?.premiumTier.sendsSuperReactions ??
+          false);
 
   /// The largest file this account may attach in this channel, or null while
   /// the account's entitlements have not arrived. The answer is whichever is
@@ -995,6 +1042,7 @@ class ConversationPaneState extends State<ConversationPane> {
     Set<String> blockedUserIds,
   ) {
     final channel = widget.channel;
+    final sendsSuperReactions = _sendsSuperReactions(chat);
     return MessageList(
       key: _timelineKey,
       blockedUserIds: blockedUserIds,
@@ -1021,8 +1069,14 @@ class ConversationPaneState extends State<ConversationPane> {
       onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
-      onLoadReactionUsers: chat.loadReactionUsers,
+      onLoadReactionUsers: chat.canListReactionUsers
+          ? chat.loadReactionUsers
+          : null,
       onAddReaction: chat.addReaction,
+      onToggleSuperReaction: sendsSuperReactions
+          ? chat.toggleSuperReaction
+          : null,
+      onAddSuperReaction: sendsSuperReactions ? chat.addSuperReaction : null,
       onMarkUnread: chat.readStateRepository == null
           ? null
           : chat.markChannelUnreadFrom,
@@ -1040,6 +1094,8 @@ class ConversationPaneState extends State<ConversationPane> {
       onResolveAlert: chat.resolveAutoModAlert,
       onReport: (message) => unawaited(_reportMessage(context, message)),
       onEndPoll: chat.endPoll,
+      onVotePoll: chat.canVoteInPolls ? chat.votePoll : null,
+      onLoadPollVoters: chat.canListPollVoters ? chat.loadPollVoters : null,
       // A session that cannot carry out an action does not offer it.
       onForward: chat.canForwardMessages
           ? (message, targetChannelId) async {

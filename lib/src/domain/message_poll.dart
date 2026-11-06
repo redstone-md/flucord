@@ -48,6 +48,36 @@ final class MessagePoll {
   int get totalVotes =>
       answers.fold(0, (total, answer) => total + answer.count);
 
+  /// The answers the account voted for.
+  Set<int> get ownVote => {
+    for (final answer in answers)
+      if (answer.votedByCurrentUser) answer.id,
+  };
+
+  /// Whether the poll still takes votes at [now]. An ended poll only shows
+  /// its results.
+  bool isOpenAt(DateTime now) =>
+      !isFinalized && (expiry == null || expiry!.isAfter(now));
+
+  /// The poll once the account's whole vote is [answerIds]. An empty set
+  /// takes the vote back. The counts move only for answers that change.
+  MessagePoll withOwnVote(Set<int> answerIds) => copyWith(
+    answers: [
+      for (final answer in answers)
+        switch ((answer.votedByCurrentUser, answerIds.contains(answer.id))) {
+          (false, true) => answer.copyWith(
+            count: answer.count + 1,
+            votedByCurrentUser: true,
+          ),
+          (true, false) => answer.copyWith(
+            count: answer.count > 0 ? answer.count - 1 : 0,
+            votedByCurrentUser: false,
+          ),
+          _ => answer,
+        },
+    ],
+  );
+
   MessagePoll copyWith({
     List<PollAnswer>? answers,
     DateTime? expiry,
