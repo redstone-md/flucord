@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
@@ -177,6 +178,143 @@ void main() {
 
     await controller.setSoundboardMuted('user-1', false);
     expect(controller.isSoundboardMuted('user-1'), isFalse);
+  });
+
+  group('stream volume', () {
+    const sender = 'friend-1';
+    const key = GoLiveStreamKey.guild(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      userId: sender,
+    );
+
+    VoiceRemotePcmFrame streamFrame(int session) => VoiceRemotePcmFrame(
+      userId: sender,
+      sourceId: key.audioSourceId(session),
+      samples: Int16List(1920),
+    );
+
+    test('a new watched session starts at the Sender\'s level', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+
+      await controller.setStreamVolume(sender, 0.3);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      expect(controller.streamVolumeFor(sender), 0.3);
+      expect(playback.startedAt[key.audioSourceId(1)], 0.3);
+    });
+
+    test('a change reaches every session already playing', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio
+        ..add(streamFrame(1))
+        ..add(streamFrame(2));
+      await _flushEvents();
+
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0.6);
+      expect(playback.sourceVolumes[key.audioSourceId(2)], 0.6);
+    });
+
+    test('a session that ended is no longer set', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+      harness.streamAudioEnded.add(key.audioSourceId(1));
+      await _flushEvents();
+      playback.sourceVolumes.clear();
+
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes, isEmpty);
+    });
+
+    test('the level stays between 0 and 100 %', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+
+      await controller.setStreamVolume(sender, 1.7);
+      expect(controller.streamVolumeFor(sender), 1);
+      await controller.setStreamVolume(sender, -1);
+      expect(controller.streamVolumeFor(sender), 0);
+    });
+
+    test('mute silences the Stream and keeps its level', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      await controller.setStreamVolume(sender, 0.4);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      await controller.setStreamMuted(sender, true);
+
+      expect(controller.isStreamMuted(sender), isTrue);
+      expect(controller.streamVolumeFor(sender), 0.4);
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0);
+
+      harness.streamAudio.add(streamFrame(2));
+      await _flushEvents();
+      expect(playback.startedAt[key.audioSourceId(2)], 0);
+
+      await controller.setStreamMuted(sender, false);
+      expect(playback.sourceVolumes[key.audioSourceId(1)], 0.4);
+      expect(playback.sourceVolumes[key.audioSourceId(2)], 0.4);
+    });
+
+    test('the Sender\'s voice is left alone', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await controller.setParticipantVolume(sender, 1.5);
+
+      await controller.setStreamVolume(sender, 0.2);
+      await controller.setStreamMuted(sender, true);
+
+      expect(controller.volumeFor(sender), 1.5);
+      expect(controller.isParticipantMuted(sender), isFalse);
+      expect(playback.sourceVolumes[sender], 1.5);
+    });
+
+    test('level and mute are saved and read back', () async {
+      final repository = MemoryVoiceProcessingRepository();
+      final first = _Harness(repository: repository);
+      await first.controller.setStreamVolume(sender, 0.25);
+      await first.controller.setStreamMuted('friend-2', true);
+      await first.dispose();
+
+      final written = repository.saved!.listening;
+      final restarted = MemoryVoiceProcessingRepository(
+        VoiceProcessingSettings.fromJson(repository.saved!.toJson()),
+      );
+      final second = _Harness(repository: restarted);
+      addTearDown(second.dispose);
+      await second.controller.loadProcessingSettings();
+
+      expect(written.streamVolumes, {sender: 0.25});
+      expect(second.controller.streamVolumeFor(sender), 0.25);
+      expect(second.controller.isStreamMuted('friend-2'), isTrue);
+      expect(second.controller.isStreamMuted(sender), isFalse);
+      expect(second.controller.streamVolumeFor('friend-2'), 1);
+    });
   });
 
   test('speech turns other applications down and back up', () async {
@@ -489,6 +627,8 @@ final class _Harness {
       signalingServiceProvider: () => signaling,
       audioCodecFactory: FakeVoiceOpusCodecFactory(),
       playbackService: playback,
+      streamAudio: streamAudio.stream,
+      streamAudioEnded: streamAudioEnded.stream,
       processingRepository: repository,
       applicationAttenuation: attenuation,
     );
@@ -497,16 +637,26 @@ final class _Harness {
   final _FakeMedia media = _FakeMedia();
   final _FakeSignaling signaling = _FakeSignaling();
 
+  /// Sound from watched sessions, as the stream viewer hands it over.
+  final StreamController<VoiceRemotePcmFrame> streamAudio = StreamController();
+  final StreamController<String> streamAudioEnded = StreamController();
+
   late final VoiceController controller;
 
   Future<void> dispose() async {
     controller.dispose();
     await signaling.close();
+    await streamAudio.close();
+    await streamAudioEnded.close();
   }
 }
 
 final class _RecordingPlayback implements VoiceAudioPlaybackService {
   final Map<String, double> sourceVolumes = {};
+
+  /// The level each source had when its first frame came, which is the level
+  /// it starts playing at.
+  final Map<String, double?> startedAt = {};
   bool enabled = false;
 
   @override
@@ -522,7 +672,11 @@ final class _RecordingPlayback implements VoiceAudioPlaybackService {
   Future<void> setEnabled(bool value) async => enabled = value;
 
   @override
-  void addPcmFrame(VoiceRemotePcmFrame frame) {}
+  void addPcmFrame(VoiceRemotePcmFrame frame) {
+    if (!startedAt.containsKey(frame.sourceId)) {
+      startedAt[frame.sourceId] = sourceVolumes[frame.sourceId];
+    }
+  }
 
   @override
   Future<void> removeSource(String sourceId) async {}

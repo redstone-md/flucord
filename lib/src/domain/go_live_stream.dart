@@ -47,6 +47,26 @@ final class GoLiveStreamKey {
     return null;
   }
 
+  /// The playback source of one watched session's sound (ADR-0004):
+  /// `stream:<value>:<session>`. Each session gets a new number, so a source
+  /// that ended is never fed again.
+  String audioSourceId(int session) => '$_audioSourcePrefix$value:$session';
+
+  /// The stream a source from [audioSourceId] plays, or `null` when
+  /// [sourceId] is not one (a participant's voice is a bare user id).
+  ///
+  /// The session number is cut off explicitly, not guessed: user ids are
+  /// numbers too.
+  static GoLiveStreamKey? ofAudioSource(String sourceId) {
+    if (!sourceId.startsWith(_audioSourcePrefix)) return null;
+    final rest = sourceId.substring(_audioSourcePrefix.length);
+    final cut = rest.lastIndexOf(':');
+    if (cut < 0 || int.tryParse(rest.substring(cut + 1)) == null) return null;
+    return parse(rest.substring(0, cut));
+  }
+
+  static const _audioSourcePrefix = 'stream:';
+
   @override
   bool operator ==(Object other) =>
       other is GoLiveStreamKey &&

@@ -13,7 +13,7 @@ import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
 const _friend = 'friend-1';
-const _streamSource = 'stream:guild:guild-1:voice-1:friend-1';
+const _streamSource = 'stream:guild:guild-1:voice-1:friend-1:1';
 
 const _session = VoiceTransportSession(
   guildId: 'guild-1',
