@@ -45,6 +45,8 @@ final class StreamMenu {
   }) async {
     final key = streamKeyFor(sender);
     final open = viewer.isOpen(key);
+    // Taken now: the tile that opened the menu may be gone once it closes.
+    final navigator = Navigator.of(context, rootNavigator: true);
     await showFlucordActionMenu(
       context,
       position: position,
@@ -54,7 +56,7 @@ final class StreamMenu {
             'stream-menu-full-screen',
             'Full screen',
             FlucordIcons.fullscreen,
-            () => unawaited(fullScreen.open(context, key)),
+            () => unawaited(fullScreen.open(navigator, key)),
           ),
           const FlucordMenuDivider(),
         ],
@@ -82,4 +84,9 @@ final class StreamMenu {
       ],
     );
   }
+
+  /// Opens [sender]'s Stream full screen, from the Stage's own button or a
+  /// double click on it.
+  Future<void> openFullScreen(BuildContext context, String sender) => fullScreen
+      .open(Navigator.of(context, rootNavigator: true), streamKeyFor(sender));
 }

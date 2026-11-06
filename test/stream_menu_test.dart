@@ -235,6 +235,23 @@ void main() {
     }
   });
 
+  testWidgets('Full screen opens after the Stage that asked has gone', (
+    tester,
+  ) async {
+    final harness = await _watchedRoom(tester);
+    await _rightClick(tester, find.byKey(_stage));
+
+    // The Stage leaves while its menu is open; the session stays.
+    harness.focus.clear();
+    await tester.pump();
+    expect(find.byKey(_stage), findsNothing);
+    await tester.tap(find.text('Full screen'));
+    await _open(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(_page), findsOneWidget);
+  });
+
   testWidgets('full screen closes by itself when the session stops', (
     tester,
   ) async {

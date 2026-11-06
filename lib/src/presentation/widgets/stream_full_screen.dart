@@ -29,11 +29,10 @@ final class StreamFullScreen {
   /// window alone.
   final WindowFullScreen? window;
 
-  /// Opens [key] full screen, and returns once it has closed and the window
-  /// has its size and place back.
-  Future<void> open(BuildContext context, GoLiveStreamKey key) async {
+  /// Opens [key] full screen on [navigator], the app's root one, and returns
+  /// once it has closed and the window has its size and place back.
+  Future<void> open(NavigatorState navigator, GoLiveStreamKey key) async {
     if (!viewer.isOpen(key)) return;
-    final navigator = Navigator.of(context, rootNavigator: true);
     late final Route<void> route;
     route = PageRouteBuilder<void>(
       opaque: true,

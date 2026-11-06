@@ -390,9 +390,7 @@ class VoiceStreamTile extends StatelessWidget {
     final menu = _isOwn ? null : streams?.menu;
     final fullScreen = menu == null || !onStage
         ? null
-        : () => unawaited(
-            menu.fullScreen.open(context, menu.streamKeyFor(_userId)),
-          );
+        : () => unawaited(menu.openFullScreen(context, _userId));
     final controls = _control(
       context,
       name: name,
