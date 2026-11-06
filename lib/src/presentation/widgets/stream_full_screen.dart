@@ -16,8 +16,10 @@ import 'go_live_viewer.dart';
 ///
 /// It carries the viewer and the window itself because the route opens above
 /// the app's scopes. Esc, the exit button or a double-click goes back. The
-/// route also closes by itself once the Stream is no longer watched, which
-/// covers Stop watching, the Stream ending, and leaving the Room.
+/// route follows the Watched session, not its pictures: it stays through a
+/// reconnect or a decoder that drops for a moment, and closes by itself once
+/// the session is gone, which covers Stop watching, the Stream ending, and
+/// leaving the Room.
 final class StreamFullScreen {
   const StreamFullScreen({required this.viewer, this.window});
 
@@ -30,7 +32,7 @@ final class StreamFullScreen {
   /// Opens [key] full screen, and returns once it has closed and the window
   /// has its size and place back.
   Future<void> open(BuildContext context, GoLiveStreamKey key) async {
-    if (!viewer.isWatching(key)) return;
+    if (!viewer.isOpen(key)) return;
     final navigator = Navigator.of(context, rootNavigator: true);
     late final Route<void> route;
     route = PageRouteBuilder<void>(
@@ -39,7 +41,7 @@ final class StreamFullScreen {
           _StreamFullScreenPage(viewer: viewer, streamKey: key),
     );
     void closeWhenGone() {
-      if (!viewer.isWatching(key) && route.isActive) {
+      if (!viewer.isOpen(key) && route.isActive) {
         navigator.removeRoute(route);
       }
     }
@@ -91,10 +93,15 @@ class _StreamFullScreenPage extends StatelessWidget {
                 key: const ValueKey('stream-full-screen'),
                 behavior: HitTestBehavior.opaque,
                 onDoubleTap: close,
-                child: GoLiveViewer(
-                  textures: viewer.texturesFor(streamKey),
-                  label: streamKey.userId,
-                  error: viewer.errorFor(streamKey),
+                // Rebuilt with the viewer: the session that carries the
+                // pictures can arrive, or be replaced, while the page is up.
+                child: ListenableBuilder(
+                  listenable: viewer,
+                  builder: (context, _) => GoLiveViewer(
+                    textures: viewer.texturesFor(streamKey),
+                    label: streamKey.userId,
+                    error: viewer.errorFor(streamKey),
+                  ),
                 ),
               ),
               Positioned(

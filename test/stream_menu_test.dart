@@ -210,6 +210,31 @@ void main() {
     expect(find.byKey(_page), findsNothing);
   });
 
+  testWidgets('full screen follows the Watched session, not its pictures', (
+    tester,
+  ) async {
+    final harness = await _room(tester);
+    await tester.tap(find.byKey(const ValueKey('voice-watch-$_sender')));
+    await tester.pump();
+    expect(harness.viewer.isOpen(_key), isTrue);
+    expect(harness.viewer.isWatching(_key), isFalse);
+
+    // Asked for, nothing arriving yet: the session is open all the same.
+    await _rightClick(tester, find.byKey(_card));
+    await tester.tap(find.text('Full screen'));
+    await _open(tester);
+    expect(find.byKey(_page), findsOneWidget);
+
+    // A reconnect replaces the session; the page stays through it.
+    for (var i = 0; i < 2; i++) {
+      await tester.runAsync(
+        () => harness.viewer.attach(_key, packets: const Stream.empty()),
+      );
+      await tester.pump();
+      expect(find.byKey(_page), findsOneWidget);
+    }
+  });
+
   testWidgets('full screen closes by itself when the session stops', (
     tester,
   ) async {

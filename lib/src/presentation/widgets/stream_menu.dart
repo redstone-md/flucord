@@ -16,7 +16,7 @@ import 'stream_full_screen.dart';
 /// It carries the controllers itself because the menu opens on a route above
 /// the app's scopes. Stream volume and Mute stream are kept per Sender, so
 /// they show whether or not the Stream is watched; Full screen shows only
-/// while it is.
+/// while its Watched session is open, pictures or not.
 final class StreamMenu {
   const StreamMenu({
     required this.voice,
@@ -45,14 +45,13 @@ final class StreamMenu {
     Offset? position,
   }) async {
     final key = streamKeyFor(sender);
-    final watching = viewer.isWatching(key);
     final open = viewer.isOpen(key);
     final chosen = await showMenu<VoidCallback>(
       context: context,
       position: menuAt(context, position: position),
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
       items: [
-        if (watching) ...[
+        if (open) ...[
           flucordMenuAction(
             'stream-menu-full-screen',
             'Full screen',
