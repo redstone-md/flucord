@@ -26,3 +26,21 @@ abstract interface class ReactionRepository {
     int limit = 100,
   });
 }
+
+/// Super reactions, which Discord sends with the burst reaction type.
+///
+/// Only a user account offers this. A bot cannot send a super reaction, and
+/// Discord gives them only to an account with Nitro.
+abstract interface class SuperReactionRepository {
+  Future<void> addSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  });
+
+  Future<void> removeSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  });
+}

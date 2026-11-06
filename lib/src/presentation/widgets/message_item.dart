@@ -64,8 +64,10 @@ class MessageItem extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
-    required this.onLoadReactionUsers,
+    this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onToggleSuperReaction,
+    this.onAddSuperReaction,
     this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
@@ -126,8 +128,18 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-  final ReactionUsersLoader onLoadReactionUsers;
+
+  /// Loads who reacted, or null where the session cannot list them. Then the
+  /// list is not offered at all.
+  final ReactionUsersLoader? onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Takes back or adds the account's super reaction on a chip, and adds a
+  /// new one from the hover bar. Null where the account cannot send super
+  /// reactions. Then neither is offered.
+  final Future<void> Function(ChatMessage, MessageReaction)?
+  onToggleSuperReaction;
+  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
 
   /// Makes this message and everything after it unread again. Null on a
   /// transport with no read state.
@@ -665,7 +677,15 @@ class _MessageItemState extends State<MessageItem> {
             workspace: widget.workspace,
             onToggle: (reaction) =>
                 unawaited(widget.onToggleReaction(message, reaction)),
-            onShowDetails: _showReactionDetails,
+            onToggleSuper: switch (widget.onToggleSuperReaction) {
+              final toggle? => (reaction) => unawaited(
+                toggle(message, reaction),
+              ),
+              null => null,
+            },
+            onShowDetails: widget.onLoadReactionUsers == null
+                ? null
+                : _showReactionDetails,
           ),
         ],
       ],
@@ -943,7 +963,13 @@ class _MessageItemState extends State<MessageItem> {
     onReactionPickerToggled: (isOpen) {
       if (mounted) _updateBar(() => _reactionPickerOpen = isOpen);
     },
-    onShowReactionDetails: _showReactionDetails,
+    onAddSuperReaction: switch (widget.onAddSuperReaction) {
+      final add? => (emoji) => unawaited(add(widget.message, emoji)),
+      null => null,
+    },
+    onShowReactionDetails: widget.onLoadReactionUsers == null
+        ? null
+        : _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
     onForward: widget.onForward == null ? null : _showForwardDialog,
     onToggleSuppressEmbeds: switch (widget.onToggleSuppressEmbeds) {
@@ -963,13 +989,15 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   void _showReactionDetails(MessageReaction reaction) {
+    final load = widget.onLoadReactionUsers;
+    if (load == null) return;
     unawaited(
       ReactionDetailsDialog.show(
         context,
         message: widget.message,
         workspace: _workspaceNow,
         initialReaction: reaction,
-        onLoad: widget.onLoadReactionUsers,
+        onLoad: load,
       ),
     );
   }

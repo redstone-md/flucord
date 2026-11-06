@@ -106,6 +106,7 @@ final class DiscordSharedDispatches {
   void route(DiscordGatewayDispatch event) {
     switch (event.name) {
       case 'MESSAGE_REACTION_ADD' ||
+          'MESSAGE_REACTION_ADD_MANY' ||
           'MESSAGE_REACTION_REMOVE' ||
           'MESSAGE_REACTION_REMOVE_EMOJI' ||
           'MESSAGE_REACTION_REMOVE_ALL':

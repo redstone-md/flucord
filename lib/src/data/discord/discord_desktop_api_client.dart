@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_remote_auth.dart';
+import '../../domain/reaction_repository.dart';
 import '../../domain/voice_message_recorder.dart';
 import 'discord_captcha.dart';
 import 'discord_call_api.dart';
@@ -786,23 +787,54 @@ final class DiscordDesktopApiClient
     },
   );
 
+  /// The people who reacted with [emoji], one [type] at a time.
+  Future<List<Map<String, Object?>>> getReactions({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+    required DiscordReactionType type,
+    String? afterUserId,
+    int limit = 100,
+  }) => _rest.getList(
+    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}',
+    query: {
+      'type': '${type.discordValue}',
+      'limit': '${limit.clamp(1, 100)}',
+      'after': ?afterUserId,
+    },
+  );
+
+  /// A super reaction is the burst [type] on the same route.
   Future<void> addReaction({
     required String channelId,
     required String messageId,
     required String emoji,
+    DiscordReactionType type = DiscordReactionType.normal,
   }) => _rest.requestEmpty(
     'PUT',
     '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
+    query: type == DiscordReactionType.normal
+        ? null
+        : {'type': '${type.discordValue}'},
   );
 
+  /// A super reaction is taken back on the route that names its type. A
+  /// normal one keeps the short route, which means the same thing.
   Future<void> removeReaction({
     required String channelId,
     required String messageId,
     required String emoji,
-  }) => _rest.requestEmpty(
-    'DELETE',
-    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
-  );
+    DiscordReactionType type = DiscordReactionType.normal,
+  }) {
+    final reactions =
+        '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}';
+    return _rest.requestEmpty(
+      'DELETE',
+      type == DiscordReactionType.normal
+          ? '$reactions/@me'
+          : '$reactions/${type.discordValue}/@me',
+    );
+  }
 
   Future<void> setPinned({
     required String channelId,
