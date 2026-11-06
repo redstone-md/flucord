@@ -180,7 +180,9 @@ class _ForumMediaPreview extends StatelessWidget {
     final attachment = this.attachment;
     return KeyedSubtree(
       key: ValueKey('forum-post-media-${post.id}'),
-      child: attachment != null && attachment.isImage
+      // A spoiler stays hidden on the card, as it does in the chat, until the
+      // post is opened.
+      child: attachment != null && attachment.isImage && !attachment.isSpoiler
           ? LayoutBuilder(
               builder: (context, constraints) => Image(
                 image: attachmentPreviewImage(
@@ -199,25 +201,30 @@ class _ForumMediaPreview extends StatelessWidget {
               ),
             )
           : _MediaPlaceholder(
-              icon: attachment?.isVideo == true
+              icon: attachment?.isSpoiler == true
+                  ? FlucordIcons.hidden
+                  : attachment?.isVideo == true
                   ? FlucordIcons.videoFile
                   : attachment == null
                   ? FlucordIcons.mediaChannel
                   : FlucordIcons.file,
-              label: attachment?.fileName,
+              label: attachment?.isSpoiler == true
+                  ? 'Spoiler'
+                  : attachment?.fileName,
             ),
     );
   }
 
   /// The size to fetch and decode at: enough to fill [bounds] once cropped,
-  /// and no more.
+  /// and no more. The ratio is held to the chat preview's range, so a very
+  /// tall or very wide picture does not ask for a huge download.
   static Size _coverBox(MessageAttachment attachment, Size bounds) {
     final width = attachment.width;
     final height = attachment.height;
     if (width == null || height == null || width == 0 || height == 0) {
       return bounds;
     }
-    return boxCovering(bounds, width / height);
+    return boxCovering(bounds, (width / height).clamp(0.7, 2.2));
   }
 }
 

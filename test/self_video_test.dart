@@ -485,6 +485,8 @@ void main() {
       // not disturb the setting.
       await controller.selectCamera(1);
       await controller.selectCamera(-1);
+      // Nor does a camera that is no longer attached.
+      await controller.selectCamera(2);
       expect(controller.selectedCamera, 1);
 
       await controller.turnOn();

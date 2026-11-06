@@ -79,6 +79,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('keeps a spoiler hidden on the card', (tester) async {
+    await _pumpTile(tester, workspace: _workspace(_spoiler), gallery: true);
+
+    expect(find.byType(Image), findsNothing);
+    expect(find.text('Spoiler'), findsOneWidget);
+  });
+
   testWidgets('requests one lazy preview for a visible empty post', (
     tester,
   ) async {
@@ -163,6 +170,16 @@ const _capture = MessageAttachment(
   id: 'image-1',
   fileName: 'capture.png',
   url: 'https://cdn.discordapp.com/attachments/1/2/capture.png',
+  size: 1024,
+  contentType: 'image/png',
+  width: 1280,
+  height: 720,
+);
+
+const _spoiler = MessageAttachment(
+  id: 'image-2',
+  fileName: 'SPOILER_capture.png',
+  url: 'https://cdn.discordapp.com/attachments/1/2/SPOILER_capture.png',
   size: 1024,
   contentType: 'image/png',
   width: 1280,

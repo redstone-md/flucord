@@ -204,6 +204,8 @@ final class ConversationChannel {
     // `last_message_id`; dropping the remembered one would make every unread
     // channel look read until the next message arrived.
     lastMessageId: lastMessageId ?? previous.lastMessageId,
+    // Likewise a thread payload without `message_count` keeps the known one.
+    messageCount: messageCount ?? previous.messageCount,
   );
 
   /// Records that [messageId] is the newest message here, never rewinding.
@@ -234,6 +236,7 @@ final class ConversationChannel {
     int? bitrate,
     int? userLimit,
     Object? rtcRegion = _keepRtcRegion,
+    int? messageCount,
   }) => ConversationChannel(
     id: id,
     spaceId: spaceId,
@@ -280,6 +283,6 @@ final class ConversationChannel {
     lastMessageId: identical(lastMessageId, _keepLastMessageId)
         ? this.lastMessageId
         : lastMessageId as String?,
-    messageCount: messageCount,
+    messageCount: messageCount ?? this.messageCount,
   );
 }
