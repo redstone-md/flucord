@@ -20,6 +20,7 @@ extension _FlucordShellConversation on FlucordShell {
     required bool showThreads,
     required bool allowThreadPanel,
     required bool canSearch,
+    VoiceModeration? voiceModeration,
   }) => ConversationPane(
     key: ShellKeyboard.paneKeyOf(context),
     workspace: workspace,
@@ -47,6 +48,7 @@ extension _FlucordShellConversation on FlucordShell {
         unawaited(_openMemberCard(context, space.id, userId, anchor)),
     onMessageMember: (userId) =>
         unawaited(_openDirectConversation(context, userId)),
+    voiceModeration: voiceModeration,
   );
 
   /// Runs [text] against the server and opens the results panel.

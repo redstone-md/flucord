@@ -786,10 +786,13 @@ class VoiceSeatRow extends StatelessWidget {
             if (state.isStreaming)
               const _SeatStateIcon(FlucordIcons.screenShare),
             if (state.isVideoEnabled) const _SeatStateIcon(FlucordIcons.camera),
-            if (deafened)
-              const _SeatStateIcon(FlucordIcons.headphonesOff)
-            else if (silenced)
-              const _SeatStateIcon(FlucordIcons.micOff),
+            for (final mark in soundMarks(
+              selfMuted: state.selfMuted,
+              selfDeafened: state.selfDeafened,
+              serverMuted: state.serverMuted,
+              serverDeafened: state.serverDeafened,
+            ))
+              _SeatMark(mark),
           ],
         ),
       ),
@@ -880,9 +883,12 @@ class _SeatAvatar extends StatelessWidget {
 
 /// A small state mark at the end of a seat: muted, deafened, video, stream.
 class _SeatStateIcon extends StatelessWidget {
-  const _SeatStateIcon(this.icon);
+  const _SeatStateIcon(this.icon, {this.color});
 
   final FlucordIconData icon;
+
+  /// The muted colour when null.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -890,7 +896,24 @@ class _SeatStateIcon extends StatelessWidget {
     child: FlucordIcon(
       icon,
       size: _SidebarMetrics.iconSize,
-      color: context.surfaces.muted,
+      color: color ?? context.surfaces.muted,
+    ),
+  );
+}
+
+/// A seat's microphone or headphones mark, in the danger colour when a
+/// moderator set it.
+class _SeatMark extends StatelessWidget {
+  const _SeatMark(this.mark);
+
+  final ParticipantMark mark;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: mark.label,
+    child: _SeatStateIcon(
+      mark.icon,
+      color: mark.byServer ? context.surfaces.danger : null,
     ),
   );
 }

@@ -36,10 +36,23 @@ Future<void> showFlucordActionMenu(
   BuildContext context, {
   required List<PopupMenuEntry<VoidCallback>> items,
   Offset? position,
+}) => showFlucordActionMenuAt(
+  context,
+  at: menuAt(context, position: position),
+  items: items,
+);
+
+/// [showFlucordActionMenu] at [at], which a menu that opens from a row of
+/// another keeps: by then the first menu's widget may be gone, so [context]
+/// can be the navigator's own.
+Future<void> showFlucordActionMenuAt(
+  BuildContext context, {
+  required RelativeRect at,
+  required List<PopupMenuEntry<VoidCallback>> items,
 }) async {
   final chosen = await showMenu<VoidCallback>(
     context: context,
-    position: menuAt(context, position: position),
+    position: at,
     constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
     items: items,
   );
