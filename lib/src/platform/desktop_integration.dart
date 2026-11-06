@@ -24,6 +24,31 @@ final class DesktopMessageNotification {
   final ChannelLink link;
 }
 
+/// A call ringing the user, as the desktop announces it while the window is
+/// not in front: a native toast and a flashing taskbar button.
+final class DesktopRingingCall {
+  const DesktopRingingCall({
+    required this.identifier,
+    required this.title,
+    required this.body,
+    required this.link,
+    required this.showsToast,
+  });
+
+  /// One per ring, so the desktop can tell a new ring from the same one
+  /// announced again.
+  final String identifier;
+  final String title;
+  final String body;
+
+  /// The call's conversation. A click on the toast opens it.
+  final ChannelLink link;
+
+  /// Whether the account and streamer mode allow the toast. The taskbar
+  /// flashes either way, as the ring sound plays either way.
+  final bool showsToast;
+}
+
 /// The running app as the desktop layer sees it: the state desktop chrome
 /// reads and the actions it triggers.
 ///
@@ -42,6 +67,11 @@ abstract interface class DesktopAppSurface implements Listenable {
   /// window is focused is a platform fact, so the platform layer makes the
   /// final call on showing one.
   Stream<DesktopMessageNotification> get messageNotifications;
+
+  /// The call ringing the user right now, or null. A ring that starts or
+  /// ends is announced to listeners. As with messages, whether the window is
+  /// in front is for the platform layer to judge.
+  DesktopRingingCall? get ringingCall;
 
   /// Navigates to a channel. A link that arrives before the workspace is
   /// loaded is held and applied once the workspace exists.

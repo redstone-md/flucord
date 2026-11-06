@@ -28,6 +28,9 @@ abstract interface class DesktopNotificationGateway {
 
   Future<void> show(DesktopNotificationRequest request);
 
+  /// Takes down the toast shown with [identifier], if it is still up.
+  Future<void> dismiss(String identifier);
+
   Future<void> dispose();
 }
 
@@ -82,6 +85,16 @@ final class LocalDesktopNotificationGateway
     } catch (_) {
       await _destroy(notification);
       rethrow;
+    }
+  }
+
+  @override
+  Future<void> dismiss(String identifier) async {
+    final shown = _notifications.where(
+      (notification) => notification.identifier == identifier,
+    );
+    for (final notification in shown.toList(growable: false)) {
+      await _destroy(notification);
     }
   }
 
