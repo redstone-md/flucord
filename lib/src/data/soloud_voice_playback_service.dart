@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../app_log.dart';
+import '../domain/go_live_stream.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
 import '../domain/voice_processing.dart';
@@ -151,6 +152,11 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
 
   @override
   Future<void> removeSource(String sourceId) async {
+    // A Watched session's source id is never used again, so its level goes
+    // with it. A participant's level stays for when they return.
+    if (GoLiveStreamKey.ofAudioSource(sourceId) != null) {
+      _sourceVolumes.remove(sourceId);
+    }
     final playing = _sources.remove(sourceId);
     if (playing != null) await _player.disposeSource(playing.source);
   }
