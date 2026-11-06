@@ -20,6 +20,7 @@ import 'activity_views.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'participant_menu.dart';
+import 'voice_participant_grid.dart' show ParticipantMark, soundMarks;
 import 'motion_scope.dart';
 import 'presence_scope.dart';
 import 'nameplate_backdrop.dart';

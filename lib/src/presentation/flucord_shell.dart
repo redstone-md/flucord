@@ -23,6 +23,7 @@ import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/self_video_controller.dart';
 import '../application/voice_controller.dart';
+import '../application/voice_moderation.dart';
 import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
@@ -242,6 +243,14 @@ class FlucordShell extends StatelessWidget {
             final canManageServers = chatController.guildManagement != null;
             final canManageDirectMessages =
                 chatController.canManageDirectMessages;
+            // From the same resolver, so a seat and a tile offer the same.
+            final voiceModeration = switch (chatController.guildManagement) {
+              final members? => VoiceModeration(
+                members: members,
+                permissions: permissions,
+              ),
+              null => null,
+            };
             // Friends live in the DM space only. Absent on a session that is
             // never told a friend graph, such as the bot session and the demo
             // workspace.
@@ -576,6 +585,7 @@ class FlucordShell extends StatelessWidget {
                                                 context,
                                               )?.currentState?.mention(userId),
                                         ),
+                                        moderation: voiceModeration,
                                       ),
                                       // A voice connection outlives the room view, so
                                       // leaving it has to stay reachable from wherever
@@ -703,6 +713,8 @@ class FlucordShell extends StatelessWidget {
                                                   allowThreadPanel:
                                                       allowThreadPanel,
                                                   canSearch: canSearch,
+                                                  voiceModeration:
+                                                      voiceModeration,
                                                 ),
                                         ),
                                         if (friends != null && friendsOpen)

@@ -9,6 +9,7 @@ import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
+import '../application/voice_moderation.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
@@ -103,10 +104,15 @@ class ConversationPane extends StatefulWidget {
     this.onMessageMember,
     this.onAddToGroup,
     this.onOpenGroupSettings,
+    this.voiceModeration,
     super.key,
   });
 
   final ChatWorkspace workspace;
+
+  /// What a voice moderator may do from the participant menu, or null on a
+  /// session that cannot moderate.
+  final VoiceModeration? voiceModeration;
 
   /// What the account may do in [channel], resolved from its permissions.
   final ChannelCapabilities capabilities;
@@ -482,6 +488,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onMessage: widget.onMessageMember,
         onMention: mention,
       ),
+      moderation: widget.voiceModeration,
     );
 
     // What the channel shows under its header: the voice Room, a forum's

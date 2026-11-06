@@ -591,26 +591,50 @@ class VoiceStreamTile extends StatelessWidget {
   }
 }
 
-/// The member [userId] names, or a stand-in for somebody this client has not
-/// loaded.
-/// One thing a person's tile or avatar says about their sound.
-typedef ParticipantMark = ({FlucordIconData icon, String label});
+/// One thing a person's tile, avatar or seat says about their sound.
+/// [byServer] is a moderator's doing, drawn apart from the person's own.
+typedef ParticipantMark = ({FlucordIconData icon, String label, bool byServer});
 
 /// What a Room tile or a call avatar marks about [participant]'s sound, the
-/// most pressing first: their microphone (deafened or muted), then whether
-/// this client muted them. [participant] is null for somebody not in the
-/// Room, whose microphone is nobody's business yet.
+/// most pressing first: their microphone, then whether this client muted
+/// them. [participant] is null for somebody not in the Room, whose
+/// microphone is nobody's business yet.
 List<ParticipantMark> participantMarks(
   VoiceParticipant? participant, {
   required bool mutedForYou,
 }) => [
-  if (participant?.isDeafened ?? false)
-    (icon: FlucordIcons.headphonesOff, label: 'Deafened')
-  else if (participant?.isMuted ?? false)
-    (icon: FlucordIcons.micOff, label: 'Muted'),
-  if (mutedForYou) (icon: FlucordIcons.volumeOff, label: 'Muted for you'),
+  if (participant != null)
+    ...soundMarks(
+      selfMuted: participant.selfMuted,
+      selfDeafened: participant.selfDeafened,
+      serverMuted: participant.serverMuted,
+      serverDeafened: participant.serverDeafened,
+    ),
+  if (mutedForYou)
+    (icon: FlucordIcons.volumeOff, label: 'Muted for you', byServer: false),
 ];
 
+/// What somebody's voice state marks: deafened before muted, as deafening
+/// mutes too. A server mute still shows beside a self-deafen, because only
+/// a moderator can lift it.
+List<ParticipantMark> soundMarks({
+  required bool selfMuted,
+  required bool selfDeafened,
+  required bool serverMuted,
+  required bool serverDeafened,
+}) => [
+  if (serverDeafened)
+    (icon: FlucordIcons.headphonesOff, label: 'Server deafened', byServer: true)
+  else if (selfDeafened)
+    (icon: FlucordIcons.headphonesOff, label: 'Deafened', byServer: false),
+  if (serverMuted && !serverDeafened)
+    (icon: FlucordIcons.micOff, label: 'Server muted', byServer: true)
+  else if (selfMuted && !selfDeafened && !serverDeafened)
+    (icon: FlucordIcons.micOff, label: 'Muted', byServer: false),
+];
+
+/// The member [userId] names, or a stand-in for somebody this client has not
+/// loaded.
 Member voiceMemberOf(List<Member> members, String userId) =>
     members.where((member) => member.id == userId).firstOrNull ??
     _unknownMember(userId);
@@ -729,7 +753,13 @@ class _Mark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: mark.label,
-    child: FlucordIcon(mark.icon, size: 14, color: context.surfaces.bodyText),
+    child: FlucordIcon(
+      mark.icon,
+      size: 14,
+      color: mark.byServer
+          ? context.surfaces.danger
+          : context.surfaces.bodyText,
+    ),
   );
 }
 

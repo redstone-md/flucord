@@ -20,6 +20,10 @@ final class ChannelCapabilities {
     required this.embedLinks,
     required this.moderateStage,
     required this.bypassesSlowmode,
+    this.connect = false,
+    this.muteMembers = false,
+    this.deafenMembers = false,
+    this.moveMembers = false,
   });
 
   /// Everything allowed. Used where no permission data exists at all — a demo
@@ -38,6 +42,10 @@ final class ChannelCapabilities {
     embedLinks: true,
     moderateStage: true,
     bypassesSlowmode: true,
+    connect: true,
+    muteMembers: true,
+    deafenMembers: true,
+    moveMembers: true,
   );
 
   /// Nothing allowed, for a channel that resolved to no permissions at all.
@@ -112,6 +120,22 @@ final class ChannelCapabilities {
               DiscordPermissions.manageChannels |
               DiscordPermissions.bypassSlowmode,
         ),
+        connect: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.connect,
+        ),
+        muteMembers: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.muteMembers,
+        ),
+        deafenMembers: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.deafenMembers,
+        ),
+        moveMembers: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.moveMembers,
+        ),
       );
 
   final bool viewChannel;
@@ -132,6 +156,15 @@ final class ChannelCapabilities {
   /// Whether slowmode leaves this account alone in this channel.
   final bool bypassesSlowmode;
 
+  /// Joining this voice channel.
+  final bool connect;
+
+  /// Server muting, server deafening and moving somebody in this voice
+  /// channel. Moving needs [connect] in the channel moved to as well.
+  final bool muteMembers;
+  final bool deafenMembers;
+  final bool moveMembers;
+
   /// Whether [message] may be acted on as its owner would: your own always,
   /// anyone else's only with `MANAGE_MESSAGES`. This is the rule behind both
   /// deleting a message and suppressing its embeds.
@@ -150,7 +183,11 @@ final class ChannelCapabilities {
       other.attachFiles == attachFiles &&
       other.sendVoiceMessages == sendVoiceMessages &&
       other.embedLinks == embedLinks &&
-      other.bypassesSlowmode == bypassesSlowmode;
+      other.bypassesSlowmode == bypassesSlowmode &&
+      other.connect == connect &&
+      other.muteMembers == muteMembers &&
+      other.deafenMembers == deafenMembers &&
+      other.moveMembers == moveMembers;
 
   @override
   int get hashCode => Object.hash(
@@ -164,5 +201,9 @@ final class ChannelCapabilities {
     sendVoiceMessages,
     embedLinks,
     bypassesSlowmode,
+    connect,
+    muteMembers,
+    deafenMembers,
+    moveMembers,
   );
 }
