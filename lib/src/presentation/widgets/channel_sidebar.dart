@@ -407,10 +407,10 @@ class ChannelSidebar extends StatelessWidget {
       _DirectMessagesFolder(
         labelTrailing: _directMessagesLabelTrailing(context),
         requests: requests,
-        conversationRows: [
-          for (final channel in order.conversations) _rowFor(channel),
-        ],
+        conversations: order.conversations,
+        conversationRow: _rowFor,
         requestRows: [for (final channel in requests) _requestRowFor(channel)],
+        selectedChannelId: selectedChannelId,
       ),
     ];
   }
