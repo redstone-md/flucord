@@ -6,6 +6,8 @@ import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/platform/desktop_message_notification_controller.dart';
 
+import 'support/fake_desktop_notifications.dart';
+
 DesktopMessageNotification _notification({
   required String identifier,
   ChannelLink link = const ChannelLink(
@@ -24,7 +26,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('shows a toast and activates its channel on click', () async {
-    final gateway = _NotificationGateway();
+    final gateway = FakeDesktopNotificationGateway();
     final controller = DesktopMessageNotificationController(
       isFocused: () async => false,
       gateway: gateway,
@@ -55,7 +57,7 @@ void main() {
   });
 
   test('drops the toast for the focused active channel only', () async {
-    final gateway = _NotificationGateway();
+    final gateway = FakeDesktopNotificationGateway();
     var focused = true;
     final controller = DesktopMessageNotificationController(
       isFocused: () async => focused,
@@ -87,7 +89,7 @@ void main() {
   });
 
   test('stays silent while streamer mode is on', () async {
-    final gateway = _NotificationGateway();
+    final gateway = FakeDesktopNotificationGateway();
     var streaming = true;
     final controller = DesktopMessageNotificationController(
       isFocused: () async => false,
@@ -110,7 +112,7 @@ void main() {
   });
 
   test('shows what the surface stream delivers after attach', () async {
-    final gateway = _NotificationGateway();
+    final gateway = FakeDesktopNotificationGateway();
     final controller = DesktopMessageNotificationController(
       isFocused: () async => false,
       gateway: gateway,
@@ -149,6 +151,9 @@ final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
       _notifications.stream;
 
   @override
+  DesktopRingingCall? get ringingCall => null;
+
+  @override
   void openChannelLink(ChannelLink link) => openedLinks.add(link);
 
   @override
@@ -162,20 +167,4 @@ final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
 
   @override
   Future<void> prepareToExit() async {}
-}
-
-final class _NotificationGateway implements DesktopNotificationGateway {
-  final List<DesktopNotificationRequest> requests = [];
-  int initializeCount = 0;
-
-  @override
-  Future<void> initialize() async => initializeCount++;
-
-  @override
-  Future<void> show(DesktopNotificationRequest request) async {
-    requests.add(request);
-  }
-
-  @override
-  Future<void> dispose() async {}
 }
