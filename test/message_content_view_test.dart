@@ -247,6 +247,26 @@ void main() {
     );
   });
 
+  testWidgets('a -# line is small and muted, with its markdown intact', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host('above\n-# small **bold** <@100>'));
+    await tester.pump();
+
+    final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+    final body = _spanWithText(tester, 'above').style!;
+    final small = _spanWithText(tester, 'small ').style!;
+    expect(small.fontSize, lessThan(body.fontSize!));
+    expect(small.color, surfaces.muted);
+    expect(_plainText(tester), isNot(contains('-#')));
+
+    final bold = _spanWithText(tester, 'bold').style!;
+    expect(bold.fontWeight, FlucordType.writtenBold.fontWeight);
+    expect(bold.fontSize, small.fontSize);
+    final mention = tester.widget<Text>(find.text('@Mira'));
+    expect(mention.style?.fontSize, small.fontSize);
+  });
+
   testWidgets('routes a voice channel mention like any other channel', (
     tester,
   ) async {
