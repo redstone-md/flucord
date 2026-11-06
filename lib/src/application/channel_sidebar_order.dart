@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart';
+
 import '../domain/chat_models.dart';
 import '../domain/read_state.dart';
 
@@ -46,9 +48,17 @@ final class ChannelSidebarOrder {
   );
 
   /// The direct messages, without the requests, which live in their folder.
-  late final List<ConversationChannel> conversations = _regular
-      .where((channel) => !channel.isMessageRequest)
-      .toList(growable: false);
+  ///
+  /// This is the one place the DM list is ordered: the latest activity first.
+  /// A new message, a sent one or a new conversation moves a row here, on the
+  /// next build. The sort is stable, so ids that tie keep the order given.
+  late final List<ConversationChannel> conversations = () {
+    final rows = _regular
+        .where((channel) => !channel.isMessageRequest)
+        .toList(growable: false);
+    mergeSort(rows, compare: ConversationChannel.latestActivityFirst);
+    return rows;
+  }();
 
   /// The direct messages nobody has answered yet.
   late final List<ConversationChannel> messageRequests = _regular
