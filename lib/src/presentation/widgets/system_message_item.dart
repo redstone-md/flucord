@@ -50,13 +50,10 @@ class SystemMessageItem extends StatelessWidget {
                 border: Border.all(color: context.surfaces.border),
                 borderRadius: FlucordRadius.full,
               ),
-              // A call start is marked green, as Discord marks it.
               child: FlucordIcon(
                 descriptor.icon,
                 size: 16,
-                color: message.type == DiscordMessageType.call
-                    ? context.surfaces.success
-                    : null,
+                color: descriptor.tint?.call(context.surfaces),
               ),
             ),
             const SizedBox(width: 12),
@@ -130,51 +127,79 @@ final class _SystemMessageAction {
   final VoidCallback onPressed;
 }
 
+/// The colour an icon takes from the theme.
+typedef _Tint = Color Function(FlucordSurfaceTheme surfaces);
+
 final class _SystemMessageDescriptor {
-  const _SystemMessageDescriptor({required this.icon, required this.text});
+  const _SystemMessageDescriptor({
+    required this.icon,
+    required this.text,
+    this.tint,
+  });
 
   final FlucordIconData icon;
+
+  /// The icon's colour, or null for the text's.
+  final _Tint? tint;
   final String text;
 
   factory _SystemMessageDescriptor.from(ChatMessage message, String author) {
-    final icon = switch (message.type) {
-      DiscordMessageType.recipientAdd => FlucordIcons.invite,
-      DiscordMessageType.recipientRemove => FlucordIcons.removeFriend,
-      DiscordMessageType.call => FlucordIcons.call,
-      DiscordMessageType.channelNameChange => FlucordIcons.edit,
-      DiscordMessageType.channelIconChange => FlucordIcons.image,
-      DiscordMessageType.channelPinnedMessage => FlucordIcons.pin,
-      DiscordMessageType.userJoin => FlucordIcons.joined,
+    final (icon, tint) = switch (message.type) {
+      DiscordMessageType.recipientAdd => (FlucordIcons.invite, null),
+      DiscordMessageType.recipientRemove => (FlucordIcons.removeFriend, null),
+      // A call start is marked green, as Discord marks it.
+      DiscordMessageType.call => (
+        FlucordIcons.call,
+        (FlucordSurfaceTheme surfaces) => surfaces.success,
+      ),
+      DiscordMessageType.channelNameChange => (FlucordIcons.edit, null),
+      DiscordMessageType.channelIconChange => (FlucordIcons.image, null),
+      DiscordMessageType.channelPinnedMessage => (FlucordIcons.pin, null),
+      DiscordMessageType.userJoin => (FlucordIcons.joined, null),
       DiscordMessageType.guildBoost ||
       DiscordMessageType.guildBoostTier1 ||
       DiscordMessageType.guildBoostTier2 ||
-      DiscordMessageType.guildBoostTier3 => FlucordIcons.boost,
-      DiscordMessageType.channelFollowAdd => FlucordIcons.notifications,
-      DiscordMessageType.guildDiscoveryRequalified => FlucordIcons.explore,
+      DiscordMessageType.guildBoostTier3 => (FlucordIcons.boost, null),
+      DiscordMessageType.channelFollowAdd => (FlucordIcons.notifications, null),
+      DiscordMessageType.guildDiscoveryRequalified => (
+        FlucordIcons.explore,
+        null,
+      ),
       DiscordMessageType.guildDiscoveryDisqualified ||
       DiscordMessageType.guildDiscoveryGracePeriodInitialWarning ||
-      DiscordMessageType.guildDiscoveryGracePeriodFinalWarning =>
+      DiscordMessageType.guildDiscoveryGracePeriodFinalWarning => (
         FlucordIcons.warning,
-      DiscordMessageType.threadCreated => FlucordIcons.threads,
-      DiscordMessageType.guildInviteReminder => FlucordIcons.invite,
+        null,
+      ),
+      DiscordMessageType.threadCreated => (FlucordIcons.threads, null),
+      DiscordMessageType.guildInviteReminder => (FlucordIcons.invite, null),
       DiscordMessageType.roleSubscriptionPurchase ||
-      DiscordMessageType.guildApplicationPremiumSubscription =>
+      DiscordMessageType.guildApplicationPremiumSubscription => (
         FlucordIcons.entitlements,
-      DiscordMessageType.stageStart => FlucordIcons.stage,
-      DiscordMessageType.stageEnd => FlucordIcons.stop,
-      DiscordMessageType.stageSpeaker => FlucordIcons.mic,
-      DiscordMessageType.stageTopic => FlucordIcons.edit,
-      DiscordMessageType.guildIncidentAlertModeEnabled =>
+        null,
+      ),
+      DiscordMessageType.stageStart => (FlucordIcons.stage, null),
+      DiscordMessageType.stageEnd => (FlucordIcons.stop, null),
+      DiscordMessageType.stageSpeaker => (FlucordIcons.mic, null),
+      DiscordMessageType.stageTopic => (FlucordIcons.edit, null),
+      DiscordMessageType.guildIncidentAlertModeEnabled => (
         FlucordIcons.alertMode,
-      DiscordMessageType.guildIncidentAlertModeDisabled =>
+        null,
+      ),
+      DiscordMessageType.guildIncidentAlertModeDisabled => (
         FlucordIcons.alertModeOff,
-      DiscordMessageType.guildIncidentReportRaid => FlucordIcons.report,
-      DiscordMessageType.guildIncidentReportFalseAlarm =>
+        null,
+      ),
+      DiscordMessageType.guildIncidentReportRaid => (FlucordIcons.report, null),
+      DiscordMessageType.guildIncidentReportFalseAlarm => (
         FlucordIcons.reportOff,
-      _ => FlucordIcons.info,
+        null,
+      ),
+      _ => (FlucordIcons.info, null),
     };
     return _SystemMessageDescriptor(
       icon: icon,
+      tint: tint,
       text: SystemMessageText.describe(message, author),
     );
   }
