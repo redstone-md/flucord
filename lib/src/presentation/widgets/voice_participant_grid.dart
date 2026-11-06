@@ -237,15 +237,12 @@ class VoiceParticipantTile extends StatelessWidget {
 
   VideoTexture? get cameraTexture => cameraTextureFor?.call(participant.userId);
 
-  /// What is wrong with the participant's microphone, if anything, and
-  /// whether this client has muted them.
   List<Widget> get _marks => [
-    if (participant.isDeafened)
-      const _Mark(icon: FlucordIcons.headphonesOff, label: 'Deafened')
-    else if (participant.isMuted)
-      const _Mark(icon: FlucordIcons.micOff, label: 'Muted'),
-    if (participantMenu?.isMutedForYou(participant.userId) ?? false)
-      const _Mark(icon: FlucordIcons.volumeOff, label: 'Muted for you'),
+    for (final mark in participantMarks(
+      participant,
+      mutedForYou: participantMenu?.isMutedForYou(participant.userId) ?? false,
+    ))
+      _Mark(mark),
   ];
 
   @override
@@ -573,6 +570,24 @@ class VoiceStreamTile extends StatelessWidget {
 
 /// The member [userId] names, or a stand-in for somebody this client has not
 /// loaded.
+/// One thing a person's tile or avatar says about their sound.
+typedef ParticipantMark = ({FlucordIconData icon, String label});
+
+/// What a Room tile or a call avatar marks about [participant]'s sound, the
+/// most pressing first: their microphone (deafened or muted), then whether
+/// this client muted them. [participant] is null for somebody not in the
+/// Room, whose microphone is nobody's business yet.
+List<ParticipantMark> participantMarks(
+  VoiceParticipant? participant, {
+  required bool mutedForYou,
+}) => [
+  if (participant?.isDeafened ?? false)
+    (icon: FlucordIcons.headphonesOff, label: 'Deafened')
+  else if (participant?.isMuted ?? false)
+    (icon: FlucordIcons.micOff, label: 'Muted'),
+  if (mutedForYou) (icon: FlucordIcons.volumeOff, label: 'Muted for you'),
+];
+
 Member voiceMemberOf(List<Member> members, String userId) =>
     members.where((member) => member.id == userId).firstOrNull ??
     _unknownMember(userId);
@@ -684,15 +699,14 @@ class _NameChip extends StatelessWidget {
 
 /// One mark in a name chip, such as a muted microphone.
 class _Mark extends StatelessWidget {
-  const _Mark({required this.icon, required this.label});
+  const _Mark(this.mark);
 
-  final FlucordIconData icon;
-  final String label;
+  final ParticipantMark mark;
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: label,
-    child: FlucordIcon(icon, size: 14, color: context.surfaces.bodyText),
+    message: mark.label,
+    child: FlucordIcon(mark.icon, size: 14, color: context.surfaces.bodyText),
   );
 }
 

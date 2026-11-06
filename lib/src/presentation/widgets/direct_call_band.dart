@@ -160,9 +160,10 @@ class DirectCallBand extends StatelessWidget {
   }
 }
 
-/// One person in the band: a large avatar with the name under it, a green
-/// ring while they speak, and a red badge on a muted microphone. Somebody
-/// not in the call is dimmed, with two rings while they are being rung.
+/// One person in the band. Their avatar carries one badge, the first of the
+/// marks a Room tile shows: the band has room for one, and it must say the
+/// same as the tile. Somebody not in the call is dimmed, with two rings
+/// while they are being rung.
 class _CallPerson extends StatelessWidget {
   const _CallPerson({
     required this.member,
@@ -193,17 +194,10 @@ class _CallPerson extends StatelessWidget {
   /// How far the two ringing rings reach past [_slot].
   static const _ringingSpread = [4.0, 12.0];
 
-  /// The badge on the avatar: what is wrong with their microphone, or that
-  /// this client muted them.
-  (FlucordIconData, String)? get _badge => switch (participant) {
-    final p? when p.isDeafened => (FlucordIcons.headphonesOff, 'Deafened'),
-    final p? when p.isMuted => (FlucordIcons.micOff, 'Muted'),
-    _ when menu?.isMutedForYou(member.id) ?? false => (
-      FlucordIcons.volumeOff,
-      'Muted for you',
-    ),
-    _ => null,
-  };
+  ParticipantMark? get _badge => participantMarks(
+    participant,
+    mutedForYou: menu?.isMutedForYou(member.id) ?? false,
+  ).firstOrNull;
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +255,7 @@ class _CallPerson extends StatelessWidget {
                 )
               else
                 avatar,
-              if (_badge case (final icon, final label))
+              if (_badge case (:final icon, :final label))
                 PositionedDirectional(
                   end: 4,
                   bottom: 4,
