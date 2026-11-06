@@ -34,6 +34,7 @@ final class ConversationChannel {
     this.mentionCount = 0,
     this.firstUnreadMessageId,
     this.lastMessageId,
+    this.messageCount,
     this.permissionOverwrites = const {},
     this.rateLimitPerUser = 0,
     this.isAgeGated = false,
@@ -102,6 +103,11 @@ final class ConversationChannel {
   /// is what lets that comparison survive a restart, because the client can
   /// answer it without having loaded a single message.
   final String? lastMessageId;
+
+  /// How many messages a thread holds, its opening message aside, as
+  /// Discord last reported it. Null outside a thread and on a thread read
+  /// from the local cache, which does not keep it.
+  final int? messageCount;
 
   /// The channel's permission overwrites, keyed by role or member id.
   ///
@@ -198,6 +204,8 @@ final class ConversationChannel {
     // `last_message_id`; dropping the remembered one would make every unread
     // channel look read until the next message arrived.
     lastMessageId: lastMessageId ?? previous.lastMessageId,
+    // Likewise a thread payload without `message_count` keeps the known one.
+    messageCount: messageCount ?? previous.messageCount,
   );
 
   /// Records that [messageId] is the newest message here, never rewinding.
@@ -228,6 +236,7 @@ final class ConversationChannel {
     int? bitrate,
     int? userLimit,
     Object? rtcRegion = _keepRtcRegion,
+    int? messageCount,
   }) => ConversationChannel(
     id: id,
     spaceId: spaceId,
@@ -274,5 +283,6 @@ final class ConversationChannel {
     lastMessageId: identical(lastMessageId, _keepLastMessageId)
         ? this.lastMessageId
         : lastMessageId as String?,
+    messageCount: messageCount ?? this.messageCount,
   );
 }

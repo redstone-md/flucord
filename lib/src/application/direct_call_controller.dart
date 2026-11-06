@@ -102,17 +102,16 @@ final class DirectCallController extends ChangeNotifier {
 
   /// Places a call: pre-flight, join, then ring.
   ///
-  /// The pre-flight comes first because a DM with someone who is not a friend
-  /// answers "not ringable", and joining a channel nobody will be told about
-  /// would strand the caller alone in a silent room.
+  /// The pre-flight comes first because a caller who may not call at all is
+  /// refused there, and that refusal is kept in [error] before any room is
+  /// joined. A caller who may call but not ring still starts the call, as in
+  /// Discord: the others see it in the DM and can walk in.
   Future<void> placeCall(String channelId) => _run(() async {
     final service = _service;
     if (service == null) return;
-    if (!await service.isRingable(channelId)) {
-      _error = StateError('This conversation cannot be called');
-      return;
-    }
+    final ringable = await service.isRingable(channelId);
     await _voice.connectToCall(channelId: channelId);
+    if (!ringable) return;
     _outgoingRings.add(channelId);
     await service.ring(channelId);
   });
@@ -265,6 +264,7 @@ final class DirectCallController extends ChangeNotifier {
     try {
       await action();
     } catch (error) {
+      AppLog.warning('voice.call', 'call action failed', error: error);
       _error = error;
     } finally {
       _isBusy = false;

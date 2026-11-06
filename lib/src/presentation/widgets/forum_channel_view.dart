@@ -282,7 +282,7 @@ class _ForumPostSlivers extends StatelessWidget {
         crossAxisCount: columns,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
-        mainAxisExtent: usesGallery ? 244 : 108,
+        mainAxisExtent: usesGallery ? 260 : 128,
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) => ForumPostTile(

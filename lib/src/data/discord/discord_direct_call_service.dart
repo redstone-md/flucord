@@ -66,16 +66,8 @@ final class DiscordDirectCallService implements DirectCallService {
   }
 
   @override
-  Future<bool> isRingable(String channelId) async {
-    try {
-      return await _api.isChannelRingable(channelId);
-    } on Object {
-      // The desktop client treats a failed pre-flight as "you may not ring
-      // this person" rather than as an outage, because that is what a DM with
-      // a non-friend answers with.
-      return false;
-    }
-  }
+  Future<bool> isRingable(String channelId) =>
+      _api.isChannelRingable(channelId);
 
   @override
   Future<void> ring(String channelId, {List<String>? recipients}) async {

@@ -40,6 +40,15 @@ Size boxFitting(Size bounds, double ratio) {
   return Size(width, width / ratio);
 }
 
+/// The smallest box of this [ratio] that covers [bounds].
+///
+/// A picture cropped to fill a tile has to be at least the tile in both
+/// directions, or the part that shows is drawn upscaled.
+Size boxCovering(Size bounds, double ratio) {
+  final width = math.max(bounds.width, bounds.height * ratio);
+  return Size(width, width / ratio);
+}
+
 /// A media proxy [address] that asks for this size, and for a still frame when
 /// [stillFrame] is true.
 ///

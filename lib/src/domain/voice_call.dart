@@ -119,11 +119,12 @@ abstract interface class DirectCallService {
   /// watched looks permanently call-free.
   void watchChannel(String channelId);
 
-  /// Whether Discord will let the local user ring [channelId] at all.
+  /// Whether the local user may ring the others in [channelId], on top of
+  /// starting a call there.
   ///
-  /// The pre-flight matters for a DM with a non-friend: the ring itself would
-  /// be rejected, and the desktop client shows an "add as a friend" prompt
-  /// instead of failing silently.
+  /// The two answers differ: a caller who may not call at all is refused with
+  /// an error, which reaches the caller. A caller who may call but not ring
+  /// gets false and still starts the call; the others see it in the DM.
   Future<bool> isRingable(String channelId);
 
   /// Rings [recipients], or everybody in the channel when it is null.

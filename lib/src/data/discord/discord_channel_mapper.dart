@@ -75,6 +75,7 @@ extension DiscordChannelMapper on DiscordMapper {
       rtcRegion: _textOrAuto(payload['rtc_region']),
       unread: false,
       lastMessageId: _lastMessageId(payload),
+      messageCount: payload['message_count'] as int?,
     );
   }
 

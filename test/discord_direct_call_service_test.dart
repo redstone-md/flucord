@@ -122,7 +122,7 @@ void main() {
     expect(harness.api.stopped.single.$2, ['friend-1']);
   });
 
-  test('a failed pre-flight means not ringable, not an outage', () async {
+  test('a refused pre-flight reaches the caller', () async {
     final harness = _Harness();
     addTearDown(harness.close);
 
@@ -130,7 +130,7 @@ void main() {
     expect(await harness.service.isRingable('dm-1'), isTrue);
 
     harness.api.failPreflight = true;
-    expect(await harness.service.isRingable('dm-1'), isFalse);
+    await expectLater(harness.service.isRingable('dm-1'), throwsStateError);
   });
 
   test('reports the ring aimed at the local user and its retraction', () async {

@@ -13,6 +13,7 @@ import '../../application/auth_session_controller.dart';
 import '../../application/keybind_controller.dart';
 import '../../application/age_verification_controller.dart';
 import '../../application/streamer_mode_controller.dart';
+import '../../application/self_video_controller.dart';
 import '../../application/stream_quality_controller.dart';
 import '../../application/theme_controller.dart';
 import '../../application/voice_controller.dart';
@@ -40,6 +41,7 @@ import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 import 'user_settings_account_sections.dart';
 import 'keybind_section.dart';
+import 'camera_settings_section.dart';
 import 'stream_quality_section.dart';
 import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
@@ -58,6 +60,7 @@ import 'auth_session_scope.dart';
 import 'family_centre_scope.dart';
 import 'keybind_scope.dart';
 import 'multi_factor_auth_scope.dart';
+import 'self_video_scope.dart';
 import 'stream_quality_scope.dart';
 import 'streamer_mode_scope.dart';
 import 'theme_scope.dart';
@@ -139,6 +142,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.streamQualityController,
     this.themeController,
     this.voiceController,
+    this.selfVideoController,
     super.key,
   });
 
@@ -206,6 +210,9 @@ class UserSettingsDialog extends StatefulWidget {
   /// The audio devices, which belong to the machine like the themes do.
   final VoiceController? voiceController;
 
+  /// The camera, which is chosen beside the audio devices for the same reason.
+  final SelfVideoController? selfVideoController;
+
   /// Opens settings with every controller the scopes above [context]
   /// publish. Where the gear lives, nothing is threaded down to it.
   static Future<void> showFromScopes(
@@ -230,6 +237,7 @@ class UserSettingsDialog extends StatefulWidget {
     streamQualityController: StreamQualityScope.maybeOf(context),
     themeController: ThemeScope.maybeOf(context),
     voiceController: VoiceScope.maybeOf(context),
+    selfVideoController: SelfVideoScope.maybeRead(context),
   );
 
   static Future<void> show(
@@ -251,6 +259,7 @@ class UserSettingsDialog extends StatefulWidget {
     StreamQualityController? streamQualityController,
     ThemeController? themeController,
     VoiceController? voiceController,
+    SelfVideoController? selfVideoController,
   }) => showDialog<void>(
     context: context,
     builder: (_) => UserSettingsDialog(
@@ -271,6 +280,7 @@ class UserSettingsDialog extends StatefulWidget {
       streamQualityController: streamQualityController,
       themeController: themeController,
       voiceController: voiceController,
+      selfVideoController: selfVideoController,
     ),
   );
 
@@ -334,6 +344,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
         streamQualityController: widget.streamQualityController,
         themeController: widget.themeController,
         voiceController: widget.voiceController,
+        selfVideoController: widget.selfVideoController,
         category: _category,
       ),
     ),
@@ -359,6 +370,7 @@ class _Body extends StatelessWidget {
     required this.streamQualityController,
     required this.themeController,
     required this.voiceController,
+    required this.selfVideoController,
     required this.category,
   });
 
@@ -382,6 +394,7 @@ class _Body extends StatelessWidget {
   final StreamQualityController? streamQualityController;
   final ThemeController? themeController;
   final VoiceController? voiceController;
+  final SelfVideoController? selfVideoController;
   final UserSettingsCategory category;
 
   @override
@@ -496,6 +509,11 @@ class _Body extends StatelessWidget {
           // this machine sends its pictures at. Either can be missing without
           // taking the other with it.
           if (voice != null) VoiceDevicesSection(controller: voice),
+          if (selfVideoController case final camera?
+              when camera.isSupported) ...[
+            const SizedBox(height: 28),
+            CameraSettingsSection(controller: camera),
+          ],
           if (voice != null && quality != null) const SizedBox(height: 28),
           if (quality != null) StreamQualitySection(controller: quality),
         ],

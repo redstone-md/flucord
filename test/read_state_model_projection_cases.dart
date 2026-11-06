@@ -160,6 +160,7 @@ void _projectionCases() {
         topic: '',
         kind: ChannelKind.text,
         lastMessageId: _newerMessage,
+        messageCount: 7,
         unread: true,
         mentionCount: 2,
       );
@@ -174,6 +175,7 @@ void _projectionCases() {
       expect(merged.name, 'renamed');
       expect(merged.lastMessageId, _newerMessage);
       expect(merged.mentionCount, 2);
+      expect(merged.messageCount, 7);
     });
   });
 }

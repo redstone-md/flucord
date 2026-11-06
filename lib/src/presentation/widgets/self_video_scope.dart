@@ -15,4 +15,9 @@ final class SelfVideoScope extends InheritedNotifier<SelfVideoController> {
   /// button listens on its own, so the pane does not rebuild with the camera.
   static SelfVideoController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<SelfVideoScope>()!.notifier!;
+
+  /// [read], or null above any scope: settings opened where no camera is
+  /// published.
+  static SelfVideoController? maybeRead(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<SelfVideoScope>()?.notifier;
 }
