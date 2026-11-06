@@ -196,6 +196,14 @@ void main() {
       expect(_heardAt(harness), 0.2);
     });
 
+    testWidgets('plays above the room level', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 1.5);
+      await _receive(tester, harness, _friend);
+
+      expect(_heardAt(harness), 1.5);
+    });
+
     testWidgets('is gone once it is reset', (tester) async {
       final harness = await _connectedRoom(tester);
       await harness.voice.setParticipantVolume(_friend, 0.2);

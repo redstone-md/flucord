@@ -55,8 +55,9 @@ void main() {
     expect(controller.volumeFor('user-1'), 0.25);
     expect(controller.volumeFor('user-2'), 1);
 
-    await controller.setParticipantVolume('user-2', 0.9);
-    expect(playback.sourceVolumes, {'user-1': 0.25, 'user-2': 0.9});
+    await controller.setParticipantVolume('user-2', 1.5);
+    expect(playback.sourceVolumes, {'user-1': 0.25, 'user-2': 1.5});
+    expect(controller.volumeFor('user-2'), 1.5);
   });
 
   test(
@@ -67,17 +68,21 @@ void main() {
       addTearDown(harness.dispose);
       final controller = harness.controller;
 
-      await controller.setParticipantVolume('user-1', 2);
-      expect(controller.volumeFor('user-1'), 1);
+      await controller.setParticipantVolume('user-1', 3);
+      expect(controller.volumeFor('user-1'), 2);
 
       await controller.setParticipantVolume('user-2', -0.5);
       expect(controller.volumeFor('user-2'), 0);
 
+      await controller.setParticipantVolume('user-3', 1);
+
       final saved = repository.saved;
       expect(saved, isNotNull);
       // Full level is stored as no entry: it is the room's default.
-      expect(saved!.listening.participantVolumes, {'user-2': 0.0});
-      expect(controller.volumeFor('user-1'), 1);
+      expect(saved!.listening.participantVolumes, {
+        'user-1': 2.0,
+        'user-2': 0.0,
+      });
     },
   );
 

@@ -110,7 +110,8 @@ abstract interface class VoiceAudioPlaybackService {
   void addPcmFrame(VoiceRemotePcmFrame frame);
   Future<void> removeSource(String sourceId);
 
-  /// Sets one source's volume, 0 to 1, as a fraction of the room's level.
+  /// Sets one source's volume, 0 to 2, as a fraction of the room's level.
+  /// Above 1 turns the source up.
   ///
   /// Set on the source rather than scaled into its samples: a level changed
   /// mid-word has to reach the speaker without a gap, and the stream is the

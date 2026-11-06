@@ -176,6 +176,9 @@ final class VoiceListeningSettings {
   /// as a fraction of their own volume. Discord's own default.
   static const double defaultAttenuationLevel = 0.8;
 
+  /// The loudest a participant can be turned up: twice the room's level.
+  static const double maxParticipantVolume = 2;
+
   final Map<String, double> participantVolumes;
 
   /// Whether other applications are turned down while this account speaks.
@@ -189,7 +192,7 @@ final class VoiceListeningSettings {
   double volumeFor(String participant) {
     final held = participantVolumes[participant];
     if (held == null) return 1;
-    return held.clamp(0.0, 1.0);
+    return held.clamp(0.0, maxParticipantVolume);
   }
 
   VoiceListeningSettings copyWith({
@@ -210,7 +213,7 @@ final class VoiceListeningSettings {
     String participant,
     double volume,
   ) {
-    final level = volume.clamp(0.0, 1.0);
+    final level = volume.clamp(0.0, maxParticipantVolume);
     final volumes = {...participantVolumes};
     if (level == 1) {
       volumes.remove(participant);

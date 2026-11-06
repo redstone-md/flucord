@@ -33,7 +33,10 @@ extension VoiceControllerListening on VoiceController {
   /// slider, but a value set by hand for it would change only what this
   /// client plays of itself, which is nothing: the level is still kept.
   Future<void> setParticipantVolume(String participant, double volume) async {
-    final level = volume.clamp(0.0, 1.0);
+    final level = volume.clamp(
+      0.0,
+      VoiceListeningSettings.maxParticipantVolume,
+    );
     // A change the user made is a change the startup load must not undo.
     _processingTouched = true;
     _processing = _processing.copyWith(
