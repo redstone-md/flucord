@@ -33,6 +33,9 @@ final class UserSettingsController extends ChangeNotifier {
   /// says so rather than showing controls that could never be saved.
   bool get isAvailable => _repository != null;
 
+  /// Whether a change can be saved now: the stored settings have loaded.
+  bool get canEdit => _repository?.isLoaded ?? false;
+
   bool get isLoading => _isLoading;
 
   /// Why the settings could not be read, or `null`.
