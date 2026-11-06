@@ -9,35 +9,64 @@ import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
+/// The reactions under a message, one chip per emoji and reaction type.
+///
+/// A super reaction gets a chip of its own next to the normal one, as Discord
+/// draws it, so each chip says which kind a click adds or takes back.
 class MessageReactionStrip extends StatelessWidget {
   const MessageReactionStrip({
     required this.message,
     required this.workspace,
     required this.onToggle,
-    required this.onShowDetails,
+    this.onToggleSuper,
+    this.onShowDetails,
     super.key,
   });
 
   final ChatMessage message;
   final ChatWorkspace workspace;
   final ValueChanged<MessageReaction> onToggle;
-  final ValueChanged<MessageReaction> onShowDetails;
+
+  /// Adds or takes back the account's super reaction, or null where the
+  /// account cannot send one. Then a super reaction chip only shows the count.
+  final ValueChanged<MessageReaction>? onToggleSuper;
+
+  /// Opens the list of who reacted, or null where the session cannot list
+  /// them.
+  final ValueChanged<MessageReaction>? onShowDetails;
 
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 4,
     runSpacing: 4,
     children: [
-      for (final reaction in message.reactions)
-        _ReactionChip(
-          message: message,
-          reaction: reaction,
-          workspace: workspace,
-          onToggle: () => onToggle(reaction),
-          onShowDetails: () => onShowDetails(reaction),
-        ),
+      for (final reaction in message.reactions) ...[
+        if (reaction.burstCount > 0)
+          _ReactionChip(
+            message: message,
+            reaction: reaction,
+            workspace: workspace,
+            isSuper: true,
+            onToggle: _bind(onToggleSuper, reaction),
+            onShowDetails: _bind(onShowDetails, reaction),
+          ),
+        if (reaction.normalCount > 0)
+          _ReactionChip(
+            message: message,
+            reaction: reaction,
+            workspace: workspace,
+            isSuper: false,
+            onToggle: () => onToggle(reaction),
+            onShowDetails: _bind(onShowDetails, reaction),
+          ),
+      ],
     ],
   );
+
+  static VoidCallback? _bind(
+    ValueChanged<MessageReaction>? action,
+    MessageReaction reaction,
+  ) => action == null ? null : () => action(reaction);
 }
 
 class ReactionGlyph extends StatelessWidget {
@@ -108,6 +137,7 @@ class _ReactionChip extends StatelessWidget {
     required this.message,
     required this.reaction,
     required this.workspace,
+    required this.isSuper,
     required this.onToggle,
     required this.onShowDetails,
   });
@@ -115,29 +145,41 @@ class _ReactionChip extends StatelessWidget {
   final ChatMessage message;
   final MessageReaction reaction;
   final ChatWorkspace workspace;
-  final VoidCallback onToggle;
-  final VoidCallback onShowDetails;
+
+  /// Whether this chip counts super reactions rather than normal ones.
+  final bool isSuper;
+  final VoidCallback? onToggle;
+  final VoidCallback? onShowDetails;
 
   @override
   Widget build(BuildContext context) {
-    final selected =
-        reaction.reactedByCurrentUser || reaction.burstByCurrentUser;
+    final selected = isSuper
+        ? reaction.burstByCurrentUser
+        : reaction.reactedByCurrentUser;
+    final count = isSuper ? reaction.burstCount : reaction.normalCount;
     final burstColor = reaction.burstColorValues.firstOrNull;
+    final hint = [
+      if (isSuper) 'Super reaction',
+      if (onToggle != null) 'Click to toggle',
+      if (onShowDetails != null) 'Right-click for details',
+    ].join(' · ');
     return Semantics(
       // Its own node, so a screen reader reaches each reaction as a button
       // and the row's text does not swallow it.
       container: true,
-      label: '${reaction.emojiName} reaction, ${reaction.count}',
-      button: true,
+      label:
+          '${reaction.emojiName} ${isSuper ? 'super reaction' : 'reaction'}, '
+          '$count',
+      button: onToggle != null,
       toggled: selected,
       onTap: onToggle,
       customSemanticsActions: {
         const CustomSemanticsAction(label: 'View reaction details'):
-            onShowDetails,
+            ?onShowDetails,
       },
       excludeSemantics: true,
       child: Tooltip(
-        message: 'Click to toggle · Right-click for details',
+        message: hint,
         child: Material(
           color: selected
               ? context.surfaces.brand.withValues(alpha: 0.16)
@@ -163,7 +205,8 @@ class _ReactionChip extends StatelessWidget {
                 children: [
                   KeyedSubtree(
                     key: ValueKey(
-                      'reaction-custom-${message.id}-${reaction.emojiId}',
+                      'reaction-custom-${message.id}-${reaction.emojiId}'
+                      '${isSuper ? '-super' : ''}',
                     ),
                     child: ReactionGlyph(
                       reaction: reaction,
@@ -171,7 +214,7 @@ class _ReactionChip extends StatelessWidget {
                       channelId: message.channelId,
                     ),
                   ),
-                  if (reaction.burstCount > 0) ...[
+                  if (isSuper) ...[
                     const SizedBox(width: 4),
                     FlucordIcon(
                       FlucordIcons.superReaction,
@@ -183,7 +226,7 @@ class _ReactionChip extends StatelessWidget {
                   ],
                   const SizedBox(width: 5),
                   Text(
-                    '${reaction.count}',
+                    '$count',
                     style: const TextStyle(
                       fontSize: FlucordType.caption,
                       fontFeatures: [FontFeature.tabularFigures()],

@@ -803,6 +803,16 @@ class ConversationPaneState extends State<ConversationPane> {
         .messageCharacterLimit;
   }
 
+  /// Whether this session and account may send super reactions. Until the
+  /// account's entitlements arrive the answer is no, so nothing is offered
+  /// that Discord would refuse.
+  bool _sendsSuperReactions(ChatController chat) =>
+      chat.canSendSuperReactions &&
+      (AccountEntitlementsScope.maybeOf(
+            context,
+          )?.entitlements?.premiumTier.sendsSuperReactions ??
+          false);
+
   /// The largest file this account may attach in this channel, or null while
   /// the account's entitlements have not arrived. The answer is whichever is
   /// larger: what the account itself can upload, or what this server's boost
@@ -995,6 +1005,7 @@ class ConversationPaneState extends State<ConversationPane> {
     Set<String> blockedUserIds,
   ) {
     final channel = widget.channel;
+    final sendsSuperReactions = _sendsSuperReactions(chat);
     return MessageList(
       key: _timelineKey,
       blockedUserIds: blockedUserIds,
@@ -1021,8 +1032,14 @@ class ConversationPaneState extends State<ConversationPane> {
       onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
-      onLoadReactionUsers: chat.loadReactionUsers,
+      onLoadReactionUsers: chat.canListReactionUsers
+          ? chat.loadReactionUsers
+          : null,
       onAddReaction: chat.addReaction,
+      onToggleSuperReaction: sendsSuperReactions
+          ? chat.toggleSuperReaction
+          : null,
+      onAddSuperReaction: sendsSuperReactions ? chat.addSuperReaction : null,
       onMarkUnread: chat.readStateRepository == null
           ? null
           : chat.markChannelUnreadFrom,
