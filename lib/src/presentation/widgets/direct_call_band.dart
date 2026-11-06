@@ -216,7 +216,7 @@ class _CallPerson extends StatelessWidget {
       showPresence: false,
       spaceId: spaceId,
     );
-    Widget person(bool focused) => Column(
+    Widget person(bool hasFocus) => Column(
       mainAxisSize: MainAxisSize.min,
       spacing: 16,
       children: [
@@ -241,7 +241,7 @@ class _CallPerson extends StatelessWidget {
                       width: 1,
                     ),
                   ),
-              if (focused)
+              if (hasFocus)
                 _Ring(color: surfaces.focusRing)
               else if (participant?.isSpeaking ?? false)
                 _Ring(
@@ -308,7 +308,7 @@ class _CallPerson extends StatelessWidget {
     return ContextMenuTarget(
       onOpen: (context, position) =>
           unawaited(menu.open(context, member.id, position: position)),
-      builder: (_, focused) => person(focused),
+      builder: (_, hasFocus) => person(hasFocus),
     );
   }
 }

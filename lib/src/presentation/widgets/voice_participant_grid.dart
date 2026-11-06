@@ -271,17 +271,17 @@ class VoiceParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final menu = participantMenu;
-    if (menu == null) return _tile(context, focused: false);
+    if (menu == null) return _tile(context, hasFocus: false);
     return ContextMenuTarget(
       onOpen: (context, position) =>
           unawaited(menu.open(context, participant.userId, position: position)),
-      builder: (context, focused) => _tile(context, focused: focused),
+      builder: (context, hasFocus) => _tile(context, hasFocus: hasFocus),
     );
   }
 
-  Widget _tile(BuildContext context, {required bool focused}) {
+  Widget _tile(BuildContext context, {required bool hasFocus}) {
     final surfaces = context.surfaces;
-    final ring = focused
+    final ring = hasFocus
         ? surfaces.focusRing
         : participant.isSpeaking
         ? surfaces.success
@@ -421,12 +421,12 @@ class VoiceStreamTile extends StatelessWidget {
     // gestures rather than inside them, so a press does not wait to learn
     // whether a second click follows.
     final controlsInside = fullScreen == null;
-    Widget tile(bool focused) => Semantics(
+    Widget tile(bool hasFocus) => Semantics(
       label: "$name's stream",
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: FlucordFixedColors.media,
-          border: focused
+          border: hasFocus
               ? Border.all(color: context.surfaces.focusRing, width: 2)
               : null,
           borderRadius: size._radius,
@@ -472,12 +472,12 @@ class VoiceStreamTile extends StatelessWidget {
       ),
     );
     final onTap = this.onTap;
-    Widget tappable(bool focused) => onTap == null
-        ? tile(focused)
+    Widget tappable(bool hasFocus) => onTap == null
+        ? tile(hasFocus)
         : GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => onTap(_userId),
-            child: tile(focused),
+            child: tile(hasFocus),
           );
     final target = menu == null
         ? tappable(false)
@@ -488,7 +488,7 @@ class VoiceStreamTile extends StatelessWidget {
             // The Stage has no single tap, so a double click costs it no
             // delay.
             onDoubleTap: fullScreen,
-            builder: (_, focused) => tappable(focused),
+            builder: (_, hasFocus) => tappable(hasFocus),
           );
     return KeyedSubtree(
       key: ValueKey('voice-stream-card-$_userId'),

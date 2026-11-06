@@ -8,7 +8,8 @@ import 'package:flutter/services.dart';
 /// Focusable so the keyboard reaches the menu too. The keys are bound above
 /// the focus, where its key presses pass on their way up; Escape is not
 /// bound, so it still reaches whatever binds it higher up. [builder] is told
-/// whether the target has focus, to draw a ring.
+/// whether the target has the keyboard focus, to draw a ring. That is not
+/// the Room's Focused, which is the tile on the Stage.
 class ContextMenuTarget extends StatelessWidget {
   const ContextMenuTarget({
     required this.onOpen,
@@ -19,7 +20,7 @@ class ContextMenuTarget extends StatelessWidget {
   });
 
   final void Function(BuildContext context, Offset? position) onOpen;
-  final Widget Function(BuildContext context, bool focused) builder;
+  final Widget Function(BuildContext context, bool hasFocus) builder;
   final VoidCallback? onDoubleTap;
 
   /// False when what [builder] draws takes the focus itself, as a button
