@@ -102,7 +102,8 @@ class DirectCallBand extends StatelessWidget {
             child: Align(
               alignment: AlignmentDirectional.centerStart,
               child: _CallStatus(
-                // The length counts once the call is up and answered.
+                // Shown once the call is up and answered, and counted from
+                // when this account joined, so it includes the ringing.
                 joinedAt: connected ? controller.joinedAt : null,
                 label: calling
                     ? 'Calling ${channel.name}'
@@ -329,9 +330,8 @@ class _Ring extends StatelessWidget {
   );
 }
 
-/// The band's first line: the signal mark, then "Connected" and how long the
-/// call has run, or what the connection is doing. Only this line redraws
-/// each second.
+/// The band's connection state, with how long the call has run once it is
+/// up. Its own widget so that only this line redraws each second.
 class _CallStatus extends StatefulWidget {
   const _CallStatus({
     required this.joinedAt,
@@ -385,43 +385,24 @@ class _CallStatusState extends State<_CallStatus> {
 
   @override
   Widget build(BuildContext context) {
-    final surfaces = context.surfaces;
     final joinedAt = widget.joinedAt;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      spacing: 6,
-      children: [
-        FlucordIcon(
-          FlucordIcons.signal,
-          size: 14,
-          color: widget.isUp ? surfaces.success : surfaces.muted,
-        ),
-        Flexible(
-          child: Text.rich(
-            joinedAt == null
-                ? TextSpan(text: widget.label)
-                : TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'Connected',
-                        style: FlucordTextRole.caption.strong.copyWith(
-                          color: surfaces.success,
-                        ),
-                      ),
-                      TextSpan(
-                        text:
-                            ' · ${_callLength(clock.now().difference(joinedAt))}',
-                      ),
-                    ],
+    return VoiceSignalLine(
+      isUp: widget.isUp,
+      text: joinedAt == null
+          ? TextSpan(text: widget.label)
+          : TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Connected',
+                  style: FlucordTextRole.caption.strong.copyWith(
+                    color: context.surfaces.success,
                   ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: FlucordTextRole.caption.style.copyWith(
-              color: surfaces.muted,
+                ),
+                TextSpan(
+                  text: ' · ${_callLength(clock.now().difference(joinedAt))}',
+                ),
+              ],
             ),
-          ),
-        ),
-      ],
     );
   }
 }

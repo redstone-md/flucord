@@ -40,9 +40,9 @@ String voiceRoomHeaderLabel(VoiceController controller) {
   };
 }
 
-/// The connection state in the Room header: the signal mark, green while
-/// the transport is up, and [voiceRoomHeaderLabel]. Draws nothing while
-/// this account is not in [channelId].
+/// The voice channel Room's connection state, for the channel header.
+/// Draws nothing while this account is not in [channelId]: there is no
+/// connection of this channel's to report.
 class VoiceRoomStatusLine extends StatelessWidget {
   const VoiceRoomStatusLine({
     required this.controller,
@@ -60,34 +60,57 @@ class VoiceRoomStatusLine extends StatelessWidget {
       if (controller.connectedChannelId != channelId) {
         return const SizedBox.shrink();
       }
-      final surfaces = context.surfaces;
       return Row(
         key: const ValueKey('voice-room-status'),
         children: [
           const ChatHeaderDivider(),
           const SizedBox(width: 12),
-          FlucordIcon(
-            FlucordIcons.signal,
-            size: 14,
-            color: controller.isTransportReady
-                ? surfaces.success
-                : surfaces.muted,
-          ),
-          const SizedBox(width: 6),
           Flexible(
-            child: Text(
-              voiceRoomHeaderLabel(controller),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: FlucordTextRole.caption.style.copyWith(
-                color: surfaces.muted,
-              ),
+            child: VoiceSignalLine(
+              isUp: controller.isTransportReady,
+              text: TextSpan(text: voiceRoomHeaderLabel(controller)),
             ),
           ),
         ],
       );
     },
   );
+}
+
+/// A Room's connection state on one line: the signal mark, green while the
+/// transport is up, then [text]. The voice channel header and the DM call
+/// band both draw it, so the two read alike.
+class VoiceSignalLine extends StatelessWidget {
+  const VoiceSignalLine({required this.isUp, required this.text, super.key});
+
+  final bool isUp;
+  final InlineSpan text;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 6,
+      children: [
+        FlucordIcon(
+          FlucordIcons.signal,
+          size: 14,
+          color: isUp ? surfaces.success : surfaces.muted,
+        ),
+        Flexible(
+          child: Text.rich(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: FlucordTextRole.caption.style.copyWith(
+              color: surfaces.muted,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// The one thing most worth saying about a room that is not working, or null.
