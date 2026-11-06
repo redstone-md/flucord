@@ -22,6 +22,11 @@ The icons come from the hugeicons package (https://hugeicons.com), Copyright
 (c) 2024 Halal Labs. They are licensed under the MIT License, whose full text
 ships with the package.
 
+Code blocks are highlighted by the re_highlight package
+(https://github.com/reqable/re-highlight), Copyright (c) 2024 Reqable, under
+the MIT License. Its language grammars are translated from highlight.js
+(https://highlightjs.org), which is under the BSD 3-Clause License.
+
 The service logos in assets/logos come from Simple Icons
 (https://simpleicons.org), released under CC0 1.0. The other service logos
 are hugeicons drawings. Each logo is a trademark of its owner and is shown

@@ -286,6 +286,19 @@ void main() {
           () => expectContrast(surfaces.errorText, 4.5),
         );
 
+        test('every code colour reaches 4.5:1', () {
+          final syntax = theme.extension<FlucordSyntaxTheme>()!;
+          for (final color in [
+            syntax.keyword,
+            syntax.title,
+            syntax.string,
+            syntax.number,
+            syntax.comment,
+          ]) {
+            expectContrast(color, 4.5);
+          }
+        });
+
         // Widgets and Material's own fields draw error text in it.
         test(
           'the scheme\'s error colour reaches 4.5:1',

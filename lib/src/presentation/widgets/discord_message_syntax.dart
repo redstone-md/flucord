@@ -36,6 +36,28 @@ List<md.InlineSyntax> discordMessageInlineSyntaxes() => [
   _DiscordBroadcastMentionSyntax(),
 ];
 
+List<md.BlockSyntax> discordMessageBlockSyntaxes() => const [
+  _DiscordSubtextSyntax(),
+];
+
+/// A line that starts with `-# `, which Discord draws small and muted. The
+/// text is kept unparsed here, because it is drawn as markdown of its own.
+final class _DiscordSubtextSyntax extends md.BlockSyntax {
+  const _DiscordSubtextSyntax();
+
+  static final _line = RegExp(r'^-# +(.*)$');
+
+  @override
+  RegExp get pattern => _line;
+
+  @override
+  md.Node parse(md.BlockParser parser) {
+    final text = pattern.firstMatch(parser.current.content)![1]!;
+    parser.advance();
+    return md.Element.empty('discord-subtext')..attributes['text'] = text;
+  }
+}
+
 final class _DiscordEmojiSyntax extends md.InlineSyntax {
   _DiscordEmojiSyntax() : super(DiscordMarkers.emoji.pattern);
 
