@@ -7,7 +7,7 @@
 ;
 ; Compile:
 ;   ISCC.exe /DAppVersion=0.0.8 /DOutputName=flucord-windows-x64-setup-v0.0.8 windows\installer\flucord.iss
-; Silent install, which is what an updater runs:
+; Silent install (WinSparkle updates run the normal wizard instead):
 ;   flucord-windows-x64-setup-v0.0.8.exe /VERYSILENT /NORESTART
 
 #ifndef AppVersion
