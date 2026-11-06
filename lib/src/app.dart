@@ -9,6 +9,7 @@ import 'app_composition.dart';
 import 'data/profile_asset_cache.dart';
 import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/accessibility_dials.dart';
+import 'presentation/widgets/client_sounds_scope.dart';
 import 'presentation/widgets/accessibility_scope.dart';
 import 'presentation/widgets/trusted_domains_scope.dart';
 import 'presentation/widgets/image_nameplate_videos.dart';
@@ -150,7 +151,10 @@ class _FlucordAppState extends State<FlucordApp> {
                           fullScreen: _composition.windowFullScreen,
                           child: TrustedDomainsScope(
                             controller: _composition.trustedDomains,
-                            child: child!,
+                            child: ClientSoundsScope(
+                              controller: _composition.clientSounds,
+                              child: child!,
+                            ),
                           ),
                         ),
                       ),

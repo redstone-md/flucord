@@ -184,8 +184,11 @@ class _ReadySettings implements UserSettingsRepository {
 
 class _SilentSoundboardPlayer implements SoundboardAudioPlayer {
   @override
-  Future<void> play(String url, {double volume = 1}) async {}
+  Future<void> play(String url, {double volume = 1, bool loop = false}) async {}
 
   @override
   Future<void> dispose() async {}
+
+  @override
+  Future<void> stop() async {}
 }
