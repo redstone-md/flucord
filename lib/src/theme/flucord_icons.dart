@@ -239,6 +239,7 @@ abstract final class FlucordIcons {
   static const syncing = FlucordIconData(HugeIcons.strokeRoundedReload);
   static const credential = FlucordIconData(HugeIcons.strokeRoundedKey01);
   static const desktop = FlucordIconData(HugeIcons.strokeRoundedComputer);
+  static const appWindow = FlucordIconData(HugeIcons.strokeRoundedAppWindow);
   static const packageMissing = FlucordIconData(
     HugeIcons.strokeRoundedPackageRemove,
   );

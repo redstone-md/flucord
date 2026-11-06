@@ -33,7 +33,7 @@ import 'widgets/external_link_launcher_scope.dart';
 import 'widgets/forum_channel_view.dart';
 import 'widgets/gif_picker_scope.dart';
 import 'widgets/go_live_button.dart';
-import 'widgets/go_live_display_dialog.dart';
+import 'widgets/go_live_source_dialog.dart';
 import '../application/workspace_controller.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/go_live_scope.dart';
@@ -443,7 +443,11 @@ class ConversationPaneState extends State<ConversationPane> {
         controller: goLive,
         channelId: channel.id,
         quality: StreamQualityScope.maybeOf(context),
-        pickSource: () => GoLiveDisplayDialog.pick(context, goLive.displays),
+        pickSource: () => GoLiveSourceDialog.pick(
+          context,
+          sources: goLive.sources,
+          thumbnails: goLive.thumbnails,
+        ),
         guildId: channel.guildId,
       ),
     );

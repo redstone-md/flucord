@@ -27,12 +27,21 @@ final class EncodedVideoFrame {
 
 /// Where the pictures come from.
 ///
-/// The two share everything downstream of the capture — the same encoder, the
+/// They share everything downstream of the capture — the same encoder, the
 /// same packetiser, the same socket — but they are not the same feature on
-/// Discord: a screen is a Go Live stream with its own SSRC and its own
-/// viewers, and a camera is the account's own video in the room it is sitting
-/// in, announced with `self_video` on the voice state.
-enum VideoCaptureSource { display, camera }
+/// Discord: a screen or a window is a Go Live stream with its own SSRC and its
+/// own viewers, and a camera is the account's own video in the room it is
+/// sitting in, announced with `self_video` on the voice state.
+enum VideoCaptureSource {
+  display,
+  camera,
+
+  /// One top-level window, followed as it moves and resizes.
+  window;
+
+  /// Whether the pictures are a Go Live stream rather than the camera.
+  bool get isShare => this != camera;
+}
 
 /// What a stream is being encoded at.
 ///
@@ -44,6 +53,7 @@ final class VideoEncoderSettings {
     required this.bitrate,
     this.source = VideoCaptureSource.display,
     this.displayIndex = 0,
+    this.windowHandle = 0,
     this.width = 1280,
     this.height = 720,
     this.framesPerSecond = 30,
@@ -55,12 +65,17 @@ final class VideoEncoderSettings {
     this.width = 1280,
     this.height = 720,
     this.framesPerSecond = 30,
-  }) : source = VideoCaptureSource.camera;
+  }) : source = VideoCaptureSource.camera,
+       windowHandle = 0;
 
   final VideoCaptureSource source;
 
   /// Which display, or which camera when [source] is a camera.
   final int displayIndex;
+
+  /// The window's handle (an `HWND` on Windows) when [source] is a window,
+  /// otherwise 0.
+  final int windowHandle;
   final int width;
   final int height;
   final int framesPerSecond;
@@ -72,6 +87,7 @@ final class VideoEncoderSettings {
   VideoEncoderSettings withBitrate(int bitrate) => VideoEncoderSettings(
     source: source,
     displayIndex: displayIndex,
+    windowHandle: windowHandle,
     width: width,
     height: height,
     framesPerSecond: framesPerSecond,
@@ -96,18 +112,42 @@ final class VideoEncoderSettings {
     bitrate: bitrate,
   );
 
+  /// The same settings pointed at one window instead of a display.
+  VideoEncoderSettings onWindow(int handle) => VideoEncoderSettings(
+    source: VideoCaptureSource.window,
+    windowHandle: handle,
+    width: width,
+    height: height,
+    framesPerSecond: framesPerSecond,
+    bitrate: bitrate,
+  );
+
+  /// These settings pointed at whatever [other] captures.
+  VideoEncoderSettings onSourceOf(VideoEncoderSettings other) =>
+      VideoEncoderSettings(
+        source: other.source,
+        displayIndex: other.displayIndex,
+        windowHandle: other.windowHandle,
+        width: width,
+        height: height,
+        framesPerSecond: framesPerSecond,
+        bitrate: bitrate,
+      );
+
   bool get isValid =>
       width > 0 &&
       height > 0 &&
       framesPerSecond > 0 &&
       bitrate > 0 &&
-      displayIndex >= 0;
+      displayIndex >= 0 &&
+      (source != VideoCaptureSource.window || windowHandle != 0);
 
   @override
   bool operator ==(Object other) =>
       other is VideoEncoderSettings &&
       other.source == source &&
       other.displayIndex == displayIndex &&
+      other.windowHandle == windowHandle &&
       other.width == width &&
       other.height == height &&
       other.framesPerSecond == framesPerSecond &&
@@ -117,6 +157,7 @@ final class VideoEncoderSettings {
   int get hashCode => Object.hash(
     source,
     displayIndex,
+    windowHandle,
     width,
     height,
     framesPerSecond,
@@ -145,6 +186,12 @@ enum VideoEncoderFailure {
   /// display duplication was invalidated (a mode change, a driver reset) and
   /// reopening it kept failing.
   captureLost,
+
+  /// The shared window was closed, or was gone before the share started.
+  windowClosed,
+
+  /// The window is there, and the platform would not capture it.
+  windowRefused,
 }
 
 final class VideoEncoderException implements Exception {
@@ -175,6 +222,9 @@ final class VideoEncoderException implements Exception {
     VideoEncoderFailure.state => 'The encoder is already running.',
     VideoEncoderFailure.captureLost =>
       'The screen capture stopped and could not be reopened.',
+    VideoEncoderFailure.windowClosed => 'The shared window was closed.',
+    VideoEncoderFailure.windowRefused =>
+      'Windows would not capture that window.',
   };
 
   String get _platformSuffix {
@@ -231,6 +281,14 @@ abstract interface class VideoBitrateControl {
   /// Applies [bitsPerSecond] from the next picture on. False when the running
   /// encoder refused, in which case it keeps its rate.
   Future<bool> setBitrate(int bitsPerSecond);
+}
+
+/// An encoder that can capture one window as well as a whole display.
+///
+/// Separate from [VideoEncoderService] because not every platform can: where
+/// this is missing or answers false, no window is offered to share.
+abstract interface class WindowCaptureSupport {
+  bool get canCaptureWindows;
 }
 
 /// An encoder that can deliver its frames to another isolate.

@@ -5,6 +5,7 @@ import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/presentation/widgets/go_live_button.dart';
 import 'package:flucord/src/presentation/widgets/voice_control.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -278,6 +279,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('go-live-error')), findsOne);
+  });
+
+  testWidgets('a share whose window closed says so in plain words', (
+    tester,
+  ) async {
+    final repository = _FakeRepository();
+    final encoder = FakeVideoEncoder();
+    final controller = GoLiveController(
+      repositoryProvider: () => repository,
+      capture: VideoCaptureHub(encoder: encoder),
+    )..reconcile();
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
+    await tester.pumpAndSettle();
+    encoder.fail(const VideoEncoderException(VideoEncoderFailure.windowClosed));
+    await tester.pumpAndSettle();
+
+    final reason = tester.widget<Tooltip>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('go-live-error')),
+        matching: find.byType(Tooltip),
+      ),
+    );
+    // The capture ended, not Discord: no refusal is blamed on it.
+    expect(reason.message, 'The shared window was closed.');
   });
 
   test('a build without an encoder says it cannot encode', () async {
