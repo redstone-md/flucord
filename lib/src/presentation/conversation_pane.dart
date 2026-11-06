@@ -14,6 +14,7 @@ import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
+import '../domain/discord_relationship.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
 import '../domain/voice_connection.dart';
@@ -911,29 +912,51 @@ class ConversationPaneState extends State<ConversationPane> {
         // for the life of the session; were one to be swapped, the timeline
         // would keep the old one.
         Expanded(
-          child: CachedSubtree(
-            dependencies: [
-              ...timelineDependencies(widget.workspace, channel),
-              channel,
-              widget.capabilities,
-              workspaceController.query,
-              workspaceController.targetMessageId,
-              workspaceController.targetRequest,
-              chat.hasNewerMessages(channel.id),
-              chat.historyWindowError(channel.id),
-              chat.lastSentMessageIdIn(channel.id),
-              chat.canLoadOlderMessages(channel.id),
-              chat.isLoadingOlderMessages(channel.id),
-              chat.olderMessagesError(channel.id),
-            ],
-            // One group, so Tab walks the rows in order. Without it, the order
-            // goes by height on screen and mixes in the rail and the sidebar.
-            builder: (_) => FocusTraversalGroup(
-              child: _timeline(chat, workspaceController),
+          child: _withBlockedUserIds(
+            chat,
+            (blockedUserIds) => CachedSubtree(
+              dependencies: [
+                ...timelineDependencies(widget.workspace, channel),
+                blockedUserIds,
+                channel,
+                widget.capabilities,
+                workspaceController.query,
+                workspaceController.targetMessageId,
+                workspaceController.targetRequest,
+                chat.hasNewerMessages(channel.id),
+                chat.historyWindowError(channel.id),
+                chat.lastSentMessageIdIn(channel.id),
+                chat.canLoadOlderMessages(channel.id),
+                chat.isLoadingOlderMessages(channel.id),
+                chat.olderMessagesError(channel.id),
+              ],
+              // One group, so Tab walks the rows in order. Without it, the
+              // order goes by height on screen and mixes in the rail and the
+              // sidebar.
+              builder: (_) => FocusTraversalGroup(
+                child: _timeline(chat, workspaceController, blockedUserIds),
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// Builds with the people the account has blocked, again whenever that
+  /// changes. A new session's graph starts over, so the last account's blocks
+  /// never reach it.
+  Widget _withBlockedUserIds(
+    ChatController chat,
+    Widget Function(Set<String> blockedUserIds) builder,
+  ) {
+    final relationships = chat.relationships;
+    return StreamBuilder<List<DiscordRelationship>>(
+      key: ObjectKey(relationships),
+      stream: relationships?.relationshipUpdates,
+      initialData: relationships?.relationships ?? const [],
+      builder: (context, snapshot) =>
+          builder(snapshot.requireData.blockedUserIds),
     );
   }
 
@@ -967,10 +990,12 @@ class ConversationPaneState extends State<ConversationPane> {
   Widget _timeline(
     ChatController chat,
     WorkspaceController workspaceController,
+    Set<String> blockedUserIds,
   ) {
     final channel = widget.channel;
     return MessageList(
       key: _timelineKey,
+      blockedUserIds: blockedUserIds,
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
       applicationCommands: SlashCommandScope.read(context),

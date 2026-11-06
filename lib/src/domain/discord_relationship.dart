@@ -195,6 +195,14 @@ final class DiscordRelationship {
       );
 }
 
+extension BlockedUserIds on Iterable<DiscordRelationship> {
+  /// The ids of everybody the account has blocked.
+  Set<String> get blockedUserIds => {
+    for (final entry in this)
+      if (entry.kind == DiscordRelationshipKind.blocked) entry.user.id,
+  };
+}
+
 final class DiscordSocialSdkException implements Exception {
   const DiscordSocialSdkException(this.code);
 

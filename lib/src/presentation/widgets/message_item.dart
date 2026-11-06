@@ -57,6 +57,7 @@ class MessageItem extends StatefulWidget {
     required this.workspace,
     required this.grouped,
     required this.isCurrentUser,
+    this.quotesBlockedAuthor = false,
     this.capabilities = ChannelCapabilities.unrestricted,
     required this.onReply,
     required this.onEdit,
@@ -111,6 +112,10 @@ class MessageItem extends StatefulWidget {
   final bool grouped;
   final bool isCurrentUser;
 
+  /// Whether the message this one replies to is from somebody the account
+  /// blocked. The reply line then hides the quote until the reader asks.
+  final bool quotesBlockedAuthor;
+
   /// Which actions this channel's permissions allow. Unrestricted by default
   /// so a host with no permission data keeps the toolbar it had.
   final ChannelCapabilities capabilities;
@@ -154,6 +159,9 @@ class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
   bool _barHovered = false;
   bool _reactionPickerOpen = false;
+
+  /// The reader asked to see a quote from a blocked person.
+  bool _blockedQuoteShown = false;
 
   /// The toolbar floats in the overlay. It reaches above the row, and a part
   /// of a row outside its own bounds would get no clicks.
@@ -209,6 +217,10 @@ class _MessageItemState extends State<MessageItem> {
   @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A new block hides the quote again.
+    if (widget.quotesBlockedAuthor && !oldWidget.quotesBlockedAuthor) {
+      _blockedQuoteShown = false;
+    }
     if (widget.isEditing && !oldWidget.isEditing) {
       _editOpenedFromRow = _rowFocus.hasFocus;
       // Words given up last time do not come back.
@@ -752,6 +764,7 @@ class _MessageItemState extends State<MessageItem> {
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final open = widget.onOpenMessage;
     final author = widget.workspace.memberOrNull(reply.authorId);
+    final concealed = widget.quotesBlockedAuthor && !_blockedQuoteShown;
     return Row(
       children: [
         const MessageReplySpine(
@@ -761,10 +774,17 @@ class _MessageItemState extends State<MessageItem> {
         Expanded(
           child: _clickable(
             key: const ValueKey('message-reply-preview'),
-            label: 'Go to the replied message',
-            onTap: open == null ? null : () => open(reply.messageId),
+            label: concealed
+                ? 'Show the blocked message'
+                : 'Go to the replied message',
+            onTap: concealed
+                ? () => setState(() => _blockedQuoteShown = true)
+                : open == null
+                ? null
+                : () => open(reply.messageId),
             child: MessageReplyPreview(
               reply: reply,
+              concealed: concealed,
               author: author,
               workspace: widget.workspace,
               nameColor: author == null ? null : _nameColor(author),
