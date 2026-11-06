@@ -991,6 +991,8 @@ final class VoiceController extends ChangeNotifier
     _speakingTimers.clear();
     _pendingPcmFrames.clear();
     _lastPcmMicros.clear();
+    // A Room left can end its sessions without their end reaching here.
+    _streamSources.clear();
   }
 
   /// Drops participants the seated roster no longer lists.

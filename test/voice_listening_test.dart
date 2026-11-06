@@ -243,6 +243,23 @@ void main() {
       expect(playback.sourceVolumes, isEmpty);
     });
 
+    test('leaving the Room forgets its sessions', () async {
+      final playback = _RecordingPlayback();
+      final harness = _Harness(playback: playback);
+      addTearDown(harness.dispose);
+      final controller = harness.controller;
+      await _connect(harness);
+      harness.streamAudio.add(streamFrame(1));
+      await _flushEvents();
+
+      await controller.disconnect();
+      await _connect(harness);
+      playback.sourceVolumes.clear();
+      await controller.setStreamVolume(sender, 0.6);
+
+      expect(playback.sourceVolumes, isEmpty);
+    });
+
     test('the level stays between 0 and 100 %', () async {
       final harness = _Harness();
       addTearDown(harness.dispose);
