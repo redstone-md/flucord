@@ -20,6 +20,8 @@ import 'package:flucord/src/data/discord/voice_reconnect_backoff.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
+import 'support/fake_voice_socket.dart';
+
 part 'discord_voice_transport_handshake_cases.dart';
 part 'discord_voice_transport_recovery_cases.dart';
 part 'discord_voice_transport_reconnect_cases.dart';
@@ -139,7 +141,7 @@ void main() {
         token: 'voice-token',
         endpoint: 'c-mad01-261e88f2.discord.media:2083',
       );
-      final connector = _FakeVoiceSocketConnector(_FakeVoiceWebSocket());
+      final connector = FakeVoiceSocketConnector(FakeVoiceWebSocket());
       final client = DiscordVoiceGatewayClient(
         credentials: credentials,
         maxDaveProtocolVersion: 0,
@@ -157,11 +159,11 @@ void main() {
     });
 
     test('a sink wants ask reaches the socket as opcode 15', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: _FakeVoiceUdpTransport(),
       );
       addTearDown(client.close);
@@ -183,12 +185,12 @@ void main() {
     });
 
     test('feedback and keepalives never count against the key', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 1,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: udp,
       );
       final statuses = <VoiceSignalingStatusEvent>[];
@@ -254,12 +256,12 @@ void main() {
     test(
       'a picture-loss indication becomes a keyframe request, once per burst',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final udp = _FakeVoiceUdpTransport();
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 1,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: udp,
         );
         final keyframeRequests = <VoiceKeyframeRequestedEvent>[];
@@ -316,8 +318,8 @@ void main() {
     );
 
     test('reaches transport ready and routes DAVE binary frames', () async {
-      final socket = _FakeVoiceWebSocket();
-      final connector = _FakeVoiceSocketConnector(socket);
+      final socket = FakeVoiceWebSocket();
+      final connector = FakeVoiceSocketConnector(socket);
       final udp = _FakeVoiceUdpTransport();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
@@ -435,12 +437,12 @@ void main() {
     });
 
     test('a packet that will not authenticate is dropped, not fatal', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: udp,
       );
       final events = <VoiceSignalingEvent>[];
@@ -502,12 +504,12 @@ void main() {
     test(
       'nothing decrypting at all is reported rather than passed over',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final udp = _FakeVoiceUdpTransport();
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 0,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: udp,
         );
         final events = <VoiceSignalingEvent>[];
@@ -565,12 +567,12 @@ void main() {
     test(
       'a payload type nobody claimed is not fed to the Opus decoder',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final udp = _FakeVoiceUdpTransport();
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 0,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: udp,
         );
         addTearDown(client.close);
@@ -620,12 +622,12 @@ void main() {
     );
 
     test('splits cameras from audio and attributes them by SSRC', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: udp,
       );
       addTearDown(client.close);
@@ -723,12 +725,12 @@ void main() {
     test(
       'a socket drop that will resume keeps the media plane alive',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final udp = _FakeVoiceUdpTransport();
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 0,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: udp,
         );
         addTearDown(client.close);
@@ -770,8 +772,8 @@ void main() {
     );
 
     test('treats close code 4017 as terminal', () async {
-      final socket = _FakeVoiceWebSocket();
-      final connector = _FakeVoiceSocketConnector(socket);
+      final socket = FakeVoiceWebSocket();
+      final connector = FakeVoiceSocketConnector(socket);
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
@@ -795,12 +797,12 @@ void main() {
     });
 
     test('a client that failed lets go of its UDP socket on close', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport()..failDiscovery = true;
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: udp,
       );
       final statuses = <VoiceSignalingStatusEvent>[];
@@ -830,11 +832,11 @@ void main() {
     });
 
     test('one unanswered heartbeat does not end the call', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: _FakeVoiceUdpTransport(),
       );
       final statuses = <VoiceSignalingStatusEvent>[];
@@ -871,12 +873,12 @@ void main() {
 
     test('an acknowledged heartbeat reports the round trip', () {
       fakeAsync((async) {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         var now = Duration.zero;
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 0,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: _FakeVoiceUdpTransport(),
           now: () => now,
         );
@@ -903,8 +905,8 @@ void main() {
     });
 
     test('a session Discord ended waits to be handed a new one', () async {
-      final socket = _FakeVoiceWebSocket();
-      final connector = _FakeVoiceSocketConnector(socket);
+      final socket = FakeVoiceWebSocket();
+      final connector = FakeVoiceSocketConnector(socket);
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
@@ -931,8 +933,8 @@ void main() {
     });
 
     test('a session Discord ended asks for fresh credentials', () async {
-      final socket = _FakeVoiceWebSocket();
-      final connector = _FakeVoiceSocketConnector(socket);
+      final socket = FakeVoiceWebSocket();
+      final connector = FakeVoiceSocketConnector(socket);
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 0,
@@ -960,8 +962,8 @@ void main() {
       'a session Discord ended does not redial on unanswered heartbeats',
       () {
         fakeAsync((async) {
-          final socket = _FakeVoiceWebSocket();
-          final connector = _FakeVoiceSocketConnector(socket);
+          final socket = FakeVoiceWebSocket();
+          final connector = FakeVoiceSocketConnector(socket);
           final client = DiscordVoiceGatewayClient(
             credentials: _credentials,
             maxDaveProtocolVersion: 0,
@@ -1002,11 +1004,11 @@ void main() {
     test(
       'a socket that died under a send reconnects instead of throwing',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final client = DiscordVoiceGatewayClient(
           credentials: _credentials,
           maxDaveProtocolVersion: 0,
-          socketConnector: _FakeVoiceSocketConnector(socket),
+          socketConnector: FakeVoiceSocketConnector(socket),
           udpTransport: _FakeVoiceUdpTransport(),
         );
         final statuses = <VoiceSignalingStatusEvent>[];
@@ -1047,13 +1049,13 @@ void main() {
     );
 
     test('routes DAVE gateway frames through the native boundary', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final daveService = _GatewayFakeDaveService();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 1,
         daveService: daveService,
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: _FakeVoiceUdpTransport(),
       );
       addTearDown(client.close);
@@ -1101,14 +1103,14 @@ void main() {
     });
 
     test('group decryption adds no copy of its own', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final client = DiscordVoiceGatewayClient(
         credentials: _credentials,
         maxDaveProtocolVersion: 1,
         // Its decryptor hands back what it is given, so whatever else comes
         // out is a copy this client made.
         daveService: _GatewayFakeDaveService(),
-        socketConnector: _FakeVoiceSocketConnector(socket),
+        socketConnector: FakeVoiceSocketConnector(socket),
         udpTransport: _FakeVoiceUdpTransport(),
       );
       addTearDown(client.close);
@@ -1160,12 +1162,12 @@ void main() {
 /// and what reaches the picture stream, driven by packets and a clock.
 void _feedbackCases() {
   test('a feedback request leaves as encrypted RTCP, or not at all', () async {
-    final socket = _FakeVoiceWebSocket();
+    final socket = FakeVoiceWebSocket();
     final udp = _FakeVoiceUdpTransport();
     final client = DiscordVoiceGatewayClient(
       credentials: _credentials,
       maxDaveProtocolVersion: 0,
-      socketConnector: _FakeVoiceSocketConnector(socket),
+      socketConnector: FakeVoiceSocketConnector(socket),
       udpTransport: udp,
     );
     addTearDown(client.close);
@@ -1295,66 +1297,6 @@ Map<String, Object?> _jsonAt(List<Object> values, int index) =>
     (jsonDecode(values[index] as String) as Map).cast<String, Object?>();
 
 Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
-
-final class _FakeVoiceSocketConnector implements DiscordVoiceSocketConnector {
-  _FakeVoiceSocketConnector(this.socket);
-
-  final _FakeVoiceWebSocket socket;
-  int connectCount = 0;
-  Uri? lastUri;
-
-  @override
-  Future<DiscordVoiceWebSocket> connect(Uri uri) async {
-    connectCount++;
-    lastUri = uri;
-    return socket;
-  }
-}
-
-final class _FakeVoiceWebSocket implements DiscordVoiceWebSocket {
-  final StreamController<Object?> _messages = StreamController.broadcast();
-  final List<Object> sent = [];
-  bool _closed = false;
-
-  @override
-  int? closeCode;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void addJson(Map<String, Object?> payload) =>
-      _messages.add(jsonEncode(payload));
-
-  void addBinary(List<int> payload) =>
-      _messages.add(Uint8List.fromList(payload));
-
-  Future<void> closeFromServer(int code) async {
-    closeCode = code;
-    await _closeMessages();
-  }
-
-  /// Set when the socket should behave like one that has closed underneath
-  /// the client: `dart:io` throws "StreamSink is closed" on a write.
-  bool failSends = false;
-
-  @override
-  void send(Object data) {
-    if (failSends) throw StateError('StreamSink is closed');
-    sent.add(data);
-  }
-
-  @override
-  Future<void> close([int? code, String? reason]) async {
-    closeCode ??= code;
-    await _closeMessages();
-  }
-
-  Future<void> _closeMessages() async {
-    if (_closed) return;
-    _closed = true;
-    await _messages.close();
-  }
-}
 
 final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
   final StreamController<Uint8List> _packets = StreamController.broadcast();
