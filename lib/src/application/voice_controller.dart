@@ -147,6 +147,7 @@ final class VoiceController extends ChangeNotifier
   String? _connectedChannelId;
   bool _isCallSession = false;
   VoiceTransportSession? _transportSession;
+  Duration? _roundTrip;
   final Map<String, VoiceParticipant> _participants = {};
   String? _selfUserId;
 
@@ -311,6 +312,10 @@ final class VoiceController extends ChangeNotifier
   /// on every speaking change, so a list of people listens here instead.
   Listenable get seats => _seats;
   bool get isTransportReady => _transportSession != null;
+
+  /// The voice server's last heartbeat round trip, while the transport is
+  /// up and one has been measured.
+  Duration? get roundTrip => isTransportReady ? _roundTrip : null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
   bool get isMuted => _isMuted;
@@ -511,6 +516,7 @@ final class VoiceController extends ChangeNotifier
     _isCallSession = isCall;
     _participants.clear();
     _transportSession = null;
+    _roundTrip = null;
     await _audioPipeline?.setEnabled(false);
     await _setPlaybackEnabled(false);
     // Only a session that is actually being established says "joining". A
@@ -717,6 +723,8 @@ final class VoiceController extends ChangeNotifier
           _clearParticipants();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
+      case VoiceRoundTripEvent():
+        _roundTrip = event.roundTrip;
       case VoiceTransportReadyEvent():
         _transportSession = event.session;
         unawaited(

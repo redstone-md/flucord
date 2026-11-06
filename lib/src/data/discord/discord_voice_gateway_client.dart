@@ -270,7 +270,9 @@ final class DiscordVoiceGatewayClient
     final sentAt = _heartbeatSentAt;
     if (sentAt == null) return;
     _heartbeatSentAt = null;
-    _roundTrip = _now() - sentAt;
+    final roundTrip = _now() - sentAt;
+    _roundTrip = roundTrip;
+    if (!_events.isClosed) _events.add(VoiceRoundTripEvent(roundTrip));
   }
 
   int _pliBlocked = 0;
