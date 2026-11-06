@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'application/connection_controller.dart';
 import 'domain/accessibility.dart';
+import 'domain/trusted_domains.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
@@ -67,6 +68,7 @@ class AppBootstrap {
     this.streamerModeRepository,
     this.streamQualityRepository,
     this.accessibilityRepository,
+    this.trustedDomainsRepository,
     this.navigationMemoryRepository,
     this.spellCheckService,
     this.voiceProcessingRepository,
@@ -142,6 +144,10 @@ class AppBootstrap {
 
   /// Where the accessibility dials are kept, injected for the same reason.
   final AccessibilityRepository? accessibilityRepository;
+
+  /// Where the sites trusted from the "Leaving" dialog are kept, injected
+  /// for the same reason.
+  final TrustedDomainsRepository? trustedDomainsRepository;
   final NavigationMemoryRepository? navigationMemoryRepository;
 
   /// The local spell checker, injected so a test can hand the composer a

@@ -10,6 +10,7 @@ import '../../domain/external_link_launcher.dart';
 import 'chat_scope.dart';
 import 'discord_markdown.dart';
 import 'guild_access_scope.dart';
+import 'leaving_site_dialog.dart';
 import 'message_context_menu.dart';
 import 'profile_opener_scope.dart';
 
@@ -110,6 +111,7 @@ class _MessageContentViewState extends State<MessageContentView> {
       }
     }
     final uri = Uri.tryParse(rawHref);
+    if (uri != null && !await confirmLeavingFor(context, uri)) return;
     final opened = uri != null && await widget.linkLauncher.open(uri);
     if (opened || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
