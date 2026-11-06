@@ -1,6 +1,7 @@
 import '../../domain/desktop_relationship_repository.dart';
 import '../../domain/direct_message_management.dart';
 import '../../domain/scheduled_event_repository.dart';
+import '../../domain/sticker_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
@@ -26,6 +27,8 @@ import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/guild_membership.dart';
 import '../../domain/guild_member_list_repository.dart';
+import '../../domain/message_flag_repository.dart';
+import '../../domain/message_forward_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
 import '../../domain/permission_overwrite.dart';
@@ -99,6 +102,9 @@ final class DiscordDesktopChatRepository
         GuildMemberListRepository,
         ScheduledEventRepository,
         VoiceMessageRepository,
+        MessageForwardRepository,
+        StickerRepository,
+        MessageFlagRepository,
         DirectMessageManagementRepository {
   DiscordDesktopChatRepository(
     this._api,
@@ -718,6 +724,41 @@ final class DiscordDesktopChatRepository
     return _storeSentMessage(payload);
   }
 
+  /// A forward is a send with no words of its own: the reference names the
+  /// source, and Discord answers with the snapshot it took.
+  @override
+  Future<ChatMessage> forwardMessage({
+    required String sourceChannelId,
+    required String sourceMessageId,
+    required String targetChannelId,
+  }) async => _storeSentMessage(
+    await _api.createMessage(
+      channelId: targetChannelId,
+      content: '',
+      nonce: _nonceFactory.next(),
+      forwardOf: (channelId: sourceChannelId, messageId: sourceMessageId),
+    ),
+  );
+
+  @override
+  Future<ChatMessage> sendStickers({
+    required String channelId,
+    required String authorId,
+    required List<String> stickerIds,
+  }) async {
+    if (stickerIds.isEmpty) {
+      throw ArgumentError.value(stickerIds, 'stickerIds', 'must contain 1-3');
+    }
+    return _storeSentMessage(
+      await _api.createMessage(
+        channelId: channelId,
+        content: '',
+        nonce: _nonceFactory.next(),
+        stickerIds: stickerIds,
+      ),
+    );
+  }
+
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);
     // The gateway's copy may come later, and the channel must read as read
@@ -741,6 +782,22 @@ final class DiscordDesktopChatRepository
       payload,
       fallback: await _cache.readMessage(messageId),
     );
+  }
+
+  @override
+  Future<ChatMessage> setSuppressEmbeds({
+    required String channelId,
+    required String messageId,
+    required bool suppress,
+  }) async {
+    final held = await _cache.readMessage(messageId);
+    final payload = await _api.editMessageFlags(
+      channelId: channelId,
+      messageId: messageId,
+      suppressEmbeds: suppress,
+      componentsV2: held?.hasFlag(DiscordMessageFlag.componentsV2) ?? false,
+    );
+    return _storeMessage(payload, fallback: held);
   }
 
   @override

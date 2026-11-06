@@ -187,6 +187,20 @@ final class ConversationChannel {
   bool get canAcceptMessageForward =>
       hasMessageTimeline && !(isThread && isArchived && isLocked);
 
+  /// The id that dates the latest activity here: the newest message, or the
+  /// channel id when that is newer. A conversation nobody wrote in yet counts
+  /// from when it was created.
+  String get latestActivityId {
+    final last = lastMessageId;
+    return last != null && DiscordSnowflake.compare(last, id) > 0 ? last : id;
+  }
+
+  /// Sorts the DM list: the latest activity first, as Discord does.
+  static int latestActivityFirst(
+    ConversationChannel left,
+    ConversationChannel right,
+  ) => DiscordSnowflake.compare(right.latestActivityId, left.latestActivityId);
+
   ConversationChannel markUnread({
     required String messageId,
     required bool mention,

@@ -111,6 +111,19 @@ final class VoiceSignalingStatusEvent extends VoiceSignalingEvent {
   final Object? error;
 }
 
+/// Discord refused the room because it requires end-to-end encryption
+/// (DAVE), and this build cannot offer it.
+///
+/// Joining again is refused the same way, so this is a reason to show, not a
+/// fault to retry.
+final class VoiceEncryptionRequiredException implements Exception {
+  const VoiceEncryptionRequiredException();
+
+  @override
+  String toString() =>
+      'Discord requires end-to-end encrypted voice (DAVE) here (code 4017)';
+}
+
 final class VoiceCredentialsReadyEvent extends VoiceSignalingEvent {
   const VoiceCredentialsReadyEvent(this.credentials);
 

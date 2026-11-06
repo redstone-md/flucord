@@ -91,6 +91,21 @@ void main() {
       }
     });
 
+    test('a room that requires DAVE fails with that reason', () {
+      final action = protocol().closedWithCode(
+        DiscordVoiceCloseCodes.daveRequired,
+      );
+
+      expect(
+        action,
+        isA<DiscordVoiceGatewayFail>().having(
+          (fail) => fail.error,
+          'error',
+          isA<VoiceEncryptionRequiredException>(),
+        ),
+      );
+    });
+
     test('anything else, including no code at all, reconnects', () {
       expect(
         protocol().closedWithCode(null),

@@ -601,15 +601,27 @@ final class DiscordDesktopApiClient
   Future<void> leaveThread(String threadId) =>
       _rest.requestEmpty('DELETE', '/channels/$threadId/thread-members/@me');
 
+  /// `POST /channels/{id}/messages`, the one route every kind of send uses.
+  ///
+  /// A forward names its source in [forwardOf] and needs no content. Up to
+  /// three [stickerIds] may go with or without text.
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
     required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    ({String channelId, String messageId})? forwardOf,
+    List<String> stickerIds = const [],
     bool suppressNotifications = false,
     bool textToSpeech = false,
   }) async {
+    if (stickerIds.length > 3) {
+      throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
+    }
+    if (forwardOf != null && replyToMessageId != null) {
+      throw ArgumentError('A message cannot both forward and reply');
+    }
     final payload = <String, Object?>{
       'content': content,
       'nonce': nonce,
@@ -617,9 +629,18 @@ final class DiscordDesktopApiClient
       // gets the first message back, so a quick retry does not post twice.
       'enforce_nonce': true,
       'tts': textToSpeech,
-      'flags': suppressNotifications ? 4096 : 0,
-      if (replyToMessageId != null)
+      'flags': suppressNotifications
+          ? DiscordMessageFlag.suppressNotifications.bit
+          : 0,
+      if (forwardOf != null)
+        'message_reference': {
+          'type': DiscordMessageReferenceType.forward.discordValue,
+          'message_id': forwardOf.messageId,
+          'channel_id': forwardOf.channelId,
+        }
+      else if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
+      if (stickerIds.isNotEmpty) 'sticker_ids': stickerIds,
       if (attachments.isNotEmpty)
         'attachments': [
           for (var index = 0; index < attachments.length; index++)
@@ -715,6 +736,24 @@ final class DiscordDesktopApiClient
     'PATCH',
     '/channels/$channelId/messages/$messageId',
     body: {'content': content},
+  );
+
+  /// Edits only the flags. A user may set just `SUPPRESS_EMBEDS` here. A
+  /// message built from version 2 components keeps that flag too, because
+  /// Discord does not let it be removed.
+  Future<Map<String, Object?>> editMessageFlags({
+    required String channelId,
+    required String messageId,
+    required bool suppressEmbeds,
+    bool componentsV2 = false,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/channels/$channelId/messages/$messageId',
+    body: {
+      'flags':
+          (suppressEmbeds ? DiscordMessageFlag.suppressEmbeds.bit : 0) |
+          (componentsV2 ? DiscordMessageFlag.componentsV2.bit : 0),
+    },
   );
 
   Future<void> deleteMessage({
