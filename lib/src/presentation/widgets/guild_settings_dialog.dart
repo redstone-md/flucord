@@ -138,8 +138,6 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
       ),
       GuildSettingsSection.invites => GuildSettingsInvitesSection(
         controller: controller,
-        workspace: widget.workspace,
-        spaceId: widget.space.id,
       ),
       GuildSettingsSection.webhooks => GuildSettingsWebhooksSection(
         controller: controller,

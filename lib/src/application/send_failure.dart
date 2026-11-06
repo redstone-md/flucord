@@ -45,9 +45,13 @@ String sendingTooFast(String wait) =>
 ///
 /// Discord's own refusal is the clear answer when it gave one, such as a DM
 /// with someone who does not take calls from this account.
-String callFailureReason(Object? error) => switch (error) {
+String callFailureReason(Object? error) =>
+    refusalOr(error, 'The call could not start. Try again.');
+
+/// Discord's own refusal of [error] when it gave one, else [fallback].
+String refusalOr(Object? error, String fallback) => switch (error) {
   DiscordApiException(statusCode: < 500, :final message)
       when message.isNotEmpty =>
     message,
-  _ => 'The call could not start. Try again.',
+  _ => fallback,
 };

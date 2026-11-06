@@ -76,5 +76,15 @@ final class GuildMemberEdit {
   set timeoutUntil(DateTime? value) => _values['communication_disabled_until'] =
       value?.toUtc().toIso8601String();
 
+  /// The server mute. Needs `MUTE_MEMBERS`, and the member in voice.
+  set serverMuted(bool value) => _values['mute'] = value;
+
+  /// The server deafen. Needs `DEAFEN_MEMBERS`, and the member in voice.
+  set serverDeafened(bool value) => _values['deaf'] = value;
+
+  /// The voice channel the member is moved to. A null disconnects them.
+  /// Needs `MOVE_MEMBERS`, and `CONNECT` in the channel moved to.
+  set voiceChannelId(String? value) => _values['channel_id'] = value;
+
   Map<String, Object?> toJson() => Map<String, Object?>.unmodifiable(_values);
 }

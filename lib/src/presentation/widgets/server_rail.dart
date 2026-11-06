@@ -1,17 +1,27 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/discord_rgb.dart';
+import '../../domain/guild_folders.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
 
 import 'activity_label.dart';
 import 'count_badge.dart';
+import 'flucord_menu.dart';
+import 'folder_settings_dialog.dart';
 import 'rail_tile.dart';
 
-class ServerRail extends StatelessWidget {
+part 'server_rail_folders.dart';
+
+class ServerRail extends StatefulWidget {
   const ServerRail({
     required this.spaces,
     required this.activity,
@@ -21,6 +31,8 @@ class ServerRail extends StatelessWidget {
     required this.onOpenConnections,
     required this.sessionMode,
     required this.isDark,
+    this.folders = const [],
+    this.onArrange,
     this.onAddServer,
     this.onOpenSpaceMenu,
     super.key,
@@ -41,6 +53,13 @@ class ServerRail extends StatelessWidget {
   final SessionMode sessionMode;
   final bool isDark;
 
+  /// The account's stored folders and server order.
+  final List<GuildFolder> folders;
+
+  /// Saves a new server list, or null where nothing can be saved. Servers
+  /// and folders can be dragged and folders edited only with it.
+  final ValueChanged<List<GuildFolder>>? onArrange;
+
   /// Opens the add-server surface, or null on a transport that cannot join,
   /// create or leave anything. The button is hidden rather than disabled:
   /// a plus that can do nothing is a lie about what the app offers.
@@ -50,12 +69,49 @@ class ServerRail extends StatelessWidget {
   final void Function(String spaceId, Offset position)? onOpenSpaceMenu;
 
   @override
+  State<ServerRail> createState() => _ServerRailState();
+}
+
+class _ServerRailState extends State<ServerRail> {
+  /// The folders shown open. Kept on this device only, as Discord does.
+  final Set<int> _expanded = {};
+
+  @override
   Widget build(BuildContext context) {
+    final spaces = widget.spaces;
     final directSpaces = spaces.where((space) => space.isDirectMessages);
     final directSpace = directSpaces.isEmpty ? null : directSpaces.first;
-    final guildSpaces = spaces
-        .where((space) => !space.isDirectMessages)
-        .toList(growable: false);
+    final guildSpaces = {
+      for (final space in spaces)
+        if (!space.isDirectMessages) space.id: space,
+    };
+    final rail = GuildRail.arrange(widget.folders, guildSpaces.keys.toList());
+    final arrange = widget.onArrange;
+    final layout = _RailLayout(
+      rail: rail,
+      spaces: guildSpaces,
+      activity: widget.activity,
+      selectedSpaceId: widget.selectedSpaceId,
+      onSelectSpace: widget.onSelectSpace,
+      onOpenSpaceMenu: widget.onOpenSpaceMenu,
+      onDrop: arrange == null
+          ? null
+          : (item, target) {
+              final next = rail.drop(item, target);
+              if (!listEquals(next.entries, rail.entries)) {
+                arrange(next.entries);
+              }
+            },
+      onEditFolder: arrange == null
+          ? null
+          : (folderId, name, colour) => arrange(
+              rail.editFolder(folderId, name: name, colour: colour).entries,
+            ),
+      isExpanded: _expanded.contains,
+      onToggleFolder: (folderId) => setState(() {
+        if (!_expanded.remove(folderId)) _expanded.add(folderId);
+      }),
+    );
     return Container(
       key: const ValueKey('server-rail'),
       width: RailMetrics.width,
@@ -64,53 +120,43 @@ class ServerRail extends StatelessWidget {
         children: [
           const SizedBox(height: RailMetrics.gap),
           _HomeButton(
-            selected: directSpace?.id == selectedSpaceId,
+            selected: directSpace?.id == widget.selectedSpaceId,
             activity: directSpace == null
                 ? SpaceActivity.none
-                : activity[directSpace.id] ?? SpaceActivity.none,
+                : widget.activity[directSpace.id] ?? SpaceActivity.none,
             onPressed: directSpace == null
                 ? null
-                : () => onSelectSpace(directSpace.id),
+                : () => widget.onSelectSpace(directSpace.id),
           ),
           const RailDivider(),
           Expanded(
-            child: ListView.separated(
+            child: ListView.builder(
               // Room for the badge that hangs below the last tile.
               padding: const EdgeInsets.only(bottom: RailMetrics.gap),
-              itemCount: guildSpaces.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: RailMetrics.gap),
-              itemBuilder: (context, index) {
-                final space = guildSpaces[index];
-                return _SpaceButton(
-                  space: space,
-                  selected: space.id == selectedSpaceId,
-                  activity: activity[space.id] ?? SpaceActivity.none,
-                  onPressed: () => onSelectSpace(space.id),
-                  onOpenMenu: onOpenSpaceMenu == null
-                      ? null
-                      : (position) => onOpenSpaceMenu!(space.id, position),
-                );
-              },
+              itemCount: layout.itemCount,
+              itemBuilder: layout.entry,
             ),
           ),
-          if (onAddServer != null)
+          if (widget.onAddServer case final onAddServer?)
             Padding(
               padding: const EdgeInsets.only(bottom: RailMetrics.gap),
-              child: _AddServerButton(onPressed: onAddServer!),
+              child: _AddServerButton(onPressed: onAddServer),
             ),
           IconButton(
             key: const ValueKey('open-connections'),
-            onPressed: onOpenConnections,
+            onPressed: widget.onOpenConnections,
             icon: FlucordIcon(
               FlucordIcons.link,
-              color: sessionMode == SessionMode.discord
+              color: widget.sessionMode == SessionMode.discord
                   ? context.surfaces.accentIcon
                   : null,
             ),
             tooltip: 'Connections',
           ),
-          RailThemeToggle(isDark: isDark, onPressed: onToggleTheme),
+          RailThemeToggle(
+            isDark: widget.isDark,
+            onPressed: widget.onToggleTheme,
+          ),
           const SizedBox(height: RailMetrics.gap),
         ],
       ),

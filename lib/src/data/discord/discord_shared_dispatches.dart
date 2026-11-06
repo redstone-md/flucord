@@ -9,6 +9,7 @@ import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
 import 'discord_message_update_handler.dart';
+import 'discord_poll_vote_handler.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_role_dispatch.dart';
@@ -43,7 +44,8 @@ final class DiscordSharedDispatches {
          updatedMessage,
          events.publish,
        ),
-       _channels = DiscordChannelHandler(cache, mapper, events.publish);
+       _channels = DiscordChannelHandler(cache, mapper, events.publish),
+       _pollVotes = DiscordPollVoteHandler(cache, currentMemberId);
 
   final ChatCache _cache;
   final DiscordMapper _mapper;
@@ -53,6 +55,7 @@ final class DiscordSharedDispatches {
   final DiscordReactionHandler _reactions;
   final DiscordMessageUpdateHandler _updates;
   final DiscordChannelHandler _channels;
+  final DiscordPollVoteHandler _pollVotes;
 
   /// The step added last. See [inOrder].
   Future<void> _lastStep = Future.value();
@@ -109,10 +112,17 @@ final class DiscordSharedDispatches {
   void route(DiscordGatewayDispatch event) {
     switch (event.name) {
       case 'MESSAGE_REACTION_ADD' ||
+          'MESSAGE_REACTION_ADD_MANY' ||
           'MESSAGE_REACTION_REMOVE' ||
           'MESSAGE_REACTION_REMOVE_EMOJI' ||
           'MESSAGE_REACTION_REMOVE_ALL':
         inOrder(() => _reactions.apply(event));
+      case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
+        inOrder(() async {
+          if (await _pollVotes.apply(event) case final update?) {
+            _events.publish(update);
+          }
+        });
       case 'MESSAGE_UPDATE':
         inOrder(() => _updates.apply(event.data));
       case 'MESSAGE_DELETE':

@@ -63,6 +63,7 @@ import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/stream_suspension.dart';
 import 'application/accessibility_controller.dart';
+import 'application/trusted_domains_controller.dart';
 import 'application/navigation_memory_store.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
@@ -102,6 +103,7 @@ import 'data/file_keybind_repository.dart';
 import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'data/file_accessibility_repository.dart';
+import 'data/file_trusted_domains_repository.dart';
 import 'data/file_navigation_memory_repository.dart';
 import 'data/spell_check/word_list_spell_check_service.dart';
 import 'data/noop_voice_media_service.dart';
@@ -239,6 +241,7 @@ final class AppComposition {
   /// cannot go full screen. The Stream then fills the window alone.
   late final WindowFullScreen? windowFullScreen;
   late final AccessibilityController accessibility;
+  late final TrustedDomainsController trustedDomains;
   late final ScreenshotService screenshot;
   late final ClipRecorder clipRecorder;
   late final VoiceOverlayController voiceOverlay;
@@ -676,6 +679,12 @@ final class AppComposition {
       ),
     );
     unawaited(accessibility.load());
+    trustedDomains = _register(
+      TrustedDomainsController(
+        bootstrap.trustedDomainsRepository ?? FileTrustedDomainsRepository(),
+      ),
+    );
+    unawaited(trustedDomains.load());
     screenshot =
         bootstrap.screenshotService ??
         (Platform.isWindows
@@ -755,6 +764,8 @@ final class AppComposition {
         chat: chat,
         workspace: workspace,
         visible: windowVisible,
+        directCall: directCall,
+        streamerMode: () => streamerMode.settings,
         onProtocolUri: (uri) => unawaited(oauth.handleProtocolUri(uri)),
       ),
     );

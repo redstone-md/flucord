@@ -92,4 +92,66 @@ void main() {
       'Keep the bench open?',
     );
   });
+
+  test('votes, changes the vote, takes it back, and lists voters', () async {
+    final controller = ChatController(
+      MockChatRepository(latency: Duration.zero),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.createPoll(
+      channelId: 'forge-general',
+      poll: PendingPoll(
+        question: 'Which build ships?',
+        answers: const ['Stable', 'Canary'],
+        durationHours: 24,
+      ),
+    );
+    ChatMessage poll() => controller.workspace!.messages.last;
+    List<int> counts() => [for (final a in poll().poll!.answers) a.count];
+
+    expect(controller.canVoteInPolls, isTrue);
+    expect(await controller.votePoll(poll(), {1}), isTrue);
+    expect(counts(), [1, 0]);
+    expect(poll().poll!.ownVote, {1});
+
+    expect(await controller.votePoll(poll(), {2}), isTrue);
+    expect(counts(), [0, 1]);
+
+    final voters = await controller.loadPollVoters(
+      poll(),
+      poll().poll!.answers.last,
+      null,
+    );
+    expect(voters.users.map((user) => user.id), [
+      controller.workspace!.currentMemberId,
+    ]);
+
+    expect(await controller.votePoll(poll(), const {}), isTrue);
+    expect(counts(), [0, 0]);
+    expect(poll().poll!.ownVote, isEmpty);
+  });
+
+  test('an ended poll takes no vote', () async {
+    final controller = ChatController(
+      MockChatRepository(latency: Duration.zero),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.createPoll(
+      channelId: 'forge-general',
+      poll: PendingPoll(
+        question: 'Which build ships?',
+        answers: const ['Stable', 'Canary'],
+        durationHours: 24,
+      ),
+    );
+    await controller.endPoll(controller.workspace!.messages.last);
+
+    expect(
+      await controller.votePoll(controller.workspace!.messages.last, {1}),
+      isFalse,
+    );
+    expect(controller.workspace!.messages.last.poll!.totalVotes, 0);
+  });
 }

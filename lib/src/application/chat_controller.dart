@@ -1,5 +1,6 @@
 import '../domain/game_detection.dart';
 import '../domain/desktop_relationship_repository.dart';
+import '../domain/direct_message_management.dart';
 import '../domain/age_verification.dart';
 import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
@@ -24,6 +25,7 @@ import '../domain/discord_snowflake.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_management.dart';
 import '../domain/guild_expression_repository.dart';
+import '../domain/guild_join_gate.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/guild_member_list_repository.dart';
 import '../domain/moderation_repository.dart';
@@ -71,8 +73,10 @@ part 'chat_controller_voice_messages.dart';
 part 'chat_controller_scheduled_events.dart';
 part 'chat_controller_user_settings.dart';
 part 'chat_controller_guild_access.dart';
+part 'chat_controller_join_gate.dart';
 part 'chat_controller_read_state.dart';
 part 'chat_controller_history_window.dart';
+part 'chat_controller_direct_messages.dart';
 part 'chat_controller_outgoing.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
@@ -562,19 +566,24 @@ final class ChatController extends ChangeNotifier {
     if (value.isEmpty || _workspace == null) return null;
     try {
       final conversation = await _repository.openDirectConversation(value);
-      _workspace = conversation.recipients
-          .fold(
-            _workspace!.upsertSpace(const CommunitySpace.directMessages()),
-            (workspace, recipient) => workspace.upsertMember(recipient),
-          )
-          .upsertChannel(conversation.channel);
-      notifyListeners();
+      _adoptConversation(conversation);
       return conversation.channel.id;
     } catch (error) {
       _error = error;
       notifyListeners();
       return null;
     }
+  }
+
+  /// Puts a DM Discord just opened into the workspace.
+  void _adoptConversation(DirectConversation conversation) {
+    _workspace = conversation.recipients
+        .fold(
+          _workspace!.upsertSpace(const CommunitySpace.directMessages()),
+          (workspace, recipient) => workspace.upsertMember(recipient),
+        )
+        .upsertChannel(conversation.channel);
+    notifyListeners();
   }
 
   Future<void> loadOlderMessages(String channelId) async {

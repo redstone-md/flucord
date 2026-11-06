@@ -280,6 +280,11 @@ final class ChatWorkspace {
 
   Member? memberOrNull(String id) => _memberById[id];
 
+  /// Whether the account has yet to agree to [spaceId]'s rules. Discord lets
+  /// a pending member look around but not take part.
+  bool isPendingIn(String spaceId) =>
+      memberOrNull(currentMemberId)?.membershipIn(spaceId)?.isPending ?? false;
+
   ConversationChannel? channelOrNull(String id) => _channelById[id];
 
   CommunityRole? roleOrNull(String id) => _roleById[id];

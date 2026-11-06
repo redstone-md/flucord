@@ -600,6 +600,16 @@ final class _PreviewingGuildManagement implements GuildManagementRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<OwnServerProfile> loadOwnServerProfile(String guildId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<OwnServerProfile> saveOwnServerProfile({
+    required String guildId,
+    required ServerProfileEdit edit,
+  }) => throw UnimplementedError();
+
+  @override
   Future<void> kickMember({
     required String guildId,
     required String userId,

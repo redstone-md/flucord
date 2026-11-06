@@ -99,6 +99,21 @@ final class MessageReactionCounted extends MessageReactionChange {
   }
 }
 
+/// Several reactions that Discord sent as one batch, applied in order.
+final class MessageReactionBatch extends MessageReactionChange {
+  const MessageReactionBatch({
+    required super.channelId,
+    required super.messageId,
+    required this.changes,
+  });
+
+  final List<MessageReactionCounted> changes;
+
+  @override
+  List<MessageReaction> _applied(List<MessageReaction> reactions) =>
+      changes.fold(reactions, (applied, change) => change._applied(applied));
+}
+
 /// A moderator cleared one emoji from the message.
 final class MessageReactionEmojiCleared extends MessageReactionChange {
   const MessageReactionEmojiCleared({

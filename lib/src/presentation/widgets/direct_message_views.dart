@@ -96,21 +96,31 @@ class _PersonRow extends StatelessWidget {
     key: ValueKey('direct-message-person-${person.id}'),
     dense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-    leading: SizedBox.square(
-      dimension: 30,
-      child: ClipOval(
-        child: RemoteIdentityImage(
-          url: person.avatarUrl,
-          fallback: ColoredBox(
-            color: context.surfaces.raised,
-            child: const FlucordIcon(FlucordIcons.person, size: 16),
-          ),
-        ),
-      ),
-    ),
+    leading: CandidateAvatar(url: person.avatarUrl),
     title: Text(person.name, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: person.isFriend ? const Text('Friend') : null,
     onTap: onPressed,
+  );
+}
+
+/// A person's small picture in a list of people to pick from.
+class CandidateAvatar extends StatelessWidget {
+  const CandidateAvatar({required this.url, super.key});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 30,
+    child: ClipOval(
+      child: RemoteIdentityImage(
+        url: url,
+        fallback: ColoredBox(
+          color: context.surfaces.raised,
+          child: const FlucordIcon(FlucordIcons.person, size: 16),
+        ),
+      ),
+    ),
   );
 }
 

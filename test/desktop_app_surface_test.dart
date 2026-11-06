@@ -7,6 +7,7 @@ import 'package:flucord/src/application/desktop_app_surface.dart';
 import 'package:flucord/src/application/window_visible.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
+import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
@@ -21,6 +22,8 @@ import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
+
+import 'support/idle_direct_calls.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -292,6 +295,8 @@ void main() {
         chat: chat,
         workspace: workspace,
         visible: WindowVisible(),
+        directCall: idleDirectCalls(),
+        streamerMode: () => StreamerModeSettings.off,
         onProtocolUri: (_) {},
         incomingMessages: messages.stream,
       );
@@ -379,6 +384,8 @@ class _MountedSurface {
       chat: chat,
       workspace: workspace,
       visible: visible,
+      directCall: idleDirectCalls(),
+      streamerMode: () => StreamerModeSettings.off,
       onProtocolUri: (_) {},
       incomingMessages: messages.stream,
     );

@@ -22,6 +22,7 @@ import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
 import 'outgoing_message_status.dart';
+import 'poll_voters_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'profile_card_route.dart';
@@ -50,14 +51,18 @@ class MessageList extends StatefulWidget {
     this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
-    required this.onLoadReactionUsers,
+    this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onToggleSuperReaction,
+    this.onAddSuperReaction,
     this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
+    this.onVotePoll,
+    this.onLoadPollVoters,
     this.onForward,
     this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
@@ -132,8 +137,18 @@ class MessageList extends StatefulWidget {
   final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-  final ReactionUsersLoader onLoadReactionUsers;
+
+  /// Loads who reacted, or null where the session cannot list them. Then the
+  /// list is not offered at all.
+  final ReactionUsersLoader? onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Takes back or adds the account's super reaction on a chip, and adds a
+  /// new one from the hover bar. Null where the account cannot send super
+  /// reactions. Then neither is offered.
+  final Future<void> Function(ChatMessage, MessageReaction)?
+  onToggleSuperReaction;
+  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
   final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
@@ -142,6 +157,14 @@ class MessageList extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
 
   /// Forwards a message, or null where the session cannot. Then the action
   /// is not offered at all.
@@ -938,12 +961,16 @@ class MessageListState extends State<MessageList>
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
                 onAddReaction: widget.onAddReaction,
+                onToggleSuperReaction: widget.onToggleSuperReaction,
+                onAddSuperReaction: widget.onAddSuperReaction,
                 onMarkUnread: widget.onMarkUnread,
                 onCreateThread: widget.onCreateThread,
                 onTogglePin: widget.onTogglePin,
                 onResolveAlert: widget.onResolveAlert,
                 onReport: widget.onReport,
                 onEndPoll: widget.onEndPoll,
+                onVotePoll: widget.onVotePoll,
+                onLoadPollVoters: widget.onLoadPollVoters,
                 onForward: widget.onForward,
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,

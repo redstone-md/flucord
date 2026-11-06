@@ -61,7 +61,7 @@ final class DiscordCodeBlockBuilder extends MarkdownElementBuilder {
         ),
       },
     'emphasis': const TextStyle(fontStyle: FontStyle.italic),
-    'strong': const TextStyle(fontWeight: FontWeight.bold),
+    'strong': const TextStyle(fontWeight: FontWeight.w500),
   };
 
   /// Which colour each highlight.js scope takes. A scope not named here

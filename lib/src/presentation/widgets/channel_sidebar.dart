@@ -20,6 +20,7 @@ import 'activity_views.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'participant_menu.dart';
+import 'voice_participant_grid.dart' show ParticipantMark, soundMarks;
 import 'motion_scope.dart';
 import 'presence_scope.dart';
 import 'nameplate_backdrop.dart';
@@ -62,6 +63,8 @@ class ChannelSidebar extends StatelessWidget {
     required this.collapsedCategoryIds,
     required this.onToggleCategory,
     required this.onNewDirectMessage,
+    this.onNewGroupDirectMessage,
+    this.onCloseDirectMessage,
     this.onAcceptMessageRequest,
     this.onDeclineMessageRequest,
     this.readState,
@@ -70,6 +73,8 @@ class ChannelSidebar extends StatelessWidget {
     this.isLoadingScheduledEvents = false,
     this.scheduledEventsError,
     this.onOpenEvents,
+    this.onInvitePeople,
+    this.onEditServerProfile,
     this.onOpenServerSettings,
     this.onLeaveServer,
     this.onReportServer,
@@ -135,6 +140,14 @@ class ChannelSidebar extends StatelessWidget {
   final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
 
+  /// Starts a group DM, from the plus beside the "Direct messages" label.
+  /// Null on a session that cannot start one.
+  final VoidCallback? onNewGroupDirectMessage;
+
+  /// Closes a DM or leaves a group, from the cross on its row. Null on a
+  /// session that cannot.
+  final ValueChanged<ConversationChannel>? onCloseDirectMessage;
+
   /// Answers a message request in the folder, by channel id. Null on a
   /// surface that cannot answer one, which leaves the folder read-only.
   final void Function(String channelId)? onAcceptMessageRequest;
@@ -151,6 +164,14 @@ class ChannelSidebar extends StatelessWidget {
   final bool isLoadingScheduledEvents;
   final Object? scheduledEventsError;
   final VoidCallback? onOpenEvents;
+
+  /// Opens Invite people. Null when the account may invite to no channel
+  /// here, or the transport cannot make invites.
+  final VoidCallback? onInvitePeople;
+
+  /// Opens Edit server profile. Null when there is nothing this account may
+  /// change here.
+  final VoidCallback? onEditServerProfile;
 
   /// Opens the server-settings window. Null when the account may administer
   /// nothing here, or when the transport has no admin plane at all. The header
@@ -201,6 +222,8 @@ class ChannelSidebar extends StatelessWidget {
                 ? _DirectMessageSearch(onPressed: onNewDirectMessage)
                 : _ServerHeader(
                     title: _spaceTitle(context),
+                    onInvite: onInvitePeople,
+                    onEditProfile: onEditServerProfile,
                     onOpenSettings: onOpenServerSettings,
                     onLeave: onLeaveServer,
                     onReport: onReportServer,
@@ -279,10 +302,12 @@ class ChannelSidebar extends StatelessWidget {
   );
 
   /// What sits beside the "Direct messages" label: the mark of a muted
-  /// space and the space's notification menu. Null when there is neither.
+  /// space, the space's notification menu and the plus that starts a group.
+  /// Null when there is none of them.
   Widget? _directMessagesLabelTrailing(BuildContext context) {
     final onRequest = onNotificationRequest;
-    if (!_spaceMuted && onRequest == null) return null;
+    final onNewGroup = onNewGroupDirectMessage;
+    if (!_spaceMuted && onRequest == null && onNewGroup == null) return null;
     final color = context.surfaces.captionText;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -299,15 +324,19 @@ class ChannelSidebar extends StatelessWidget {
             key: const ValueKey('space-notification-menu'),
             tooltip: 'Notification settings',
             iconSize: _SidebarMetrics.labelIconSize,
-            style: IconButton.styleFrom(
-              fixedSize: const Size.square(_SidebarMetrics.labelButtonSize),
-              minimumSize: const Size.square(_SidebarMetrics.labelButtonSize),
-              padding: EdgeInsets.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
+            style: _SidebarMetrics.labelButtonStyle,
             icon: FlucordIcon(FlucordIcons.more, color: color),
             onSelected: (request) => onRequest(request, null),
             itemBuilder: (context) => _spaceNotificationItems,
+          ),
+        if (onNewGroup != null)
+          IconButton(
+            key: const ValueKey('new-group-direct-message'),
+            tooltip: 'Create group DM',
+            iconSize: _SidebarMetrics.labelIconSize,
+            style: _SidebarMetrics.labelButtonStyle,
+            icon: FlucordIcon(FlucordIcons.add, color: color),
+            onPressed: onNewGroup,
           ),
       ],
     );
@@ -408,7 +437,8 @@ class ChannelSidebar extends StatelessWidget {
         labelTrailing: _directMessagesLabelTrailing(context),
         requests: requests,
         conversations: order.conversations,
-        conversationRow: _rowFor,
+        conversationRow: (channel) =>
+            _rowFor(channel, onClose: onCloseDirectMessage),
         requestRows: [for (final channel in requests) _requestRowFor(channel)],
         selectedChannelId: selectedChannelId,
       ),
@@ -497,18 +527,22 @@ class ChannelSidebar extends StatelessWidget {
       ),
   ];
 
-  _ChannelRow _rowFor(ConversationChannel channel, {bool indented = false}) =>
-      _ChannelRow(
-        channel: channel,
-        selected: channel.id == selectedChannelId,
-        recipient: _recipientOf(channel),
-        indented: indented,
-        muted: _isMuted(channel),
-        showsUnread: _showsUnread(channel),
-        notificationLevel: _readState.notificationLevelFor(channel),
-        onNotificationRequest: onNotificationRequest == null
-            ? null
-            : (request) => onNotificationRequest!(request, channel),
-        onPressed: () => onSelectChannel(channel.id),
-      );
+  _ChannelRow _rowFor(
+    ConversationChannel channel, {
+    bool indented = false,
+    ValueChanged<ConversationChannel>? onClose,
+  }) => _ChannelRow(
+    channel: channel,
+    selected: channel.id == selectedChannelId,
+    recipient: _recipientOf(channel),
+    indented: indented,
+    muted: _isMuted(channel),
+    showsUnread: _showsUnread(channel),
+    notificationLevel: _readState.notificationLevelFor(channel),
+    onNotificationRequest: onNotificationRequest == null
+        ? null
+        : (request) => onNotificationRequest!(request, channel),
+    onPressed: () => onSelectChannel(channel.id),
+    onClose: onClose == null ? null : () => onClose(channel),
+  );
 }

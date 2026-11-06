@@ -1,3 +1,5 @@
+import 'guild_folders.dart';
+
 /// How far a stored setting actually reaches once Flucord has read it.
 ///
 /// Discord's blob carries preferences for surfaces Flucord has not built, and
@@ -316,6 +318,7 @@ final class UserSettings {
     this.localization = const LocalizationPreferences(),
     this.status = const StatusPreferences(),
     this.voiceAndVideo = const VoiceAndVideoPreferences(),
+    this.guildFolders = const [],
     this.dataVersion = 0,
   });
 
@@ -326,6 +329,10 @@ final class UserSettings {
   final LocalizationPreferences localization;
   final StatusPreferences status;
   final VoiceAndVideoPreferences voiceAndVideo;
+
+  /// The server list's folders and order, as stored. An account that never
+  /// arranged its servers stores none.
+  final List<GuildFolder> guildFolders;
 
   /// `Versions.data_version`, the server's counter for this blob.
   final int dataVersion;

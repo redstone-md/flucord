@@ -34,6 +34,7 @@ class FlucordDialog extends StatelessWidget {
     this.actions,
     this.confirm,
     this.cancelEnabled = true,
+    this.cancelLabel = 'Cancel',
     this.maxWidth = 440,
     super.key,
   }) : child = null,
@@ -55,6 +56,7 @@ class FlucordDialog extends StatelessWidget {
     this.actions,
     this.confirm,
     this.cancelEnabled = true,
+    this.cancelLabel = 'Cancel',
     this.maxWidth = double.infinity,
     this.maxHeight,
     this.alignment,
@@ -75,6 +77,7 @@ class FlucordDialog extends StatelessWidget {
       actions = null,
       confirm = null,
       cancelEnabled = true,
+      cancelLabel = 'Cancel',
       maxWidth = double.infinity,
       maxHeight = null,
       alignment = null,
@@ -97,6 +100,9 @@ class FlucordDialog extends StatelessWidget {
 
   /// False disables Cancel, for a dialog busy with work it must finish.
   final bool cancelEnabled;
+
+  /// The words on Cancel, for a dialog whose way out has its own name.
+  final String cancelLabel;
   final Widget? child;
   final double maxWidth;
   final double? maxHeight;
@@ -211,7 +217,7 @@ class FlucordDialog extends StatelessWidget {
     final confirm = this.confirm;
     if (confirm == null) return actions ?? const [];
     return [
-      FlucordDialogCancel(enabled: cancelEnabled),
+      FlucordDialogCancel(label: cancelLabel, enabled: cancelEnabled),
       ...?actions,
       FlucordButton(
         key: confirm.key,

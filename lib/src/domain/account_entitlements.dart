@@ -79,6 +79,15 @@ enum PremiumTier {
     _ => 2000,
   };
 
+  /// Whether this account may send super reactions. Discord gives them to
+  /// every paid tier and to no free account.
+  bool get sendsSuperReactions => this != PremiumTier.none;
+
+  /// Whether the account may set an avatar, banner and bio per server.
+  /// Nitro Basic does not include server profiles.
+  bool get hasServerProfiles =>
+      this == PremiumTier.nitro || this == PremiumTier.nitroBoost;
+
   /// The largest file this account may attach anywhere, in bytes.
   int get uploadLimitBytes => switch (this) {
     PremiumTier.none => 20 * 1024 * 1024,

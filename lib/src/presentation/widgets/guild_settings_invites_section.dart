@@ -9,6 +9,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
 import 'guild_settings_controls.dart';
 import 'flucord_dialog.dart';
+import 'invite_limit_fields.dart';
 
 /// The invites page: what is outstanding, and how to add or revoke one.
 ///
@@ -16,16 +17,9 @@ import 'flucord_dialog.dart';
 /// separately: `CREATE_INSTANT_INVITE` is an ordinary member's power and
 /// `MANAGE_GUILD` is what it takes to cancel somebody else's.
 class GuildSettingsInvitesSection extends StatelessWidget {
-  const GuildSettingsInvitesSection({
-    required this.controller,
-    required this.workspace,
-    required this.spaceId,
-    super.key,
-  });
+  const GuildSettingsInvitesSection({required this.controller, super.key});
 
   final GuildSettingsController controller;
-  final ChatWorkspace workspace;
-  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -74,18 +68,7 @@ class GuildSettingsInvitesSection extends StatelessWidget {
   }
 
   Future<void> _create(BuildContext context) async {
-    final channels = workspace
-        .channelsFor(spaceId)
-        .where(
-          (channel) =>
-              !channel.isThread &&
-              channel.kind == ChannelKind.text &&
-              // CREATE_INSTANT_INVITE is routinely granted guild-wide and then
-              // taken back per channel, so the guild-wide answer alone would
-              // offer channels the server refuses.
-              controller.capabilities.canInviteToChannel(channel),
-        )
-        .toList(growable: false);
+    final channels = controller.capabilities.invitableChannels;
     if (channels.isEmpty) return;
     final choice = await showDialog<_InviteChoice>(
       context: context,
@@ -152,40 +135,12 @@ class _CreateInviteDialogState extends State<_CreateInviteDialog> {
                 setState(() => _channelId = value ?? _channelId),
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            key: const ValueKey('create-invite-expiry'),
-            initialValue: _maxAge,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Expires after',
-            ),
-            items: [
-              for (final seconds in InviteOptions.maxAgeChoices)
-                DropdownMenuItem(
-                  value: seconds,
-                  child: Text(_expiryLabel(seconds)),
-                ),
-            ],
-            onChanged: (value) => setState(() => _maxAge = value ?? _maxAge),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            key: const ValueKey('create-invite-uses'),
-            initialValue: _maxUses,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Maximum uses',
-            ),
-            items: [
-              for (final uses in InviteOptions.maxUsesChoices)
-                DropdownMenuItem(
-                  value: uses,
-                  child: Text(uses == 0 ? 'No limit' : '$uses uses'),
-                ),
-            ],
-            onChanged: (value) => setState(() => _maxUses = value ?? _maxUses),
+          InviteLimitFields(
+            keyPrefix: 'create-invite',
+            maxAgeSeconds: _maxAge,
+            maxUses: _maxUses,
+            onMaxAgeChanged: (value) => setState(() => _maxAge = value),
+            onMaxUsesChanged: (value) => setState(() => _maxUses = value),
           ),
           SwitchListTile(
             key: const ValueKey('create-invite-temporary'),
@@ -214,14 +169,4 @@ class _CreateInviteDialogState extends State<_CreateInviteDialog> {
       ),
     ),
   );
-
-  static String _expiryLabel(int seconds) => switch (seconds) {
-    0 => 'Never',
-    1800 => '30 minutes',
-    3600 => '1 hour',
-    21600 => '6 hours',
-    43200 => '12 hours',
-    86400 => '1 day',
-    _ => '7 days',
-  };
 }

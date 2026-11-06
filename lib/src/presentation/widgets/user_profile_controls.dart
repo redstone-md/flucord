@@ -185,7 +185,13 @@ class ProfileAvatarRow extends StatelessWidget {
         ),
       ),
       const SizedBox(width: 16),
-      ProfileImageButtons(label: 'avatar', onPick: onPick, onRemove: onRemove),
+      Flexible(
+        child: ProfileImageButtons(
+          label: 'avatar',
+          onPick: onPick,
+          onRemove: onRemove,
+        ),
+      ),
     ],
   );
 }

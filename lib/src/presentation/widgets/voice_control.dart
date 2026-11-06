@@ -14,21 +14,35 @@ import '../../theme/flucord_icons.dart';
 final class VoiceControl {
   /// Mute and deafen rest outside a room: the controller keeps no flags
   /// there, so a press would do nothing. A room being joined still takes them.
+  /// They rest too while a moderator holds them, and say so: only the
+  /// moderator can lift a server mute or deafen.
   VoiceControl.mute(VoiceController voice)
-    : tooltip = voice.isMuted ? 'Unmute' : 'Mute',
-      icon = voice.isMuted ? FlucordIcons.micOff : FlucordIcons.mic,
-      danger = voice.isMuted,
+    : tooltip = voice.isServerMuted
+          ? 'Server muted'
+          : voice.isMuted
+          ? 'Unmute'
+          : 'Mute',
+      icon = voice.isMuted || voice.isServerMuted
+          ? FlucordIcons.micOff
+          : FlucordIcons.mic,
+      danger = voice.isMuted || voice.isServerMuted,
       active = false,
-      onPressed = _inRoom(voice) ? (() => unawaited(voice.toggleMute())) : null;
+      onPressed = _inRoom(voice) && !voice.isServerMuted
+          ? (() => unawaited(voice.toggleMute()))
+          : null;
 
   VoiceControl.deafen(VoiceController voice)
-    : tooltip = voice.isDeafened ? 'Undeafen' : 'Deafen',
-      icon = voice.isDeafened
+    : tooltip = voice.isServerDeafened
+          ? 'Server deafened'
+          : voice.isDeafened
+          ? 'Undeafen'
+          : 'Deafen',
+      icon = voice.isDeafened || voice.isServerDeafened
           ? FlucordIcons.headphonesOff
           : FlucordIcons.headphones,
-      danger = voice.isDeafened,
+      danger = voice.isDeafened || voice.isServerDeafened,
       active = false,
-      onPressed = _inRoom(voice)
+      onPressed = _inRoom(voice) && !voice.isServerDeafened
           ? (() => unawaited(voice.toggleDeafen()))
           : null;
 

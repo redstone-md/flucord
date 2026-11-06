@@ -256,7 +256,7 @@ class _CallPerson extends StatelessWidget {
                 )
               else
                 avatar,
-              if (_badge case (:final icon, :final label))
+              if (_badge case (:final icon, :final label, byServer: _))
                 PositionedDirectional(
                   end: 4,
                   bottom: 4,
