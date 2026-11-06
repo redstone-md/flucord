@@ -11,6 +11,9 @@ final _invite = find.byKey(const ValueKey('invite-people'));
 final _editProfile = find.byKey(const ValueKey('edit-server-profile'));
 
 const _invitesPath = '/api/v9/channels/${SessionHarness.channelId}/invites';
+const _ownMemberPath = '/api/v9/guilds/${SessionHarness.guildId}/members/@me';
+const _me = {'id': SessionHarness.currentUserId, 'username': 'me'};
+const _myMessageId = '900000000000000007';
 
 /// The default READY, with [extra] granted to everybody in the guild, and
 /// the account's own membership, so its permissions there are known.
@@ -75,6 +78,89 @@ void main() {
       expect(_editProfile, findsNothing);
     },
     ready: _readyGranting(BigInt.zero),
+    platform: TargetPlatform.windows,
+  );
+
+  testSession(
+    'a nickname saved for the server shows on messages and in the member list',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _openServerMenu(tester, session);
+      await tester.tap(_editProfile);
+      await session.settle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('server-profile-nickname')),
+        'Smith',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('server-profile-save')));
+      await session.settle();
+
+      final save = session.transport.requests.singleWhere(
+        (request) => request.method == 'PATCH',
+      );
+      expect(save.uri.path, _ownMemberPath);
+      expect(save.json, {'nick': 'Smith'});
+
+      // Discord answers the change with the update every client gets.
+      await session.dispatch('GUILD_MEMBER_UPDATE', {
+        'guild_id': SessionHarness.guildId,
+        'user': _me,
+        'nick': 'Smith',
+        'roles': <Object?>[],
+      });
+
+      expect(
+        find.descendant(
+          of: session.messageRow(_myMessageId),
+          matching: find.text('Smith'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('member-row-${SessionHarness.currentUserId}'),
+          ),
+          matching: find.text('Smith'),
+        ),
+        findsOneWidget,
+      );
+    },
+    ready: _readyGranting(DiscordPermissions.changeNickname),
+    routes: (transport) {
+      transport
+        ..on(
+          'GET',
+          '/api/v9/channels/${SessionHarness.channelId}/messages',
+          (_) => jsonResponse([
+            {
+              ...rawMessage(
+                id: _myMessageId,
+                channelId: SessionHarness.channelId,
+                authorId: SessionHarness.currentUserId,
+                content: 'hello',
+              ),
+              'author': _me,
+            },
+          ]),
+        )
+        ..on(
+          'GET',
+          _ownMemberPath,
+          (_) => jsonResponse({'user': _me, 'roles': <Object?>[]}),
+        )
+        ..on(
+          'PATCH',
+          _ownMemberPath,
+          (_) => jsonResponse({
+            'user': _me,
+            'nick': 'Smith',
+            'roles': <Object?>[],
+          }),
+        );
+    },
     platform: TargetPlatform.windows,
   );
 }

@@ -7,6 +7,7 @@ enum ServerMenuAction {
   invite,
   settings,
   notifications,
+  editProfile,
   report,
   leave,
 }
@@ -23,6 +24,11 @@ List<PopupMenuEntry<ServerMenuAction>> serverMenuItems(
       ServerMenuAction.notifications,
       'space-notification-menu',
       'Notification settings',
+    ),
+    (
+      ServerMenuAction.editProfile,
+      'edit-server-profile',
+      'Edit server profile',
     ),
     (ServerMenuAction.report, 'report-server', 'Report server'),
     (ServerMenuAction.leave, 'leave-server', 'Leave server'),

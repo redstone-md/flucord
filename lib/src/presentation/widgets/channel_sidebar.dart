@@ -71,6 +71,7 @@ class ChannelSidebar extends StatelessWidget {
     this.scheduledEventsError,
     this.onOpenEvents,
     this.onInvitePeople,
+    this.onEditServerProfile,
     this.onOpenServerSettings,
     this.onLeaveServer,
     this.onReportServer,
@@ -157,6 +158,10 @@ class ChannelSidebar extends StatelessWidget {
   /// here, or the transport cannot make invites.
   final VoidCallback? onInvitePeople;
 
+  /// Opens Edit server profile. Null when there is nothing this account may
+  /// change here.
+  final VoidCallback? onEditServerProfile;
+
   /// Opens the server-settings window. Null when the account may administer
   /// nothing here, or when the transport has no admin plane at all. The header
   /// menu then has no settings entry, which is what Discord does too.
@@ -207,6 +212,7 @@ class ChannelSidebar extends StatelessWidget {
                 : _ServerHeader(
                     title: _spaceTitle(context),
                     onInvite: onInvitePeople,
+                    onEditProfile: onEditServerProfile,
                     onOpenSettings: onOpenServerSettings,
                     onLeave: onLeaveServer,
                     onReport: onReportServer,

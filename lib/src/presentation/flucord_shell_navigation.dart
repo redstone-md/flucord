@@ -276,6 +276,54 @@ extension _FlucordShellNavigation on FlucordShell {
       chatController.guildManagement != null &&
       administration.invitableChannels.isNotEmpty;
 
+  /// Whether Edit server profile has anything this account may change in
+  /// [administration]'s server: the nickname, or with Nitro the avatar,
+  /// banner and bio.
+  bool _canEditServerProfile(
+    BuildContext context,
+    GuildAdminCapabilities administration,
+  ) =>
+      chatController.guildManagement != null &&
+      _currentMember() != null &&
+      (administration.canChangeNickname || _hasServerProfiles(context));
+
+  Member? _currentMember() {
+    final workspace = chatController.workspace;
+    return workspace?.memberOrNull(workspace.currentMemberId);
+  }
+
+  bool _hasServerProfiles(BuildContext context) =>
+      AccountEntitlementsScope.maybeOf(
+        context,
+      )?.entitlements?.premiumTier.hasServerProfiles ??
+      false;
+
+  /// Opens Edit server profile for [space]. The new profile reaches the
+  /// member list, messages and profile card through the GUILD_MEMBER_UPDATE
+  /// Discord sends for the change, as it does for any other client.
+  Future<void> _editServerProfile(
+    BuildContext context,
+    CommunitySpace space,
+    GuildAdminCapabilities administration,
+  ) async {
+    final repository = chatController.guildManagement;
+    final self = _currentMember();
+    if (repository == null || self == null) return;
+    final controller = ServerProfileController(repository, guildId: space.id);
+    try {
+      await showServerProfileDialog(
+        context,
+        space: space,
+        self: self,
+        controller: controller,
+        canChangeNickname: administration.canChangeNickname,
+        hasServerProfiles: _hasServerProfiles(context),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   /// Opens Invite people for [space], with a link into the channel on
   /// screen when the account may invite there, else into the first one it
   /// may.
@@ -322,6 +370,8 @@ extension _FlucordShellNavigation on FlucordShell {
       },
       if (_canInvitePeople(administration)) ServerMenuAction.invite,
       if (_canOpenSettings(administration)) ServerMenuAction.settings,
+      if (_canEditServerProfile(context, administration))
+        ServerMenuAction.editProfile,
       if (chatController.moderation != null) ServerMenuAction.report,
       if (chatController.guildManagement != null) ServerMenuAction.leave,
     });
@@ -348,6 +398,8 @@ extension _FlucordShellNavigation on FlucordShell {
         await _openGuildSettings(context, space, administration);
       case ServerMenuAction.notifications:
         await _openSpaceNotificationMenu(context, space, at);
+      case ServerMenuAction.editProfile:
+        await _editServerProfile(context, space, administration);
       case ServerMenuAction.report:
         await _reportSpace(context, space);
       case ServerMenuAction.leave:
