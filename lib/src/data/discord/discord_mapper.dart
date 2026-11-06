@@ -10,6 +10,7 @@ import '../../domain/guild_membership.dart';
 import '../../domain/message_search.dart';
 import '../../domain/monogram.dart';
 import '../../domain/permission_overwrite.dart';
+import '../../domain/reaction_repository.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
@@ -309,6 +310,16 @@ final class DiscordMapper {
       membershipsBySpace: {guildId: membership(guildMember)},
     );
   }
+
+  /// One page of the people who reacted, asked for [limit] at a time. A full
+  /// page may have more behind it.
+  ReactionUsersPage reactionUsers(
+    List<Map<String, Object?>> payloads, {
+    required int limit,
+  }) => ReactionUsersPage(
+    users: [for (final payload in payloads) member(payload, role: 'Reacted')],
+    hasMore: payloads.length == limit,
+  );
 
   Member member(
     Map<String, Object?> payload, {
