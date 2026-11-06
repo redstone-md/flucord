@@ -72,6 +72,7 @@ final class MockChatRepository
         ThreadListRepository,
         ForumPostRepository,
         PollRepository,
+        PollVoteRepository,
         ReactionRepository,
         MessageForwardRepository,
         MessageFlagRepository,

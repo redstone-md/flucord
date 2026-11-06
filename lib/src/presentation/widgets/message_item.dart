@@ -37,6 +37,7 @@ import 'message_embed_view.dart';
 import 'message_invite_cards.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
+import 'poll_voters_dialog.dart';
 import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
@@ -71,6 +72,8 @@ class MessageItem extends StatefulWidget {
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
+    this.onVotePoll,
+    this.onLoadPollVoters,
     this.onForward,
     this.onToggleSuppressEmbeds,
     required this.linkLauncher,
@@ -138,6 +141,14 @@ class MessageItem extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
 
   /// Forwards a message, or null where the session cannot. Then the action
   /// is not offered at all.
@@ -629,6 +640,22 @@ class _MessageItemState extends State<MessageItem> {
               poll: poll,
               canEnd: widget.isCurrentUser,
               onEnd: () => unawaited(widget.onEndPoll(message)),
+              onVote: switch (widget.onVotePoll) {
+                final vote? => (answerIds) => unawaited(
+                  vote(message, answerIds),
+                ),
+                null => null,
+              },
+              onShowVoters: switch (widget.onLoadPollVoters) {
+                final load? => () => unawaited(
+                  PollVotersDialog.show(
+                    context,
+                    message: message,
+                    onLoad: load,
+                  ),
+                ),
+                null => null,
+              },
             ),
           ),
         if (message.reactions.isNotEmpty && display.rendersReactions) ...[

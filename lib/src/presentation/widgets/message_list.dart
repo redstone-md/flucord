@@ -20,6 +20,7 @@ import 'message_context_menu.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
+import 'poll_voters_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'profile_card_route.dart';
@@ -56,6 +57,8 @@ class MessageList extends StatefulWidget {
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
+    this.onVotePoll,
+    this.onLoadPollVoters,
     this.onForward,
     this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
@@ -131,6 +134,14 @@ class MessageList extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
 
   /// Forwards a message, or null where the session cannot. Then the action
   /// is not offered at all.
@@ -894,6 +905,8 @@ class MessageListState extends State<MessageList>
                 onResolveAlert: widget.onResolveAlert,
                 onReport: widget.onReport,
                 onEndPoll: widget.onEndPoll,
+                onVotePoll: widget.onVotePoll,
+                onLoadPollVoters: widget.onLoadPollVoters,
                 onForward: widget.onForward,
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,

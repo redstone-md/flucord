@@ -6,17 +6,6 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
   ChatCache get _cache;
   DiscordMessageNonceFactory get _messageNonceFactory;
   String? get _currentMemberId;
-  StreamController<ChatRepositoryEvent> get _events;
-
-  late final DiscordPollVoteHandler _pollVoteHandler = DiscordPollVoteHandler(
-    _cache,
-    () => _currentMemberId,
-  );
-
-  Future<void> _handlePollVote(DiscordGatewayDispatch event) async {
-    final update = await _pollVoteHandler.apply(event);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
 
   @override
   Future<ChatMessage> createPoll({
@@ -41,7 +30,7 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
     required String channelId,
     required String messageId,
   }) async {
-    final payload = await _api.endPoll(
+    final payload = await _api.polls.endPoll(
       channelId: channelId,
       messageId: messageId,
     );
@@ -54,4 +43,20 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
     await _cache.writeMessage(message);
     return message;
   }
+
+  @override
+  Future<PollVotersPage> loadPollVoters({
+    required String channelId,
+    required String messageId,
+    required int answerId,
+    String? afterUserId,
+    int limit = 100,
+  }) => _api.polls.answerVoters(
+    channelId: channelId,
+    messageId: messageId,
+    answerId: answerId,
+    mapper: _mapper,
+    afterUserId: afterUserId,
+    limit: limit,
+  );
 }

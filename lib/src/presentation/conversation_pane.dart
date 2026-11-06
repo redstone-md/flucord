@@ -1064,6 +1064,8 @@ class ConversationPaneState extends State<ConversationPane> {
       onResolveAlert: chat.resolveAutoModAlert,
       onReport: (message) => unawaited(_reportMessage(context, message)),
       onEndPoll: chat.endPoll,
+      onVotePoll: chat.canVoteInPolls ? chat.votePoll : null,
+      onLoadPollVoters: chat.canListPollVoters ? chat.loadPollVoters : null,
       // A session that cannot carry out an action does not offer it.
       onForward: chat.canForwardMessages
           ? (message, targetChannelId) async {

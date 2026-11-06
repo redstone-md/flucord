@@ -32,6 +32,7 @@ import '../../domain/message_forward_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
 import '../../domain/permission_overwrite.dart';
+import '../../domain/poll_repository.dart';
 import '../../domain/presence_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
@@ -105,7 +106,9 @@ final class DiscordDesktopChatRepository
         MessageForwardRepository,
         StickerRepository,
         MessageFlagRepository,
-        DirectMessageManagementRepository {
+        DirectMessageManagementRepository,
+        PollRepository,
+        PollVoteRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -758,6 +761,68 @@ final class DiscordDesktopChatRepository
       ),
     );
   }
+
+  @override
+  Future<ChatMessage> createPoll({
+    required String channelId,
+    required String authorId,
+    required PendingPoll poll,
+  }) async => _storeSentMessage(
+    await _api.createMessage(
+      channelId: channelId,
+      content: '',
+      nonce: _nonceFactory.next(),
+      poll: poll,
+    ),
+  );
+
+  @override
+  Future<ChatMessage> endPoll({
+    required String channelId,
+    required String messageId,
+  }) async => _storeMessage(
+    await _api.polls.endPoll(channelId: channelId, messageId: messageId),
+    fallback: await _cache.readMessage(messageId),
+  );
+
+  /// Discord answers a vote with no body, so the vote is counted here. The
+  /// account's own vote dispatches that follow then change nothing.
+  @override
+  Future<ChatMessage> votePoll({
+    required String channelId,
+    required String messageId,
+    required Set<int> answerIds,
+  }) async {
+    await _api.polls.vote(
+      channelId: channelId,
+      messageId: messageId,
+      answerIds: answerIds.toList()..sort(),
+    );
+    final held = await _cache.readMessage(messageId);
+    final poll = held?.poll;
+    if (held == null || poll == null) {
+      throw StateError('Poll message $messageId is not in the cache');
+    }
+    final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
+    await _cache.writeMessage(voted);
+    return voted;
+  }
+
+  @override
+  Future<PollVotersPage> loadPollVoters({
+    required String channelId,
+    required String messageId,
+    required int answerId,
+    String? afterUserId,
+    int limit = 100,
+  }) => _api.polls.answerVoters(
+    channelId: channelId,
+    messageId: messageId,
+    answerId: answerId,
+    mapper: _mapper,
+    afterUserId: afterUserId,
+    limit: limit,
+  );
 
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);
