@@ -43,11 +43,11 @@ void main() {
       final identify = protocol.identify()['d']! as Map<String, Object?>;
 
       // Discord closes a Go Live socket that identifies without this with
-      // `identifyRefused`, the moment it finishes connecting, which is
+      // close code 4017, the moment it finishes connecting, which is
       // what every share and every attempt to watch somebody was doing.
       expect(identify['video'], isTrue);
       // A screen, not a camera. Discord closes a Go Live socket that says
-      // "video" with `identifyRefused` the moment the handshake finishes.
+      // "video" with close code 4017 the moment the handshake finishes.
       expect(identify['streams'], [
         {'type': 'screen', 'rid': '100', 'quality': 100},
       ]);

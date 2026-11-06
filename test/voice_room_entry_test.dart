@@ -7,6 +7,8 @@ import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/presentation/widgets/voice_room_status.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/stream_room_harness.dart';
+
 void main() {
   group('devices that would not open', () {
     test('a failure is tried again rather than remembered forever', () async {
@@ -205,6 +207,57 @@ void main() {
       expect(warning, contains('Audio devices could not be opened'));
       expect(warning, contains('no audio devices'));
       expect(voiceRoomOffersDeviceRetry(controller), isTrue);
+    });
+
+    group('a room Discord refused for missing DAVE', () {
+      const plainly =
+          'End-to-end encrypted voice is not available in this build.';
+
+      Future<VoiceController> refused(
+        Future<void> Function(VoiceController controller) join,
+      ) async {
+        final signaling = _FakeSignaling();
+        final controller = VoiceController(
+          _FakeMedia(),
+          signalingServiceProvider: () => signaling,
+          callServiceProvider: StreamRoomCallService.new,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await join(controller);
+        signaling.announce(
+          const VoiceSignalingStatusEvent(
+            VoiceConnectionStatus.failure,
+            error: VoiceEncryptionRequiredException(),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        return controller;
+      }
+
+      void expectSaidPlainly(VoiceController controller) {
+        expect(voiceRoomWarning(controller), plainly);
+        expect(voiceRoomStatusLabel(controller), 'Encrypted voice unavailable');
+        // Joining again is refused the same way, so nothing offers it.
+        expect(voiceRoomOffersConnectionRetry(controller), isFalse);
+      }
+
+      test('in a voice channel', () async {
+        expectSaidPlainly(
+          await refused(
+            (controller) =>
+                controller.connect(guildId: 'guild-1', channelId: 'voice-1'),
+          ),
+        );
+      });
+
+      test('in a DM call', () async {
+        expectSaidPlainly(
+          await refused(
+            (controller) => controller.connectToCall(channelId: 'dm-1'),
+          ),
+        );
+      });
     });
 
     test('a room with nothing wrong says nothing', () async {
