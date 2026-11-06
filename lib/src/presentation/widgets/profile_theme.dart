@@ -36,7 +36,9 @@ class ProfileTheme extends StatelessWidget {
     final surfaces = base.extension<FlucordSurfaceTheme>()!;
     final top = Color.alphaBlend(look.veil, look.primary);
     return base.copyWith(
+      // A list replaces every extension, so the others are carried over.
       extensions: [
+        ...base.extensions.values,
         surfaces.copyWith(
           rail: top,
           canvas: top,

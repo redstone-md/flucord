@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_external_link_launcher.dart';
@@ -156,6 +157,94 @@ void main() {
     final revealed = tester.widget<Text>(find.text('classified'));
     expect(revealed.style?.color, FlucordTheme.dark.colorScheme.onSurface);
     expect(tester.takeException(), isNull);
+  });
+
+  group('a code block', () {
+    for (final (name, theme) in [
+      ('dark', FlucordTheme.dark),
+      ('light', FlucordTheme.light),
+    ]) {
+      testWidgets('tagged with a known language is highlighted in $name', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _host(
+            '```dart\nfinal name = "Mira"; // greet\nreturn 42;\n```',
+            theme: theme,
+          ),
+        );
+
+        final syntax = theme.extension<FlucordSyntaxTheme>()!;
+        final keyword = _spanWithText(tester, 'final').style?.color;
+        expect(keyword, syntax.keyword);
+        expect(_spanWithText(tester, '"Mira"').style?.color, syntax.string);
+        expect(_spanWithText(tester, '42').style?.color, syntax.number);
+        expect(_spanWithText(tester, '// greet').style?.color, syntax.comment);
+        for (final color in [
+          keyword,
+          syntax.string,
+          syntax.number,
+          syntax.comment,
+        ]) {
+          expectReadable(theme, color, 4.5);
+        }
+      });
+    }
+
+    for (final (name, body) in [
+      ('with an unknown language', '```nosuchlang\nfinal x = 42;\n```'),
+      ('with no language', '```\nfinal x = 42;\n```'),
+    ]) {
+      testWidgets('$name stays plain', (tester) async {
+        await tester.pumpWidget(_host(body));
+
+        final span = _spanWithText(tester, 'final x = 42;');
+        expect(span.style?.fontFamily, 'Consolas');
+        expect(span.children, isNull);
+      });
+    }
+
+    testWidgets(
+      'copies as the plain code',
+      (tester) async {
+        final copied = <String>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied.add((call.arguments as Map)['text'] as String);
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        const code = 'void main() {\n  print("hi"); // say it\n}';
+        await tester.pumpWidget(_host('```dart\n$code\n```'));
+
+        final drawn = find.text(code, findRichText: true);
+        final mouse = await tester.startGesture(
+          tester.getTopLeft(drawn) + const Offset(1, 4),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+        await mouse.moveTo(tester.getBottomRight(drawn) + const Offset(40, 0));
+        await tester.pump();
+        await mouse.up();
+        await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pump();
+
+        expect(copied, [code]);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
   });
 
   testWidgets('routes a voice channel mention like any other channel', (

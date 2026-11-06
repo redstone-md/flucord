@@ -365,7 +365,10 @@ abstract final class FlucordTheme {
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
         trackShape: const RoundedRectSliderTrackShape(),
       ),
-      extensions: [surfaces],
+      extensions: [
+        surfaces,
+        FlucordSyntaxTheme.of(surfaces, readable: readableText),
+      ],
     );
   }
 }
@@ -552,9 +555,81 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
   }
 }
 
+/// The colours of highlighted code. Each one is a theme hue moved toward the
+/// text colour until it reads at 4.5:1, so an installed theme gets code in
+/// its own colours.
+@immutable
+final class FlucordSyntaxTheme extends ThemeExtension<FlucordSyntaxTheme> {
+  const FlucordSyntaxTheme({
+    required this.keyword,
+    required this.title,
+    required this.string,
+    required this.number,
+    required this.comment,
+  });
+
+  /// [readable] is the theme's own move toward readable text.
+  factory FlucordSyntaxTheme.of(
+    FlucordSurfaceTheme surfaces, {
+    required Color Function(Color base) readable,
+  }) => FlucordSyntaxTheme(
+    keyword: readable(surfaces.mention),
+    title: readable(surfaces.brand),
+    string: readable(surfaces.success),
+    number: readable(surfaces.warning),
+    comment: surfaces.captionText,
+  );
+
+  /// Keywords, and removed lines in a diff.
+  final Color keyword;
+
+  /// The names of functions, classes and tags.
+  final Color title;
+
+  /// Strings, and added lines in a diff.
+  final Color string;
+
+  /// Numbers, literals and built-in types.
+  final Color number;
+  final Color comment;
+
+  @override
+  FlucordSyntaxTheme copyWith({
+    Color? keyword,
+    Color? title,
+    Color? string,
+    Color? number,
+    Color? comment,
+  }) => FlucordSyntaxTheme(
+    keyword: keyword ?? this.keyword,
+    title: title ?? this.title,
+    string: string ?? this.string,
+    number: number ?? this.number,
+    comment: comment ?? this.comment,
+  );
+
+  @override
+  FlucordSyntaxTheme lerp(
+    covariant ThemeExtension<FlucordSyntaxTheme>? other,
+    double t,
+  ) {
+    if (other is! FlucordSyntaxTheme) return this;
+    return FlucordSyntaxTheme(
+      keyword: Color.lerp(keyword, other.keyword, t)!,
+      title: Color.lerp(title, other.title, t)!,
+      string: Color.lerp(string, other.string, t)!,
+      number: Color.lerp(number, other.number, t)!,
+      comment: Color.lerp(comment, other.comment, t)!,
+    );
+  }
+}
+
 extension FlucordThemeContext on BuildContext {
   FlucordSurfaceTheme get surfaces =>
       Theme.of(this).extension<FlucordSurfaceTheme>()!;
+
+  FlucordSyntaxTheme get syntax =>
+      Theme.of(this).extension<FlucordSyntaxTheme>()!;
 }
 
 /// Fills drawn from a role rather than stored, so a theme never sets them.
@@ -567,5 +642,12 @@ extension FlucordFills on FlucordSurfaceTheme {
   Color get brandTint => brand.withValues(alpha: 0.18);
 
   /// Every fill a piece of text can end up on.
-  List<Color> get backgrounds => [rail, canvas, surface, raised, inset, control];
+  List<Color> get backgrounds => [
+    rail,
+    canvas,
+    surface,
+    raised,
+    inset,
+    control,
+  ];
 }

@@ -8,6 +8,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'discord_code_block.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
 import 'profile_card_route.dart';
@@ -140,32 +141,41 @@ class _DiscordMarkdownState extends State<DiscordMarkdown> {
           child: Text(widget.body, style: _bodyStyle),
         );
 
-  Widget _markdown(BuildContext context, String body) => MarkdownBody(
-    key: ValueKey(Object.hash(_resolutionSignature, body)),
-    data: body,
-    selectable: false,
-    softLineBreak: true,
-    extensionSet: md.ExtensionSet.gitHubFlavored,
-    inlineSyntaxes: discordMessageInlineSyntaxes(),
-    builders: discordMessageBuilders(
-      workspace: _workspace,
-      spaceId: widget.spaceId,
-      onSelectChannel: widget.onSelectChannel ?? (_) {},
-      onOpenProfile: widget.onOpenProfile,
-      now: widget.now,
-    ),
-    styleSheet: _markdownStyleSheet ??= _buildStyleSheet(context),
-    onTapLink: (_, href, _) {
-      if (href != null) widget.onTapLink(href);
-    },
-    imageBuilder: (uri, _, alt) => Text(
-      alt?.isNotEmpty == true ? alt! : uri.toString(),
-      style: TextStyle(
-        color: context.surfaces.link,
-        decoration: TextDecoration.underline,
+  Widget _markdown(BuildContext context, String body) {
+    final styleSheet = _markdownStyleSheet ??= _buildStyleSheet(context);
+    return MarkdownBody(
+      key: ValueKey(Object.hash(_resolutionSignature, body)),
+      data: body,
+      selectable: false,
+      softLineBreak: true,
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      inlineSyntaxes: discordMessageInlineSyntaxes(),
+      builders: {
+        ...discordMessageBuilders(
+          workspace: _workspace,
+          spaceId: widget.spaceId,
+          onSelectChannel: widget.onSelectChannel ?? (_) {},
+          onOpenProfile: widget.onOpenProfile,
+          now: widget.now,
+        ),
+        'pre': DiscordCodeBlockBuilder(
+          style: styleSheet.code,
+          padding: styleSheet.codeblockPadding!,
+        ),
+      },
+      styleSheet: styleSheet,
+      onTapLink: (_, href, _) {
+        if (href != null) widget.onTapLink(href);
+      },
+      imageBuilder: (uri, _, alt) => Text(
+        alt?.isNotEmpty == true ? alt! : uri.toString(),
+        style: TextStyle(
+          color: context.surfaces.link,
+          decoration: TextDecoration.underline,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   int get _resolutionSignature {
     final values = <Object?>[
