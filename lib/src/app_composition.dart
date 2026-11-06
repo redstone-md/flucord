@@ -755,6 +755,8 @@ final class AppComposition {
         chat: chat,
         workspace: workspace,
         visible: windowVisible,
+        directCall: directCall,
+        streamerMode: () => streamerMode.settings,
         onProtocolUri: (uri) => unawaited(oauth.handleProtocolUri(uri)),
       ),
     );
