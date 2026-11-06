@@ -316,6 +316,41 @@ final class DiscordDesktopApiClient
         },
       );
 
+  /// `POST /users/@me/channels` with several recipients starts a group DM.
+  Future<Map<String, Object?>> createGroupDirectMessageChannel(
+    List<String> recipientIds,
+  ) => _rest.requestObject(
+    'POST',
+    '/users/@me/channels',
+    body: {'recipients': recipientIds},
+  );
+
+  /// `PUT /channels/{id}/recipients/{user}`: adds somebody to a group DM.
+  Future<void> putChannelRecipient(String channelId, String userId) =>
+      _rest.requestEmpty('PUT', _recipientPath(channelId, userId));
+
+  /// `DELETE /channels/{id}/recipients/{user}`: the owner removes somebody.
+  Future<void> deleteChannelRecipient(String channelId, String userId) =>
+      _rest.requestEmpty('DELETE', _recipientPath(channelId, userId));
+
+  /// `PATCH /channels/{id}` with a group DM's `name` or `icon`.
+  Future<Map<String, Object?>> patchGroupDirectMessage(
+    String channelId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject(
+    'PATCH',
+    '/channels/${Uri.encodeComponent(channelId)}',
+    body: body,
+  );
+
+  /// `DELETE /channels/{id}`: leaves a group DM or closes a DM.
+  Future<Map<String, Object?>> closePrivateChannel(String channelId) => _rest
+      .requestObject('DELETE', '/channels/${Uri.encodeComponent(channelId)}');
+
+  static String _recipientPath(String channelId, String userId) =>
+      '/channels/${Uri.encodeComponent(channelId)}'
+      '/recipients/${Uri.encodeComponent(userId)}';
+
   Future<Map<String, Object?>> createThreadFromMessage({
     required String channelId,
     required String messageId,

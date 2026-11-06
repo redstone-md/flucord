@@ -3,11 +3,13 @@ import 'dart:ui' show Size;
 
 import 'package:window_manager/window_manager.dart';
 
+import 'desktop_call_alert_controller.dart';
 import 'desktop_integration.dart';
 import 'desktop_message_notification_controller.dart';
 import 'desktop_protocol_intake.dart';
 import 'desktop_protocol_router.dart';
 import 'desktop_tray_coordinator.dart';
+import 'window_attention.dart';
 import '../app_log.dart';
 
 /// The smallest the window can be made, on every desktop platform.
@@ -29,7 +31,8 @@ abstract interface class DesktopUpdater {
 }
 
 /// The desktop attach and teardown flow every platform shares: window
-/// lifecycle, message notifications, tray, and protocol routing.
+/// lifecycle, message notifications, ringing calls, tray, and protocol
+/// routing.
 ///
 /// A platform shell configures this flow with what differs there: how
 /// flucord:// URLs arrive, the tray details, and the updater. Closing the
@@ -42,8 +45,25 @@ final class DesktopIntegrationFlow
     DesktopTrayConfiguration trayConfiguration =
         const DesktopTrayConfiguration(),
     DesktopUpdater? updater,
+
+    /// The taskbar flash for a ringing call, where the platform has one.
+    WindowAttention attention = const UnavailableWindowAttention(),
+
+    /// The native toasts. Tests hand in a fake; the app uses local_notifier.
+    DesktopNotificationGateway? notificationGateway,
   }) : _protocolIntake = protocolIntake,
        _updater = updater {
+    // One toast layer for messages and calls: local_notifier is set up once.
+    final gateway = notificationGateway ?? LocalDesktopNotificationGateway();
+    _messageNotifications = DesktopMessageNotificationController(
+      isFocused: windowManager.isFocused,
+      gateway: gateway,
+    );
+    _callAlerts = DesktopCallAlertController(
+      isFocused: windowManager.isFocused,
+      gateway: gateway,
+      attention: attention,
+    );
     _desktopTray = DesktopTrayCoordinator(
       showWindow: _showWindow,
       quit: _quit,
@@ -55,8 +75,8 @@ final class DesktopIntegrationFlow
   final DesktopProtocolIntake _protocolIntake;
   final DesktopUpdater? _updater;
   final DesktopProtocolRouter _protocolRouter = DesktopProtocolRouter();
-  final DesktopMessageNotificationController _messageNotifications =
-      DesktopMessageNotificationController(isFocused: windowManager.isFocused);
+  late final DesktopMessageNotificationController _messageNotifications;
+  late final DesktopCallAlertController _callAlerts;
   late final DesktopTrayCoordinator _desktopTray;
 
   DesktopAppSurface? _surface;
@@ -78,6 +98,7 @@ final class DesktopIntegrationFlow
     _surface = surface;
     _protocolRouter.attach(surface);
     _messageNotifications.attach(surface: surface, showWindow: _showWindow);
+    _callAlerts.attach(surface: surface, showWindow: _showWindow);
     _desktopTray.attach(surface);
   }
 
@@ -175,6 +196,8 @@ final class DesktopIntegrationFlow
     if (_disposed) return;
     _disposed = true;
     _protocolRouter.detach();
+    // Before the message toasts, which tear the shared toast layer down.
+    await _callAlerts.dispose();
     await _messageNotifications.dispose();
     await _desktopTray.dispose();
     _protocolIntake.dispose();

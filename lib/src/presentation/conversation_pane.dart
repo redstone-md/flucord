@@ -9,6 +9,7 @@ import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
+import '../application/voice_moderation.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
@@ -101,10 +102,17 @@ class ConversationPane extends StatefulWidget {
     required this.onOpenInbox,
     this.onOpenMemberProfile,
     this.onMessageMember,
+    this.onAddToGroup,
+    this.onOpenGroupSettings,
+    this.voiceModeration,
     super.key,
   });
 
   final ChatWorkspace workspace;
+
+  /// What a voice moderator may do from the participant menu, or null on a
+  /// session that cannot moderate.
+  final VoiceModeration? voiceModeration;
 
   /// What the account may do in [channel], resolved from its permissions.
   final ChannelCapabilities capabilities;
@@ -147,6 +155,11 @@ class ConversationPane extends StatefulWidget {
 
   /// Opens the direct message with a member, from the participant menu.
   final ValueChanged<String>? onMessageMember;
+
+  /// Adds friends to a group DM, and opens its settings. Null on a session
+  /// that cannot run a group.
+  final ValueChanged<ConversationChannel>? onAddToGroup;
+  final ValueChanged<ConversationChannel>? onOpenGroupSettings;
 
   @override
   State<ConversationPane> createState() => ConversationPaneState();
@@ -475,6 +488,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onMessage: widget.onMessageMember,
         onMention: mention,
       ),
+      moderation: widget.voiceModeration,
     );
 
     // What the channel shows under its header: the voice Room, a forum's
@@ -673,6 +687,16 @@ class ConversationPaneState extends State<ConversationPane> {
                 }
               : null,
           onOpenInbox: widget.onOpenInbox,
+          onAddToGroup: switch (widget.onAddToGroup) {
+            final add? when channel.isGroupDirectMessage => () => add(channel),
+            _ => null,
+          },
+          onOpenGroupSettings: switch (widget.onOpenGroupSettings) {
+            final open? when channel.isGroupDirectMessage => () => open(
+              channel,
+            ),
+            _ => null,
+          },
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
