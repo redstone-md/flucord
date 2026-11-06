@@ -210,7 +210,7 @@ Map<String, Object?> _voiceReadyFrame(
   },
 };
 
-Iterable<int?> _opcodes(_FakeVoiceWebSocket socket) => socket.sent
+Iterable<int?> _opcodes(FakeVoiceWebSocket socket) => socket.sent
     .whereType<String>()
     .map((frame) => (jsonDecode(frame) as Map)['op'] as int?);
 
@@ -262,15 +262,15 @@ final class _RecoveryRig implements DiscordVoiceSocketConnector {
   final IoDiscordVoiceUdpTransport udp;
   late final DiscordVoiceGatewayClient client;
   late final StreamSubscription<VoiceSignalingEvent> _subscription;
-  final List<_FakeVoiceWebSocket> dials = [];
+  final List<FakeVoiceWebSocket> dials = [];
   final List<VoiceSignalingStatusEvent> statuses = [];
   int _nextKeyByte = 0;
 
-  _FakeVoiceWebSocket get lastDial => dials.last;
+  FakeVoiceWebSocket get lastDial => dials.last;
 
   @override
   Future<DiscordVoiceWebSocket> connect(Uri uri) async {
-    final socket = _FakeVoiceWebSocket();
+    final socket = FakeVoiceWebSocket();
     dials.add(socket);
     return socket;
   }
@@ -285,7 +285,7 @@ final class _RecoveryRig implements DiscordVoiceSocketConnector {
   /// before that, and the fake drops a frame that nobody listens to. Wait for
   /// the client's first frame, the one Discord answers on the real socket.
   Future<DiscordVoiceTransportCipher> finishHandshake(
-    _FakeVoiceWebSocket dial, {
+    FakeVoiceWebSocket dial, {
     required int ssrc,
   }) async {
     dial.addJson(_voiceReadyFrame(server.port, ssrc: ssrc));

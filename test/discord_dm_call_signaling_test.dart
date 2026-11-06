@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
@@ -12,6 +13,8 @@ import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+
+import 'support/fake_voice_socket.dart';
 
 void main() {
   test('a session with no call plane refuses to join a call', () async {
@@ -99,6 +102,48 @@ void main() {
     await service.finishSpeaking();
     expect(clients.single.frames, hasLength(1));
     expect(clients.single.finished, isTrue);
+  });
+
+  group('a room that requires DAVE, on a build without it', () {
+    // Close code 4017 is Discord's "E2EE/DAVE protocol required". Asking again
+    // is answered the same way, so the session says why and stops there.
+    test('a voice channel stops at the refusal and says why', () {
+      fakeAsync((async) {
+        final rig = _DaveLessRig();
+        unawaited(
+          rig.service.joinVoiceChannel(
+            guildId: 'guild-1',
+            channelId: 'voice-1',
+          ),
+        );
+        rig.handCredentials(guildId: 'guild-1', channelId: 'voice-1');
+        async.flushMicrotasks();
+
+        unawaited(rig.socket.closeFromServer(4017));
+        async.elapse(const Duration(minutes: 2));
+
+        rig.expectRefusedOnce();
+        // The one join, and no leave and rejoin cycle after it.
+        expect(rig.gateway.updates, hasLength(1));
+        rig.close(async);
+      });
+    });
+
+    test('a DM call stops at the refusal and says why', () {
+      fakeAsync((async) {
+        final rig = _DaveLessRig();
+        unawaited(rig.service.joinCall(channelId: 'dm-1'));
+        rig.handCredentials(guildId: null, channelId: 'dm-1');
+        async.flushMicrotasks();
+
+        unawaited(rig.socket.closeFromServer(4017));
+        async.elapse(const Duration(minutes: 2));
+
+        rig.expectRefusedOnce();
+        expect(rig.gateway.callStates, [('dm-1', true)]);
+        rig.close(async);
+      });
+    });
   });
 
   group('session assembler', () {
@@ -335,6 +380,57 @@ void main() {
 Future<void> _flushEvents() async {
   await Future<void>.delayed(Duration.zero);
   await Future<void>.delayed(Duration.zero);
+}
+
+/// The session service over the real voice socket, on a build that offers
+/// no DAVE, with the socket's server side in the test's hands.
+final class _DaveLessRig {
+  _DaveLessRig() {
+    _subscription = service.voiceEvents.listen(events.add);
+  }
+
+  final gateway = _FakeCallGateway();
+  final socket = FakeVoiceWebSocket();
+  late final connector = FakeVoiceSocketConnector(socket);
+  late final service = DiscordVoiceSignalingService(
+    mainGateway: gateway,
+    socketFactory: DiscordVoiceGatewaySocketFactory(socketConnector: connector),
+    callGateway: gateway,
+  )..setCurrentUserId('me');
+  final events = <VoiceSignalingEvent>[];
+  late final StreamSubscription<VoiceSignalingEvent> _subscription;
+
+  /// The pair the main gateway answers a join with.
+  void handCredentials({required String? guildId, required String channelId}) {
+    gateway
+      ..dispatch('VOICE_STATE_UPDATE', {
+        'user_id': 'me',
+        'guild_id': ?guildId,
+        'channel_id': channelId,
+        'session_id': 'voice-session',
+      })
+      ..dispatch('VOICE_SERVER_UPDATE', {
+        'guild_id': guildId,
+        'channel_id': channelId,
+        'token': 'voice-token',
+        'endpoint': 'voice.example.test',
+      });
+  }
+
+  /// One dial, refused for DAVE, and nothing dialled after it.
+  void expectRefusedOnce() {
+    final last = events.whereType<VoiceSignalingStatusEvent>().last;
+    expect(last.status, VoiceConnectionStatus.failure);
+    expect(last.error, isA<VoiceEncryptionRequiredException>());
+    expect(connector.connectCount, 1);
+  }
+
+  void close(FakeAsync async) {
+    unawaited(_subscription.cancel());
+    unawaited(service.close());
+    unawaited(gateway.close());
+    async.flushMicrotasks();
+  }
 }
 
 final class _GuildUpdate {
