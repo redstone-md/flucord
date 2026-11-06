@@ -93,7 +93,8 @@ jobs:
       - name: Build
         run: >
           cmake --build build/flucord-video-test --config Release
-          --target flucord_video_clock_test flucord_video_surface_test
+          --target flucord_video flucord_video_clock_test
+          flucord_video_surface_test flucord_video_fit_test
       - name: Test
         run: >
           ctest --test-dir build/flucord-video-test -C Release
