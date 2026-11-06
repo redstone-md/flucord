@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_discord_wire.dart';
+
 void main() {
   test('a body goes out with a fixed length, never chunked', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -37,5 +39,20 @@ void main() {
     await transport.send(method: 'POST', uri: uri, headers: const {});
 
     expect(seen, [('POST', body.length, false), ('POST', 0, false)]);
+  });
+
+  test('an empty raw body claims no content type', () async {
+    final transport = FakeDiscordTransport(
+      fallback: (_) => jsonResponse(const {}),
+    );
+    final client = DiscordRestClient(
+      authorization: DiscordBotAuthorization('token'),
+      transport: transport,
+    );
+    addTearDown(client.close);
+
+    await client.request('POST', '/channels/1/typing', rawBody: const []);
+
+    expect(transport.requests.single.headers, isNot(contains('content-type')));
   });
 }

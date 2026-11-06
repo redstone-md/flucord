@@ -604,7 +604,7 @@ final class DiscordRestClient {
     query: query,
     headers: {
       ..._headers(
-        contentType: encodedBody == null ? null : contentType,
+        contentType: encodedBody?.isNotEmpty == true ? contentType : null,
         auditLogReason: auditLogReason,
       ),
       ...headers,
