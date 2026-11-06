@@ -733,10 +733,12 @@ class ConversationPaneState extends State<ConversationPane> {
             onTyping: () => chat.startTyping(channel.id),
             onCreatePoll: (poll) =>
                 chat.createPoll(channelId: channel.id, poll: poll),
-            onSendStickers: (stickerIds) => chat.sendStickers(
-              channelId: channel.id,
-              stickerIds: stickerIds,
-            ),
+            onSendStickers: chat.canSendStickers
+                ? (stickerIds) => chat.sendStickers(
+                    channelId: channel.id,
+                    stickerIds: stickerIds,
+                  )
+                : null,
             voiceMessageRecorder: VoiceMessageRecorderScope.maybeOf(context),
             onSendVoiceMessage:
                 chat.canSendVoiceMessages &&
@@ -1013,13 +1015,21 @@ class ConversationPaneState extends State<ConversationPane> {
       onResolveAlert: chat.resolveAutoModAlert,
       onReport: (message) => unawaited(_reportMessage(context, message)),
       onEndPoll: chat.endPoll,
-      onForward: (message, targetChannelId) async {
-        final forwarded = await chat.forwardMessage(message, targetChannelId);
-        if (!forwarded) return false;
-        widget.onSelectChannel(targetChannelId);
-        return true;
-      },
-      onToggleSuppressEmbeds: chat.toggleSuppressEmbeds,
+      // A session that cannot carry out an action does not offer it.
+      onForward: chat.canForwardMessages
+          ? (message, targetChannelId) async {
+              final forwarded = await chat.forwardMessage(
+                message,
+                targetChannelId,
+              );
+              if (!forwarded) return false;
+              widget.onSelectChannel(targetChannelId);
+              return true;
+            }
+          : null,
+      onToggleSuppressEmbeds: chat.canSuppressEmbeds
+          ? chat.toggleSuppressEmbeds
+          : null,
       canLoadOlder: chat.canLoadOlderMessages(channel.id),
       isLoadingOlder: chat.isLoadingOlderMessages(channel.id),
       olderLoadError: chat.olderMessagesError(channel.id),

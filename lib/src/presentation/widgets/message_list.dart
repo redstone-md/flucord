@@ -55,8 +55,8 @@ class MessageList extends StatefulWidget {
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
     required this.isLoadingOlder,
     required this.olderLoadError,
@@ -125,8 +125,14 @@ class MessageList extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
-  final ForwardMessageCallback onForward;
-  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
+
+  /// Forwards a message, or null where the session cannot. Then the action
+  /// is not offered at all.
+  final ForwardMessageCallback? onForward;
+
+  /// Suppresses or restores a message's embeds, or null where the session
+  /// cannot. Then the action is not offered at all.
+  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final bool canLoadOlder;
   final bool isLoadingOlder;
   final Object? olderLoadError;
