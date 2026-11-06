@@ -610,7 +610,8 @@ final class DiscordDesktopApiClient
   ///
   /// A forward names its source in [forwardOf] and needs no content. Up to
   /// three [stickerIds] may go with or without text. A [poll] needs no
-  /// content either.
+  /// content either. [onUploadProgress] hears how much of [attachments] has
+  /// gone out.
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
@@ -622,6 +623,7 @@ final class DiscordDesktopApiClient
     PendingPoll? poll,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
     if (stickerIds.length > 3) {
       throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
@@ -670,6 +672,9 @@ final class DiscordDesktopApiClient
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
       guardedByNonce: true,
+      onBodySent: onUploadProgress == null
+          ? null
+          : (sent) => onUploadProgress(sent / multipart.bytes.length),
     );
     if (response is! Map) {
       throw const DiscordApiException(

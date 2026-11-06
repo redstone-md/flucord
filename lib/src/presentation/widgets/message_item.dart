@@ -90,8 +90,17 @@ class MessageItem extends StatefulWidget {
     this.isEditing = false,
     this.onEditingChanged,
     this.onEditClosed,
+    this.deliveryStatus,
+    this.isSending = false,
     super.key,
   });
+
+  /// Drawn under a message Discord does not have yet. Such a row has no
+  /// actions, since there is nothing on the server to act on.
+  final Widget? deliveryStatus;
+
+  /// The message is on its way, and its text shows dimmed until it arrives.
+  final bool isSending;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -235,11 +244,12 @@ class _MessageItemState extends State<MessageItem> {
   void _updateBar(VoidCallback change) {
     setState(change);
     final wanted =
-        _hovered ||
-        _barHovered ||
-        _reactionPickerOpen ||
-        _rowFocus.hasPrimaryFocus ||
-        _barFocus.hasFocus;
+        widget.deliveryStatus == null &&
+        (_hovered ||
+            _barHovered ||
+            _reactionPickerOpen ||
+            _rowFocus.hasPrimaryFocus ||
+            _barFocus.hasFocus);
     if (wanted == _barPortal.isShowing) return;
     wanted ? _barPortal.show() : _barPortal.hide();
   }
@@ -456,7 +466,20 @@ class _MessageItemState extends State<MessageItem> {
           onOpen: (position) => unawaited(_openContextMenu(context, position)),
           onSelectionChanged: (content) =>
               _selectedText = content?.plainText ?? '',
-          child: _content(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.isSending)
+                Opacity(
+                  key: ValueKey('message-sending-${widget.message.id}'),
+                  opacity: 0.5,
+                  child: _content(context),
+                )
+              else
+                _content(context),
+              ?widget.deliveryStatus,
+            ],
+          ),
         ),
       ),
     ],
@@ -536,6 +559,7 @@ class _MessageItemState extends State<MessageItem> {
     final body = StreamerModeScope.redact(context, widget.message.body);
     return [
       _authorName,
+      if (widget.isSending) 'Sending',
       MessageTimestamp.longOf(context, widget.message.sentAt),
       if (body.isNotEmpty)
         messagePreviewText(
@@ -877,6 +901,7 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
+    if (widget.deliveryStatus != null) return;
     final selectedText =
         TimelineSelection.maybeOf(context)?.text() ?? _selectedText;
     final action = await showMessageContextMenu(

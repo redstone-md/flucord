@@ -173,10 +173,12 @@ final class DisconnectedChatRepository implements ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) => _reject();
 
   @override

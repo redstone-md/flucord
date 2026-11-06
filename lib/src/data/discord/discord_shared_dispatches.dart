@@ -96,6 +96,12 @@ final class DiscordSharedDispatches {
         member: member,
         isNew: true,
         mentionsCurrentMember: message.mentionsCurrentMember,
+        // Discord sends a nonce back as it came, string or number.
+        nonce: switch (payload['nonce']) {
+          final String nonce => nonce,
+          final int nonce => '$nonce',
+          _ => null,
+        },
       ),
     );
     await _cache.writeMessage(message, member: member);

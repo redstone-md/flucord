@@ -682,27 +682,22 @@ final class DiscordDesktopChatRepository
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
-    final payload = await _nonceFactory.sendDraft(
+    final payload = await _api.createMessage(
       channelId: channelId,
-      body: body,
+      content: body,
+      nonce: nonce,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
-      send: (nonce) => _api.createMessage(
-        channelId: channelId,
-        content: body,
-        nonce: nonce,
-        attachments: attachments,
-        replyToMessageId: replyToMessageId,
-        suppressNotifications: suppressNotifications,
-        textToSpeech: textToSpeech,
-      ),
+      onUploadProgress: onUploadProgress,
     );
     return _storeSentMessage(payload);
   }

@@ -34,13 +34,10 @@ void main() {
     await _typeAndSend(tester, session, 'hello');
 
     expect(
-      find.text(
-        'Your message to #general did not send. '
-        'You are sending too fast. Try again in 2 hours.',
-      ),
+      find.text('Not sent. You are sending too fast. Try again in 2 hours.'),
       findsOneWidget,
     );
-    expect(_boxText(tester), 'hello');
+    expect(_boxText(tester), isEmpty);
 
     await tester.tap(
       find.byKey(const ValueKey('channel-${SessionHarness.otherChannelId}')),
@@ -94,7 +91,7 @@ void main() {
     await session.settle();
 
     _expectSameGuardedNonce(_posted(session, _sendPath), count: 2);
-    expect(find.textContaining('did not send'), findsNothing);
+    expect(find.textContaining('Not sent'), findsNothing);
     expect(_boxText(tester), isEmpty);
   });
 
@@ -117,61 +114,39 @@ void main() {
       await session.settle();
 
       _expectSameGuardedNonce(_posted(session, _sendPath), count: 2);
-      expect(find.textContaining('did not send'), findsNothing);
+      expect(find.textContaining('Not sent'), findsNothing);
       expect(_boxText(tester), isEmpty);
     },
   );
 
-  testSession('a server that keeps failing brings the text back and says why', (
-    tester,
-    session,
-  ) async {
-    session.transport.on(
-      'POST',
-      _sendPath,
-      (_) => const DiscordHttpResponse(
-        statusCode: 503,
-        headers: {},
-        body: _htmlPage,
-      ),
-    );
-    await session.openChannel(SessionHarness.channelId);
+  testSession(
+    'a server that keeps failing leaves the message failed, with why',
+    (tester, session) async {
+      session.transport.on(
+        'POST',
+        _sendPath,
+        (_) => const DiscordHttpResponse(
+          statusCode: 503,
+          headers: {},
+          body: _htmlPage,
+        ),
+      );
+      await session.openChannel(SessionHarness.channelId);
 
-    await _typeAndSend(tester, session, 'hello');
-    await tester.pump(const Duration(seconds: 3));
-    await session.settle();
+      await _typeAndSend(tester, session, 'hello');
+      await tester.pump(const Duration(seconds: 3));
+      await session.settle();
 
-    expect(_posted(session, _sendPath), hasLength(3));
-    expect(
-      find.text(
-        'Your message to #general did not send. '
-        'Discord is having trouble. Try again.',
-      ),
-      findsOneWidget,
-    );
-    expect(_boxText(tester), 'hello');
-  });
+      expect(_posted(session, _sendPath), hasLength(3));
+      expect(
+        find.text('Not sent. Discord is having trouble. Try again.'),
+        findsOneWidget,
+      );
+      expect(_boxText(tester), isEmpty);
+    },
+  );
 
-  testSession('sending a failed draft again keeps its nonce', (
-    tester,
-    session,
-  ) async {
-    session.transport.on(
-      'POST',
-      _sendPath,
-      (_) => Future.error(Exception('the answer never came')),
-    );
-    await session.openChannel(SessionHarness.channelId);
-
-    await _typeAndSend(tester, session, 'hello');
-    expect(_boxText(tester), 'hello');
-    await tester.tap(find.byKey(const ValueKey('send-message')));
-    await session.settle();
-
-    _expectSameGuardedNonce(_posted(session, _sendPath), count: 2);
-  });
-
-  testSession('a draft changed after a failure is a new message', (
+  testSession('a new message after a failure has a nonce of its own', (
     tester,
     session,
   ) async {

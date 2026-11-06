@@ -573,8 +573,6 @@ class MessageComposerState extends State<MessageComposer>
 
   Future<void> _send() async {
     if (!_canSend || widget.isSending || _runTypedCommand()) return;
-    final channelId = widget.channelId;
-    final drafts = widget.drafts;
     final content = _boxContent;
     final send = widget.onSend(
       content.text,
@@ -594,17 +592,9 @@ class MessageComposerState extends State<MessageComposer>
       _suppressNotifications = false;
     });
     _focusNode.requestFocus();
-    final sent = await send;
-    if (sent) {
-      await ClipboardAttachments.release(content.attachments);
-      return;
-    }
-    if (mounted && widget.channelId == channelId) {
-      setState(() => _showInBox(_boxContent.withFailedSend(content)));
-    } else {
-      // The user has left that channel, so its draft takes the message.
-      drafts.write(channelId, drafts.read(channelId).withFailedSend(content));
-    }
+    // A failed message stays in the timeline with Retry, so the box does not
+    // take it back, and a pasted picture stays on disk for the retry.
+    if (await send) await ClipboardAttachments.release(content.attachments);
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
@@ -25,7 +26,25 @@ abstract interface class DiscordHttpTransport {
   void close();
 }
 
-final class IoDiscordHttpTransport implements DiscordHttpTransport {
+/// Hears how many bytes of a request body have gone out so far.
+typedef BodySentListener = void Function(int sentBytes);
+
+/// A transport that can say how much of a request body has gone out, which is
+/// what an upload's progress is drawn from. The rest client asks for it only
+/// when a caller listens; any other transport sends the body unwatched.
+abstract interface class DiscordUploadTransport
+    implements DiscordHttpTransport {
+  @override
+  Future<DiscordHttpResponse> send({
+    required String method,
+    required Uri uri,
+    required Map<String, String> headers,
+    List<int>? body,
+    BodySentListener? onBodySent,
+  });
+}
+
+final class IoDiscordHttpTransport implements DiscordUploadTransport {
   IoDiscordHttpTransport({
     HttpClient? client,
     this.requestTimeout = _defaultTimeout,
@@ -40,6 +59,9 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
 
   /// The slowest upload that still finishes: about 256 kbit/s.
   static const _slowestUploadBytesPerSecond = 32 * 1024;
+
+  /// How much of a watched body goes to the socket at a time.
+  static const _watchedChunkBytes = 64 * 1024;
 
   /// One request's budget before its body: connect, response headers and body.
   /// Without it a server that accepts and never answers holds its caller
@@ -67,6 +89,7 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
     required Uri uri,
     required Map<String, String> headers,
     List<int>? body,
+    BodySentListener? onBodySent,
   }) {
     HttpClientRequest? request;
     Future<DiscordHttpResponse> attempt() async {
@@ -75,7 +98,11 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
       // A fixed length rather than Dart's default chunked encoding, so the
       // body arrives whole and framed the way a browser sends it.
       request!.contentLength = body?.length ?? 0;
-      if (body != null) request!.add(body);
+      if (body != null && onBodySent != null) {
+        await request!.addStream(_watched(body, onBodySent));
+      } else if (body != null) {
+        request!.add(body);
+      }
       final response = await request!.close();
       final responseHeaders = <String, String>{};
       response.headers.forEach((name, values) {
@@ -102,6 +129,20 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
         );
       },
     );
+  }
+
+  /// [body] in chunks, telling [onBodySent] as each one is taken. The socket
+  /// pauses the stream while its buffer is full, so a chunk taken is a chunk
+  /// on its way.
+  static Stream<List<int>> _watched(
+    List<int> body,
+    BodySentListener onBodySent,
+  ) async* {
+    for (var start = 0; start < body.length; start += _watchedChunkBytes) {
+      final end = min(start + _watchedChunkBytes, body.length);
+      yield body.sublist(start, end);
+      onBodySent(end);
+    }
   }
 
   @override
@@ -261,6 +302,7 @@ final class DiscordHttpExecutor {
     required Map<String, String> headers,
     List<int>? body,
     bool guardedByNonce = false,
+    BodySentListener? onBodySent,
   }) async => (await send(
     method,
     path,
@@ -268,6 +310,7 @@ final class DiscordHttpExecutor {
     headers: headers,
     body: body,
     guardedByNonce: guardedByNonce,
+    onBodySent: onBodySent,
   )).payload;
 
   /// Like [execute], but hands back the status and headers as well.
@@ -287,6 +330,7 @@ final class DiscordHttpExecutor {
     required Map<String, String> headers,
     List<int>? body,
     bool guardedByNonce = false,
+    BodySentListener? onBodySent,
   }) async {
     final uri = Uri.parse(
       '${_baseUri.toString()}$path',
@@ -297,27 +341,42 @@ final class DiscordHttpExecutor {
       headers: headers,
       body: body,
       guardedByNonce: guardedByNonce,
+      onBodySent: onBodySent,
     );
   }
 
   /// Like [send], for a full [uri] outside Discord's API, such as the storage
   /// URL of an upload slot.
+  ///
+  /// [onBodySent] hears the body go out, on a transport that can tell. Each
+  /// attempt counts again from the start.
   Future<DiscordApiResponse> sendTo(
     String method,
     Uri uri, {
     required Map<String, String> headers,
     List<int>? body,
     bool guardedByNonce = false,
+    BodySentListener? onBodySent,
   }) async {
     final repeatsServerErrors = method != 'POST' || guardedByNonce;
     var waited = Duration.zero;
     for (var attempt = 1; ; attempt++) {
-      final response = await _transport.send(
-        method: method,
-        uri: uri,
-        headers: headers,
-        body: body,
-      );
+      final response = await switch (_transport) {
+        final DiscordUploadTransport transport when onBodySent != null =>
+          transport.send(
+            method: method,
+            uri: uri,
+            headers: headers,
+            body: body,
+            onBodySent: onBodySent,
+          ),
+        final transport => transport.send(
+          method: method,
+          uri: uri,
+          headers: headers,
+          body: body,
+        ),
+      };
       final status = response.statusCode;
       if (status >= 200 && status < 300) {
         return DiscordApiResponse(
@@ -577,6 +636,7 @@ final class DiscordRestClient {
     String? auditLogReason,
     bool guardedByNonce = false,
     Map<String, String> headers = const {},
+    BodySentListener? onBodySent,
   }) => _execute(
     method,
     path,
@@ -587,6 +647,7 @@ final class DiscordRestClient {
     auditLogReason: auditLogReason,
     guardedByNonce: guardedByNonce,
     headers: headers,
+    onBodySent: onBodySent,
   );
 
   Future<Object?> _execute(
@@ -598,6 +659,7 @@ final class DiscordRestClient {
     String? auditLogReason,
     bool guardedByNonce = false,
     Map<String, String> headers = const {},
+    BodySentListener? onBodySent,
   }) => _executor.execute(
     method,
     path,
@@ -611,6 +673,7 @@ final class DiscordRestClient {
     },
     body: encodedBody,
     guardedByNonce: guardedByNonce,
+    onBodySent: onBodySent,
   );
 
   /// PUTs [bytes] to the storage [url] of an upload slot. The URL is signed,

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -207,68 +205,6 @@ void main() {
       find.text('cat.png'),
       findsOneWidget,
       reason: 'the strip shows the name the receiver will store',
-    );
-  });
-
-  testWidgets('a failed send brings its files back and can go out again', (
-    tester,
-  ) async {
-    final answers = [Completer<bool>(), Completer<bool>()];
-    final sent = <List<PendingAttachment>>[];
-    await _pump(
-      tester,
-      picker: _FixedPicker([
-        PendingAttachment(name: 'cat.png', path: '/tmp/cat.png', size: 12),
-      ]),
-      onSend: (_, attachments, _, _) {
-        sent.add(attachments);
-        return answers[sent.length - 1].future;
-      },
-    );
-    final strip = find.byKey(const ValueKey('pending-attachment-/tmp/cat.png'));
-
-    await _openAttachmentPicker(tester);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('send-message')));
-    await tester.pump();
-    expect(strip, findsNothing, reason: 'the composer clears on the press');
-
-    answers.first.complete(false);
-    await tester.pumpAndSettle();
-    expect(strip, findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('send-message')));
-    await tester.pump();
-    expect(sent.last.single.path, '/tmp/cat.png');
-  });
-
-  testWidgets('files come back even when text was typed during the send', (
-    tester,
-  ) async {
-    final answer = Completer<bool>();
-    await _pump(
-      tester,
-      picker: _FixedPicker([
-        PendingAttachment(name: 'cat.png', path: '/tmp/cat.png', size: 12),
-      ]),
-      onSend: (_, _, _, _) => answer.future,
-    );
-
-    await _openAttachmentPicker(tester);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('send-message')));
-    await tester.pump();
-    await tester.enterText(
-      find.byKey(const ValueKey('message-composer')),
-      'typed later',
-    );
-    answer.complete(false);
-    await tester.pumpAndSettle();
-
-    expect(find.text('typed later'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('pending-attachment-/tmp/cat.png')),
-      findsOneWidget,
     );
   });
 
