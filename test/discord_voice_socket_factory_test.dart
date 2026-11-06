@@ -1,13 +1,12 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
-import 'package:flucord/src/data/discord/discord_voice_websocket.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
+
+import 'support/fake_voice_socket.dart';
 
 const _credentials = VoiceServerCredentials(
   guildId: 'guild-1',
@@ -29,7 +28,7 @@ void main() {
     test(
       'a call socket offers the room DAVE version and carries the group',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final dave = _CountingDaveService();
         final factory = _factory(socket, dave);
         final client = factory.callSocket(_credentials);
@@ -54,7 +53,7 @@ void main() {
     test(
       'a stream socket says it carries a screen and matches the call',
       () async {
-        final socket = _FakeVoiceWebSocket();
+        final socket = FakeVoiceWebSocket();
         final dave = _CountingDaveService();
         final factory = _factory(socket, dave);
         final client = factory.streamSocket(
@@ -87,7 +86,7 @@ void main() {
     );
 
     test('a stream keys its DAVE group one below the RTC server id', () async {
-      final socket = _FakeVoiceWebSocket();
+      final socket = FakeVoiceWebSocket();
       final dave = _CountingDaveService();
       final factory = _factory(socket, dave);
       // The stream credentials an endpoint hands over: the RTC server id as
@@ -118,12 +117,12 @@ void main() {
     });
 
     test('a session without DAVE offers version 0 on both kinds', () async {
-      final callSocket = _FakeVoiceWebSocket();
+      final callSocket = FakeVoiceWebSocket();
       final call = _factory(callSocket).callSocket(_credentials);
       addTearDown(call.close);
       await call.connect();
 
-      final streamSocket = _FakeVoiceWebSocket();
+      final streamSocket = FakeVoiceWebSocket();
       final stream = _factory(
         streamSocket,
       ).streamSocket(credentials: _credentials, streamKey: _streamKey);
@@ -139,55 +138,20 @@ void main() {
 }
 
 DiscordVoiceGatewaySocketFactory _factory(
-  _FakeVoiceWebSocket socket, [
+  FakeVoiceWebSocket socket, [
   _CountingDaveService? dave,
 ]) => DiscordVoiceGatewaySocketFactory(
   daveService: dave,
-  socketConnector: _FakeVoiceSocketConnector(socket),
+  socketConnector: FakeVoiceSocketConnector(socket),
 );
 
-Map<String, Object?> _identifyOn(_FakeVoiceWebSocket socket) {
+Map<String, Object?> _identifyOn(FakeVoiceWebSocket socket) {
   final identify = jsonDecode(socket.sent.single as String) as Map;
   expect(identify['op'], 0);
   return identify['d'] as Map<String, Object?>;
 }
 
 Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
-
-final class _FakeVoiceSocketConnector implements DiscordVoiceSocketConnector {
-  _FakeVoiceSocketConnector(this.socket);
-
-  final _FakeVoiceWebSocket socket;
-
-  @override
-  Future<DiscordVoiceWebSocket> connect(Uri uri) async => socket;
-}
-
-final class _FakeVoiceWebSocket implements DiscordVoiceWebSocket {
-  final StreamController<Object?> _messages = StreamController.broadcast();
-  final List<Object> sent = [];
-
-  @override
-  int? closeCode;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void addJson(Map<String, Object?> payload) =>
-      _messages.add(jsonEncode(payload));
-
-  void addBinary(List<int> payload) =>
-      _messages.add(Uint8List.fromList(payload));
-
-  @override
-  void send(Object data) => sent.add(data);
-
-  @override
-  Future<void> close([int? code, String? reason]) async {
-    closeCode = code;
-    await _messages.close();
-  }
-}
 
 /// Records group activity without doing any of it.
 final class _CountingDaveService implements VoiceDaveService {

@@ -329,7 +329,7 @@ final class DiscordVoiceGatewayClient
     // favour of 443 reached a frontend that answered every identify with
     // `sessionInvalid` — five refusals over two days, each on an endpoint
     // naming a port other than 443, while the one endpoint naming 443 was the
-    // one connection that ever opened. (The `identifyRefused` once blamed on
+    // one connection that ever opened. (The close code 4017 once blamed on
     // dialling the named port came from a stream identify that had not yet
     // learned to declare its screen.) 443 remains the default for an endpoint
     // that names no port at all: a URI parsed from a bare host has none, and

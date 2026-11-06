@@ -22,9 +22,16 @@ String voiceRoomStatusLabel(VoiceController controller) {
       'Voice connected, muted',
     VoiceConnectionStatus.ready => 'Voice connected',
     VoiceConnectionStatus.reconnecting => 'Reconnecting...',
+    VoiceConnectionStatus.failure when _needsEncryption(controller) =>
+      'Encrypted voice unavailable',
     VoiceConnectionStatus.failure => 'Could not connect',
   };
 }
+
+/// Whether Discord refused the room for end-to-end encryption this build
+/// cannot offer. Not a fault: joining again is refused the same way.
+bool _needsEncryption(VoiceController controller) =>
+    controller.error is VoiceEncryptionRequiredException;
 
 /// The Room header's words: "Connected" and the ping once the connection is
 /// up, else the same words as everywhere else. Muted and deafened are left
@@ -125,6 +132,9 @@ class VoiceSignalLine extends StatelessWidget {
 String? voiceRoomWarning(VoiceController controller) {
   if (controller.joinBlockedReason case final reason?) return reason;
   if (controller.connectionStatus == VoiceConnectionStatus.failure) {
+    if (_needsEncryption(controller)) {
+      return 'End-to-end encrypted voice is not available in this build.';
+    }
     return 'Discord voice did not answer, or refused the connection.';
   }
   if (controller.deviceError case final error?) {
@@ -147,7 +157,8 @@ String? voiceRoomWarning(VoiceController controller) {
 bool voiceRoomOffersConnectionRetry(VoiceController controller) =>
     controller.isConnected &&
     controller.hasDiscordSignaling &&
-    controller.connectionStatus == VoiceConnectionStatus.failure;
+    controller.connectionStatus == VoiceConnectionStatus.failure &&
+    !_needsEncryption(controller);
 
 /// Whether the room should offer to open the audio devices again.
 bool voiceRoomOffersDeviceRetry(VoiceController controller) =>
