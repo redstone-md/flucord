@@ -798,21 +798,19 @@ class VoiceSeatRow extends StatelessWidget {
     final menu = participantMenu;
     if (open == null && menu == null) return row;
     void openProfile() => open?.call(state.userId, popupAnchorOf(context));
-    return InkWell(
-      onTap: open == null ? null : openProfile,
-      // The right button too: a row that ignores it is the one place in the
-      // app where the mouse stops working.
-      onSecondaryTapUp: menu == null
-          ? (_) => openProfile()
-          : (details) => unawaited(
-              menu.open(
-                context,
-                state.userId,
-                position: details.globalPosition,
-              ),
-            ),
-      borderRadius: FlucordRadius.control,
-      child: row,
+    // The right button and the menu keys too: a row that ignores them is the
+    // one place in the app where they stop working.
+    return ContextMenuTarget(
+      onOpen: (context, position) => menu == null
+          ? openProfile()
+          : unawaited(menu.open(context, state.userId, position: position)),
+      // The row takes the focus itself while it opens the profile.
+      focusable: open == null,
+      builder: (_, _) => InkWell(
+        onTap: open == null ? null : openProfile,
+        borderRadius: FlucordRadius.control,
+        child: row,
+      ),
     );
   }
 }

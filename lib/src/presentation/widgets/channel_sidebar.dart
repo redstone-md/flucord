@@ -23,6 +23,7 @@ import 'participant_menu.dart';
 import 'motion_scope.dart';
 import 'presence_scope.dart';
 import 'nameplate_backdrop.dart';
+import 'context_menu_target.dart';
 import 'count_badge.dart';
 import 'direct_message_views.dart';
 import 'display_name.dart';

@@ -14,12 +14,18 @@ class ContextMenuTarget extends StatelessWidget {
     required this.onOpen,
     required this.builder,
     this.onDoubleTap,
+    this.focusable = true,
     super.key,
   });
 
   final void Function(BuildContext context, Offset? position) onOpen;
   final Widget Function(BuildContext context, bool focused) builder;
   final VoidCallback? onDoubleTap;
+
+  /// False when what [builder] draws takes the focus itself, as a button
+  /// does: the keys still open the menu while it has the focus, and the
+  /// target adds no second stop to Tab.
+  final bool focusable;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +36,8 @@ class ContextMenuTarget extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.f10, shift: true): openByKey,
       },
       child: Focus(
+        canRequestFocus: focusable,
+        skipTraversal: !focusable,
         child: Builder(
           builder: (context) => GestureDetector(
             behavior: HitTestBehavior.opaque,
