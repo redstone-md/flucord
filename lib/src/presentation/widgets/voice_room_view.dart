@@ -37,14 +37,12 @@ class VoiceRoomView extends StatefulWidget {
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
-    this._spaceId,
     super.key,
   });
 
-  /// Null for a call in a DM or group DM, which has no guild. The room is
-  /// otherwise identical — same grid, same devices, same toolbar — so the two
-  /// share this widget instead of a second copy that could drift.
-  final String? guildId;
+  /// The guild of the voice channel. A DM call is not drawn here: it is a
+  /// band above the DM's messages.
+  final String guildId;
   final String channelId;
   final String channelName;
   final VoiceController controller;
@@ -90,12 +88,8 @@ class VoiceRoomView extends StatefulWidget {
   /// room has no voice controller to hand it.
   final ParticipantMenu? participantMenu;
 
-  /// Which space's per-guild avatars to render. Defaults to [guildId] because
-  /// for guild voice they are the same thing; a DM call has to supply the DM
-  /// pseudo-space itself.
-  final String? _spaceId;
-
-  String get spaceId => _spaceId ?? guildId ?? '';
+  /// Which space's per-guild avatars to render: the guild's own.
+  String get spaceId => guildId;
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -111,15 +105,10 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   bool get _isInThisChannel =>
       widget.controller.connectedChannelId == widget.channelId;
 
-  Future<void> _connect() {
-    final guildId = widget.guildId;
-    return guildId == null
-        ? widget.controller.connectToCall(channelId: widget.channelId)
-        : widget.controller.connect(
-            guildId: guildId,
-            channelId: widget.channelId,
-          );
-  }
+  Future<void> _connect() => widget.controller.connect(
+    guildId: widget.guildId,
+    channelId: widget.channelId,
+  );
 
   @override
   Widget build(BuildContext context) {

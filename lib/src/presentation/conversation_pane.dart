@@ -479,7 +479,7 @@ class ConversationPaneState extends State<ConversationPane> {
                 builder: (_, _) => StageControls(controller: stage),
               )
             : null,
-        guildId: channel.guildId,
+        guildId: channel.spaceId,
         channelId: channel.id,
         channelName: channel.name,
         controller: voice,
