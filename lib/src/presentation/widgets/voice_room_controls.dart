@@ -7,11 +7,11 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'voice_control.dart';
 
-/// The Room's control row: microphone and deafen, then camera, Stream,
-/// activities and soundboard, then hang up.
+/// The Room's control row, one copy for the voice channel Room and the DM
+/// call band so the two cannot drift apart.
 ///
-/// The voice channel Room and the DM call band both draw it. It listens to
-/// [controller] and [camera] itself, so it stays current wherever it sits.
+/// It listens to [controller] and [camera] itself, so it stays current
+/// wherever it sits.
 /// Every icon button inside, the ones in [goLive] and [soundboard] too,
 /// takes the row's button style from an [IconButtonTheme].
 class VoiceRoomControls extends StatelessWidget {
