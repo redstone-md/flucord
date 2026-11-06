@@ -59,7 +59,7 @@ class MessageComposer extends StatefulWidget {
     required this.isSending,
     required this.onSend,
     required this.onCreatePoll,
-    required this.onSendStickers,
+    this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
     this.onEditLastMessage,
@@ -101,12 +101,16 @@ class MessageComposer extends StatefulWidget {
   final bool isSending;
   final SendMessageCallback onSend;
   final CreatePollCallback onCreatePoll;
-  final SendStickersCallback onSendStickers;
+
+  /// Sends stickers, or null where the session cannot. Then there is no
+  /// sticker picker.
+  final SendStickersCallback? onSendStickers;
 
   /// `ATTACH_FILES`. Without it the upload control is not offered at all,
   /// rather than offered and rejected once the file is already picked.
   final bool canAttachFiles;
   final ChatMessage? replyTo;
+
   /// The name the replied-to author goes by where the reply is written.
   final String? replyAuthorName;
   final VoidCallback onCancelReply;
@@ -793,12 +797,14 @@ class MessageComposerState extends State<MessageComposer>
                                   onSelected: _sendGif,
                                 ),
                               ),
-                            StickerPickerButton(
-                              sections: widget.stickerSections,
-                              isSending: widget.isSending || _isHeldBySlowmode,
-                              onSend: widget.onSendStickers,
-                              favorites: widget.expressionFavorites,
-                            ),
+                            if (widget.onSendStickers case final send?)
+                              StickerPickerButton(
+                                sections: widget.stickerSections,
+                                isSending:
+                                    widget.isSending || _isHeldBySlowmode,
+                                onSend: send,
+                                favorites: widget.expressionFavorites,
+                              ),
                             // The two send buttons share one key, so a disabled
                             // send updates in place; only the spinner and the
                             // recorder cross-fade.

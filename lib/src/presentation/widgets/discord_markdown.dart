@@ -8,6 +8,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'discord_code_block.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
 import 'profile_card_route.dart';
@@ -140,32 +141,57 @@ class _DiscordMarkdownState extends State<DiscordMarkdown> {
           child: Text(widget.body, style: _bodyStyle),
         );
 
-  Widget _markdown(BuildContext context, String body) => MarkdownBody(
-    key: ValueKey(Object.hash(_resolutionSignature, body)),
-    data: body,
-    selectable: false,
-    softLineBreak: true,
-    extensionSet: md.ExtensionSet.gitHubFlavored,
-    inlineSyntaxes: discordMessageInlineSyntaxes(),
-    builders: discordMessageBuilders(
-      workspace: _workspace,
-      spaceId: widget.spaceId,
-      onSelectChannel: widget.onSelectChannel ?? (_) {},
-      onOpenProfile: widget.onOpenProfile,
-      now: widget.now,
-    ),
-    styleSheet: _markdownStyleSheet ??= _buildStyleSheet(context),
-    onTapLink: (_, href, _) {
-      if (href != null) widget.onTapLink(href);
-    },
-    imageBuilder: (uri, _, alt) => Text(
-      alt?.isNotEmpty == true ? alt! : uri.toString(),
-      style: TextStyle(
-        color: context.surfaces.link,
-        decoration: TextDecoration.underline,
+  Widget _markdown(BuildContext context, String body) {
+    final styleSheet = _markdownStyleSheet ??= _buildStyleSheet(context);
+    return MarkdownBody(
+      key: ValueKey(Object.hash(_resolutionSignature, body)),
+      data: body,
+      selectable: false,
+      softLineBreak: true,
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      blockSyntaxes: discordMessageBlockSyntaxes(),
+      inlineSyntaxes: discordMessageInlineSyntaxes(),
+      builders: {
+        ...discordMessageBuilders(
+          workspace: _workspace,
+          spaceId: widget.spaceId,
+          onSelectChannel: widget.onSelectChannel ?? (_) {},
+          onOpenProfile: widget.onOpenProfile,
+          now: widget.now,
+        ),
+        'pre': DiscordCodeBlockBuilder(
+          style: styleSheet.code,
+          padding: styleSheet.codeblockPadding!,
+        ),
+        'discord-subtext': _SubtextBuilder(
+          (text) => DiscordMarkdown(
+            body: text,
+            onTapLink: widget.onTapLink,
+            workspace: widget.workspace,
+            spaceId: widget.spaceId,
+            onSelectChannel: widget.onSelectChannel,
+            onOpenProfile: widget.onOpenProfile,
+            now: widget.now,
+            textStyle: _bodyStyle.copyWith(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
+          ),
+        ),
+      },
+      styleSheet: styleSheet,
+      onTapLink: (_, href, _) {
+        if (href != null) widget.onTapLink(href);
+      },
+      imageBuilder: (uri, _, alt) => Text(
+        alt?.isNotEmpty == true ? alt! : uri.toString(),
+        style: TextStyle(
+          color: context.surfaces.link,
+          decoration: TextDecoration.underline,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   int get _resolutionSignature {
     final values = <Object?>[
@@ -254,4 +280,23 @@ class _DiscordMarkdownState extends State<DiscordMarkdown> {
       ),
     );
   }
+}
+
+/// A `-# ` line. The markdown sheet styles only the tags it knows, so the
+/// line's text is drawn as markdown again, at the subtext size and colour.
+final class _SubtextBuilder extends MarkdownElementBuilder {
+  _SubtextBuilder(this._draw);
+
+  final Widget Function(String text) _draw;
+
+  @override
+  bool isBlockElement() => true;
+
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) => _draw(element.attributes['text']!);
 }

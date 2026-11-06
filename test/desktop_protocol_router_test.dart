@@ -80,6 +80,9 @@ final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
       const Stream.empty();
 
   @override
+  DesktopRingingCall? get ringingCall => null;
+
+  @override
   void openChannelLink(ChannelLink link) => openedLinks.add(link);
 
   @override
