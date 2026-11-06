@@ -43,6 +43,7 @@ class ChatHeader extends StatelessWidget {
     this.onToggleThreads,
     this.onOpenInbox,
     this.leading,
+    this.status,
     this.threadMembership,
     this.showVoiceSurfaces = false,
     this.isInCall = false,
@@ -76,6 +77,10 @@ class ChatHeader extends StatelessWidget {
   /// What stands before the name, such as a DM's avatar with its status
   /// dot. Null draws the channel's icon.
   final Widget? leading;
+
+  /// What stands in the topic's place, such as a Room's connection state.
+  /// It draws its own [ChatHeaderDivider], so it can draw nothing at all.
+  final Widget? status;
 
   /// Whether the pane below is currently showing a message timeline. Search and
   /// pins belong to that timeline, so a voice channel earns them only while its
@@ -204,14 +209,25 @@ class ChatHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: nameStyle,
               );
-              // The name comes first and is never cut for the topic: the
-              // topic shows only in the room the whole name leaves.
+              // The name comes first and is never cut for the topic or the
+              // status: either shows only in the room the whole name leaves.
               final topicRoom =
                   box.maxWidth -
                   _widthOf(context, channel.name, nameStyle) -
                   2 * _topicGap -
                   1;
+              if (status case final status?
+                  when showTopic && topicRoom >= _minTopicWidth) {
+                return Row(
+                  children: [
+                    name,
+                    const SizedBox(width: _topicGap),
+                    Expanded(child: status),
+                  ],
+                );
+              }
               if (!showTopic ||
+                  status != null ||
                   channel.topic.isEmpty ||
                   topicRoom < _minTopicWidth) {
                 return Align(
@@ -223,12 +239,7 @@ class ChatHeader extends StatelessWidget {
                 children: [
                   name,
                   const SizedBox(width: _topicGap),
-                  Container(
-                    key: const ValueKey('chat-header-divider'),
-                    width: 1,
-                    height: FlucordIconButton.iconSize,
-                    color: surfaces.border,
-                  ),
+                  const ChatHeaderDivider(),
                   const SizedBox(width: _topicGap),
                   Expanded(
                     child: Text(
@@ -497,4 +508,17 @@ class _SearchFieldState extends State<_SearchField> {
     if (widget.onSubmitted == null) return field;
     return Tooltip(message: 'Press Enter to search the server', child: field);
   }
+}
+
+/// The short line between a header's name and what follows it.
+class ChatHeaderDivider extends StatelessWidget {
+  const ChatHeaderDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('chat-header-divider'),
+    width: 1,
+    height: FlucordIconButton.iconSize,
+    color: context.surfaces.border,
+  );
 }

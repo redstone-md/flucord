@@ -111,7 +111,6 @@ void main() {
 
       expect(find.byTooltip('Undeafen'), findsOneWidget);
       expect(findFlucordIcon(FlucordIcons.headphonesOff), findsOneWidget);
-      expect(find.text('Voice connected, deafened'), findsOneWidget);
     });
 
     testWidgets('undeafening afterwards brings the sound back', (tester) async {

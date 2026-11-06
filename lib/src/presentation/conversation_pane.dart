@@ -59,6 +59,7 @@ import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
 import 'widgets/participant_menu.dart';
 import 'widgets/voice_room_view.dart';
+import 'widgets/voice_room_status.dart';
 import 'widgets/voice_scope.dart';
 import 'widgets/voice_stream_controls.dart';
 import 'widgets/workspace_scope.dart';
@@ -556,6 +557,9 @@ class ConversationPaneState extends State<ConversationPane> {
             ),
             null => null,
           },
+          status: showsRoom
+              ? VoiceRoomStatusLine(controller: voice, channelId: channel.id)
+              : null,
           // Only a thread has a membership to join; every other channel gets
           // nothing rather than a control that would have nothing to act on.
           threadMembership: channel.isThread

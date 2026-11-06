@@ -14,7 +14,7 @@ void main() {
     VoiceConnectionStatus.connecting: 'Connecting...',
     VoiceConnectionStatus.discovering: 'Connecting...',
     VoiceConnectionStatus.negotiating: 'Connecting...',
-    VoiceConnectionStatus.ready: 'Voice connected',
+    VoiceConnectionStatus.ready: 'Connected',
     VoiceConnectionStatus.reconnecting: 'Reconnecting...',
     VoiceConnectionStatus.failure: 'Could not connect',
     VoiceConnectionStatus.disconnected: 'Disconnected',
@@ -71,24 +71,28 @@ void main() {
     }
   });
 
-  testWidgets('a muted Room says it is muted', (tester) async {
+  // Muted and deafened show on the control row's buttons, so the header
+  // keeps saying the connection is up.
+  testWidgets('a muted Room still says it is connected', (tester) async {
     final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
     await _say(tester, room, VoiceConnectionStatus.ready);
 
     await tester.tap(find.byKey(const ValueKey('voice-mute')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Voice connected, muted'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.byTooltip('Unmute'), findsOneWidget);
   });
 
-  testWidgets('a deafened Room says it is deafened', (tester) async {
+  testWidgets('a deafened Room still says it is connected', (tester) async {
     final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
     await _say(tester, room, VoiceConnectionStatus.ready);
 
     await tester.tap(find.byKey(const ValueKey('voice-deafen')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Voice connected, deafened'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.byTooltip('Undeafen'), findsOneWidget);
   });
 }
 

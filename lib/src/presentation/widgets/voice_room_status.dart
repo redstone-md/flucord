@@ -1,5 +1,11 @@
+import 'package:flutter/material.dart';
+
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'chat_header.dart';
 
 String voiceRoomStatusLabel(VoiceController controller) {
   if (!controller.isConnected) return 'Disconnected';
@@ -18,6 +24,70 @@ String voiceRoomStatusLabel(VoiceController controller) {
     VoiceConnectionStatus.reconnecting => 'Reconnecting...',
     VoiceConnectionStatus.failure => 'Could not connect',
   };
+}
+
+/// The Room header's words: "Connected" and the ping once the connection is
+/// up, else the same words as everywhere else. Muted and deafened are left
+/// to the control row, which shows them on its buttons.
+String voiceRoomHeaderLabel(VoiceController controller) {
+  if (controller.connectionStatus != VoiceConnectionStatus.ready ||
+      !controller.isConnected) {
+    return voiceRoomStatusLabel(controller);
+  }
+  return switch (controller.roundTrip) {
+    final roundTrip? => 'Connected · ${roundTrip.inMilliseconds} ms',
+    null => 'Connected',
+  };
+}
+
+/// The connection state in the Room header: the signal mark, green while
+/// the transport is up, and [voiceRoomHeaderLabel]. Draws nothing while
+/// this account is not in [channelId].
+class VoiceRoomStatusLine extends StatelessWidget {
+  const VoiceRoomStatusLine({
+    required this.controller,
+    required this.channelId,
+    super.key,
+  });
+
+  final VoiceController controller;
+  final String channelId;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      if (controller.connectedChannelId != channelId) {
+        return const SizedBox.shrink();
+      }
+      final surfaces = context.surfaces;
+      return Row(
+        key: const ValueKey('voice-room-status'),
+        children: [
+          const ChatHeaderDivider(),
+          const SizedBox(width: 12),
+          FlucordIcon(
+            FlucordIcons.signal,
+            size: 14,
+            color: controller.isTransportReady
+                ? surfaces.success
+                : surfaces.muted,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              voiceRoomHeaderLabel(controller),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: FlucordTextRole.caption.style.copyWith(
+                color: surfaces.muted,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 /// The one thing most worth saying about a room that is not working, or null.

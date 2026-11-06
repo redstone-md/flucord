@@ -10,8 +10,8 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_type.dart';
-import 'voice_control.dart';
 import 'voice_participant_grid.dart';
+import 'voice_room_controls.dart';
 import 'voice_room_status.dart';
 import 'voice_stream_controls.dart';
 import '../../domain/voice_connection.dart';
@@ -151,10 +151,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 focusedUserId: widget.focusedUserId,
                 onTapParticipant: widget.onTapParticipant,
                 onClearFocus: widget.onClearFocus,
-                goLive: widget.goLive,
-                soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
-                channelName: widget.channelName,
                 controller: widget.controller,
                 members: widget.members,
                 currentMemberId: widget.currentMemberId,
@@ -162,10 +159,11 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 cameraTextureFor: widget.cameraTextureFor,
               ),
             ),
-            _VoiceToolbar(
+            VoiceRoomControls(
               controller: widget.controller,
               camera: widget.camera,
               goLive: widget.goLive,
+              soundboard: widget.soundboard,
             ),
           ],
         );
@@ -262,10 +260,7 @@ class _VoiceStage extends StatelessWidget {
 
   const _VoiceStage({
     required this.streamViewer,
-    required this.goLive,
-    required this.soundboard,
     required this.stageControls,
-    required this.channelName,
     required this.controller,
     required this.members,
     required this.currentMemberId,
@@ -284,14 +279,11 @@ class _VoiceStage extends StatelessWidget {
   final void Function(String userId)? onTapParticipant;
   final VoidCallback? onClearFocus;
 
-  final String channelName;
   final VoiceController controller;
   final List<Member> members;
   final String currentMemberId;
   final String spaceId;
   final Widget? stageControls;
-  final Widget? soundboard;
-  final Widget? goLive;
   final Widget? streamViewer;
   final VoiceStreamControls? streams;
   final ParticipantMenu? participantMenu;
@@ -356,38 +348,6 @@ class _VoiceStage extends StatelessWidget {
     final room = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  channelName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FlucordTextRole.heading.style,
-                ),
-              ),
-              ?soundboard,
-              const SizedBox(width: 12),
-              // Shares the row with the name on a narrow window, rather than
-              // pushing past its edge.
-              Flexible(
-                child: Text(
-                  voiceRoomStatusLabel(controller),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: controller.isTransportReady
-                        ? context.surfaces.success
-                        : context.surfaces.muted,
-                    fontSize: FlucordType.caption,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
         // What is wrong, rather than the old fixed sentence: a room that says
         // nothing is indistinguishable from one that is simply quiet.
         if (voiceRoomWarning(controller) case final warning?)
@@ -466,88 +426,4 @@ class _VoiceStage extends StatelessWidget {
       child: Focus(autofocus: true, child: room),
     );
   }
-}
-
-class _VoiceToolbar extends StatelessWidget {
-  const _VoiceToolbar({required this.controller, this.camera, this.goLive});
-
-  final VoiceController controller;
-  final SelfVideoController? camera;
-
-  /// The Go Live control, which is the room's only share button.
-  final Widget? goLive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: context.surfaces.surface,
-        border: Border(top: BorderSide(color: context.surfaces.border)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _controlButton(
-            context,
-            const ValueKey('voice-mute'),
-            VoiceControl.mute(controller),
-          ),
-          const SizedBox(width: 12),
-          _controlButton(
-            context,
-            const ValueKey('voice-deafen'),
-            VoiceControl.deafen(controller),
-          ),
-          if (camera case final camera? when camera.isSupported) ...[
-            const SizedBox(width: 12),
-            // Its own listener: the Room rebuilds with the voice controller,
-            // and the camera finishes turning on after that has announced it.
-            ListenableBuilder(
-              listenable: camera,
-              builder: (context, _) => _controlButton(
-                context,
-                const ValueKey('voice-camera'),
-                VoiceControl.camera(camera),
-              ),
-            ),
-          ],
-          // One share control, not two. The room used to carry a local
-          // capture button here and a Go Live button in the header, which
-          // looked like a choice and was not one: only Go Live puts a picture
-          // in the channel.
-          if (goLive case final control?) ...[
-            const SizedBox(width: 12),
-            control,
-          ],
-          const SizedBox(width: 12),
-          IconButton.filled(
-            key: const ValueKey('voice-disconnect'),
-            onPressed: controller.isConnected ? controller.disconnect : null,
-            tooltip: 'Disconnect',
-            style: IconButton.styleFrom(
-              backgroundColor: context.surfaces.danger,
-              foregroundColor: FlucordFixedColors.onFill,
-            ),
-            icon: const FlucordIcon(FlucordIcons.hangUp),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _controlButton(BuildContext context, Key key, VoiceControl control) =>
-      IconButton(
-        key: key,
-        onPressed: control.onPressed,
-        tooltip: control.tooltip,
-        style: IconButton.styleFrom(
-          backgroundColor: context.surfaces.raised,
-          foregroundColor: control.danger
-              ? context.surfaces.danger
-              : Theme.of(context).colorScheme.onSurface,
-          side: BorderSide(color: context.surfaces.border),
-        ),
-        icon: FlucordIcon(control.icon),
-      );
 }
