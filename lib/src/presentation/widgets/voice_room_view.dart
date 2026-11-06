@@ -283,18 +283,20 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    Widget grid(List<VoiceRoomTile> tiles, {required bool compact}) =>
-        VoiceParticipantGrid(
-          tiles: tiles,
-          members: members,
-          currentMemberId: currentMemberId,
-          spaceId: spaceId,
-          cameraTextureFor: cameraTextureFor,
-          streams: streams,
-          participantMenu: participantMenu,
-          onTapParticipant: onTapParticipant,
-          compact: compact,
-        );
+    VoiceParticipantGrid grid(
+      List<VoiceRoomTile> tiles, {
+      required bool compact,
+    }) => VoiceParticipantGrid(
+      tiles: tiles,
+      members: members,
+      currentMemberId: currentMemberId,
+      spaceId: spaceId,
+      cameraTextureFor: cameraTextureFor,
+      streams: streams,
+      participantMenu: participantMenu,
+      onTapParticipant: onTapParticipant,
+      compact: compact,
+    );
     final tiles = VoiceParticipantGrid.tilesOf(
       controller.participants,
       currentMemberId: currentMemberId,
@@ -314,37 +316,23 @@ class _VoiceStage extends StatelessWidget {
                 ? VoiceTileKind.person
                 : VoiceTileKind.stream,
           );
-    final stage = switch (onStage) {
-      null => null,
-      (:final participant, kind: VoiceTileKind.person) => VoiceParticipantTile(
-        key: const ValueKey('voice-stage-tile'),
-        participant: participant,
-        members: members,
-        currentMemberId: currentMemberId,
-        spaceId: spaceId,
-        cameraTextureFor: cameraTextureFor,
-        participantMenu: participantMenu,
-        onTap: onTapParticipant,
-        size: VoiceParticipantTileSize.stage,
-      ),
-      (:final participant, kind: VoiceTileKind.stream) => VoiceStreamTile(
-        participant: participant,
-        members: members,
-        currentMemberId: currentMemberId,
-        spaceId: spaceId,
-        streams: streams,
-        picture: streamViewer,
-        size: VoiceParticipantTileSize.stage,
-      ),
-    };
     // Every other tile sits in the strip under the Stage. A strip with
     // nothing left in it is not drawn at all.
-    final strip = [
+    final strip = grid([
       for (final tile in tiles)
         if (tile.participant.userId != onStage?.participant.userId ||
             tile.kind != onStage?.kind)
           tile,
-    ];
+    ], compact: true);
+    // Drawn as the strip draws its tiles, only larger.
+    final stage = onStage == null
+        ? null
+        : strip.tileFor(
+            onStage,
+            key: const ValueKey('voice-stage-tile'),
+            size: VoiceParticipantTileSize.stage,
+            picture: streamViewer,
+          );
     final onClearFocus = this.onClearFocus;
     final room = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -404,10 +392,10 @@ class _VoiceStage extends StatelessWidget {
                     spacing: 12,
                     children: [
                       Expanded(child: stage),
-                      if (strip.isNotEmpty)
+                      if (strip.tiles.isNotEmpty)
                         SizedBox(
                           height: VoiceParticipantGrid.stripHeight,
-                          child: grid(strip, compact: true),
+                          child: strip,
                         ),
                     ],
                   ),

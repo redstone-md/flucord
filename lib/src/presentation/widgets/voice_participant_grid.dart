@@ -144,35 +144,58 @@ class VoiceParticipantGrid extends StatelessWidget {
               ),
         itemCount: tiles.length,
         itemBuilder: (context, index) {
-          final (:participant, :kind) = tiles[index];
-          return switch (kind) {
-            VoiceTileKind.person => VoiceParticipantTile(
-              participant: participant,
-              members: members,
-              currentMemberId: currentMemberId,
-              spaceId: spaceId,
-              cameraTextureFor: cameraTextureFor,
-              participantMenu: participantMenu,
-              onTap: onTapParticipant,
-              size: size,
-              live:
-                  _sendsStream(participant, currentMemberId, streams) &&
-                  !streamTiles.contains(participant.userId),
-            ),
-            VoiceTileKind.stream => VoiceStreamTile(
-              participant: participant,
-              members: members,
-              currentMemberId: currentMemberId,
-              spaceId: spaceId,
-              streams: streams,
-              onTap: onTapParticipant,
-              size: size,
-            ),
-          };
+          final tile = tiles[index];
+          final userId = tile.participant.userId;
+          return tileFor(
+            tile,
+            size: size,
+            live:
+                _sendsStream(tile.participant, currentMemberId, streams) &&
+                !streamTiles.contains(userId),
+          );
         },
       ),
     );
   }
+
+  /// Draws [tile] at [size], the one way a Room draws a tile: the grid uses
+  /// it for each of its tiles, and the Room for its Stage. [live] marks a
+  /// person tile whose Stream has no tile beside it. [picture] is the
+  /// watched session's pictures, for a Stream on the Stage.
+  ///
+  /// A Stream on the Stage answers no single tap, which would hold up the
+  /// double click that opens it full screen.
+  Widget tileFor(
+    VoiceRoomTile tile, {
+    required VoiceParticipantTileSize size,
+    bool live = false,
+    Widget? picture,
+    Key? key,
+  }) => switch (tile) {
+    (:final participant, kind: VoiceTileKind.person) => VoiceParticipantTile(
+      key: key,
+      participant: participant,
+      members: members,
+      currentMemberId: currentMemberId,
+      spaceId: spaceId,
+      cameraTextureFor: cameraTextureFor,
+      participantMenu: participantMenu,
+      onTap: onTapParticipant,
+      size: size,
+      live: live,
+    ),
+    (:final participant, kind: VoiceTileKind.stream) => VoiceStreamTile(
+      key: key,
+      participant: participant,
+      members: members,
+      currentMemberId: currentMemberId,
+      spaceId: spaceId,
+      streams: streams,
+      picture: picture,
+      onTap: size == VoiceParticipantTileSize.stage ? null : onTapParticipant,
+      size: size,
+    ),
+  };
 
   /// How tall the strip under the Stage is, and how wide a tile in it.
   static const stripHeight = 104.0;
