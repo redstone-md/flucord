@@ -2,6 +2,7 @@ import 'chat_models.dart' show CommunityRole;
 import 'discord_permissions.dart';
 import 'discord_rgb.dart';
 import 'permission_overwrite.dart';
+import 'user_profile.dart' show ProfileImage, ProfileValue;
 
 part 'guild_ban.dart';
 part 'guild_channel_editing.dart';
@@ -9,6 +10,7 @@ part 'guild_invite.dart';
 part 'guild_member_editing.dart';
 part 'guild_position_deltas.dart';
 part 'guild_role_editing.dart';
+part 'guild_server_profile.dart';
 part 'guild_webhook.dart';
 
 /// The shared shape of every guild enum Discord numbers on the wire.

@@ -6,11 +6,14 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
+/// A poll with its results. A tap on an answer votes while the poll is open.
 class MessagePollView extends StatelessWidget {
   const MessagePollView({
     required this.poll,
     required this.canEnd,
     required this.onEnd,
+    this.onVote,
+    this.onShowVoters,
     super.key,
   });
 
@@ -18,10 +21,19 @@ class MessagePollView extends StatelessWidget {
   final bool canEnd;
   final VoidCallback onEnd;
 
+  /// Sends the account's whole new vote, or null where the session cannot
+  /// vote. An empty set takes the vote back.
+  final ValueChanged<Set<int>>? onVote;
+
+  /// Opens the list of who voted, or null where the session cannot list it.
+  final VoidCallback? onShowVoters;
+
   @override
   Widget build(BuildContext context) {
     final total = poll.totalVotes;
-    final ended = poll.isFinalized || _hasExpired(poll.expiry);
+    final ended = !poll.isOpenAt(DateTime.now());
+    final vote = ended ? null : onVote;
+    final ownVote = poll.ownVote;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: Column(
@@ -38,7 +50,13 @@ class MessagePollView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (final answer in poll.answers) ...[
-            _PollAnswerRow(answer: answer, total: total),
+            _PollAnswerRow(
+              answer: answer,
+              total: total,
+              onTap: vote == null
+                  ? null
+                  : () => vote(_toggled(ownVote, answer)),
+            ),
             if (answer != poll.answers.last) const SizedBox(height: 5),
           ],
           const SizedBox(height: 7),
@@ -53,16 +71,23 @@ class MessagePollView extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onShowVoters case final show? when total > 0)
+                _PollTextButton(
+                  key: const ValueKey('poll-voters'),
+                  label: 'Show voters',
+                  onPressed: show,
+                ),
+              if (vote != null && ownVote.isNotEmpty)
+                _PollTextButton(
+                  key: const ValueKey('poll-remove-vote'),
+                  label: 'Remove vote',
+                  onPressed: () => vote(const {}),
+                ),
               if (canEnd && !ended)
-                TextButton(
+                _PollTextButton(
                   key: const ValueKey('end-poll'),
+                  label: 'End poll',
                   onPressed: onEnd,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 28),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    textStyle: const TextStyle(fontSize: FlucordType.caption),
-                  ),
-                  child: const Text('End poll'),
                 ),
             ],
           ),
@@ -79,8 +104,12 @@ class MessagePollView extends StatelessWidget {
     return '$votes · ${_remaining(expiry)} · $selection';
   }
 
-  static bool _hasExpired(DateTime? expiry) =>
-      expiry != null && !expiry.isAfter(DateTime.now());
+  /// The vote after a tap on [answer]. A one-answer poll moves the vote to
+  /// it; a tap on the answer already chosen takes that answer back.
+  Set<int> _toggled(Set<int> ownVote, PollAnswer answer) {
+    if (ownVote.contains(answer.id)) return {...ownVote}..remove(answer.id);
+    return poll.allowMultiselect ? {...ownVote, answer.id} : {answer.id};
+  }
 
   static String _remaining(DateTime? expiry) {
     if (expiry == null) return 'No end time';
@@ -92,11 +121,40 @@ class MessagePollView extends StatelessWidget {
   }
 }
 
+class _PollTextButton extends StatelessWidget {
+  const _PollTextButton({
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      minimumSize: const Size(0, 28),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      textStyle: const TextStyle(fontSize: FlucordType.caption),
+    ),
+    child: Text(label),
+  );
+}
+
 class _PollAnswerRow extends StatelessWidget {
-  const _PollAnswerRow({required this.answer, required this.total});
+  const _PollAnswerRow({
+    required this.answer,
+    required this.total,
+    required this.onTap,
+  });
 
   final PollAnswer answer;
   final int total;
+
+  /// Votes, or null when the answer takes no vote.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +163,7 @@ class _PollAnswerRow extends StatelessWidget {
     return Semantics(
       label: '${answer.text}, $percent percent, ${answer.count} votes',
       selected: answer.votedByCurrentUser,
+      button: onTap != null,
       child: Container(
         key: ValueKey('poll-answer-${answer.id}'),
         height: 38,
@@ -158,6 +217,10 @@ class _PollAnswerRow extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            Material(
+              type: MaterialType.transparency,
+              child: InkWell(onTap: onTap),
             ),
           ],
         ),

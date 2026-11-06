@@ -14,11 +14,13 @@ import 'package:flucord/src/domain/guild_join_gate.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/moderation_report.dart';
 import 'package:flucord/src/domain/permission_overwrite.dart';
+import 'package:flucord/src/domain/user_profile.dart';
 
 part 'guild_management_repository_access_cases.dart';
 part 'guild_management_repository_automod_cases.dart';
 part 'guild_management_repository_bans_cases.dart';
 part 'guild_management_repository_join_gate_cases.dart';
+part 'guild_management_repository_profile_cases.dart';
 
 void main() {
   _serverAccessCases();
@@ -26,6 +28,8 @@ void main() {
   _automodCases();
 
   _joinGateCases();
+
+  _ownServerProfileCases();
 
   group('guild overview', () {
     test('reads and writes a partial patch', () async {
