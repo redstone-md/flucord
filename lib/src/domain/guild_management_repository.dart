@@ -117,6 +117,16 @@ abstract interface class GuildManagementRepository {
     String? reason,
   });
 
+  /// This account's own profile in [guildId]: nickname, avatar, banner, bio.
+  Future<OwnServerProfile> loadOwnServerProfile(String guildId);
+
+  /// Saves the touched fields of this account's server profile. A refusal
+  /// arrives as [ServerProfileRefusal].
+  Future<OwnServerProfile> saveOwnServerProfile({
+    required String guildId,
+    required ServerProfileEdit edit,
+  });
+
   Future<void> kickMember({
     required String guildId,
     required String userId,

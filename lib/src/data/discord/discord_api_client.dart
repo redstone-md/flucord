@@ -3,6 +3,7 @@ import '../../domain/reaction_repository.dart';
 import '../../domain/voice_message_recorder.dart';
 import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
+import 'discord_poll_routes.dart';
 import 'discord_voice_message_payload.dart';
 import 'discord_rest_client.dart';
 import 'discord_thread_directory.dart';
@@ -137,10 +138,7 @@ final class DiscordApiClient {
     return messages;
   }
 
-  Future<Map<String, Object?>> endPoll({
-    required String channelId,
-    required String messageId,
-  }) => _requestObject('POST', '/channels/$channelId/polls/$messageId/expire');
+  DiscordPollRoutes get polls => DiscordPollRoutes(_rest);
 
   Future<void> addReaction({
     required String channelId,

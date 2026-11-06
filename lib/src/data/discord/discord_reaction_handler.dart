@@ -32,26 +32,25 @@ final class DiscordReactionHandler {
         messageId: messageId,
       );
     }
-    final emojiPayload = event.data['emoji'];
-    if (emojiPayload is! Map) return null;
-    final emoji = emojiPayload.cast<String, Object?>();
-    final name = emoji['name'] as String?;
-    if (name == null) return null;
-    final id = emoji['id'] as String?;
+    if (event.name == 'MESSAGE_REACTION_ADD_MANY') {
+      return _batchFrom(event.data, channelId, messageId);
+    }
+    final emoji = _emojiFrom(event.data['emoji']);
+    if (emoji == null) return null;
     if (event.name == 'MESSAGE_REACTION_REMOVE_EMOJI') {
       return MessageReactionEmojiCleared(
         channelId: channelId,
         messageId: messageId,
-        emojiName: name,
-        emojiId: id,
+        emojiName: emoji.name,
+        emojiId: emoji.id,
       );
     }
     return MessageReactionCounted(
       channelId: channelId,
       messageId: messageId,
-      emojiName: name,
-      emojiId: id,
-      animated: emoji['animated'] as bool? ?? false,
+      emojiName: emoji.name,
+      emojiId: emoji.id,
+      animated: emoji.animated,
       added: event.name == 'MESSAGE_REACTION_ADD',
       byCurrentUser: event.data['user_id'] == _currentMemberId(),
       type: event.data['type'] == DiscordReactionType.burst.discordValue
@@ -62,6 +61,53 @@ final class DiscordReactionHandler {
           .map(DiscordColor.parseHex)
           .whereType<int>()
           .toList(growable: false),
+    );
+  }
+
+  /// `MESSAGE_REACTION_ADD_MANY`: Discord folds a quick run of added reactions
+  /// into one dispatch, listing who reacted with each emoji. It names no type,
+  /// so each one counts as a normal reaction.
+  MessageReactionBatch? _batchFrom(
+    Map<String, Object?> data,
+    String channelId,
+    String messageId,
+  ) {
+    final currentMemberId = _currentMemberId();
+    final changes = [
+      for (final entry
+          in (data['reactions'] as List? ?? const []).whereType<Map>())
+        if (_emojiFrom(entry['emoji']) case final emoji?)
+          for (final userId in (entry['users'] as List? ?? const []))
+            MessageReactionCounted(
+              channelId: channelId,
+              messageId: messageId,
+              emojiName: emoji.name,
+              emojiId: emoji.id,
+              animated: emoji.animated,
+              added: true,
+              byCurrentUser: userId == currentMemberId,
+              type: DiscordReactionType.normal,
+              burstColors: const [],
+            ),
+    ];
+    if (changes.isEmpty) return null;
+    return MessageReactionBatch(
+      channelId: channelId,
+      messageId: messageId,
+      changes: changes,
+    );
+  }
+
+  /// The partial emoji a reaction dispatch carries, or null when it has no
+  /// name to match a reaction by.
+  ({String name, String? id, bool animated})? _emojiFrom(Object? payload) {
+    if (payload is! Map) return null;
+    final name = payload['name'];
+    if (name is! String) return null;
+    return (
+      name: name,
+      id: payload['id'] as String?,
+      animated: payload['animated'] as bool? ?? false,
     );
   }
 }

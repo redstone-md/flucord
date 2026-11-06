@@ -2,6 +2,8 @@ import '../../domain/chat_cache.dart';
 import '../../domain/chat_repository.dart';
 import 'discord_gateway_client.dart';
 
+/// Applies `MESSAGE_POLL_VOTE_ADD` and `MESSAGE_POLL_VOTE_REMOVE` to the
+/// cached poll, one vote at a time.
 final class DiscordPollVoteHandler {
   const DiscordPollVoteHandler(this._cache, this._currentMemberId);
 
@@ -21,6 +23,9 @@ final class DiscordPollVoteHandler {
     final add = event.name == 'MESSAGE_POLL_VOTE_ADD';
     final byCurrentUser = event.data['user_id'] == _currentMemberId();
     final current = answers[index];
+    // The vote route counts the account's own vote when it answers, so the
+    // dispatch that echoes it finds nothing left to change.
+    if (byCurrentUser && current.votedByCurrentUser == add) return null;
     answers[index] = current.copyWith(
       count: (current.count + (add ? 1 : -1)).clamp(0, 0x7fffffff),
       votedByCurrentUser: byCurrentUser ? add : current.votedByCurrentUser,

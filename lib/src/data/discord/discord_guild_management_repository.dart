@@ -2,6 +2,7 @@ import '../../domain/automod_rule.dart';
 import '../../domain/automod_rule_editing.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_audit_log.dart';
+import '../../domain/guild_join_gate.dart';
 import '../../domain/guild_management.dart';
 import '../../domain/guild_management_repository.dart';
 import 'discord_automod_mapper.dart';
@@ -12,6 +13,7 @@ import 'discord_rest_client.dart';
 part 'discord_guild_management_access.dart';
 part 'discord_guild_management_automod.dart';
 part 'discord_guild_management_channels.dart';
+part 'discord_guild_management_join_gate.dart';
 part 'discord_guild_management_members.dart';
 part 'discord_guild_management_moderation.dart';
 part 'discord_guild_management_webhooks.dart';
@@ -36,7 +38,8 @@ final class DiscordGuildManagementRepository
         _DiscordGuildMemberAdministration,
         _DiscordGuildModeration,
         _DiscordGuildAutoMod,
-        _DiscordGuildWebhooks
+        _DiscordGuildWebhooks,
+        _DiscordGuildJoinGate
     implements GuildManagementRepository {
   DiscordGuildManagementRepository(this._rest, {DiscordMapper? mapper})
     : _mapper = mapper ?? DiscordMapper();
