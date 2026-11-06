@@ -589,6 +589,7 @@ final class AppComposition {
         repositoryProvider: () => chat.soundboard,
         connectedChannelId: () => voice.connectedChannelId,
         player: bootstrap.soundboardAudioPlayer ?? MediaKitSoundboardPlayer(),
+        isSenderMuted: voice.isSoundboardMuted,
       ),
     );
     // The camera reads the live voice session rather than being handed one:

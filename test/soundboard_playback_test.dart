@@ -89,6 +89,39 @@ void main() {
     },
   );
 
+  test('a sender whose soundboard is muted is recorded, not played', () async {
+    final repository = _FakeRepository(
+      sounds: const [
+        SoundboardSound(id: '10', name: 'airhorn', guildId: 'guild-1'),
+      ],
+    );
+    final player = _FakePlayer();
+    final controller = SoundboardPlaybackController(
+      repositoryProvider: () => repository,
+      connectedChannelId: () => 'voice-1',
+      player: player,
+      isSenderMuted: (userId) => userId == 'loud',
+    )..reconcile();
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    SoundboardPlayback from(String userId) => SoundboardPlayback(
+      channelId: 'voice-1',
+      userId: userId,
+      soundId: '10',
+      guildId: 'guild-1',
+    );
+    repository.send(from('loud'));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.lastPlayed?.userId, 'loud');
+    expect(player.played, isEmpty);
+
+    repository.send(from('quiet'));
+    await Future<void>.delayed(Duration.zero);
+    expect(player.played, hasLength(1));
+  });
+
   test('a room this client is not in stays silent', () async {
     final repository = _FakeRepository(
       sounds: const [
