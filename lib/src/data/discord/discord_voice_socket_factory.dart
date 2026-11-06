@@ -16,7 +16,7 @@ import 'discord_voice_websocket.dart';
 ///   the credentials' channel already names: the RTC channel the create
 ///   assigned the stream to;
 /// - a stream socket says at identify that it carries a screen. One that
-///   does not is closed with `identifyRefused` as soon as it finishes
+///   does not is closed with code 4017 as soon as it finishes
 ///   connecting;
 /// - a session without DAVE offers version 0, which is what tells Discord to
 ///   stay on the transport cipher rather than negotiating a group.

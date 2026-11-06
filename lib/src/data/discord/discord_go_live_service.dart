@@ -217,7 +217,7 @@ final class DiscordGoLiveService implements GoLiveRepository {
           // carries neither. A stream lives on its own RTC server and its own
           // channel there, and identifying with the guild and the voice
           // channel is refused: `sessionInvalid` for the one,
-          // `identifyRefused` for the other.
+          // close code 4017 for the other.
           rtcServerId: _streams[key.value]?.rtcServerId ?? '',
           rtcChannelId: _streams[key.value]?.rtcChannelId ?? '',
         ),

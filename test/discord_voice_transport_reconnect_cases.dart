@@ -113,13 +113,13 @@ final class _FlakyVoiceServer implements DiscordVoiceSocketConnector {
 
   /// When each dial came, on the fake clock.
   final List<Duration> dialledAt = [];
-  final List<_FakeVoiceWebSocket> sockets = [];
+  final List<FakeVoiceWebSocket> sockets = [];
 
   @override
   Future<DiscordVoiceWebSocket> connect(Uri uri) async {
     dialledAt.add(_async.elapsed);
     if (!reachable) throw const SocketException('Connection refused');
-    final socket = _FakeVoiceWebSocket();
+    final socket = FakeVoiceWebSocket();
     sockets.add(socket);
     return socket;
   }

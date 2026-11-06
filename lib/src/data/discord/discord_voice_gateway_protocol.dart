@@ -181,10 +181,12 @@ abstract final class DiscordVoiceCloseCodes {
   /// NAT mapping to expire is closed with this as well.
   static const serverMoved = 4014;
 
-  /// The connection did not match what its identify claimed: a stream socket
-  /// that did not declare its stream or its screen, or one identifying with
-  /// the voice channel instead of the stream's RTC channel.
-  static const identifyRefused = 4017;
+  /// "E2EE/DAVE protocol required", in Discord's voice close codes: the room
+  /// needs a client that speaks DAVE, and this one offered none. A stream
+  /// socket that did not declare its stream or its screen, or identified with
+  /// the voice channel instead of the stream's RTC channel, was closed with
+  /// it too.
+  static const daveRequired = 4017;
 
   /// The main gateway session this connection identified with expired, which
   /// is what happens when that gateway reconnected and was handed a new one.
@@ -216,7 +218,7 @@ final class DiscordVoiceGatewayProtocol {
   /// A stream server carries many at once and is told which by key. Nothing
   /// else in the identify names one: the RTC server id it was given is per
   /// stream, but the server answers an identify without the key with
-  /// `identifyRefused`.
+  /// close code 4017.
   final String? streamKey;
   int sequenceAck = -1;
 
@@ -314,6 +316,9 @@ final class DiscordVoiceGatewayProtocol {
 
   /// Triage for the code the server closed the socket with.
   DiscordVoiceGatewayAction closedWithCode(int? code) {
+    if (code == DiscordVoiceCloseCodes.daveRequired) {
+      return const DiscordVoiceGatewayFail(VoiceEncryptionRequiredException());
+    }
     if (code != null && _sessionEndedCodes.contains(code)) {
       return DiscordVoiceGatewayAwaitCredentials(
         StateError('Discord ended the voice session (code $code)'),
@@ -345,7 +350,6 @@ final class DiscordVoiceGatewayProtocol {
     DiscordGatewayCloseCodes.authenticationFailed,
     4009,
     4011,
-    DiscordVoiceCloseCodes.identifyRefused,
     4020,
     4021,
   };
@@ -393,7 +397,7 @@ final class DiscordVoiceGatewayProtocol {
   /// four identifying fields.
   ///
   /// A Go Live connection declares the stream it is there to carry. Discord
-  /// closes one that does not with `identifyRefused` the moment it finishes
+  /// closes one that does not with close code 4017 the moment it finishes
   /// connecting, which is what every share and every attempt to watch
   /// somebody was doing. `rid` "100" and quality 100 are the single
   /// full-quality layer; simulcast would list more.
