@@ -9,33 +9,55 @@ extension ChatControllerReactions on ChatController {
   bool get canSendSuperReactions => _repository is SuperReactionRepository;
 
   /// Adds the account's super reaction to [reaction], or takes it back.
-  Future<void> toggleSuperReaction(
+  ///
+  /// False when Discord refused it, as it does once the account has none
+  /// left; [error] then says why. Nothing changes on screen before Discord
+  /// confirms, so there is nothing to roll back.
+  Future<bool> toggleSuperReaction(
     ChatMessage message,
     MessageReaction reaction,
+  ) => _superReacting(
+    (repository) => reaction.burstByCurrentUser
+        ? repository.removeSuperReaction(
+            channelId: message.channelId,
+            messageId: message.id,
+            emoji: reaction.key,
+          )
+        : repository.addSuperReaction(
+            channelId: message.channelId,
+            messageId: message.id,
+            emoji: reaction.key,
+          ),
+  );
+
+  /// Adds the account's super reaction of [emoji], as [toggleSuperReaction].
+  Future<bool> addSuperReaction(ChatMessage message, String emoji) =>
+      _superReacting(
+        (repository) => repository.addSuperReaction(
+          channelId: message.channelId,
+          messageId: message.id,
+          emoji: emoji,
+        ),
+      );
+
+  Future<bool> _superReacting(
+    Future<void> Function(SuperReactionRepository repository) send,
   ) async {
     if (_repository case final SuperReactionRepository repository) {
-      await (reaction.burstByCurrentUser
-          ? repository.removeSuperReaction(
-              channelId: message.channelId,
-              messageId: message.id,
-              emoji: reaction.key,
-            )
-          : repository.addSuperReaction(
-              channelId: message.channelId,
-              messageId: message.id,
-              emoji: reaction.key,
-            ));
+      try {
+        await send(repository);
+        return true;
+      } on Object catch (error) {
+        AppLog.warning(
+          'chat.reaction',
+          'A super reaction failed',
+          error: error,
+        );
+        _error = error;
+        _notify();
+      }
     }
-  }
-
-  Future<void> addSuperReaction(ChatMessage message, String emoji) async {
-    if (_repository case final SuperReactionRepository repository) {
-      await repository.addSuperReaction(
-        channelId: message.channelId,
-        messageId: message.id,
-        emoji: emoji,
-      );
-    }
+    return false;
   }
 
   Future<ReactionUsersPage> loadReactionUsers(
