@@ -63,7 +63,8 @@ class RepositoryPrivacyAudit {
     # is fewer than twenty such stretches since 2015, so a real id of this
     # shape is very unlikely, and a match is taken for a fixture. Naming each
     # fixture id instead would grow this list with every test.
-    # test/repository_snowflake_test.dart applies the same pattern.
+    # tool/repository_text_rules.dart applies the same pattern before a
+    # commit and in the tests.
     $this.FixtureSnowflakePattern = [regex]::new('^[1-9]0{9,}[0-9]{0,8}$')
 
     $privateKey = 'BEGIN\s+(?:(?:RSA|EC|OPENSSH|DSA)\s+)?' +

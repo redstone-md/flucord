@@ -45,7 +45,9 @@ To try the interface with demo data and no account, add
 `--dart-define=FLUCORD_DEMO_MODE=true`.
 
 Before you open a pull request, run `flutter analyze`, `flutter test` and
-`.\tool\audit_public_repository.ps1`. Planned work is in
+`.\tool\audit_public_repository.ps1`. To check each commit for realistic
+Discord ids and em dashes before history keeps them, run
+`git config core.hooksPath .githooks` once. Planned work is in
 [roadmap.md](roadmap.md), and the other docs are in [docs/](docs).
 
 ## License

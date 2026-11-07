@@ -2,18 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// The working-tree half of the snowflake rule in
-/// tool/audit_public_repository.ps1. The audit reads the whole history, but
-/// only in CI; this test catches a realistic id while it is still a local
-/// edit, before history keeps it forever. The patterns match the audit's.
-final _snowflake = RegExp(r'(?<![0-9A-Fa-f])[0-9]{17,20}(?![0-9A-Fa-f])');
-final _fixtureShape = RegExp(r'^[1-9]0{9,}[0-9]{0,8}$');
-
-Set<String> _allowedSnowflakes() => File('tool/allowed_snowflakes.txt')
-    .readAsLinesSync()
-    .map((line) => line.trim())
-    .where((line) => line.isNotEmpty && !line.startsWith('#'))
-    .toSet();
+import '../tool/repository_text_rules.dart';
 
 void main() {
   test('tracked and new files carry no realistic Discord ids', () {
@@ -28,27 +17,46 @@ void main() {
     ]);
     expect(grep.exitCode, anyOf(0, 1), reason: '${grep.stderr}');
 
-    final allowed = _allowedSnowflakes();
+    final allowed = readAllowedSnowflakes();
     final offenders = <String>[];
     for (final match in (grep.stdout as String).split('\n')) {
       final separator = match.indexOf(':', match.indexOf(':') + 1);
       if (separator < 0) continue;
-      for (final id in _snowflake.allMatches(match.substring(separator + 1))) {
-        final value = id[0]!;
-        if (!allowed.contains(value) && !_fixtureShape.hasMatch(value)) {
-          offenders.add('${match.substring(0, separator)}: $value');
-        }
+      for (final id in realisticSnowflakes(
+        match.substring(separator + 1),
+        allowed,
+      )) {
+        offenders.add('${match.substring(0, separator)}: $id');
       }
     }
 
     expect(
       offenders,
       isEmpty,
-      reason:
-          'Use a fixture-shaped id (one non-zero digit, at least nine zeroes, '
-          'a short count: 100000000000000221). A value that is already in '
-          'history and names no one goes in tool/allowed_snowflakes.txt with '
-          'a comment:\n${offenders.join('\n')}',
+      reason: '$snowflakeAdvice\n${offenders.join('\n')}',
     );
+  });
+
+  test('a commit is checked on the lines it adds, where they land', () {
+    // Split so this file carries no realistic id of its own.
+    const leaked =
+        '1139323097930027'
+        '999';
+    const diff =
+        'diff --git a/test/a_test.dart b/test/a_test.dart\n'
+        '--- a/test/a_test.dart\n'
+        '+++ b/test/a_test.dart\n'
+        '@@ -3,0 +4,3 @@\n'
+        "+const fixture = '100000000000000221';\n"
+        "+const leaked = '$leaked';\n"
+        '+++ looks like a header \u2014 but is an added line\n'
+        '@@ -20 +23 @@\n'
+        "-const removed = '$leaked';\n"
+        "+const allowed = '1139323097930027002';\n";
+
+    expect(addedLineProblems(diff, {'1139323097930027002'}), [
+      'test/a_test.dart:5: realistic Discord id $leaked',
+      'test/a_test.dart:6: em dash',
+    ]);
   });
 }
