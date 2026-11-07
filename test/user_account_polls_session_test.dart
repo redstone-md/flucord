@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +97,29 @@ void main() {
 
     expect(find.textContaining('1 vote'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
+  });
+
+  testSession('a vote from somebody else that lands while the own vote is '
+      'answered still counts', (tester, session) async {
+    session.transport.on('PUT', _votePath, (_) {
+      // Discord sends the friend's vote while it answers the account's own.
+      unawaited(
+        session.dispatch(
+          'MESSAGE_POLL_VOTE_ADD',
+          _vote(2, userId: SessionHarness.friendId),
+          settle: false,
+        ),
+      );
+      return const DiscordHttpResponse(statusCode: 204, headers: {}, body: '');
+    });
+    await session.openChannel(SessionHarness.channelId);
+    await session.dispatch('MESSAGE_CREATE', _poll());
+
+    await tester.tap(find.byKey(const ValueKey('poll-answer-1')));
+    await session.settle();
+
+    expect(find.textContaining('2 votes'), findsOneWidget);
+    expect(find.text('50%'), findsNWidgets(2));
   });
 
   testSession('the voters of an answer are listed', (tester, session) async {

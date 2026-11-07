@@ -178,6 +178,18 @@ final class DiscordSharedDispatches {
     });
   }
 
+  /// Runs [step] on the same queue as the dispatches, as [inOrder] does, and
+  /// hands its result or its failure back to the caller.
+  ///
+  /// For a write of the repository's own that reads a cached message first,
+  /// so a dispatch about the same message cannot land between the read and
+  /// the write and be lost.
+  Future<T> queued<T>(Future<T> Function() step) {
+    final done = _lastStep.then((_) => step());
+    _lastStep = done.then((_) {}, onError: (_) {});
+    return done;
+  }
+
   Future<void> _deleteMessage(Map<String, Object?> data) async {
     final messageId = data['id'] as String?;
     final channelId = data['channel_id'] as String?;

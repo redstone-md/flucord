@@ -828,8 +828,10 @@ final class DiscordDesktopChatRepository
     fallback: await _cache.readMessage(messageId),
   );
 
-  /// Discord answers a vote with no body, so the vote is counted here. The
-  /// account's own vote dispatches that follow then change nothing.
+  /// Discord answers a vote with no body, so the vote is counted here, on the
+  /// dispatch queue so a vote from somebody else is not written over. The
+  /// count only marks the account's own vote, so it and the dispatches that
+  /// echo it change nothing a second time, in whichever order they come.
   @override
   Future<ChatMessage> votePoll({
     required String channelId,
@@ -841,14 +843,16 @@ final class DiscordDesktopChatRepository
       messageId: messageId,
       answerIds: answerIds.toList()..sort(),
     );
-    final held = await _cache.readMessage(messageId);
-    final poll = held?.poll;
-    if (held == null || poll == null) {
-      throw StateError('Poll message $messageId is not in the cache');
-    }
-    final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
-    await _cache.writeMessage(voted);
-    return voted;
+    return _sharedDispatches.queued(() async {
+      final held = await _cache.readMessage(messageId);
+      final poll = held?.poll;
+      if (held == null || poll == null) {
+        throw StateError('Poll message $messageId is not in the cache');
+      }
+      final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
+      await _cache.writeMessage(voted);
+      return voted;
+    });
   }
 
   @override
