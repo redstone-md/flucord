@@ -266,6 +266,12 @@ class MessageComposerState extends State<MessageComposer>
       }
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
+    } else if (!channelChanged &&
+        oldWidget.onSendVoiceMessage != null &&
+        widget.onSendVoiceMessage == null) {
+      // Voice messages were taken away here mid recording: there is nothing
+      // left to send it with.
+      _discardVoiceState(widget.voiceMessageRecorder);
     }
     _updateAutocompleteCatalog(channelChanged: channelChanged);
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {

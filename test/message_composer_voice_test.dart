@@ -99,6 +99,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('losing the voice message permission ends the recording', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recorder = FakeVoiceMessageRecorder();
+    addTearDown(recorder.dispose);
+
+    await tester.pumpWidget(
+      _composerApp(recorder: recorder, onSendVoiceMessage: (_, _) {}),
+    );
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+
+    await tester.pumpWidget(
+      _composerApp(recorder: recorder, onSendVoiceMessage: null),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('send-voice-message')), findsNothing);
+    expect(recorder.cancelCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the frames a stop hands over still count', (tester) async {
     final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
@@ -217,7 +241,7 @@ void main() {
 Widget _composerApp({
   String channelId = 'channel-1',
   required FakeVoiceMessageRecorder recorder,
-  required SendVoiceMessageCallback onSendVoiceMessage,
+  required SendVoiceMessageCallback? onSendVoiceMessage,
 }) => MaterialApp(
   theme: FlucordTheme.dark,
   home: Scaffold(
