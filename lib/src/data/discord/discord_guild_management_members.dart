@@ -67,11 +67,11 @@ mixin _DiscordGuildMemberAdministration {
 
   String _ownBase(String guildId) => '/guilds/${_segment(guildId)}/members/@me';
 
-  /// `GET /guilds/{id}/members/@me`, the private member object, which is the
-  /// one that carries the server bio and banner.
+  /// `GET /users/@me/guilds/{id}/member`, the private member object, which
+  /// is the one that carries the server bio and banner.
   Future<OwnServerProfile> loadOwnServerProfile(String guildId) async =>
       DiscordGuildAdminMapper.ownServerProfile(
-        await _rest.getObject(_ownBase(guildId)),
+        await _rest.getObject('/users/@me/guilds/${_segment(guildId)}/member'),
         guildId: guildId,
       );
 

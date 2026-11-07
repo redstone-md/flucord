@@ -12,6 +12,8 @@ final _editProfile = find.byKey(const ValueKey('edit-server-profile'));
 
 const _invitesPath = '/api/v9/channels/${SessionHarness.channelId}/invites';
 const _ownMemberPath = '/api/v9/guilds/${SessionHarness.guildId}/members/@me';
+const _readOwnMemberPath =
+    '/api/v9/users/@me/guilds/${SessionHarness.guildId}/member';
 const _me = {'id': SessionHarness.currentUserId, 'username': 'me'};
 const _myMessageId = '900000000000000007';
 
@@ -148,7 +150,7 @@ void main() {
         )
         ..on(
           'GET',
-          _ownMemberPath,
+          _readOwnMemberPath,
           (_) => jsonResponse({'user': _me, 'roles': <Object?>[]}),
         )
         ..on(

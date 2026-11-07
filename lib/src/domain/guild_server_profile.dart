@@ -1,7 +1,7 @@
 part of 'guild_management.dart';
 
 /// What this account set for itself in one server, as
-/// `GET /guilds/{id}/members/@me` answers it.
+/// `GET /users/@me/guilds/{id}/member` answers it.
 ///
 /// Each field is null (or empty, for the bio) where the server profile sets
 /// nothing, and the account's own profile shows instead.

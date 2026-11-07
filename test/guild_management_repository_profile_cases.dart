@@ -1,7 +1,7 @@
 part of 'guild_management_repository_test.dart';
 
-/// The account's own server profile: `GET` and `PATCH
-/// /guilds/{id}/members/@me`.
+/// The account's own server profile: `GET /users/@me/guilds/{id}/member`
+/// and `PATCH /guilds/{id}/members/@me`.
 void _ownServerProfileCases() {
   group('own server profile', () {
     test('reads the nickname, avatar, banner and bio of one server', () async {
@@ -22,7 +22,7 @@ void _ownServerProfileCases() {
       expect(transport.requests.single.method, 'GET');
       expect(
         transport.requests.single.uri.path,
-        endsWith('/guilds/111111111111111111/members/@me'),
+        endsWith('/users/@me/guilds/111111111111111111/member'),
       );
       expect(profile.nickname, 'Forge Mira');
       expect(profile.avatarHash, 'a1b2');
