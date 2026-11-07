@@ -4,15 +4,14 @@ mixin _DiscordDesktopChatRepositoryScheduledEvents
     implements ScheduledEventRepository {
   DiscordDesktopApiClient get _api;
   DiscordMapper get _mapper;
+  DiscordScheduledEvents get _scheduledEvents;
 
   @override
-  Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
-    final payloads = await _api.getGuildScheduledEvents(spaceId);
-    return [
-      for (final payload in payloads)
-        ?_mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId),
-    ]..sort(GuildScheduledEvent.compareForDisplay);
-  }
+  Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) =>
+      _scheduledEvents.load(
+        spaceId,
+        () => _api.getGuildScheduledEvents(spaceId),
+      );
 
   @override
   Future<List<GuildScheduledEventAttendee>> loadEventAttendees({

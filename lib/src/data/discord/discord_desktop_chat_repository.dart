@@ -69,6 +69,7 @@ import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
+import 'discord_scheduled_events.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
@@ -264,6 +265,11 @@ final class DiscordDesktopChatRepository
     _events.publish,
     onChannelAdded: _readState.addPrivateChannel,
   );
+
+  @override
+  DiscordScheduledEvents get _scheduledEvents =>
+      _sharedDispatches.scheduledEvents;
+
   @override
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(

@@ -13,6 +13,7 @@ import 'discord_poll_vote_handler.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_role_dispatch.dart';
+import 'discord_scheduled_events.dart';
 
 /// The gateway dispatches that the bot and desktop transports answer the same
 /// way.
@@ -45,6 +46,7 @@ final class DiscordSharedDispatches {
          events.publish,
        ),
        _channels = DiscordChannelHandler(cache, mapper, events.publish),
+       scheduledEvents = DiscordScheduledEvents(cache, mapper, events.publish),
        _pollVotes = DiscordPollVoteHandler(cache, currentMemberId);
 
   final ChatCache _cache;
@@ -56,6 +58,9 @@ final class DiscordSharedDispatches {
   final DiscordMessageUpdateHandler _updates;
   final DiscordChannelHandler _channels;
   final DiscordPollVoteHandler _pollVotes;
+
+  /// A server's scheduled events, read through the cache by either transport.
+  final DiscordScheduledEvents scheduledEvents;
 
   /// The step added last. See [inOrder].
   Future<void> _lastStep = Future.value();
@@ -154,6 +159,8 @@ final class DiscordSharedDispatches {
         }
       case 'PRESENCE_UPDATE':
         unawaited(_presenceIdentity(event.data));
+      case final name when name.startsWith('GUILD_SCHEDULED_EVENT_'):
+        unawaited(scheduledEvents.apply(event));
     }
   }
 

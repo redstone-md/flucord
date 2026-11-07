@@ -55,6 +55,7 @@ import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_mapper.dart';
+import 'discord_scheduled_events.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
@@ -160,6 +161,10 @@ final class DiscordChatRepository
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   @override
   String? _currentMemberId;
+  @override
+  DiscordScheduledEvents get _scheduledEvents =>
+      _sharedDispatches.scheduledEvents;
+
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(
         cache: _cache,
