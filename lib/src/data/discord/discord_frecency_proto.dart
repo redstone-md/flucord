@@ -11,6 +11,7 @@ abstract final class FrecencyUserSettingsField {
   static const stickerFrecency = 4;
   static const favoriteEmojis = 5;
   static const emojiFrecency = 6;
+  static const favoriteSoundboardSounds = 8;
 }
 
 abstract final class FavoriteGifsField {
@@ -36,6 +37,11 @@ abstract final class FavoriteEmojisField {
   static const emojis = 1;
 }
 
+abstract final class FavoriteSoundboardSoundsField {
+  /// `repeated fixed64` — snowflakes, written packed.
+  static const soundIds = 1;
+}
+
 /// Field numbers inside `FrecencyItem`, which every frecency table holds.
 abstract final class FrecencyItemField {
   static const totalUses = 1;
@@ -52,11 +58,11 @@ abstract final class ProtoMapEntryField {
 
 /// Reads and writes the favourites held in `FrecencyUserSettings`.
 ///
-/// The three favourite groups are read and written; the two frecency tables
+/// The four favourite groups are read and written; the two frecency tables
 /// are read but never written, because counting a use is the server's job and
 /// a client that wrote its own figures would fight whatever the other sessions
-/// had counted. Everything else — soundboard sounds, the command histories —
-/// is left in the buffer untouched, because a write replaces the whole blob
+/// had counted. Everything else, such as the sound and command histories, is
+/// left in the buffer untouched, because a write replaces the whole blob
 /// and a codec that dropped what it did not understand would wipe those groups
 /// off the account on the first starred GIF.
 abstract final class DiscordFrecencyProtoCodec {
@@ -67,6 +73,9 @@ abstract final class DiscordFrecencyProtoCodec {
     final gifsGroup = root.messageAt(FrecencyUserSettingsField.favoriteGifs);
     final stickers = root.messageAt(FrecencyUserSettingsField.favoriteStickers);
     final emojis = root.messageAt(FrecencyUserSettingsField.favoriteEmojis);
+    final sounds = root.messageAt(
+      FrecencyUserSettingsField.favoriteSoundboardSounds,
+    );
     return ExpressionFavorites(
       gifs: _decodeGifs(gifsGroup),
       hideGifTooltip: gifsGroup?.boolAt(FavoriteGifsField.hideTooltip) ?? false,
@@ -77,6 +86,12 @@ abstract final class DiscordFrecencyProtoCodec {
           _snowflakeOf(id),
       ],
       emojis: emojis?.stringsAt(FavoriteEmojisField.emojis) ?? const [],
+      soundIds: [
+        for (final id
+            in sounds?.fixed64ListAt(FavoriteSoundboardSoundsField.soundIds) ??
+                const <int>[])
+          _snowflakeOf(id),
+      ],
       stickerFrecency: _decodeFrecency(
         root.messageAt(FrecencyUserSettingsField.stickerFrecency),
         keyed: _snowflakeKey,
@@ -98,10 +113,17 @@ abstract final class DiscordFrecencyProtoCodec {
       )
       ..setMessage(
         FrecencyUserSettingsField.favoriteStickers,
-        ProtoMessage()..setFixed64List(FavoriteStickersField.stickerIds, [
-          for (final id in favorites.stickerIds)
-            if (int.tryParse(id) case final int value) value,
-        ]),
+        ProtoMessage()..setFixed64List(
+          FavoriteStickersField.stickerIds,
+          _fixed64s(favorites.stickerIds),
+        ),
+      )
+      ..setMessage(
+        FrecencyUserSettingsField.favoriteSoundboardSounds,
+        ProtoMessage()..setFixed64List(
+          FavoriteSoundboardSoundsField.soundIds,
+          _fixed64s(favorites.soundIds),
+        ),
       )
       ..setMessage(
         FrecencyUserSettingsField.favoriteEmojis,
@@ -110,6 +132,13 @@ abstract final class DiscordFrecencyProtoCodec {
       );
     return next;
   }
+
+  /// Snowflakes as fixed64 values. One that is not a number is skipped: a
+  /// fixed64 cannot carry it, and a zero would star something nobody starred.
+  static List<int> _fixed64s(List<String> ids) => [
+    for (final id in ids)
+      if (int.tryParse(id) case final int value) value,
+  ];
 
   /// Whether the GIF group would still fit once written.
   ///

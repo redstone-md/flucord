@@ -282,6 +282,24 @@ void main() {
       ]);
     });
 
+    test('starred sounds sit where Discord keeps them', () {
+      // favorite_soundboard_sounds is field 8 of FrecencyUserSettings, and
+      // holds `repeated fixed64 sound_ids = 1`.
+      final starred = ProtoMessage()
+        ..setMessage(8, ProtoMessage()..setFixed64List(1, [3, 1000000000001]));
+
+      expect(DiscordFrecencyProtoCodec.decodeMessage(starred).soundIds, [
+        '3',
+        '1000000000001',
+      ]);
+
+      final written = DiscordFrecencyProtoCodec.apply(
+        ProtoMessage(),
+        const ExpressionFavorites(soundIds: ['7', '1000000000002']),
+      );
+      expect(written.messageAt(8)?.fixed64ListAt(1), [7, 1000000000002]);
+    });
+
     test('a sticker id that is not a number is not written', () {
       // Nothing should ever put one here, but a fixed64 cannot carry it and
       // silently writing a zero would favourite a sticker nobody starred.
@@ -624,6 +642,26 @@ void main() {
         isFalse,
       );
       expect(transport.writes, isEmpty);
+    });
+
+    test('a sound is starred and unstarred', () async {
+      final transport = _FakeTransport();
+      final store = DiscordExpressionFavoritesRepository(transport);
+      addTearDown(store.close);
+
+      expect(
+        await store.setSoundFavorite(soundId: '7', favorite: true),
+        isTrue,
+      );
+      expect(store.current.isFavoriteSound('7'), isTrue);
+      expect(_decodeWrite(transport).soundIds, ['7']);
+      // Already there: the answer is yes, and no request goes out.
+      await store.setSoundFavorite(soundId: '7', favorite: true);
+      expect(transport.writes.length, 1);
+
+      await store.setSoundFavorite(soundId: '7', favorite: false);
+      expect(store.current.soundIds, isEmpty);
+      expect(_decodeWrite(transport).soundIds, isEmpty);
     });
 
     test('an emoji is starred and unstarred', () async {

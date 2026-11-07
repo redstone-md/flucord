@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/expression_favorites.dart';
 
-/// Drives the star on a GIF, a sticker or an emoji.
+/// Drives the star on a GIF, a sticker, an emoji or a soundboard sound.
 ///
 /// The favourites blob is not in `READY`, so this loads it the first time a
 /// picker asks. Every write answers whether it was taken, and a refusal is
@@ -43,6 +43,8 @@ final class ExpressionFavoritesController extends ChangeNotifier {
       favorites.isFavoriteSticker(stickerId);
 
   bool isFavoriteEmoji(String idOrName) => favorites.isFavoriteEmoji(idOrName);
+
+  bool isFavoriteSound(String soundId) => favorites.isFavoriteSound(soundId);
 
   /// Fetches the blob if it has not been read yet.
   Future<void> load() async {
@@ -84,6 +86,14 @@ final class ExpressionFavoritesController extends ChangeNotifier {
     return _write(
       (repository) =>
           repository.setEmojiFavorite(idOrName: idOrName, favorite: favorite),
+    );
+  }
+
+  Future<bool> toggleSound(String soundId) {
+    final favorite = !isFavoriteSound(soundId);
+    return _write(
+      (repository) =>
+          repository.setSoundFavorite(soundId: soundId, favorite: favorite),
     );
   }
 
