@@ -1,0 +1,4 @@
+#!/bin/sh
+# Keeps realistic Discord ids and em dashes out of history: the CI audit reads
+# every commit, so a line has to be stopped before it is committed.
+exec dart tool/check_staged.dart
