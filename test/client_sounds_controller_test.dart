@@ -72,6 +72,16 @@ void main() {
     expect(harness.player.log, isEmpty);
   });
 
+  test('a switch flipped while the setting is read is kept', () async {
+    final harness = _Harness()..repository.stored = true;
+
+    final loading = harness.controller.load();
+    await harness.controller.setEnabled(enabled: false);
+    await loading;
+
+    expect(harness.controller.enabled, isFalse);
+  });
+
   test('streamer mode silences sounds too', () async {
     var silenced = true;
     final harness = _Harness(isSilenced: () => silenced);

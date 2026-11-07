@@ -176,6 +176,21 @@ void main() {
     expect(_dialog, findsOneWidget);
   });
 
+  test('an edit made while saving stays in the draft', () async {
+    final repository = FakeGuildManagementRepository();
+    final controller = ServerProfileController(repository, guildId: guildId);
+    await controller.load();
+
+    controller.editNickname('Smith');
+    final saving = controller.save();
+    controller.editNickname('Smithy');
+
+    expect(await saving, isFalse);
+    expect(controller.hasChanges, isTrue);
+    expect(await controller.save(), isTrue);
+    expect(repository.savedServerProfiles.last.toJson(), {'nick': 'Smithy'});
+  });
+
   testWidgets('Save waits for a change', (tester) async {
     await _open(tester, FakeGuildManagementRepository());
 

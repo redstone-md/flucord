@@ -13,7 +13,7 @@ final class TrustedDomainsController extends ChangeNotifier {
   final TrustedDomainsRepository _repository;
 
   TrustedDomains _domains = TrustedDomains.none;
-  bool _loaded = false;
+  Future<void>? _loading;
   Object? _writeError;
   bool _disposed = false;
 
@@ -25,18 +25,27 @@ final class TrustedDomainsController extends ChangeNotifier {
 
   bool trusts(Uri uri) => _domains.trusts(uri);
 
-  Future<void> load() async {
-    if (_loaded) return;
+  Future<void> load() => _loading ??= _read();
+
+  Future<void> _read() async {
     _domains = await _repository.load();
-    _loaded = true;
     _notify();
   }
 
   /// Trusts the host of [uri] from now on.
-  Future<void> trust(Uri uri) => _persist(_domains.adding(uri));
+  ///
+  /// Waits for the saved list first: a change made on the empty list would
+  /// be overwritten by the read, or save over every host trusted before.
+  Future<void> trust(Uri uri) async {
+    await load();
+    await _persist(_domains.adding(uri));
+  }
 
   /// Forgets every trusted host, so each asks again.
-  Future<void> clear() => _persist(TrustedDomains.none);
+  Future<void> clear() async {
+    await load();
+    await _persist(TrustedDomains.none);
+  }
 
   Future<void> _persist(TrustedDomains domains) async {
     _domains = domains;

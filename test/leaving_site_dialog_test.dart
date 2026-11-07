@@ -155,6 +155,19 @@ void main() {
     expect(after.trusts(Uri.parse('https://other.example.com')), isFalse);
   });
 
+  test('a host trusted while the list is read keeps the saved ones', () async {
+    final repository = _MemoryTrustedDomains()
+      ..stored = TrustedDomains.none.adding(Uri.parse('https://saved.com'));
+    final trust = TrustedDomainsController(repository);
+
+    final loading = trust.load();
+    await trust.trust(Uri.parse('https://new.com'));
+    await loading;
+
+    expect(trust.hosts, {'saved.com', 'new.com'});
+    expect(repository.stored.hosts, {'saved.com', 'new.com'});
+  });
+
   test('a damaged file trusts nothing', () async {
     final directory = await Directory.systemTemp.createTemp('flucord-trust');
     addTearDown(() => directory.delete(recursive: true));

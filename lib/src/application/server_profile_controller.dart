@@ -85,23 +85,33 @@ final class ServerProfileController extends ChangeNotifier {
     _notify();
   }
 
-  /// Saves the draft. Answers whether the server took it; a refusal leaves
-  /// the draft as it was and sets [refusal].
+  /// Saves the draft. Answers whether the server took all of it; a refusal
+  /// leaves the draft as it was and sets [refusal].
+  ///
+  /// An edit made while the save was out is not part of it, so it stays in
+  /// the draft and the answer is false until it is saved too.
   Future<bool> save() async {
     if (!hasChanges || _saving) return !hasChanges;
     _saving = true;
     _refusal = null;
     _notify();
+    final sent = _edit;
     try {
       _profile = await _repository.saveOwnServerProfile(
         guildId: guildId,
-        edit: _edit,
+        edit: sent,
       );
-      _nickname = const ProfileValue.untouched();
-      _bio = const ProfileValue.untouched();
-      _avatar = const ProfileImage.untouched();
-      _banner = const ProfileImage.untouched();
-      return true;
+      if (identical(_nickname, sent.nickname)) {
+        _nickname = const ProfileValue.untouched();
+      }
+      if (identical(_bio, sent.bio)) _bio = const ProfileValue.untouched();
+      if (identical(_avatar, sent.avatar)) {
+        _avatar = const ProfileImage.untouched();
+      }
+      if (identical(_banner, sent.banner)) {
+        _banner = const ProfileImage.untouched();
+      }
+      return !hasChanges;
     } on ServerProfileRefusal catch (refusal) {
       _refusal = refusal.message;
       return false;

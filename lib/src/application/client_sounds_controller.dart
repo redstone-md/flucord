@@ -42,6 +42,10 @@ final class ClientSoundsController extends ChangeNotifier
   int _loopTurn = 0;
   bool _enabled = true;
   bool _loaded = false;
+
+  /// Set once the person flips the switch. Their choice is newer than the
+  /// saved one, so a read still on its way does not replace it.
+  bool _switched = false;
   bool _disposed = false;
 
   bool get enabled => _enabled;
@@ -51,12 +55,15 @@ final class ClientSoundsController extends ChangeNotifier
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
-    _enabled = await _repository.loadEnabled();
+    final saved = await _repository.loadEnabled();
+    if (_switched || _disposed) return;
+    _enabled = saved;
     if (!_enabled) _silenceLoop();
     _notify();
   }
 
   Future<void> setEnabled({required bool enabled}) async {
+    _switched = true;
     if (_enabled == enabled) return;
     _enabled = enabled;
     final loop = _loop;
