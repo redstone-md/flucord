@@ -79,6 +79,22 @@ final class DiscordVoiceSignalingService
   /// fresh pair from turning the recovery into a loop.
   final Map<VoiceSessionKey, int> _forcedReissues = {};
   static const _maxForcedReissues = 3;
+
+  /// The newest credentials each session was handed a client for.
+  final Map<VoiceSessionKey, VoiceServerCredentials> _latestCredentials = {};
+
+  /// The credentials of the client whose transport last reached ready.
+  final Map<VoiceSessionKey, VoiceServerCredentials> _readyCredentials = {};
+
+  /// Sessions Discord moved to another channel whose connection has not
+  /// settled there yet. While one dials its new connection, the room is
+  /// reconnecting rather than joining for the first time.
+  final Set<VoiceSessionKey> _moving = {};
+
+  /// The wait after a move for the rest of Discord's move: new credentials,
+  /// and a close of the old socket. A close in this wait is part of the move,
+  /// so it does not start the opcode 5 recovery.
+  final Map<VoiceSessionKey, Timer> _moveTimers = {};
   VoiceConnectionStatus _currentStatus = VoiceConnectionStatus.disconnected;
   VoiceTransportSession? _currentSession;
   final Map<VoiceSessionKey, StreamSubscription<VoiceSignalingEvent>>
@@ -232,6 +248,7 @@ final class DiscordVoiceSignalingService
     _desiredChannels[key] = channelId;
     _generations[key] = (_generations[key] ?? 0) + 1;
     _forcedReissues.remove(key);
+    _endMove(key);
     _assembler.clear(key);
     _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.joining));
     // The people already sitting in the channel were announced at bootstrap and
@@ -256,6 +273,9 @@ final class DiscordVoiceSignalingService
     _forcedReissues.remove(key);
     _lastStatuses.remove(key);
     _pingedSessions.remove(key);
+    _endMove(key);
+    _latestCredentials.remove(key);
+    _readyCredentials.remove(key);
     _assembler.clear(key);
     _sendVoiceState(key, null);
     await _closeClient(key);
@@ -335,6 +355,27 @@ final class DiscordVoiceSignalingService
     if (applied.isNotEmpty && !_seatedChanges.isClosed) {
       _seatedChanges.add(null);
     }
+    final currentUserId = _currentUserId;
+    // Every self voice state carries the session a stream connection has to
+    // identify with, and it is reissued more often than credentials are
+    // rebuilt: the assembler only produces those when a server update
+    // arrives too. Holding the one from the first join is how a stream
+    // ended up offering a session Discord had already replaced.
+    if (currentUserId != null &&
+        event.name == 'VOICE_STATE_UPDATE' &&
+        event.data['user_id'] == currentUserId) {
+      AppLog.warning(
+        'voice.creds',
+        'self VOICE_STATE_UPDATE fields: ${event.data.keys.join(', ')}',
+      );
+      final sessionId = event.data['session_id'];
+      if (sessionId is String && sessionId.isNotEmpty) {
+        _currentSessionId = sessionId;
+      }
+      // Before the seat itself is announced: the room has to be in the new
+      // channel by then, or the account's own seat reads as somebody leaving.
+      _followSelfState(event.data);
+    }
     for (final state in applied) {
       if (_desiredChannels.containsKey(VoiceSessionKey.guild(state.guildId!))) {
         _emit(state);
@@ -347,7 +388,6 @@ final class DiscordVoiceSignalingService
       final key = VoiceSessionKey.privateCall(change.channelId);
       if (_desiredChannels.containsKey(key)) _emit(change.state);
     }
-    final currentUserId = _currentUserId;
     if (currentUserId == null) return;
     // Which fields the credentials frames carry is the whole question when a
     // connection built from them is refused, and only the names matter: the
@@ -358,22 +398,6 @@ final class DiscordVoiceSignalingService
         'VOICE_SERVER_UPDATE fields: ${event.data.keys.join(', ')}',
       );
     }
-    // Every self voice state carries the session a stream connection has to
-    // identify with, and it is reissued more often than credentials are
-    // rebuilt — the assembler only produces those when a server update
-    // arrives too. Holding the one from the first join is how a stream
-    // ended up offering a session Discord had already replaced.
-    if (event.name == 'VOICE_STATE_UPDATE' &&
-        event.data['user_id'] == currentUserId) {
-      AppLog.warning(
-        'voice.creds',
-        'self VOICE_STATE_UPDATE fields: ${event.data.keys.join(', ')}',
-      );
-      final sessionId = event.data['session_id'];
-      if (sessionId is String && sessionId.isNotEmpty) {
-        _currentSessionId = sessionId;
-      }
-    }
     final credentials = _assembler.accept(
       eventName: event.name,
       data: event.data,
@@ -383,8 +407,118 @@ final class DiscordVoiceSignalingService
     _currentSessionId = credentials.sessionId;
     final key = credentials.sessionKey;
     if (_desiredChannels[key] != credentials.channelId) return;
+    // A move on the same voice server: the connection stays.
+    if (_moving.contains(key) && _isLiveOn(credentials)) {
+      _endMove(key);
+      return;
+    }
     _queueVoiceClient(credentials);
   }
+
+  /// Follows a self voice state that names another channel than the one
+  /// asked for, in a guild this client is in: a moderator moved the account,
+  /// or disconnected it when the channel is null.
+  ///
+  /// The move wins over a reconnect in flight. Its recovery is called off,
+  /// and the new channel is announced once, because the recovery already
+  /// announced the old one and Discord could act on that after the move.
+  void _followSelfState(Map<String, Object?> data) {
+    final guildId = data['guild_id'];
+    if (guildId is! String) return;
+    final key = VoiceSessionKey.guild(guildId);
+    final wanted = _desiredChannels[key];
+    final channel = data['channel_id'];
+    final channelId = channel is String && channel.isNotEmpty ? channel : null;
+    if (wanted == null || channelId == wanted) return;
+    // The leave half of this client's own leave-and-rejoin cycle.
+    if (channelId == null && _forcedReissues.containsKey(key)) return;
+    _reissueTimers.remove(key)?.cancel();
+    _forcedReissues.remove(key);
+    final wasRecovering = _pingedSessions.remove(key);
+    _endMove(key);
+    if (channelId == null) {
+      // Discord already has the account out. The room leaves the way a
+      // person's own Leave does, and nothing here rejoins in the meantime.
+      _desiredChannels.remove(key);
+    } else {
+      _desiredChannels[key] = channelId;
+      _moving.add(key);
+      _moveTimers[key] = Timer(_reissueFallbackDelay, () => _moveSettled(key));
+      if (wasRecovering) {
+        final flags = _lastFlags[key];
+        _sendVoiceState(
+          key,
+          channelId,
+          selfMute: flags?.mute ?? false,
+          selfDeaf: flags?.deaf ?? false,
+          selfVideo: flags?.video ?? false,
+        );
+      }
+      _reaimCredentials(key, channelId);
+    }
+    _emit(VoiceMovedToChannelEvent(guildId: guildId, channelId: channelId));
+  }
+
+  /// Credentials that came in just before the move, and that no connection
+  /// has used yet, are the ones Discord issued for the new channel. Without
+  /// this the client queued for them gives way to the move, and nothing
+  /// dials at all.
+  void _reaimCredentials(VoiceSessionKey key, String channelId) {
+    final latest = _latestCredentials[key];
+    if (latest == null ||
+        latest.channelId == channelId ||
+        identical(latest, _readyCredentials[key])) {
+      return;
+    }
+    _queueVoiceClient(latest.inChannel(channelId));
+  }
+
+  /// Whether [credentials] are the ones the session's working connection
+  /// already runs on.
+  bool _isLiveOn(VoiceServerCredentials credentials) {
+    final key = credentials.sessionKey;
+    final live = _readyCredentials[key];
+    return live != null &&
+        identical(live, _latestCredentials[key]) &&
+        _lastStatuses[key] == VoiceConnectionStatus.ready &&
+        live.endpoint == credentials.endpoint &&
+        live.token == credentials.token;
+  }
+
+  /// The wait after a move ran out. A socket Discord closed in it, with no
+  /// credentials to rebuild from, is recovered the usual way now.
+  void _moveSettled(VoiceSessionKey key) {
+    _moveTimers.remove(key);
+    if (_lastStatuses[key] == VoiceConnectionStatus.reconnecting &&
+        !_pingedSessions.contains(key)) {
+      _recover(key);
+    }
+  }
+
+  void _endMove(VoiceSessionKey key) {
+    _moving.remove(key);
+    _moveTimers.remove(key)?.cancel();
+  }
+
+  /// What the room is told of [event]: while a moved session dials its new
+  /// connection, the room is reconnecting, not joining for the first time.
+  VoiceSignalingEvent _shownDuringMove(
+    VoiceSessionKey key,
+    VoiceSignalingEvent event,
+  ) => switch (event) {
+    VoiceSignalingStatusEvent(
+      status: VoiceConnectionStatus.connecting ||
+          VoiceConnectionStatus.discovering ||
+          VoiceConnectionStatus.negotiating,
+      :final error,
+    )
+        when _moving.contains(key) =>
+      VoiceSignalingStatusEvent(
+        VoiceConnectionStatus.reconnecting,
+        error: error,
+      ),
+    _ => event,
+  };
 
   /// Pokes the main gateway when a voice socket drops but intends to come back.
   ///
@@ -406,11 +540,16 @@ final class DiscordVoiceSignalingService
       ? '?'
       : value.substring(value.length - 4);
 
-  void _onClientEvent(VoiceSessionKey key, VoiceSignalingEvent event) {
+  void _onClientEvent(
+    VoiceServerCredentials credentials,
+    VoiceSignalingEvent event,
+  ) {
+    final key = credentials.sessionKey;
+    final shown = _shownDuringMove(key, event);
     // Only the session being listened to speaks for the client's state: a
     // second connection winding down must not report the first as gone.
     if (key == _activeSession) {
-      if (event is VoiceSignalingStatusEvent) _currentStatus = event.status;
+      if (shown is VoiceSignalingStatusEvent) _currentStatus = shown.status;
       if (event is VoiceTransportReadyEvent) _currentSession = event.session;
     }
     if (event is VoiceSignalingStatusEvent) {
@@ -418,48 +557,65 @@ final class DiscordVoiceSignalingService
       final wasReconnecting = _pingedSessions.contains(key);
       final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;
       if (isReconnecting && !wasReconnecting) {
-        final channelId = _desiredChannels[key];
-        final userId = _currentUserId;
-        final sessionId = _currentSessionId ?? _gateway.sessionId;
-        if (channelId != null && userId != null && sessionId != null) {
-          _pingedSessions.add(key);
-          _gateway.pingVoiceServer();
-          // And the voice state is sent again. The ping asks the server to
-          // re-issue what it already believes it has handed out; re-announcing
-          // the channel is what makes it hand out a *new* one. Without this a
-          // client holding credentials from a replaced session waited for an
-          // update that never came, and the room went from reconnecting
-          // straight to disconnected while Discord still had the account in
-          // the channel.
-          // The identity halves are seeded rather than dropped: a ping that
-          // is answered with a lone server update still completes against
-          // them, and a stale token or endpoint can no more complete the
-          // pairing than it could before.
-          _assembler.remember(
-            key: key,
-            channelId: channelId,
-            userId: userId,
-            sessionId: sessionId,
-          );
-          _generations[key] = (_generations[key] ?? 0) + 1;
-          final flags = _lastFlags[key];
-          _sendVoiceState(
-            key,
-            channelId,
-            selfMute: flags?.mute ?? false,
-            selfDeaf: flags?.deaf ?? false,
-            selfVideo: flags?.video ?? false,
-          );
-          _scheduleReissueFallback(key);
-        }
+        // A close during a move is Discord ending the old socket. The move's
+        // own credentials rebuild it, and [_moveSettled] covers them not
+        // coming.
+        if (!_moveTimers.containsKey(key)) _recover(key);
       } else if (!isReconnecting) {
         _pingedSessions.remove(key);
       }
+      if (event.status == VoiceConnectionStatus.failure ||
+          event.status == VoiceConnectionStatus.disconnected) {
+        _moving.remove(key);
+      }
     }
     // A transport that reached ready settles every forced cycle that led to
-    // it; the next time one is needed, the count starts from zero.
-    if (event is VoiceTransportReadyEvent) _forcedReissues.remove(key);
-    _emit(event);
+    // it, and any move; the next time one is needed, the count starts from
+    // zero.
+    if (event is VoiceTransportReadyEvent) {
+      _forcedReissues.remove(key);
+      _readyCredentials[key] = credentials;
+      _moving.remove(key);
+    }
+    _emit(shown);
+  }
+
+  /// Pings the voice server and announces the channel again, which is how a
+  /// session Discord ended asks for fresh credentials.
+  void _recover(VoiceSessionKey key) {
+    final channelId = _desiredChannels[key];
+    final userId = _currentUserId;
+    final sessionId = _currentSessionId ?? _gateway.sessionId;
+    if (channelId == null || userId == null || sessionId == null) return;
+    _pingedSessions.add(key);
+    _gateway.pingVoiceServer();
+    // And the voice state is sent again. The ping asks the server to
+    // re-issue what it already believes it has handed out; re-announcing
+    // the channel is what makes it hand out a *new* one. Without this a
+    // client holding credentials from a replaced session waited for an
+    // update that never came, and the room went from reconnecting
+    // straight to disconnected while Discord still had the account in
+    // the channel.
+    // The identity halves are seeded rather than dropped: a ping that
+    // is answered with a lone server update still completes against
+    // them, and a stale token or endpoint can no more complete the
+    // pairing than it could before.
+    _assembler.remember(
+      key: key,
+      channelId: channelId,
+      userId: userId,
+      sessionId: sessionId,
+    );
+    _generations[key] = (_generations[key] ?? 0) + 1;
+    final flags = _lastFlags[key];
+    _sendVoiceState(
+      key,
+      channelId,
+      selfMute: flags?.mute ?? false,
+      selfDeaf: flags?.deaf ?? false,
+      selfVideo: flags?.video ?? false,
+    );
+    _scheduleReissueFallback(key);
   }
 
   /// Whether the session's connection is one a join into the same channel
@@ -540,6 +696,7 @@ final class DiscordVoiceSignalingService
     final key = credentials.sessionKey;
     final generation = (_generations[key] ?? 0) + 1;
     _generations[key] = generation;
+    _latestCredentials[key] = credentials;
     final queued = _clientStarts[key] ?? Future<void>.value();
     final start = queued.then(
       (_) => _startVoiceClient(credentials, generation),
@@ -570,7 +727,7 @@ final class DiscordVoiceSignalingService
       final client = _socketFactory.callSocket(credentials);
       _clients[key] = client;
       _clientSubscriptions[key] = client.events.listen(
-        (event) => _onClientEvent(key, event),
+        (event) => _onClientEvent(credentials, event),
       );
       if (client case final VoiceAudioTransport audioTransport) {
         _audioSubscriptions[key] = audioTransport.remoteAudio.listen(
@@ -725,10 +882,11 @@ final class DiscordVoiceSignalingService
     if (_closed) return;
     _closed = true;
     await _gatewaySubscription.cancel();
-    for (final timer in _reissueTimers.values) {
+    for (final timer in [..._reissueTimers.values, ..._moveTimers.values]) {
       timer.cancel();
     }
     _reissueTimers.clear();
+    _moveTimers.clear();
     for (final key in _clients.keys.toList(growable: false)) {
       await _closeClient(key);
     }

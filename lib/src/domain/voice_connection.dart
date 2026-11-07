@@ -77,6 +77,16 @@ final class VoiceServerCredentials {
   /// The voice gateway identifies against `server_id`, which is the guild for
   /// guild voice and the channel for a private call (R08).
   String get serverId => guildId ?? channelId;
+
+  /// The same credentials, for the channel Discord moved the account to.
+  VoiceServerCredentials inChannel(String channelId) => VoiceServerCredentials(
+    guildId: guildId,
+    channelId: channelId,
+    userId: userId,
+    sessionId: sessionId,
+    token: token,
+    endpoint: endpoint,
+  );
 }
 
 final class VoiceTransportSession {
@@ -122,6 +132,19 @@ final class VoiceEncryptionRequiredException implements Exception {
   @override
   String toString() =>
       'Discord requires end-to-end encrypted voice (DAVE) here (code 4017)';
+}
+
+/// Discord moved this account to another voice channel of the same guild, or
+/// out of voice when [channelId] is null: a moderator moved or disconnected
+/// it. The room follows this one event.
+final class VoiceMovedToChannelEvent extends VoiceSignalingEvent {
+  const VoiceMovedToChannelEvent({
+    required this.guildId,
+    required this.channelId,
+  });
+
+  final String guildId;
+  final String? channelId;
 }
 
 final class VoiceCredentialsReadyEvent extends VoiceSignalingEvent {

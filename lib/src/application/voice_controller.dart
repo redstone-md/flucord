@@ -767,6 +767,8 @@ final class VoiceController extends ChangeNotifier
           event.credentials.userId,
           () => VoiceParticipant(userId: event.credentials.userId),
         );
+      case VoiceMovedToChannelEvent():
+        _followMove(event);
       case VoiceParticipantStateEvent():
         _applyParticipantState(event);
       case VoiceSpeakingEvent():
@@ -816,6 +818,24 @@ final class VoiceController extends ChangeNotifier
     _clearParticipants();
     unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();
+  }
+
+  /// Goes where Discord put this account. A move keeps the connection, the
+  /// mute and deafen flags and the account's own seat, and leaves the old
+  /// room's people behind. A disconnect leaves the way Leave does.
+  void _followMove(VoiceMovedToChannelEvent event) {
+    if (_isCallSession || event.guildId != _connectedGuildId) return;
+    final channelId = event.channelId;
+    if (channelId == null) {
+      unawaited(disconnect());
+      return;
+    }
+    if (channelId == _connectedChannelId) return;
+    _connectedChannelId = channelId;
+    _joinedAt = clock.now();
+    for (final userId in [..._participants.keys]) {
+      if (userId != _selfUserId) _forgetParticipant(userId);
+    }
   }
 
   void _applyParticipantState(VoiceParticipantStateEvent event) {
