@@ -296,8 +296,8 @@ final class DiscordDesktopChatRepository
 
   /// The desktop-user session carries voice on the very socket it already uses
   /// for messages, so the service is offered unconditionally. Whether a join
-  /// can actually complete is the service's own call — it refuses before the
-  /// gateway is ready or without DAVE — and it reports that as a failure event
+  /// can actually complete is the service's own call (it refuses before the
+  /// gateway is ready or without DAVE), and it reports that as a failure event
   /// the voice surface can show, which a null here could not.
   @override
   VoiceSignalingService? get voiceSignaling => _voiceSignaling;
@@ -363,9 +363,9 @@ final class DiscordDesktopChatRepository
   @override
   UserSettingsRepository? get userSettings => _userSettings;
 
-  /// The desktop-user session owns both halves a call needs — the gateway
-  /// socket for opcode 13 and the user's REST credentials for the ring routes —
-  /// so it is the one transport that can offer this.
+  /// The desktop-user session owns both halves a call needs: the gateway
+  /// socket for opcode 13 and the user's REST credentials for the ring routes.
+  /// So it is the one transport that can offer this.
   @override
   DirectCallService? get directCalls => _directCalls;
 

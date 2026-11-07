@@ -136,12 +136,9 @@ final class VoiceRoomCoordination {
     unawaited(_goLive.stop());
   }
 
-  /// Whether the running stream was sent into the room this client is in
-  /// now. A stream belongs to its channel: its key names it, and Discord ends
-  /// it when its owner leaves that channel, a move by a moderator included.
-  /// Moving changes the channel without the status ever saying the room went
-  /// down. A stream still being created has no key yet, so there is nothing
-  /// to compare.
+  /// Whether the running stream was sent into the channel this client is in
+  /// now. Its key names the channel, and a move changes the channel without
+  /// the status going down. A stream still being created has no key yet.
   bool get _shareIsInThisSession => switch (_goLive.streamKey) {
     null => true,
     final key => key.channelId == _voice.connectedChannelId,
