@@ -176,6 +176,76 @@ void main() {
     expect(rig.voice.connectedChannelId, 'voice-2');
   });
 
+  test('a late echo of a mute is not read as a move', () async {
+    final rig = await _MoveRig.inRoom();
+    await rig.voice.toggleMute();
+    await rig.voice.connect(guildId: 'guild-1', channelId: 'voice-2');
+
+    // Discord answers the mute in voice-1 after the join was sent.
+    rig.seatSelf('voice-1', mute: true);
+    await _flush();
+    expect(rig.voice.connectedChannelId, 'voice-2');
+
+    rig
+      ..seatSelf('voice-2', mute: true)
+      ..serverUpdate(token: 'token-2', endpoint: 'voice-b.discord.media');
+    await _until(() => rig.dialer.dials.length == 2);
+    await rig.finishHandshake(rig.dialer.dials.last.socket);
+
+    expect(rig.voice.connectedChannelId, 'voice-2');
+    expect(_identifyOn(rig.dialer.dials.last.socket)['channel_id'], 'voice-2');
+    expect(rig.sounds.played, isNot(contains(ClientSound.userMoved)));
+  });
+
+  test(
+    'the echo of the first of two quick joins is not read as a move',
+    () async {
+      final rig = await _MoveRig.inRoom();
+      await rig.voice.connect(guildId: 'guild-1', channelId: 'voice-2');
+      await rig.voice.connect(guildId: 'guild-1', channelId: 'voice-3');
+
+      rig.seatSelf('voice-2');
+      await _flush();
+
+      expect(rig.voice.connectedChannelId, 'voice-3');
+      expect(rig.sounds.played, isNot(contains(ClientSound.userMoved)));
+      // A channel the client did not ask for after that is a real move.
+      rig.seatSelf('voice-3');
+      await _flush();
+      rig.seatSelf('voice-2');
+      await _flush();
+      expect(rig.voice.connectedChannelId, 'voice-2');
+    },
+  );
+
+  test('a moderator disconnect during a leave-and-rejoin cycle ends the '
+      'room', () async {
+    final rig = await _MoveRig.inRoom(
+      reissueFallbackDelay: const Duration(milliseconds: 20),
+    );
+    await rig.dialer.dials.single.socket.closeFromServer(
+      DiscordVoiceCloseCodes.sessionInvalid,
+    );
+    // No credentials come back, so the client leaves and rejoins.
+    await _until(
+      () => rig.gateway.voiceStates.any((frame) => frame.channelId == null),
+    );
+    rig
+      ..forget()
+      // Discord answers the cycle's leave and rejoin.
+      ..seatSelf(null)
+      ..seatSelf('voice-1')
+      // Then a moderator disconnects the account.
+      ..seatSelf(null);
+    await _until(() => rig.voice.connectedChannelId == null);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(rig.voice.connectionStatus, VoiceConnectionStatus.disconnected);
+    // What Leave sends, and nothing that would rejoin.
+    expect(rig.gateway.voiceStates.map((frame) => frame.channelId), [null]);
+    expect(rig.sounds.played, [ClientSound.disconnect]);
+  });
+
   test('a moderator disconnect ends the room like Leave', () async {
     final rig = await _MoveRig.inRoom(
       reissueFallbackDelay: const Duration(milliseconds: 20),

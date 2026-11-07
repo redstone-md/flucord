@@ -95,6 +95,11 @@ final class DiscordVoiceSignalingService
   /// and a close of the old socket. A close in this wait is part of the move,
   /// so it does not start the opcode 5 recovery.
   final Map<VoiceSessionKey, Timer> _moveTimers = {};
+
+  /// The channels each guild session asked for with opcode 4 that Discord
+  /// has not answered yet, oldest first. Discord answers them in order, so a
+  /// self voice state naming one of them is an echo, not a move.
+  final Map<VoiceSessionKey, List<String?>> _unansweredRequests = {};
   VoiceConnectionStatus _currentStatus = VoiceConnectionStatus.disconnected;
   VoiceTransportSession? _currentSession;
   final Map<VoiceSessionKey, StreamSubscription<VoiceSignalingEvent>>
@@ -297,6 +302,7 @@ final class DiscordVoiceSignalingService
     }
     final guildId = key.guildId;
     if (guildId != null) {
+      (_unansweredRequests[key] ??= []).add(channelId);
       _gateway.updateVoiceState(
         guildId: guildId,
         channelId: channelId,
@@ -313,6 +319,16 @@ final class DiscordVoiceSignalingService
       selfDeaf: selfDeaf,
       selfVideo: selfVideo,
     );
+  }
+
+  /// Whether [channelId] is Discord's answer to one of this client's own
+  /// requests. That request and the older ones count as answered.
+  bool _answersOwnRequest(VoiceSessionKey key, String? channelId) {
+    final unanswered = _unansweredRequests[key];
+    final index = unanswered?.indexOf(channelId) ?? -1;
+    if (index < 0) return false;
+    unanswered!.removeRange(0, index + 1);
+    return true;
   }
 
   /// Both rosters' seats in one map, kept while neither roster changes:
@@ -415,13 +431,9 @@ final class DiscordVoiceSignalingService
     _queueVoiceClient(credentials);
   }
 
-  /// Follows a self voice state that names another channel than the one
-  /// asked for, in a guild this client is in: a moderator moved the account,
-  /// or disconnected it when the channel is null.
-  ///
-  /// The move wins over a reconnect in flight. Its recovery is called off,
-  /// and the new channel is announced once, because the recovery already
-  /// announced the old one and Discord could act on that after the move.
+  /// Follows a self voice state that no request of this client explains: a
+  /// moderator moved the account, or disconnected it when the channel is
+  /// null. The move wins over a reconnect in flight.
   void _followSelfState(Map<String, Object?> data) {
     final guildId = data['guild_id'];
     if (guildId is! String) return;
@@ -429,9 +441,14 @@ final class DiscordVoiceSignalingService
     final wanted = _desiredChannels[key];
     final channel = data['channel_id'];
     final channelId = channel is String && channel.isNotEmpty ? channel : null;
-    if (wanted == null || channelId == wanted) return;
-    // The leave half of this client's own leave-and-rejoin cycle.
-    if (channelId == null && _forcedReissues.containsKey(key)) return;
+    if (_answersOwnRequest(key, channelId) ||
+        wanted == null ||
+        channelId == wanted) {
+      return;
+    }
+    // Discord has the account elsewhere now, so an answer to an older
+    // request would be a move too.
+    _unansweredRequests.remove(key);
     _reissueTimers.remove(key)?.cancel();
     _forcedReissues.remove(key);
     final wasRecovering = _pingedSessions.remove(key);
