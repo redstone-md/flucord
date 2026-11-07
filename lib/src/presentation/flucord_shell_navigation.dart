@@ -950,7 +950,12 @@ extension _FlucordShellNavigation on FlucordShell {
         close();
         _openVoiceRoom(channelId);
       },
-      onOpenLink: (uri) => unawaited(externalLinkLauncher.open(uri)),
+      // A connection leaves the app like a link in a message, so it asks
+      // the same way.
+      onOpenLink: (uri) => unawaited(() async {
+        if (!await confirmLeavingFor(context, uri)) return;
+        await externalLinkLauncher.open(uri);
+      }()),
     );
     // A member's "In voice" follows the seats.
     return _onSeats(

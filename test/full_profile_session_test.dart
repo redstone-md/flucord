@@ -192,4 +192,27 @@ void main() {
     ready: _ready(),
     routes: _routeProfile,
   );
+
+  testSession(
+    'a connection link asks before it leaves the app',
+    (tester, session) async {
+      await _openWindow(tester, session);
+
+      await tester.tap(_key('profile-connection-github'));
+      await session.settle();
+
+      expect(_key('leaving-site-dialog'), findsOneWidget);
+    },
+    ready: _ready(),
+    routes: (transport) => transport.on(
+      'GET',
+      '/api/v9/users/${SessionHarness.friendId}/profile',
+      (_) => jsonResponse({
+        'user': {'id': SessionHarness.friendId, 'username': 'friend'},
+        'connected_accounts': [
+          {'type': 'github', 'id': '456', 'name': 'mira'},
+        ],
+      }),
+    ),
+  );
 }
