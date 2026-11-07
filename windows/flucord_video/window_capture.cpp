@@ -207,13 +207,13 @@ void WindowCapture::ReleaseFrame() {
       session_->current = nullptr;
     }
     if (session_->resize_pending) {
-      session_->resize_pending = false;
       session_->pool.Recreate(session_->device, kPixelFormat, kBuffers,
                               session_->size);
+      session_->resize_pending = false;
     }
   } catch (const winrt::hresult_error& error) {
-    // A pool that would not rebuild keeps its old size: the picture is
-    // scaled from what it delivers, and the next poll says if it failed.
+    // A pool that would not rebuild keeps its old size, and the resize stays
+    // pending, so the next frame's release tries again.
     NoteRefusal(L"frame pool kept its size", error);
   }
 }
