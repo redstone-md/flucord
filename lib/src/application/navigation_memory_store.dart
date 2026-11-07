@@ -30,6 +30,7 @@ final class NavigationMemoryStore implements ReadingPositions {
 
   String? get lastSpaceId => _memory.lastSpaceId;
   Set<String> get collapsedCategoryIds => _memory.collapsedCategoryIds;
+  Set<int> get openFolderIds => _memory.openFolderIds;
 
   String? lastChannelOf(String spaceId) => _memory.lastChannels[spaceId];
 
@@ -74,6 +75,13 @@ final class NavigationMemoryStore implements ReadingPositions {
     final collapsed = {..._memory.collapsedCategoryIds};
     if (!collapsed.add(categoryId)) collapsed.remove(categoryId);
     _memory = _memory.copyWith(collapsedCategoryIds: collapsed);
+    _scheduleSave();
+  }
+
+  void toggleFolder(int folderId) {
+    final open = {..._memory.openFolderIds};
+    if (!open.add(folderId)) open.remove(folderId);
+    _memory = _memory.copyWith(openFolderIds: open);
     _scheduleSave();
   }
 

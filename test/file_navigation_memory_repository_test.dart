@@ -16,9 +16,7 @@ void main() {
     repository = FileNavigationMemoryRepository(
       directory: () async => directory,
     );
-    file = File(
-      '${directory.path}/${FileNavigationMemoryRepository.fileName}',
-    );
+    file = File('${directory.path}/${FileNavigationMemoryRepository.fileName}');
   });
 
   test('a saved memory reads back whole', () async {
@@ -28,6 +26,7 @@ void main() {
         lastSpaceId: '200000000000000001',
         lastChannels: {'200000000000000001': '300000000000000002'},
         collapsedCategoryIds: {'300000000000000009'},
+        openFolderIds: {7},
         positions: {
           '300000000000000002': ReadingPosition(
             messageId: '900000000000000001',
@@ -43,6 +42,7 @@ void main() {
     expect(read?.lastSpaceId, '200000000000000001');
     expect(read?.lastChannels, {'200000000000000001': '300000000000000002'});
     expect(read?.collapsedCategoryIds, {'300000000000000009'});
+    expect(read?.openFolderIds, {7});
     final position = read?.positions['300000000000000002'];
     expect(position?.messageId, '900000000000000001');
     expect(position?.fromTop, 12.5);
@@ -63,7 +63,7 @@ void main() {
   test('a part of the wrong shape is left out', () async {
     file.writeAsStringSync(
       '{"account": "1", "lastSpace": 7, "lastChannels": [],'
-      ' "collapsedCategories": ["2", 3],'
+      ' "collapsedCategories": ["2", 3], "openFolders": [6, "7"],'
       ' "positions": {"4": {"message": 5}}}',
     );
 
@@ -73,6 +73,7 @@ void main() {
     expect(read?.lastSpaceId, isNull);
     expect(read?.lastChannels, isEmpty);
     expect(read?.collapsedCategoryIds, {'2'});
+    expect(read?.openFolderIds, {6});
     expect(read?.positions, isEmpty);
   });
 

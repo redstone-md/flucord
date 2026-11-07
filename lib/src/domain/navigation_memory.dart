@@ -37,6 +37,7 @@ final class NavigationMemory {
     this.lastSpaceId,
     this.lastChannels = const {},
     this.collapsedCategoryIds = const {},
+    this.openFolderIds = const {},
     this.positions = const {},
   });
 
@@ -49,6 +50,10 @@ final class NavigationMemory {
   final Map<String, String> lastChannels;
   final Set<String> collapsedCategoryIds;
 
+  /// The server folders shown open on the rail. Kept on this machine only,
+  /// as Discord does.
+  final Set<int> openFolderIds;
+
   /// By channel id, with the channel read least recently first.
   final Map<String, ReadingPosition> positions;
 
@@ -57,12 +62,14 @@ final class NavigationMemory {
     String? lastSpaceId,
     Map<String, String>? lastChannels,
     Set<String>? collapsedCategoryIds,
+    Set<int>? openFolderIds,
     Map<String, ReadingPosition>? positions,
   }) => NavigationMemory(
     accountId: accountId,
     lastSpaceId: lastSpaceId ?? this.lastSpaceId,
     lastChannels: lastChannels ?? this.lastChannels,
     collapsedCategoryIds: collapsedCategoryIds ?? this.collapsedCategoryIds,
+    openFolderIds: openFolderIds ?? this.openFolderIds,
     positions: positions ?? this.positions,
   );
 
@@ -71,6 +78,7 @@ final class NavigationMemory {
     'lastSpace': lastSpaceId,
     'lastChannels': lastChannels,
     'collapsedCategories': collapsedCategoryIds.toList(),
+    'openFolders': openFolderIds.toList(),
     'positions': {
       for (final MapEntry(:key, :value) in positions.entries)
         key: value.toJson(),
@@ -94,6 +102,9 @@ final class NavigationMemory {
         collapsedCategoryIds: {
           if (map['collapsedCategories'] case final List ids)
             ...ids.whereType<String>(),
+        },
+        openFolderIds: {
+          if (map['openFolders'] case final List ids) ...ids.whereType<int>(),
         },
         positions: {
           if (map['positions'] case final Map positions)

@@ -474,6 +474,7 @@ class FlucordShell extends StatelessWidget {
                             dependencies: [
                               workspace.spaces,
                               guildFolders,
+                              workspaceController.openFolderIds,
                               userSettings?.canEdit,
                               activityBySpaceId,
                               spaceId,
@@ -485,6 +486,10 @@ class FlucordShell extends StatelessWidget {
                                 spaces: workspace.spaces,
                                 activity: activityBySpaceId,
                                 folders: guildFolders,
+                                openFolderIds:
+                                    workspaceController.openFolderIds,
+                                onToggleFolder:
+                                    workspaceController.toggleFolder,
                                 onArrange: userSettings?.canEdit ?? false
                                     ? (folders) => unawaited(
                                         userSettings!.apply(
