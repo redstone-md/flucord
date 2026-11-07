@@ -686,7 +686,9 @@ class MessageComposerState extends State<MessageComposer>
               levels: _voiceLevels,
               isRecording: _isRecordingVoice,
               onCancel: _isRecordingVoice ? _cancelVoiceMessage : null,
-              onSend: _isRecordingVoice ? _stopAndSendVoiceMessage : null,
+              onSend: _isRecordingVoice && !_isStartingVoice
+                  ? _stopAndSendVoiceMessage
+                  : null,
             )
           else
             CallbackShortcuts(

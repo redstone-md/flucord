@@ -31,6 +31,9 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   /// When set, [stop] answers only once this completes.
   Completer<void>? holdStop;
 
+  /// When set, [start] answers only once this completes.
+  Completer<void>? holdStart;
+
   int startCount = 0;
   int cancelCount = 0;
   int deleteCount = 0;
@@ -46,6 +49,7 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   @override
   Future<void> start() async {
     startCount++;
+    await holdStart?.future;
     isRecording = true;
   }
 

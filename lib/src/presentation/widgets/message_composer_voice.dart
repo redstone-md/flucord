@@ -7,6 +7,10 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   final VoiceRecordingLevels _voiceLevels = VoiceRecordingLevels();
   bool _isRecordingVoice = false;
 
+  /// Until the recorder answers the start. Send waits for it: a stop sent to
+  /// a recorder that has not started fails.
+  bool _isStartingVoice = false;
+
   /// Between the stop and the recorder's answer, while the capture hands
   /// over its last frames and the file is written.
   bool _isStoppingVoice = false;
@@ -41,15 +45,23 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     final recorder = widget.voiceMessageRecorder!;
     final generation = ++_voiceGeneration;
     _voiceLevels.clear();
-    setState(() => _isRecordingVoice = true);
+    setState(() {
+      _isRecordingVoice = true;
+      _isStartingVoice = true;
+    });
     try {
       await recorder.start();
       if (generation != _voiceGeneration && recorder.isRecording) {
         await recorder.cancel();
+      } else if (mounted && generation == _voiceGeneration) {
+        setState(() => _isStartingVoice = false);
       }
     } catch (error) {
       if (!mounted || generation != _voiceGeneration) return;
-      setState(() => _isRecordingVoice = false);
+      setState(() {
+        _isRecordingVoice = false;
+        _isStartingVoice = false;
+      });
       _showVoiceFailure('The microphone could not be started.');
     }
   }
@@ -57,7 +69,7 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   /// Stops the recording and hands it over to be sent. The message shows in
   /// the timeline from here, so the composer is free again at once.
   Future<void> _stopAndSendVoiceMessage() async {
-    if (!_isRecordingVoice) return;
+    if (!_isRecordingVoice || _isStartingVoice) return;
     final recorder = widget.voiceMessageRecorder!;
     final send = widget.onSendVoiceMessage!;
     final generation = _voiceGeneration;
@@ -91,7 +103,10 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     final recorder = widget.voiceMessageRecorder;
     _voiceGeneration++;
     _voiceLevels.clear();
-    setState(() => _isRecordingVoice = false);
+    setState(() {
+      _isRecordingVoice = false;
+      _isStartingVoice = false;
+    });
     if (recorder?.isRecording ?? false) {
       await _cancelVoiceRecordingIgnoringErrors(recorder);
     }
@@ -110,6 +125,7 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     final wasStopping = _isStoppingVoice;
     _voiceGeneration++;
     _isRecordingVoice = false;
+    _isStartingVoice = false;
     _isStoppingVoice = false;
     _voiceLevels.clear();
     if ((recorder?.isRecording ?? false) && !wasStopping) {

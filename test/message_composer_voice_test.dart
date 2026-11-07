@@ -70,6 +70,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Send waits until the microphone has started', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recorder = FakeVoiceMessageRecorder()..holdStart = Completer();
+    addTearDown(recorder.dispose);
+    final sent = <PendingVoiceMessage>[];
+
+    await tester.pumpWidget(
+      _composerApp(
+        recorder: recorder,
+        onSendVoiceMessage: (message, _) => sent.add(message),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
+    await tester.pump();
+    expect(sent, isEmpty);
+
+    recorder.holdStart!.complete();
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
+    await tester.pumpAndSettle();
+
+    expect(sent, [same(recorder.pending)]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the frames a stop hands over still count', (tester) async {
     final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
