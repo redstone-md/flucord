@@ -28,7 +28,7 @@ mixin _DiscordGuildJoinGate implements GuildJoinGateRepository {
   }
 
   /// `PUT /guilds/{id}/requests/@me` with every field of [screening], the
-  /// rules agreed to.
+  /// rules agreed to and the questions answered as [screening] holds them.
   @override
   Future<Member?> acceptRules({
     required String guildId,
@@ -50,7 +50,12 @@ mixin _DiscordGuildJoinGate implements GuildJoinGateRepository {
                 'description': field.description,
                 if (field.rules.isNotEmpty) 'values': field.rules,
                 if (field.choices.isNotEmpty) 'choices': field.choices,
-                if (field.isRules) 'response': true,
+                'response': ?switch (field.answer) {
+                  _ when field.isRules => true,
+                  ScreeningText(:final text) => text.trim(),
+                  ScreeningChoice(:final index) => index,
+                  null => null,
+                },
               },
           ],
         },
@@ -141,6 +146,7 @@ mixin _DiscordGuildJoinGate implements GuildJoinGateRepository {
               rules: _strings(field['values']),
               choices: _strings(field['choices']),
               description: _text(field['description']),
+              placeholder: _text(field['placeholder']),
             ),
         ],
       );

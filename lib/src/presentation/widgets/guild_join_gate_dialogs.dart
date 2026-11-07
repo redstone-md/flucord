@@ -52,7 +52,8 @@ Future<T?> _orNull<T>(Future<T?> load) async {
   }
 }
 
-/// A server's rules screening: the rules, a box to agree, and Submit.
+/// A server's rules screening: the rules, a box to agree, its written and
+/// multiple-choice questions, and Submit.
 class GuildRulesDialog extends StatefulWidget {
   const GuildRulesDialog({
     required this.chat,
@@ -70,6 +71,9 @@ class GuildRulesDialog extends StatefulWidget {
 class _GuildRulesDialogState extends State<GuildRulesDialog> {
   late final Future<RulesScreening?> _screening = widget.chat
       .loadRulesScreening(widget.spaceId);
+
+  /// The screening with the answers given so far, once it has loaded.
+  RulesScreening? _answered;
   bool _agreed = false;
   bool _sending = false;
   String? _message;
@@ -106,8 +110,10 @@ class _GuildRulesDialogState extends State<GuildRulesDialog> {
   Widget build(BuildContext context) => FutureBuilder<RulesScreening?>(
     future: _screening,
     builder: (context, snapshot) {
-      final screening = snapshot.data;
+      final loaded = snapshot.data;
+      final screening = _answered ?? loaded;
       final canAccept = screening != null && screening.canAccept;
+      final hasRules = screening?.rules.isNotEmpty ?? false;
       return FlucordDialog(
         key: const ValueKey('guild-rules-dialog'),
         title: const Text('Read the server rules'),
@@ -135,7 +141,8 @@ class _GuildRulesDialogState extends State<GuildRulesDialog> {
             ? FlucordDialogConfirm(
                 key: const ValueKey('guild-rules-submit'),
                 label: _sending ? 'Submitting' : 'Submit',
-                onPressed: _agreed && !_sending
+                onPressed:
+                    (_agreed || !hasRules) && screening.isAnswered && !_sending
                     ? () => unawaited(_accept(screening))
                     : null,
               )
@@ -174,7 +181,12 @@ class _GuildRulesDialogState extends State<GuildRulesDialog> {
             ],
           ),
         ),
-      if (screening.canAccept)
+      if (screening.canAccept) ...[
+        for (final (index, field) in screening.fields.indexed)
+          if (field.isWritten || field.isMultipleChoice)
+            _question(context, screening, index, field),
+      ],
+      if (screening.canAccept && screening.rules.isNotEmpty)
         CheckboxListTile(
           key: const ValueKey('guild-rules-agree'),
           dense: true,
@@ -186,15 +198,78 @@ class _GuildRulesDialogState extends State<GuildRulesDialog> {
               : (value) => setState(() => _agreed = value ?? false),
           title: const Text('I have read and agree to the rules'),
         )
-      else
+      else if (!screening.canAccept)
         _note(
           context,
-          'This server also asks questions Flucord cannot answer yet. '
+          'This server asks you to verify your account first. '
           'Finish joining it in the Discord app.',
         ),
       if (_message case final message?) _note(context, message),
     ],
   );
+
+  /// One written or multiple-choice question, with its label above it.
+  Widget _question(
+    BuildContext context,
+    RulesScreening screening,
+    int index,
+    RulesScreeningField field,
+  ) {
+    // Read from the state, not this build: two answers can land before the
+    // next frame.
+    void answer(ScreeningAnswer? answer) => setState(
+      () => _answered = (_answered ?? screening).answer(index, answer),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            field.label,
+            style: FlucordTextRole.body.style.copyWith(
+              color: context.surfaces.text,
+            ),
+          ),
+          if (field.description case final description?)
+            _note(context, description),
+          const SizedBox(height: 6),
+          if (field.isWritten)
+            TextField(
+              key: ValueKey('guild-rules-answer-$index'),
+              enabled: !_sending,
+              maxLength: field.maxLength,
+              minLines: field.type == RulesScreeningField.paragraphType ? 3 : 1,
+              maxLines: field.type == RulesScreeningField.paragraphType ? 6 : 1,
+              decoration: InputDecoration(hintText: field.placeholder),
+              onChanged: (text) => answer(ScreeningAnswer.text(text)),
+            )
+          else
+            RadioGroup<int>(
+              groupValue: switch (field.answer) {
+                ScreeningChoice(:final index) => index,
+                _ => null,
+              },
+              onChanged: (choice) => _sending || choice == null
+                  ? null
+                  : answer(ScreeningAnswer.choice(choice)),
+              child: Column(
+                children: [
+                  for (final (choice, label) in field.choices.indexed)
+                    RadioListTile<int>(
+                      key: ValueKey('guild-rules-answer-$index-$choice'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(label),
+                      value: choice,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A server's onboarding, one question at a time.
