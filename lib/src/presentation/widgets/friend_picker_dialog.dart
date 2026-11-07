@@ -13,7 +13,7 @@ class FriendPickerDialog extends StatefulWidget {
     required this.title,
     required this.confirmLabel,
     required this.friends,
-    required this.room,
+    required this.maxPicked,
     this.minPicked = 1,
     super.key,
   });
@@ -25,7 +25,7 @@ class FriendPickerDialog extends StatefulWidget {
   final List<DirectMessageCandidate> friends;
 
   /// How many can be picked at most.
-  final int room;
+  final int maxPicked;
 
   /// How many must be picked before the dialog can confirm.
   final int minPicked;
@@ -48,13 +48,15 @@ class _FriendPickerDialogState extends State<FriendPickerDialog> {
   }
 
   void _toggle(String id) => setState(() {
-    if (!_picked.remove(id) && _picked.length < widget.room) _picked.add(id);
+    if (!_picked.remove(id) && _picked.length < widget.maxPicked) {
+      _picked.add(id);
+    }
   });
 
   @override
   Widget build(BuildContext context) {
     final matches = _matches;
-    final left = widget.room - _picked.length;
+    final left = widget.maxPicked - _picked.length;
     return FlucordDialog(
       title: Text(widget.title),
       description: left == 1

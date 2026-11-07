@@ -1,4 +1,4 @@
-import 'package:flucord/src/data/video/windows_share_sources.dart';
+import 'package:flucord/src/data/video/windows_captures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// An ordinary application window, the kind Alt+Tab lists.
@@ -43,20 +43,20 @@ WindowFacts _editorWith({
 
 void main() {
   test('an ordinary application window can be shared', () {
-    expect(_editor.isShareable, isTrue);
+    expect(_editor.isCapturable, isTrue);
   });
 
   test('what Alt+Tab hides is not offered', () {
     // Hidden, minimized, on another virtual desktop (cloaked), untitled,
     // tool windows and owned pop-ups, and the desktop itself.
-    expect(_editorWith(isVisible: false).isShareable, isFalse);
-    expect(_editorWith(isMinimized: true).isShareable, isFalse);
-    expect(_editorWith(isCloaked: true).isShareable, isFalse);
-    expect(_editorWith(title: '  ').isShareable, isFalse);
-    expect(_editorWith(isToolWindow: true).isShareable, isFalse);
-    expect(_editorWith(hasOwner: true).isShareable, isFalse);
-    expect(_editorWith(className: 'Progman').isShareable, isFalse);
-    expect(_editorWith(width: 0).isShareable, isFalse);
+    expect(_editorWith(isVisible: false).isCapturable, isFalse);
+    expect(_editorWith(isMinimized: true).isCapturable, isFalse);
+    expect(_editorWith(isCloaked: true).isCapturable, isFalse);
+    expect(_editorWith(title: '  ').isCapturable, isFalse);
+    expect(_editorWith(isToolWindow: true).isCapturable, isFalse);
+    expect(_editorWith(hasOwner: true).isCapturable, isFalse);
+    expect(_editorWith(className: 'Progman').isCapturable, isFalse);
+    expect(_editorWith(width: 0).isCapturable, isFalse);
   });
 
   test('a window that asks for the task bar is offered even when owned', () {
@@ -65,12 +65,12 @@ void main() {
         hasOwner: true,
         isToolWindow: true,
         isAppWindow: true,
-      ).isShareable,
+      ).isCapturable,
       isTrue,
     );
   });
 
   test('this client is never offered as a source', () {
-    expect(_editorWith(isOwnProcess: true).isShareable, isFalse);
+    expect(_editorWith(isOwnProcess: true).isCapturable, isFalse);
   });
 }

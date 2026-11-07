@@ -37,7 +37,7 @@ everything after the capture (scaling, encoding, delivery) is the display
 path's. The window keeps its shape inside the stream, with black bars, and a
 resize rebuilds the frame pool. A window that closes ends the capture with an
 empty frame and stage 10, which the share reports as "The shared window was
-closed." The picker lists the windows Alt+Tab would (`WindowsShareSourceCatalog`,
+closed." The picker lists the windows Alt+Tab would (`WindowsCaptureCatalog`,
 straight FFI against `user32`), and its thumbnails come from the screenshot
 path for screens and `PrintWindow` for windows, taken on isolates of their
 own. Every display capture behind a thumbnail is closed before the picker

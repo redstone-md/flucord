@@ -39,7 +39,7 @@ abstract final class DiscordSelfPresence {
       // asked to appear offline is doing.
       activities: status == Presence.invisible
           ? const []
-          : [?custom, ...localActivities.where(isShareable)],
+          : [?custom, ...localActivities.where(isCapturable)],
     );
   }
 
@@ -72,14 +72,14 @@ abstract final class DiscordSelfPresence {
     );
   }
 
-  /// R07's `isShareable`, reduced to the producers this client has.
+  /// R07's `isCapturable`, reduced to the producers this client has.
   ///
   /// The game-detection, Spotify and Go-Live producers are separate concerns
   /// that do not change the wire contract; until one exists, an activity with
   /// no `application_id` behind it is shareable and one that names an
   /// application is only shareable when the account allows game sharing —
   /// which is the same answer R07's per-app gate gives without a library.
-  static bool isShareable(UserActivity activity) =>
+  static bool isCapturable(UserActivity activity) =>
       activity.hasFlag(ActivityFlag.contextless) ||
       activity.applicationId == null;
 

@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
-import '../../domain/go_live_sources.dart';
+import '../../domain/stream_captures.dart';
 import 'screenshot_service.dart';
 
 /// What the window walk saw of one top-level window.
@@ -56,7 +56,7 @@ final class WindowFacts {
   /// Whether the picker offers it: the windows Alt+Tab lists, as Discord's
   /// own picker does, without this client's windows. A minimized window has
   /// no picture to send, so it is left out too.
-  bool get isShareable =>
+  bool get isCapturable =>
       isVisible &&
       !isMinimized &&
       !isCloaked &&
@@ -114,8 +114,8 @@ final class _BitmapInfoHeader extends Struct {
 /// The window walk is quick and runs where it is asked. The thumbnails run
 /// on an isolate of their own: a screen capture can wait up to a second, and
 /// `PrintWindow` waits on the window's own thread.
-final class WindowsShareSourceCatalog implements ShareSourceCatalog {
-  WindowsShareSourceCatalog() : _user32 = _User32.open();
+final class WindowsCaptureCatalog implements CaptureCatalog {
+  WindowsCaptureCatalog() : _user32 = _User32.open();
 
   final _User32 _user32;
 
@@ -125,24 +125,26 @@ final class WindowsShareSourceCatalog implements ShareSourceCatalog {
   static const _windowBudget = Duration(seconds: 2);
 
   @override
-  List<GoLiveWindow> windows() => _user32.shareableWindows();
+  List<WindowCapture> windows() => _user32.shareableWindows();
 
   @override
-  Future<Map<String, ShareThumbnail>> thumbnails(List<GoLiveSource> sources) =>
-      _take(sources);
+  Future<Map<String, CaptureThumbnail>> thumbnails(
+    List<StreamCapture> sources,
+  ) => _take(sources);
 
   /// Static, so the closures handed to the isolates cannot capture `this`
   /// and the native handles it holds.
-  static Future<Map<String, ShareThumbnail>> _take(
-    List<GoLiveSource> sources,
+  static Future<Map<String, CaptureThumbnail>> _take(
+    List<StreamCapture> sources,
   ) async {
     final displays = [
       for (final source in sources)
-        if (source is GoLiveDisplay) (id: source.sourceId, index: source.index),
+        if (source is DisplayCapture)
+          (id: source.sourceId, index: source.index),
     ];
     final windows = [
       for (final source in sources)
-        if (source is GoLiveWindow)
+        if (source is WindowCapture)
           (id: source.sourceId, handle: source.handle),
     ];
     // The screens are always waited for: each capture behind them is closed
@@ -156,14 +158,14 @@ final class WindowsShareSourceCatalog implements ShareSourceCatalog {
     return {for (final part in taken) ...part};
   }
 
-  static Map<String, ShareThumbnail> _screenThumbnails(
+  static Map<String, CaptureThumbnail> _screenThumbnails(
     List<({String id, int index})> displays,
   ) {
     final screens = NativeScreenshotService();
     return {
       for (final display in displays)
         if (screens.capture(displayIndex: display.index) case final shot?)
-          display.id: ShareThumbnail.fromBgra(
+          display.id: CaptureThumbnail.fromBgra(
             shot.pixels,
             width: shot.width,
             height: shot.height,
@@ -172,7 +174,7 @@ final class WindowsShareSourceCatalog implements ShareSourceCatalog {
     };
   }
 
-  static Map<String, ShareThumbnail> _windowThumbnails(
+  static Map<String, CaptureThumbnail> _windowThumbnails(
     List<({String id, int handle})> windows,
   ) {
     final user32 = _User32.open();
@@ -351,14 +353,14 @@ final class _User32 {
   final int _ownProcess;
 
   /// The top-level windows the picker offers, front first.
-  List<GoLiveWindow> shareableWindows() {
+  List<WindowCapture> shareableWindows() {
     final text = calloc<Uint16>(_textCapacity);
     final className = calloc<Uint16>(_textCapacity);
     final process = calloc<Uint32>();
     final cloaked = calloc<Int32>();
     final rect = calloc<_Rect>();
     try {
-      final found = <GoLiveWindow>[];
+      final found = <WindowCapture>[];
       // GW_CHILD from the desktop is the first top-level window; GW_HWNDNEXT
       // walks the rest in z-order.
       for (
@@ -395,8 +397,8 @@ final class _User32 {
           width: rect.ref.right - rect.ref.left,
           height: rect.ref.bottom - rect.ref.top,
         );
-        if (facts.isShareable) {
-          found.add(GoLiveWindow(handle: window, name: facts.title.trim()));
+        if (facts.isCapturable) {
+          found.add(WindowCapture(handle: window, name: facts.title.trim()));
         }
       }
       return found;
@@ -412,7 +414,7 @@ final class _User32 {
 
   /// A thumbnail of [window], or null when it is gone, not answering, or
   /// would not draw.
-  ShareThumbnail? printWindow(int window) {
+  CaptureThumbnail? printWindow(int window) {
     if (_isHung(window) != 0) return null;
     final rect = calloc<_Rect>();
     final info = calloc<_BitmapInfoHeader>();
@@ -436,7 +438,7 @@ final class _User32 {
       info.ref
         ..size = sizeOf<_BitmapInfoHeader>()
         ..width = width
-        // Negative: rows from the top, as ShareThumbnail reads them.
+        // Negative: rows from the top, as CaptureThumbnail reads them.
         ..height = -height
         ..planes = 1
         ..bitCount = 32;
@@ -452,7 +454,7 @@ final class _User32 {
         _dibRgbColors,
       );
       if (rows != height) return null;
-      return ShareThumbnail.fromBgra(
+      return CaptureThumbnail.fromBgra(
         Uint8List.fromList(pixels.asTypedList(length)),
         width: width,
         height: height,

@@ -6,8 +6,8 @@ import 'dart:typed_data';
 /// Each travels as a source id in the shape a capture source list uses,
 /// `screen:<index>:0` or `window:<handle>:0`. This client never varies the
 /// tail, but the shape is not ours to change.
-sealed class GoLiveSource {
-  const GoLiveSource();
+sealed class StreamCapture {
+  const StreamCapture();
 
   String get sourceId;
 
@@ -20,8 +20,8 @@ sealed class GoLiveSource {
 /// Named by the encoder rather than by a capture library: enumerating sources
 /// through WebRTC opens duplications of its own to build thumbnails with, and
 /// one of those left open is what refuses the share afterwards.
-final class GoLiveDisplay extends GoLiveSource {
-  const GoLiveDisplay({required this.index, required this.name});
+final class DisplayCapture extends StreamCapture {
+  const DisplayCapture({required this.index, required this.name});
 
   final int index;
 
@@ -45,8 +45,8 @@ final class GoLiveDisplay extends GoLiveSource {
 }
 
 /// One top-level window this machine can share, by its handle.
-final class GoLiveWindow extends GoLiveSource {
-  const GoLiveWindow({required this.handle, required this.name});
+final class WindowCapture extends StreamCapture {
+  const WindowCapture({required this.handle, required this.name});
 
   /// The platform's handle for it (an `HWND` on Windows).
   final int handle;
@@ -67,8 +67,8 @@ final class GoLiveWindow extends GoLiveSource {
 }
 
 /// A small picture of a source for the picker, as encoded image bytes.
-final class ShareThumbnail {
-  const ShareThumbnail({
+final class CaptureThumbnail {
+  const CaptureThumbnail({
     required this.bytes,
     required this.width,
     required this.height,
@@ -80,7 +80,7 @@ final class ShareThumbnail {
   /// Each picture element is the average of the area it covers, so text
   /// stays a grey smear rather than turning into noise. The alpha is made
   /// opaque: a window drawn by GDI leaves it at zero.
-  factory ShareThumbnail.fromBgra(
+  factory CaptureThumbnail.fromBgra(
     Uint8List bgra, {
     required int width,
     required int height,
@@ -115,7 +115,7 @@ final class ShareThumbnail {
         pixels[out + 3] = 0xff;
       }
     }
-    return ShareThumbnail(
+    return CaptureThumbnail(
       bytes: _bitmap(pixels, outWidth, outHeight),
       width: outWidth,
       height: outHeight,
@@ -149,26 +149,26 @@ final class ShareThumbnail {
 
 /// Where the Go Live picker finds windows to share, and the thumbnails it
 /// shows for every source. The screens themselves come from the encoder.
-abstract interface class ShareSourceCatalog {
+abstract interface class CaptureCatalog {
   /// The windows that can be shared now, front first.
-  List<GoLiveWindow> windows();
+  List<WindowCapture> windows();
 
   /// A thumbnail for each of [sources] that could be captured, by source id.
   ///
   /// Every display capture taken for these is closed before this completes,
   /// so a share started after it does not find its display held.
-  Future<Map<String, ShareThumbnail>> thumbnails(List<GoLiveSource> sources);
+  Future<Map<String, CaptureThumbnail>> thumbnails(List<StreamCapture> sources);
 }
 
 /// A platform with no windows to list and no thumbnails to take.
-final class UnavailableShareSourceCatalog implements ShareSourceCatalog {
-  const UnavailableShareSourceCatalog();
+final class UnavailableCaptureCatalog implements CaptureCatalog {
+  const UnavailableCaptureCatalog();
 
   @override
-  List<GoLiveWindow> windows() => const [];
+  List<WindowCapture> windows() => const [];
 
   @override
-  Future<Map<String, ShareThumbnail>> thumbnails(
-    List<GoLiveSource> sources,
+  Future<Map<String, CaptureThumbnail>> thumbnails(
+    List<StreamCapture> sources,
   ) async => const {};
 }

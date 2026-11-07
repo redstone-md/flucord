@@ -1,14 +1,14 @@
 import 'dart:typed_data';
 
-import 'package:flucord/src/domain/go_live_sources.dart';
+import 'package:flucord/src/domain/stream_captures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('a window source id names its handle, and nothing else does', () {
-    expect(GoLiveWindow.handleFor('window:42:0'), 42);
-    expect(GoLiveWindow.handleFor('screen:1:0'), isNull);
-    expect(GoLiveWindow.handleFor('window:nope:0'), isNull);
-    expect(GoLiveWindow.handleFor(null), isNull);
+    expect(WindowCapture.handleFor('window:42:0'), 42);
+    expect(WindowCapture.handleFor('screen:1:0'), isNull);
+    expect(WindowCapture.handleFor('window:nope:0'), isNull);
+    expect(WindowCapture.handleFor(null), isNull);
   });
 
   test('a thumbnail averages the area each element covers, as a top-down '
@@ -19,7 +19,7 @@ void main() {
     const black = [0x00, 0x00, 0x00, 0x00];
     const pad = [9, 9, 9, 9];
     final row = [...white, ...white, ...black, ...black, ...pad];
-    final thumbnail = ShareThumbnail.fromBgra(
+    final thumbnail = CaptureThumbnail.fromBgra(
       Uint8List.fromList([...row, ...row]),
       width: 4,
       height: 2,
@@ -41,7 +41,7 @@ void main() {
   });
 
   test('a thumbnail never grows a picture smaller than its box', () {
-    final thumbnail = ShareThumbnail.fromBgra(
+    final thumbnail = CaptureThumbnail.fromBgra(
       Uint8List(4 * 3 * 2),
       width: 3,
       height: 2,

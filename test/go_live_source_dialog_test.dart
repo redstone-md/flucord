@@ -1,18 +1,18 @@
 import 'dart:async';
 
-import 'package:flucord/src/domain/go_live_sources.dart';
+import 'package:flucord/src/domain/stream_captures.dart';
 import 'package:flucord/src/presentation/widgets/go_live_source_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/fake_share_sources.dart';
+import 'support/fake_captures.dart';
 
 const _screens = [
-  GoLiveDisplay(index: 0, name: 'Screen 1'),
-  GoLiveDisplay(index: 1, name: 'Screen 2'),
+  DisplayCapture(index: 0, name: 'Screen 1'),
+  DisplayCapture(index: 1, name: 'Screen 2'),
 ];
-const _notes = GoLiveWindow(handle: 0x2a, name: 'Notes');
+const _notes = WindowCapture(handle: 0x2a, name: 'Notes');
 
 Finder _thumbnail(String sourceId) =>
     find.byKey(ValueKey('go-live-thumbnail-$sourceId'));
@@ -22,7 +22,7 @@ void main() {
     await _pump(tester, const [
       ..._screens,
       _notes,
-    ], FakeShareSourceCatalog(pictured: {'screen:0:0', 'window:42:0'}));
+    ], FakeCaptureCatalog(pictured: {'screen:0:0', 'window:42:0'}));
 
     // Applications first, the way Discord's picker opens.
     expect(find.text('Notes'), findsOneWidget);
@@ -42,7 +42,7 @@ void main() {
     final picked = await _pump(tester, const [
       ..._screens,
       _notes,
-    ], FakeShareSourceCatalog());
+    ], FakeCaptureCatalog());
 
     await tester.tap(find.byKey(const ValueKey('go-live-source-window:42:0')));
     await tester.pumpAndSettle();
@@ -58,7 +58,7 @@ void main() {
     final picked = await _pump(
       tester,
       _screens,
-      FakeShareSourceCatalog(thumbnailsReady: ready),
+      FakeCaptureCatalog(thumbnailsReady: ready),
     );
     unawaited(picked.then((_) => answered = true));
 
@@ -74,7 +74,7 @@ void main() {
   testWidgets('without windows there are no tabs, only screens', (
     tester,
   ) async {
-    await _pump(tester, _screens, FakeShareSourceCatalog());
+    await _pump(tester, _screens, FakeCaptureCatalog());
 
     expect(find.byKey(const ValueKey('go-live-tab-screens')), findsNothing);
     expect(find.text('Screen 1'), findsOneWidget);
@@ -83,7 +83,7 @@ void main() {
 
   testWidgets('a machine with no screens says so rather than showing an empty '
       'grid', (tester) async {
-    await _pump(tester, const [], FakeShareSourceCatalog());
+    await _pump(tester, const [], FakeCaptureCatalog());
 
     expect(
       find.text('This machine reported no screen to capture.'),
@@ -92,7 +92,7 @@ void main() {
   });
 
   testWidgets('cancelling hands nothing back', (tester) async {
-    final picked = await _pump(tester, _screens, FakeShareSourceCatalog());
+    final picked = await _pump(tester, _screens, FakeCaptureCatalog());
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -103,7 +103,7 @@ void main() {
   testWidgets('one screen and no window is shared without asking', (
     tester,
   ) async {
-    final catalog = FakeShareSourceCatalog();
+    final catalog = FakeCaptureCatalog();
     String? picked;
     await tester.pumpWidget(
       MaterialApp(
@@ -111,7 +111,7 @@ void main() {
           builder: (context) => TextButton(
             onPressed: () async => picked = await GoLiveSourceDialog.pick(
               context,
-              sources: const [GoLiveDisplay(index: 0, name: 'Screen 1')],
+              sources: const [DisplayCapture(index: 0, name: 'Screen 1')],
               thumbnails: catalog.thumbnails,
             ),
             child: const Text('open'),
@@ -130,8 +130,8 @@ void main() {
 /// Opens the picker over [sources] and answers what it was closed with.
 Future<Future<String?>> _pump(
   WidgetTester tester,
-  List<GoLiveSource> sources,
-  FakeShareSourceCatalog catalog,
+  List<StreamCapture> sources,
+  FakeCaptureCatalog catalog,
 ) async {
   final picked = Completer<String?>();
   await tester.pumpWidget(

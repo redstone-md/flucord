@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/go_live_sources.dart';
+import '../../domain/stream_captures.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
@@ -10,7 +10,7 @@ import 'flucord_dialog.dart';
 
 /// Takes a thumbnail of each source, by source id.
 typedef ShareThumbnails =
-    Future<Map<String, ShareThumbnail>> Function(List<GoLiveSource> sources);
+    Future<Map<String, CaptureThumbnail>> Function(List<StreamCapture> sources);
 
 enum _Tab { applications, screens }
 
@@ -28,14 +28,14 @@ class GoLiveSourceDialog extends StatefulWidget {
     super.key,
   });
 
-  final List<GoLiveSource> sources;
+  final List<StreamCapture> sources;
   final ShareThumbnails thumbnails;
 
   /// Asks which of [sources] to share, answering its source id, or null when
   /// dismissed. One screen and no window is shared without asking.
   static Future<String?> pick(
     BuildContext context, {
-    required List<GoLiveSource> sources,
+    required List<StreamCapture> sources,
     required ShareThumbnails thumbnails,
   }) async {
     if (sources.length <= 1) return sources.firstOrNull?.sourceId;
@@ -51,23 +51,23 @@ class GoLiveSourceDialog extends StatefulWidget {
 }
 
 class _GoLiveSourceDialogState extends State<GoLiveSourceDialog> {
-  late final Future<Map<String, ShareThumbnail>> _thumbnails = widget
+  late final Future<Map<String, CaptureThumbnail>> _thumbnails = widget
       .thumbnails(widget.sources)
-      .catchError((Object _) => <String, ShareThumbnail>{});
+      .catchError((Object _) => <String, CaptureThumbnail>{});
 
-  late final List<GoLiveWindow> _windows = [
+  late final List<WindowCapture> _windows = [
     for (final source in widget.sources)
-      if (source is GoLiveWindow) source,
+      if (source is WindowCapture) source,
   ];
-  late final List<GoLiveDisplay> _screens = [
+  late final List<DisplayCapture> _screens = [
     for (final source in widget.sources)
-      if (source is GoLiveDisplay) source,
+      if (source is DisplayCapture) source,
   ];
 
   late _Tab _tab = _windows.isEmpty ? _Tab.screens : _Tab.applications;
   bool _picking = false;
 
-  Future<void> _pick(GoLiveSource source) async {
+  Future<void> _pick(StreamCapture source) async {
     if (_picking) return;
     setState(() => _picking = true);
     await _thumbnails;
@@ -134,8 +134,8 @@ class _SourceTile extends StatelessWidget {
     required this.onPressed,
   });
 
-  final GoLiveSource source;
-  final ShareThumbnail? thumbnail;
+  final StreamCapture source;
+  final CaptureThumbnail? thumbnail;
   final VoidCallback? onPressed;
 
   static const double _width = 176;
@@ -170,7 +170,7 @@ class _SourceTile extends StatelessWidget {
                       child: thumbnail == null
                           ? Center(
                               child: FlucordIcon(
-                                source is GoLiveWindow
+                                source is WindowCapture
                                     ? FlucordIcons.appWindow
                                     : FlucordIcons.desktop,
                                 color: surfaces.muted,
