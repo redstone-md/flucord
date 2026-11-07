@@ -44,7 +44,6 @@ final class VoiceRoomCoordination {
        _room = voice.connectedChannelId {
     _voice.addListener(_followRoom);
     _voice.addListener(_syncRemoteCameras);
-    _voice.addListener(_endWatchesWithRoom);
     _voice.addListener(_endShareWithRoom);
     _voice.addListener(_endCameraWithRoom);
     _voice.addListener(_keepCameraOnConnection);
@@ -74,7 +73,6 @@ final class VoiceRoomCoordination {
   void dispose() {
     _voice.removeListener(_followRoom);
     _voice.removeListener(_syncRemoteCameras);
-    _voice.removeListener(_endWatchesWithRoom);
     _voice.removeListener(_endShareWithRoom);
     _voice.removeListener(_endCameraWithRoom);
     _voice.removeListener(_keepCameraOnConnection);
@@ -101,27 +99,20 @@ final class VoiceRoomCoordination {
     }
   }
 
-  /// When the room went to another channel, a moderator move or the
-  /// person's own: watches from the old room end, and the screen showing the
-  /// old room shows the new one.
+  /// Watches end when the room goes down or to another channel, by a
+  /// moderator move or the person's own. Discord forgets a room's watchers
+  /// with the room, and a viewer that kept its asks would offer "Stop
+  /// watching" on streams it no longer holds. On a move, the screen showing
+  /// the old room shows the new one.
   void _followRoom() {
     final previous = _room;
     final current = _voice.connectedChannelId;
-    if (current == previous) return;
     _room = current;
-    if (previous == null || current == null) return;
-    unawaited(_streamViewer.stop());
-    if (_workspace.selectedChannelId == previous) {
+    final moved = previous != null && current != null && current != previous;
+    if (!_roomIsUp || moved) unawaited(_streamViewer.stop());
+    if (moved && _workspace.selectedChannelId == previous) {
       _workspace.selectChannel(current);
     }
-  }
-
-  /// Discord forgets a room's watchers with the room. A viewer that kept its
-  /// asks would offer "Stop watching" on streams it no longer holds, and
-  /// carry withdrawals into the next room.
-  void _endWatchesWithRoom() {
-    if (_roomIsUp) return;
-    unawaited(_streamViewer.stop());
   }
 
   /// The stream ends with the room, and the capture behind it is released.
