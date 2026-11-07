@@ -3,7 +3,6 @@ part of 'discord_desktop_chat_repository.dart';
 mixin _DiscordDesktopChatRepositoryVoiceMessages
     implements VoiceMessageRepository {
   DiscordDesktopApiClient get _api;
-  DiscordMessageNonceFactory get _nonceFactory;
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload);
 
   @override
@@ -11,20 +10,14 @@ mixin _DiscordDesktopChatRepositoryVoiceMessages
     required String channelId,
     required String authorId,
     required PendingVoiceMessage voiceMessage,
+    required String nonce,
+    UploadProgressListener? onUploadProgress,
   }) async {
-    // As a draft with the file only, so a retry keeps its nonce.
-    final payload = await _nonceFactory.sendDraft(
+    final payload = await _api.createVoiceMessage(
       channelId: channelId,
-      body: '',
-      attachments: [voiceMessage.attachment],
-      replyToMessageId: null,
-      suppressNotifications: false,
-      textToSpeech: false,
-      send: (nonce) => _api.createVoiceMessage(
-        channelId: channelId,
-        voiceMessage: voiceMessage,
-        nonce: nonce,
-      ),
+      voiceMessage: voiceMessage,
+      nonce: nonce,
+      onUploadProgress: onUploadProgress,
     );
     return _storeSentMessage(payload);
   }

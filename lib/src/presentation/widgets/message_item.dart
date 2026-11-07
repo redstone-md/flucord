@@ -569,7 +569,10 @@ class _MessageItemState extends State<MessageItem> {
           MessageAttachmentGallery(
             attachments: message.attachments,
             rendersMedia: display.rendersAttachmentMedia,
-            downloadService: widget.attachmentDownloadService,
+            // A message on its way has no copy on Discord to download yet.
+            downloadService: widget.deliveryStatus == null
+                ? widget.attachmentDownloadService
+                : null,
           ),
         if (!message.suppressesEmbeds && display.rendersEmbeds)
           for (var index = 0; index < message.embeds.length; index++)

@@ -4,7 +4,6 @@ mixin _DiscordChatRepositoryVoiceMessages implements VoiceMessageRepository {
   DiscordApiClient get _api;
   DiscordMapper get _mapper;
   ChatCache get _cache;
-  DiscordMessageNonceFactory get _messageNonceFactory;
   String? get _currentMemberId;
 
   @override
@@ -12,11 +11,14 @@ mixin _DiscordChatRepositoryVoiceMessages implements VoiceMessageRepository {
     required String channelId,
     required String authorId,
     required PendingVoiceMessage voiceMessage,
+    required String nonce,
+    // The bot API client does not report upload progress, as with text.
+    UploadProgressListener? onUploadProgress,
   }) async {
     final payload = await _api.createVoiceMessage(
       channelId: channelId,
       voiceMessage: voiceMessage,
-      nonce: _messageNonceFactory.next(),
+      nonce: nonce,
       enforceNonce: true,
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);

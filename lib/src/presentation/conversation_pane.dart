@@ -796,9 +796,12 @@ class ConversationPaneState extends State<ConversationPane> {
             onSendVoiceMessage:
                 chat.canSendVoiceMessages &&
                     widget.capabilities.sendVoiceMessages
-                ? (voiceMessage) => chat.sendVoiceMessage(
-                    channelId: channel.id,
-                    voiceMessage: voiceMessage,
+                ? (voiceMessage, release) => unawaited(
+                    chat.sendVoiceMessage(
+                      channelId: channel.id,
+                      voiceMessage: voiceMessage,
+                      onReleased: release,
+                    ),
                   )
                 : null,
             onSend:

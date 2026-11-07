@@ -12,6 +12,8 @@ mixin _MockChatRepositoryVoiceMessages implements VoiceMessageRepository {
     required String channelId,
     required String authorId,
     required PendingVoiceMessage voiceMessage,
+    required String nonce,
+    UploadProgressListener? onUploadProgress,
   }) async {
     await _wait();
     final messageId = 'local-${_messageSequence++}';

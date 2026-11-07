@@ -633,6 +633,9 @@ are excluded from the denominator and are never reported as implemented.
   asks `POST /channels/{id}/attachments` for an upload slot, puts the Ogg file
   at the slot's URL, then posts the message with flag 8192, the duration and
   the waveform. The microphone shows only where `SEND_VOICE_MESSAGES` is held.
+  A voice message shows at once as sending, with its upload progress, and a
+  failed one stays in the timeline with Retry (same nonce) and Delete, like a
+  text message.
 - **Tests**: 40+ files under `test/`, including
   `discord_chat_repository_messages_test.dart` and `discord_message_mapper_test.dart`.
 - **Live evidence**: live channel history and message dispatches on Windows

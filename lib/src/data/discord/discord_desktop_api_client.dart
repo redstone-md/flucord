@@ -680,17 +680,22 @@ final class DiscordDesktopApiClient
 
   /// Posts [voiceMessage] the way the official client does: it asks for an
   /// upload slot, puts the file there, then posts the message that names the
-  /// uploaded file.
+  /// uploaded file. [onUploadProgress] hears the file go to the slot.
   Future<Map<String, Object?>> createVoiceMessage({
     required String channelId,
     required PendingVoiceMessage voiceMessage,
     required String nonce,
+    UploadProgressListener? onUploadProgress,
   }) async {
     final slot = await _uploadSlot(channelId, voiceMessage);
+    final bytes = await File(voiceMessage.path).readAsBytes();
     await _rest.uploadTo(
       slot.url,
-      await File(voiceMessage.path).readAsBytes(),
+      bytes,
       contentType: 'audio/ogg',
+      onBodySent: onUploadProgress == null
+          ? null
+          : (sent) => onUploadProgress(sent / bytes.length),
     );
     return _rest.requestObject(
       'POST',
