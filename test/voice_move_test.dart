@@ -156,9 +156,12 @@ void main() {
     await _until(() => rig.gateway.voiceStates.isNotEmpty);
 
     expect(rig.voice.isCameraOn, isFalse);
-    expect(rig.gateway.voiceStates.map((frame) => frame.channelId), [
-      'voice-2',
-    ]);
+    expect(
+      rig.gateway.voiceStates.map(
+        (frame) => (frame.channelId, frame.selfVideo),
+      ),
+      [('voice-2', false)],
+    );
   });
 
   test('a move into a channel with a server mute says so, as a join '

@@ -8,6 +8,7 @@ typedef FakeVoiceStateFrame = ({
   String? channelId,
   bool selfMute,
   bool selfDeaf,
+  bool selfVideo,
 });
 
 /// The bot transport's gateway with no socket behind it. A test sends what
@@ -50,6 +51,7 @@ final class FakeChatGateway implements DiscordChatGateway {
     channelId: channelId,
     selfMute: selfMute,
     selfDeaf: selfDeaf,
+    selfVideo: selfVideo,
   ));
 
   @override
