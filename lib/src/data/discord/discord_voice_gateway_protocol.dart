@@ -317,7 +317,14 @@ final class DiscordVoiceGatewayProtocol {
   /// Triage for the code the server closed the socket with.
   DiscordVoiceGatewayAction closedWithCode(int? code) {
     if (code == DiscordVoiceCloseCodes.daveRequired) {
-      return const DiscordVoiceGatewayFail(VoiceEncryptionRequiredException());
+      // Only a build that offered no DAVE can blame missing DAVE. One that
+      // offered it was refused for something else, such as a stream identify
+      // naming the wrong RTC channel.
+      return DiscordVoiceGatewayFail(
+        maxDaveProtocolVersion == 0
+            ? const VoiceEncryptionRequiredException()
+            : StateError('Discord refused the voice connection (code $code)'),
+      );
     }
     if (code != null && _sessionEndedCodes.contains(code)) {
       return DiscordVoiceGatewayAwaitCredentials(

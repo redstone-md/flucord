@@ -4,10 +4,11 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  DiscordVoiceGatewayProtocol protocol() => DiscordVoiceGatewayProtocol(
-    credentials: _credentials,
-    maxDaveProtocolVersion: 1,
-  );
+  DiscordVoiceGatewayProtocol protocol({int maxDaveProtocolVersion = 1}) =>
+      DiscordVoiceGatewayProtocol(
+        credentials: _credentials,
+        maxDaveProtocolVersion: maxDaveProtocolVersion,
+      );
 
   Map<String, Object?> frame(int opcode, [Object? data]) => {
     'op': opcode,
@@ -91,7 +92,23 @@ void main() {
       }
     });
 
-    test('a room that requires DAVE fails with that reason', () {
+    test('a room that requires DAVE fails with that reason, on a build '
+        'without DAVE', () {
+      final action = protocol(
+        maxDaveProtocolVersion: 0,
+      ).closedWithCode(DiscordVoiceCloseCodes.daveRequired);
+
+      expect(
+        action,
+        isA<DiscordVoiceGatewayFail>().having(
+          (fail) => fail.error,
+          'error',
+          isA<VoiceEncryptionRequiredException>(),
+        ),
+      );
+    });
+
+    test('a build with DAVE does not blame missing DAVE for code 4017', () {
       final action = protocol().closedWithCode(
         DiscordVoiceCloseCodes.daveRequired,
       );
@@ -101,7 +118,7 @@ void main() {
         isA<DiscordVoiceGatewayFail>().having(
           (fail) => fail.error,
           'error',
-          isA<VoiceEncryptionRequiredException>(),
+          isNot(isA<VoiceEncryptionRequiredException>()),
         ),
       );
     });
