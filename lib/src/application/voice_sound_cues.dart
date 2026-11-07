@@ -75,6 +75,10 @@ const _crowd = 25;
 /// The one sound the change from [before] to [after] makes, by Discord's
 /// rules, or null. The account's own connection comes first, then a move,
 /// deafen, mute, Streams, and last the others coming and going.
+///
+/// Others are heard coming and going only once the account's own seat was
+/// already in the room, so the people there on entry make no sound, even
+/// when the roster arrives after the connection.
 ClientSound? voiceSoundBetween(
   VoiceSoundSnapshot before,
   VoiceSoundSnapshot after,
@@ -82,7 +86,13 @@ ClientSound? voiceSoundBetween(
   final joined =
       after.connected &&
       (!before.connected || before.channelId != after.channelId);
-  if (joined) return after.isStage ? null : ClientSound.userJoin;
+  // Going to the channel somebody already moved the account to follows a
+  // move, whose sound has played.
+  final followedMove =
+      before.connected && before.selfSeatedIn == after.channelId;
+  if (joined) {
+    return after.isStage || followedMove ? null : ClientSound.userJoin;
+  }
   if (before.connected && !after.connected) {
     return before.isStage ? null : ClientSound.disconnect;
   }
@@ -105,7 +115,9 @@ ClientSound? voiceSoundBetween(
   }
   final ended = before.streamers.difference(after.streamers);
   if (ended.any(before.followed.contains)) return ClientSound.streamEnded;
-  if (before.others.length > _crowd) return null;
+  if (before.others.length > _crowd || before.selfSeatedIn != after.channelId) {
+    return null;
+  }
   if (after.others.difference(before.others).isNotEmpty) {
     return ClientSound.userJoin;
   }
