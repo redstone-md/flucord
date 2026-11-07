@@ -95,23 +95,41 @@ import 'discord_restored_history.dart';
 
 part 'discord_desktop_chat_events.dart';
 part 'discord_desktop_chat_session.dart';
+part 'discord_desktop_chat_repository_messages.dart';
+part 'discord_desktop_chat_repository_pins.dart';
+part 'discord_desktop_chat_repository_direct_messages.dart';
+part 'discord_desktop_chat_repository_threads.dart';
+part 'discord_desktop_chat_repository_member_list.dart';
+part 'discord_desktop_chat_repository_message_flags.dart';
+part 'discord_desktop_chat_repository_polls.dart';
+part 'discord_desktop_chat_repository_reactions.dart';
+part 'discord_desktop_chat_repository_forwards.dart';
+part 'discord_desktop_chat_repository_stickers.dart';
+part 'discord_desktop_chat_repository_voice_messages.dart';
+part 'discord_desktop_chat_repository_scheduled_events.dart';
+part 'discord_desktop_chat_repository_read_state.dart';
 
+/// The chat transport for a signed-in desktop user.
+///
+/// Each capability lives in its own part, the same way the bot repository
+/// is laid out. This class holds construction, the shared state and the
+/// helpers the parts share.
 final class DiscordDesktopChatRepository
-    implements
-        ChatRepository,
-        ThreadListRepository,
-        ForumPostRepository,
-        GuildMemberListRepository,
-        ScheduledEventRepository,
-        VoiceMessageRepository,
-        MessageForwardRepository,
-        StickerRepository,
-        MessageFlagRepository,
-        DirectMessageManagementRepository,
-        PollRepository,
-        PollVoteRepository,
-        ReactionRepository,
-        SuperReactionRepository {
+    with
+        _DiscordDesktopChatRepositoryMessages,
+        _DiscordDesktopChatRepositoryPins,
+        _DiscordDesktopChatRepositoryDirectMessages,
+        _DiscordDesktopChatRepositoryThreads,
+        _DiscordDesktopChatRepositoryMemberList,
+        _DiscordDesktopChatRepositoryMessageFlags,
+        _DiscordDesktopChatRepositoryPolls,
+        _DiscordDesktopChatRepositoryReactions,
+        _DiscordDesktopChatRepositoryForwards,
+        _DiscordDesktopChatRepositoryStickers,
+        _DiscordDesktopChatRepositoryVoiceMessages,
+        _DiscordDesktopChatRepositoryScheduledEvents,
+        _DiscordDesktopChatRepositoryReadState
+    implements ChatRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -182,17 +200,22 @@ final class DiscordDesktopChatRepository
     _gateway.useClientStateProvider(_readState.identifyClientState);
   }
 
-  static const _pageSize = 100;
-
+  @override
   final DiscordDesktopApiClient _api;
+  @override
   final DiscordDesktopGatewayClient _gateway;
+  @override
   final ChatCache _cache;
+  @override
   final DiscordMapper _mapper;
+  @override
   final DiscordMessageNonceFactory _nonceFactory;
   final DiscordUserSettingsRepository _userSettings;
+  @override
   final DiscordReadStateRepository _readState;
   final DiscordVoiceSignalingService _voiceSignaling;
   final DiscordThreadMembershipService _threadMembership;
+  @override
   late final DiscordThreadDirectory _threads = DiscordThreadDirectory(
     routes: _api.threads,
     cache: _cache,
@@ -220,9 +243,11 @@ final class DiscordDesktopChatRepository
   late final DiscordUserNotesRepository _userNotes = DiscordUserNotesRepository(
     _api,
   );
+  @override
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
+  @override
   late final DiscordMemberListHandler _memberLists;
   late final DiscordMessageSearchService _messageSearch;
   late final DiscordPresenceService _presence;
@@ -230,7 +255,9 @@ final class DiscordDesktopChatRepository
       DiscordDetectableGameService(_api);
   late final DiscordDirectCallService _directCalls;
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
+  @override
   String? _currentMemberId;
+  @override
   late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
     _api.createDirectMessageChannel,
     _cache,
@@ -238,6 +265,7 @@ final class DiscordDesktopChatRepository
     _events.publish,
     onChannelAdded: _readState.addPrivateChannel,
   );
+  @override
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(
         cache: _cache,
@@ -336,12 +364,6 @@ final class DiscordDesktopChatRepository
   @override
   UserSettingsRepository? get userSettings => _userSettings;
 
-  /// Read state is account state on the user's own session: `READY` carries
-  /// it, this socket receives every later revision of it, and these
-  /// credentials are the only ones allowed to acknowledge one.
-  @override
-  ReadStateRepository? get readState => _readState;
-
   /// The desktop-user session owns both halves a call needs — the gateway
   /// socket for opcode 13 and the user's REST credentials for the ring routes —
   /// so it is the one transport that can offer this.
@@ -408,39 +430,6 @@ final class DiscordDesktopChatRepository
   DetectableGameRepository? get detectableGames => _detectableGames;
 
   @override
-  Stream<GuildMemberList> get memberListUpdates => _memberLists.updates;
-
-  @override
-  String memberListIdFor({
-    required String guildId,
-    required String channelId,
-  }) => _memberLists.memberListIdFor(guildId: guildId, channelId: channelId);
-
-  @override
-  GuildMemberList? memberListFor({
-    required String guildId,
-    required String listId,
-  }) => _memberLists.listFor(guildId: guildId, listId: listId);
-
-  @override
-  void subscribeMemberRanges({
-    required String guildId,
-    required String channelId,
-    required List<List<int>> ranges,
-  }) => _gateway.subscribeMemberRanges(
-    guildId: guildId,
-    channelId: channelId,
-    ranges: ranges,
-  );
-
-  @override
-  void unsubscribeMemberRanges({
-    required String guildId,
-    required String channelId,
-  }) =>
-      _gateway.unsubscribeMemberRanges(guildId: guildId, channelId: channelId);
-
-  @override
   Future<ChatWorkspace> loadWorkspace() async {
     _emitStatus(RepositoryConnectionStatus.connecting);
     try {
@@ -500,377 +489,6 @@ final class DiscordDesktopChatRepository
   }
 
   @override
-  Future<ChannelHistoryPage> loadChannelHistory(
-    String channelId, {
-    String? beforeMessageId,
-    String? aroundMessageId,
-  }) async {
-    // The held page goes out first, so the conversation is readable while
-    // Discord is still being asked for the same one.
-    final restored = beforeMessageId == null && aroundMessageId == null
-        ? await readRestoredHistory(_cache, channelId, pageSize: _pageSize)
-        : null;
-    if (restored != null) _events.add(restored);
-    try {
-      final payloads = await _api.getChannelMessages(
-        channelId,
-        limit: _pageSize,
-        beforeMessageId: beforeMessageId,
-        aroundMessageId: aroundMessageId,
-      );
-      final history = _mapper.history(
-        channelId,
-        payloads,
-        currentMemberId: _currentMemberId,
-      );
-      await _cache.writeChannelHistory(history, replaceExisting: false);
-      return ChannelHistoryPage(
-        history: history,
-        hasMore: payloads.length == _pageSize,
-      );
-    } catch (error) {
-      if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      // The page already handed out is the answer; re-reading it would only
-      // decode the same rows again.
-      if (restored != null) {
-        return ChannelHistoryPage(
-          history: restored.history,
-          hasMore: restored.hasMore,
-          fromCache: true,
-        );
-      }
-      final cached = await _cache.readChannelHistory(
-        channelId,
-        limit: _pageSize,
-        beforeMessageId: beforeMessageId,
-      );
-      if (cached.messages.isEmpty) rethrow;
-      return ChannelHistoryPage(
-        history: cached,
-        hasMore: cached.messages.length >= _pageSize,
-        fromCache: true,
-      );
-    }
-  }
-
-  @override
-  Future<ChannelHistory> loadPinnedMessages(String channelId) async {
-    try {
-      final history = _mapper.history(
-        channelId,
-        await _api.getChannelPins(channelId),
-        currentMemberId: _currentMemberId,
-      );
-      for (final message in history.messages) {
-        await _cache.writeMessage(message);
-      }
-      return history;
-    } on Object {
-      return _cache.readPinnedMessages(channelId);
-    }
-  }
-
-  @override
-  Future<DirectConversation> openDirectConversation(String recipientId) async {
-    final currentUserId = _currentMemberId;
-    if (currentUserId == null) throw StateError('Workspace is not loaded');
-    return _directMessages.open(recipientId, currentUserId);
-  }
-
-  @override
-  Future<DirectConversation> createGroupDirectMessage(
-    List<String> recipientIds,
-  ) async {
-    final currentUserId = _currentMemberId;
-    if (currentUserId == null) throw StateError('Workspace is not loaded');
-    final payload = await _api.createGroupDirectMessageChannel(recipientIds);
-    return _directMessages.adoptOpened(payload, currentUserId);
-  }
-
-  /// The list changes with the `CHANNEL_RECIPIENT_ADD` that follows.
-  @override
-  Future<void> addGroupRecipient({
-    required String channelId,
-    required String userId,
-  }) => _api.putChannelRecipient(channelId, userId);
-
-  /// The list changes with the `CHANNEL_RECIPIENT_REMOVE` that follows.
-  @override
-  Future<void> removeGroupRecipient({
-    required String channelId,
-    required String userId,
-  }) => _api.deleteChannelRecipient(channelId, userId);
-
-  @override
-  Future<void> renameGroupDirectMessage(String channelId, String name) =>
-      _editGroupDirectMessage(channelId, {'name': name});
-
-  @override
-  Future<void> setGroupDirectMessageIcon(
-    String channelId,
-    String? iconDataUri,
-  ) => _editGroupDirectMessage(channelId, {'icon': iconDataUri});
-
-  /// Applies Discord's answer at once rather than waiting for the
-  /// `CHANNEL_UPDATE` that repeats it.
-  Future<void> _editGroupDirectMessage(
-    String channelId,
-    Map<String, Object?> body,
-  ) async {
-    final payload = await _api.patchGroupDirectMessage(channelId, body);
-    final currentUserId = _currentMemberId;
-    if (currentUserId != null) {
-      await _directMessages.acceptChannel(payload, currentUserId);
-    }
-  }
-
-  @override
-  Future<void> closeDirectMessage(String channelId) async {
-    await _api.closePrivateChannel(channelId);
-    await _directMessages.close(channelId);
-  }
-
-  @override
-  Future<ConversationChannel> createThreadFromMessage({
-    required String channelId,
-    required String messageId,
-    required String name,
-    required int autoArchiveDurationMinutes,
-  }) async {
-    final workspace = await _cache.readWorkspaceShell();
-    final parent = workspace?.channelOrNull(channelId);
-    if (parent == null) throw StateError('Parent channel is not cached');
-    final payload = await _api.createThreadFromMessage(
-      channelId: channelId,
-      messageId: messageId,
-      name: name,
-      autoArchiveDurationMinutes: autoArchiveDurationMinutes,
-    );
-    final channel = _mapper.channel(payload, parent.spaceId);
-    if (channel == null) throw StateError('Discord returned an invalid thread');
-    await _cache.writeChannel(channel);
-    _events.add(ChannelUpsertedEvent(channel));
-    return channel;
-  }
-
-  @override
-  Future<ThreadPage> loadThreads(
-    String parentId, {
-    int offset = 0,
-    Set<String> tagIds = const {},
-  }) => _threads.loadThreads(parentId, offset: offset, tagIds: tagIds);
-
-  @override
-  Future<CreatedForumPost> createForumPost({
-    required String channelId,
-    required String name,
-    required String content,
-    required int autoArchiveDurationMinutes,
-    List<PendingAttachment> attachments = const [],
-    List<String> appliedTagIds = const [],
-  }) => _threads.createForumPost(
-    channelId: channelId,
-    name: name,
-    content: content,
-    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
-    attachments: attachments,
-    appliedTagIds: appliedTagIds,
-  );
-
-  @override
-  Future<ChatMessage> sendMessage({
-    required String channelId,
-    required String authorId,
-    required String body,
-    required String nonce,
-    List<PendingAttachment> attachments = const [],
-    String? replyToMessageId,
-    bool suppressNotifications = false,
-    bool textToSpeech = false,
-    UploadProgressListener? onUploadProgress,
-  }) async {
-    final payload = await _api.createMessage(
-      channelId: channelId,
-      content: body,
-      nonce: nonce,
-      attachments: attachments,
-      replyToMessageId: replyToMessageId,
-      suppressNotifications: suppressNotifications,
-      textToSpeech: textToSpeech,
-      onUploadProgress: onUploadProgress,
-    );
-    return _storeSentMessage(payload);
-  }
-
-  @override
-  Future<ChatMessage> sendVoiceMessage({
-    required String channelId,
-    required String authorId,
-    required PendingVoiceMessage voiceMessage,
-  }) async {
-    // As a draft with the file only, so a retry keeps its nonce.
-    final payload = await _nonceFactory.sendDraft(
-      channelId: channelId,
-      body: '',
-      attachments: [voiceMessage.attachment],
-      replyToMessageId: null,
-      suppressNotifications: false,
-      textToSpeech: false,
-      send: (nonce) => _api.createVoiceMessage(
-        channelId: channelId,
-        voiceMessage: voiceMessage,
-        nonce: nonce,
-      ),
-    );
-    return _storeSentMessage(payload);
-  }
-
-  @override
-  Future<MemberPage> loadReactionUsers({
-    required String channelId,
-    required String messageId,
-    required String emoji,
-    required DiscordReactionType type,
-    String? afterUserId,
-    int limit = 100,
-  }) async {
-    final pageLimit = limit.clamp(1, 100);
-    final payloads = await _api.getReactions(
-      channelId: channelId,
-      messageId: messageId,
-      emoji: emoji,
-      type: type,
-      afterUserId: afterUserId,
-      limit: pageLimit,
-    );
-    return _mapper.reactionUsers(payloads, limit: pageLimit);
-  }
-
-  @override
-  Future<void> addSuperReaction({
-    required String channelId,
-    required String messageId,
-    required String emoji,
-  }) => _api.addReaction(
-    channelId: channelId,
-    messageId: messageId,
-    emoji: emoji,
-    type: DiscordReactionType.burst,
-  );
-
-  @override
-  Future<void> removeSuperReaction({
-    required String channelId,
-    required String messageId,
-    required String emoji,
-  }) => _api.removeReaction(
-    channelId: channelId,
-    messageId: messageId,
-    emoji: emoji,
-    type: DiscordReactionType.burst,
-  );
-
-  /// A forward is a send with no words of its own: the reference names the
-  /// source, and Discord answers with the snapshot it took.
-  @override
-  Future<ChatMessage> forwardMessage({
-    required String sourceChannelId,
-    required String sourceMessageId,
-    required String targetChannelId,
-  }) async => _storeSentMessage(
-    await _api.createMessage(
-      channelId: targetChannelId,
-      content: '',
-      nonce: _nonceFactory.next(),
-      forwardOf: (channelId: sourceChannelId, messageId: sourceMessageId),
-    ),
-  );
-
-  @override
-  Future<ChatMessage> sendStickers({
-    required String channelId,
-    required String authorId,
-    required List<String> stickerIds,
-  }) async {
-    if (stickerIds.isEmpty) {
-      throw ArgumentError.value(stickerIds, 'stickerIds', 'must contain 1-3');
-    }
-    return _storeSentMessage(
-      await _api.createMessage(
-        channelId: channelId,
-        content: '',
-        nonce: _nonceFactory.next(),
-        stickerIds: stickerIds,
-      ),
-    );
-  }
-
-  @override
-  Future<ChatMessage> createPoll({
-    required String channelId,
-    required String authorId,
-    required PendingPoll poll,
-  }) async => _storeSentMessage(
-    await _api.createMessage(
-      channelId: channelId,
-      content: '',
-      nonce: _nonceFactory.next(),
-      poll: poll,
-    ),
-  );
-
-  @override
-  Future<ChatMessage> endPoll({
-    required String channelId,
-    required String messageId,
-  }) async => _storeMessage(
-    await _api.polls.endPoll(channelId: channelId, messageId: messageId),
-    fallback: await _cache.readMessage(messageId),
-  );
-
-  /// Discord answers a vote with no body, so the vote is counted here, on the
-  /// dispatch queue so a vote from somebody else is not written over. The
-  /// count only marks the account's own vote, so it and the dispatches that
-  /// echo it change nothing a second time, in whichever order they come.
-  @override
-  Future<ChatMessage> votePoll({
-    required String channelId,
-    required String messageId,
-    required Set<int> answerIds,
-  }) async {
-    await _api.polls.vote(
-      channelId: channelId,
-      messageId: messageId,
-      answerIds: answerIds.toList()..sort(),
-    );
-    return _sharedDispatches.queued(() async {
-      final held = await _cache.readMessage(messageId);
-      final poll = held?.poll;
-      if (held == null || poll == null) {
-        throw StateError('Poll message $messageId is not in the cache');
-      }
-      final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
-      await _cache.writeMessage(voted);
-      return voted;
-    });
-  }
-
-  @override
-  Future<MemberPage> loadPollVoters({
-    required String channelId,
-    required String messageId,
-    required int answerId,
-    String? afterUserId,
-    int limit = 100,
-  }) => _api.polls.answerVoters(
-    channelId: channelId,
-    messageId: messageId,
-    answerId: answerId,
-    mapper: _mapper,
-    afterUserId: afterUserId,
-    limit: limit,
-  );
-
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);
     // The gateway's copy may come later, and the channel must read as read
@@ -880,246 +498,13 @@ final class DiscordDesktopChatRepository
   }
 
   @override
-  Future<ChatMessage> editMessage({
-    required String channelId,
-    required String messageId,
-    required String body,
+  Future<ChatMessage> _storeMessage(
+    Map<String, Object?> payload, {
+    ChatMessage? fallback,
   }) async {
-    final payload = await _api.editMessage(
-      channelId: channelId,
-      messageId: messageId,
-      content: body,
-    );
-    return _storeMessage(
-      payload,
-      fallback: await _cache.readMessage(messageId),
-    );
-  }
-
-  @override
-  Future<ChatMessage> setSuppressEmbeds({
-    required String channelId,
-    required String messageId,
-    required bool suppress,
-  }) async {
-    final held = await _cache.readMessage(messageId);
-    final payload = await _api.editMessageFlags(
-      channelId: channelId,
-      messageId: messageId,
-      suppressEmbeds: suppress,
-      componentsV2: held?.hasFlag(DiscordMessageFlag.componentsV2) ?? false,
-    );
-    return _storeMessage(payload, fallback: held);
-  }
-
-  @override
-  Future<void> deleteMessage({
-    required String channelId,
-    required String messageId,
-  }) async {
-    await _api.deleteMessage(channelId: channelId, messageId: messageId);
-    await _cache.deleteMessage(messageId);
-  }
-
-  @override
-  void searchGuildMembers({
-    required String guildId,
-    required String query,
-    int limit = 25,
-  }) => _gateway.requestGuildMembers(
-    guildId: guildId,
-    query: query,
-    limit: limit,
-  );
-
-  @override
-  void requestGuildMembers({
-    required String guildId,
-    required List<String> userIds,
-  }) => _gateway.requestGuildMembersByIds(guildId: guildId, userIds: userIds);
-
-  @override
-  Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
-    final payloads = await _api.getGuildScheduledEvents(spaceId);
-    return [
-      for (final payload in payloads)
-        ?_mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId),
-    ]..sort(GuildScheduledEvent.compareForDisplay);
-  }
-
-  @override
-  Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
-    required String spaceId,
-    required String eventId,
-    int limit = 100,
-  }) async {
-    final payloads = await _api.getGuildScheduledEventUsers(
-      guildId: spaceId,
-      eventId: eventId,
-      limit: limit,
-    );
-    return [for (final payload in payloads) ?_readAttendee(payload)];
-  }
-
-  /// Reads one row of the interested list.
-  ///
-  /// The nickname a server knows somebody by wins over their global name,
-  /// because that is the name everybody else in that server sees them under.
-  static GuildScheduledEventAttendee? _readAttendee(
-    Map<String, Object?> payload,
-  ) {
-    final user = payload['user'];
-    if (user is! Map) return null;
-    final fields = user.cast<String, Object?>();
-    final id = fields['id'];
-    if (id is! String || id.isEmpty) return null;
-    final member = payload['member'] is Map
-        ? (payload['member']! as Map).cast<String, Object?>()
-        : const <String, Object?>{};
-    final nickname = member['nick'];
-    final global = fields['global_name'];
-    final username = fields['username'];
-    return GuildScheduledEventAttendee(
-      userId: id,
-      displayName: switch ((nickname, global, username)) {
-        (final String nick, _, _) when nick.isNotEmpty => nick,
-        (_, final String name, _) when name.isNotEmpty => name,
-        (_, _, final String name) when name.isNotEmpty => name,
-        _ => '',
-      },
-    );
-  }
-
-  @override
-  Future<GuildScheduledEvent?> createScheduledEvent({
-    required String spaceId,
-    required GuildScheduledEventDraft draft,
-  }) async {
-    if (!draft.isValid) return null;
-    final payload = await _api.createGuildScheduledEvent(
-      guildId: spaceId,
-      body: GuildScheduledEventEdit.encodeDraft(draft),
-    );
-    return _mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId);
-  }
-
-  @override
-  Future<GuildScheduledEvent?> editScheduledEvent({
-    required String spaceId,
-    required String eventId,
-    required GuildScheduledEventEdit edit,
-  }) async {
-    if (edit.isEmpty) return null;
-    final payload = await _api.editGuildScheduledEvent(
-      guildId: spaceId,
-      eventId: eventId,
-      body: edit.toJson(),
-    );
-    return _mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId);
-  }
-
-  @override
-  Future<bool> deleteScheduledEvent({
-    required String spaceId,
-    required String eventId,
-  }) async {
-    try {
-      await _api.deleteGuildScheduledEvent(guildId: spaceId, eventId: eventId);
-      return true;
-    } on DiscordApiException catch (error) {
-      // An event somebody else already deleted, or one this account may not
-      // manage, is refused. Neither is a fault here.
-      if (error.statusCode == 403 || error.statusCode == 404) return false;
-      rethrow;
-    }
-  }
-
-  @override
-  Future<bool> setEventInterest({
-    required String spaceId,
-    required String eventId,
-    required bool interested,
-    String? exceptionId,
-  }) async {
-    try {
-      await _api.setGuildScheduledEventInterest(
-        guildId: spaceId,
-        eventId: eventId,
-        interested: interested,
-        exceptionId: exceptionId,
-      );
-    } on DiscordApiException catch (error) {
-      // An event that has ended, or one this account cannot see, is refused.
-      // That is an answer about the event, not a fault here.
-      if (error.statusCode == 400 || error.statusCode == 403) return false;
-      rethrow;
-    }
-    // The count moves when Discord echoes the change back. Patching it here
-    // as well is how a count ends up permanently wrong by one.
-    return true;
-  }
-
-  @override
-  Future<void> resolveAutoModAlert({
-    required String guildId,
-    required String channelId,
-    required String messageId,
-    required AutoModAlertAction action,
-  }) => _api.resolveAutoModAlert(
-    guildId: guildId,
-    channelId: channelId,
-    messageId: messageId,
-    actionType: action.code,
-  );
-
-  @override
-  Future<void> addReaction({
-    required String channelId,
-    required String messageId,
-    required String emoji,
-  }) => _api.addReaction(
-    channelId: channelId,
-    messageId: messageId,
-    emoji: emoji,
-  );
-
-  @override
-  Future<void> removeReaction({
-    required String channelId,
-    required String messageId,
-    required String emoji,
-  }) => _api.removeReaction(
-    channelId: channelId,
-    messageId: messageId,
-    emoji: emoji,
-  );
-
-  @override
-  Future<void> pinMessage({
-    required String channelId,
-    required String messageId,
-  }) => _setPinned(channelId, messageId, true);
-
-  @override
-  Future<void> unpinMessage({
-    required String channelId,
-    required String messageId,
-  }) => _setPinned(channelId, messageId, false);
-
-  Future<void> _setPinned(
-    String channelId,
-    String messageId,
-    bool pinned,
-  ) async {
-    await _api.setPinned(
-      channelId: channelId,
-      messageId: messageId,
-      pinned: pinned,
-    );
-    final message = await _cache.readMessage(messageId);
-    if (message != null) {
-      await _cache.writeMessage(message.copyWith(isPinned: pinned));
-    }
+    final message = _messageFrom(payload, fallback: fallback);
+    await _cache.writeMessage(message);
+    return message;
   }
 
   /// Writes one gained guild to the cache and starts its live events.
@@ -1144,13 +529,6 @@ final class DiscordDesktopChatRepository
     await _cache.deleteGuild(guildId);
     _gateway.forgetGuild(guildId);
   }
-
-  @override
-  Future<void> startTyping(String channelId) => _api.startTyping(channelId);
-
-  @override
-  Future<void> saveChannelActivity(ConversationChannel channel) =>
-      _cache.writeChannelActivity(channel);
 
   @override
   Future<void> close() async {

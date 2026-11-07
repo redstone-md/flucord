@@ -466,15 +466,6 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
   }
 
-  Future<ChatMessage> _storeMessage(
-    Map<String, Object?> payload, {
-    ChatMessage? fallback,
-  }) async {
-    final message = _messageFrom(payload, fallback: fallback);
-    await _cache.writeMessage(message);
-    return message;
-  }
-
   ChatMessage _messageFrom(
     Map<String, Object?> payload, {
     ChatMessage? fallback,
