@@ -31,17 +31,17 @@ final class _RailLayout {
 
   /// Every entry, plus a zone after the last one while dragging is on, where
   /// a drop goes to the end of the list.
-  int get itemCount => rail.entries.length + (onDrop == null ? 0 : 1);
+  int get itemCount => rail.shown.length + (onDrop == null ? 0 : 1);
 
   Widget entry(BuildContext context, int index) {
-    if (index == rail.entries.length) {
+    if (index == rail.shown.length) {
       return _DropZones(
         onDrop: onDrop,
         zones: [_Zone(RailDropAt(index), edge: _ZoneEdge.top)],
         child: const SizedBox(height: RailMetrics.tile),
       );
     }
-    final entry = rail.entries[index];
+    final entry = rail.shown[index];
     final folderId = entry.id;
     if (folderId == null) {
       final guildId = entry.guildIds.single;
@@ -115,9 +115,10 @@ final class _RailLayout {
     );
   }
 
-  Widget _guild(String guildId) {
-    final space = spaces[guildId]!;
-    return _SpaceButton(
+  /// The tile of [guildId]. [GuildRail.shown] holds only servers in
+  /// [spaces], so the empty box is never drawn in practice.
+  Widget _guild(String guildId) => switch (spaces[guildId]) {
+    final space? => _SpaceButton(
       space: space,
       selected: space.id == selectedSpaceId,
       activity: activity[space.id] ?? SpaceActivity.none,
@@ -126,13 +127,14 @@ final class _RailLayout {
         final open? => (position) => open(space.id, position),
         null => null,
       },
-    );
-  }
+    ),
+    null => const SizedBox.shrink(),
+  };
 
   Widget _folderTile(GuildFolder folder, Color colour) {
     final folderId = folder.id!;
     final open = isExpanded(folderId);
-    final members = [for (final id in folder.guildIds) spaces[id]!];
+    final members = [for (final id in folder.guildIds) ?spaces[id]];
     final edit = onEditFolder;
     return _FolderTile(
       name: _folderName(folder, members),

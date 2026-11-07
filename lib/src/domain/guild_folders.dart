@@ -73,24 +73,24 @@ final class RailDropOnto extends RailDropTarget {
   final String guildId;
 }
 
-/// The server list as the rail draws it: every joined server once, in the
-/// stored order, inside the stored folders.
+/// The account's server list: every stored entry, plus the joined servers
+/// the settings do not list yet, and the part of it the rail draws.
 final class GuildRail {
-  const GuildRail._(this.entries);
+  GuildRail._(this.entries, this._joined);
 
   /// Lays the joined [guildIds] out by the [stored] folders.
   ///
   /// A server the settings do not list yet goes on top, as in Discord, in
-  /// the order [guildIds] gives. Servers the account has left are dropped,
-  /// and so is a folder left with none.
+  /// the order [guildIds] gives. A stored server the workspace does not hold
+  /// stays where it is, folder and all, so a save from here does not take it
+  /// off the account's other clients. The rail only hides it.
   factory GuildRail.arrange(List<GuildFolder> stored, List<String> guildIds) {
-    final joined = guildIds.toSet();
     final placed = <String>{};
     final entries = <GuildFolder>[];
     for (final entry in stored) {
       final ids = [
         for (final id in entry.guildIds)
-          if (joined.contains(id) && placed.add(id)) id,
+          if (placed.add(id)) id,
       ];
       if (entry.isFolder) {
         if (ids.isNotEmpty) entries.add(entry._withGuilds(ids));
@@ -102,10 +102,31 @@ final class GuildRail {
       for (final id in guildIds)
         if (!placed.contains(id)) GuildFolder.lone(id),
       ...entries,
-    ]);
+    ], guildIds.toSet());
   }
 
+  /// Every entry, hidden servers included. This is what a save writes.
   final List<GuildFolder> entries;
+
+  /// The servers the workspace holds, which are the ones the rail draws.
+  final Set<String> _joined;
+
+  /// The entries the rail draws: only servers the workspace holds, and no
+  /// folder whose servers are all hidden. A drop target counts these.
+  late final List<GuildFolder> shown = [
+    for (final at in _shownAt) entries[at]._withGuilds(_shownIds(entries[at])),
+  ];
+
+  /// Where each entry of [shown] sits in [entries].
+  late final List<int> _shownAt = [
+    for (var at = 0; at < entries.length; at++)
+      if (_shownIds(entries[at]).isNotEmpty) at,
+  ];
+
+  List<String> _shownIds(GuildFolder entry) => [
+    for (final id in entry.guildIds)
+      if (_joined.contains(id)) id,
+  ];
 
   /// Whether [item] can land on [target]. Folders do not nest, and a server
   /// does not make a folder with itself.
@@ -128,7 +149,7 @@ final class GuildRail {
     int Function()? newFolderId,
   }) {
     if (!accepts(item, target)) return this;
-    return switch ((item, target)) {
+    return switch ((item, _stored(target))) {
       (DraggedFolder(:final folderId), RailDropAt(:final index)) => _moveFolder(
         folderId,
         index,
@@ -144,11 +165,40 @@ final class GuildRail {
     };
   }
 
+  /// [target], which counts the entries on screen, as it counts [entries].
+  /// A drop after the last server on screen lands right after it, so hidden
+  /// servers keep their place.
+  RailDropTarget _stored(RailDropTarget target) => switch (target) {
+    RailDropAt(:final index, folderId: null) => RailDropAt(
+      _storedIndex(index, _shownAt, entries.length),
+    ),
+    RailDropAt(:final index, :final folderId?) => switch (entries
+        .firstWhereOrNull((entry) => entry.id == folderId)) {
+      final folder? => RailDropAt(
+        _storedIndex(index, [
+          for (final id in _shownIds(folder)) folder.guildIds.indexOf(id),
+        ], folder.guildIds.length),
+        folderId: folderId,
+      ),
+      null => target,
+    },
+    RailDropOnto() => target,
+  };
+
+  /// [index] into the list of [shownAt] positions, as a position in a list
+  /// of [length].
+  static int _storedIndex(int index, List<int> shownAt, int length) =>
+      switch (shownAt) {
+        _ when index < shownAt.length => shownAt[index],
+        [..., final last] => last + 1,
+        [] => length,
+      };
+
   /// The rail with folder [folderId] renamed and recoloured. An empty name
   /// clears it.
   GuildRail editFolder(int folderId, {String? name, int? colour}) {
     final trimmed = name?.trim();
-    return GuildRail._([
+    return _with([
       for (final entry in entries)
         entry.id == folderId
             ? GuildFolder(
@@ -161,13 +211,15 @@ final class GuildRail {
     ]);
   }
 
+  GuildRail _with(List<GuildFolder> entries) => GuildRail._(entries, _joined);
+
   GuildRail _moveFolder(int folderId, int index) {
     final from = entries.indexWhere((entry) => entry.id == folderId);
     if (from < 0) return this;
     final next = List.of(entries);
     final folder = next.removeAt(from);
     next.insert(_shifted(index, from).clamp(0, next.length), folder);
-    return GuildRail._(next);
+    return _with(next);
   }
 
   GuildRail _moveGuild(String guildId, int index, int? folderId) {
@@ -183,7 +235,7 @@ final class GuildRail {
       ids.insert(_shifted(index, from).clamp(0, ids.length), guildId);
       next[target] = next[target]._withGuilds(ids);
     }
-    return GuildRail._withoutEmpty(next);
+    return _withoutEmpty(next);
   }
 
   GuildRail _combine(String guildId, String targetId, int Function() newId) {
@@ -198,7 +250,7 @@ final class GuildRail {
     }
     final next = _without(guildId)
       ..[target] = GuildFolder(guildIds: [targetId, guildId], id: id);
-    return GuildRail._withoutEmpty(next);
+    return _withoutEmpty(next);
   }
 
   bool _holds(String guildId) =>
@@ -216,7 +268,7 @@ final class GuildRail {
           : entry,
   ];
 
-  factory GuildRail._withoutEmpty(List<GuildFolder> entries) => GuildRail._([
+  GuildRail _withoutEmpty(List<GuildFolder> entries) => _with([
     for (final entry in entries)
       if (entry.guildIds.isNotEmpty) entry,
   ]);

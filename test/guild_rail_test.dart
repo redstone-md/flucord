@@ -20,11 +20,10 @@ void main() {
       entry.id == null ? entry.guildIds.single : [entry.id, ...entry.guildIds],
   ];
 
-  test('puts servers the settings do not list on top, and drops left ones', () {
+  test('puts servers the settings do not list on top', () {
     final arranged = GuildRail.arrange(
       [
-        const GuildFolder(guildIds: ['b', 'gone'], id: 7),
-        const GuildFolder(guildIds: ['gone-too'], id: 8),
+        const GuildFolder(guildIds: ['b'], id: 7),
         GuildFolder.lone('a'),
       ],
       ['a', 'b', 'new'],
@@ -35,6 +34,62 @@ void main() {
       [7, 'b'],
       'a',
     ]);
+  });
+
+  group('servers the workspace does not hold', () {
+    // [gone] [folder 7: b, gone-too] [folder 8: hidden] [a]
+    final stored = [
+      GuildFolder.lone('gone'),
+      const GuildFolder(guildIds: ['b', 'gone-too'], id: 7, name: 'Games'),
+      const GuildFolder(guildIds: ['hidden'], id: 8, name: 'Old', colour: 1),
+      GuildFolder.lone('a'),
+    ];
+    final partial = GuildRail.arrange(stored, ['a', 'b']);
+
+    List<Object> shown(GuildRail rail) => [
+      for (final entry in rail.shown)
+        entry.id == null
+            ? entry.guildIds.single
+            : [entry.id, ...entry.guildIds],
+    ];
+
+    test('are hidden on screen', () {
+      expect(shown(partial), [
+        [7, 'b'],
+        'a',
+      ]);
+    });
+
+    test('stay in place, with their folders, when the list is saved', () {
+      // Index 0 is folder 7 as drawn, the first entry on screen.
+      final moved = partial.drop(const DraggedGuild('a'), const RailDropAt(0));
+
+      expect(shape(moved), [
+        'gone',
+        'a',
+        [7, 'b', 'gone-too'],
+        [8, 'hidden'],
+      ]);
+      expect(moved.entries[3].name, 'Old');
+      expect(moved.entries[3].colour, 1);
+      expect(shown(moved), [
+        'a',
+        [7, 'b'],
+      ]);
+    });
+
+    test('keep their place inside a folder a drop changes', () {
+      final moved = partial.drop(
+        const DraggedGuild('a'),
+        const RailDropAt(1, folderId: 7),
+      );
+
+      expect(shape(moved), [
+        'gone',
+        [7, 'b', 'a', 'gone-too'],
+        [8, 'hidden'],
+      ]);
+    });
   });
 
   test('moves a server down the top level, before the entry it lands on', () {
