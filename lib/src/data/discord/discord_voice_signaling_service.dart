@@ -56,8 +56,8 @@ final class DiscordVoiceSignalingService
   ///
   /// Re-announcing a channel has to repeat them: opcode 4 is a whole-state
   /// frame, so sending it with the defaults would quietly unmute somebody who
-  /// muted themselves — during a reconnect, when they are least likely to
-  /// notice.
+  /// muted themselves, and during a reconnect, when they are least likely to
+  /// notice. A Leave forgets them.
   final Map<VoiceSessionKey, ({bool mute, bool deaf, bool video})> _lastFlags =
       {};
   final Set<VoiceSessionKey> _pingedSessions = <VoiceSessionKey>{};
@@ -95,6 +95,7 @@ final class DiscordVoiceSignalingService
   /// and a close of the old socket. A close in this wait is part of the move,
   /// so it does not start the opcode 5 recovery.
   final Map<VoiceSessionKey, Timer> _moveTimers = {};
+  static const _moveSettleDelay = Duration(seconds: 2);
 
   /// The channels each guild session asked for with opcode 4 that Discord
   /// has not answered yet, oldest first. Discord answers them in order, so a
@@ -278,6 +279,7 @@ final class DiscordVoiceSignalingService
     _forcedReissues.remove(key);
     _lastStatuses.remove(key);
     _pingedSessions.remove(key);
+    _lastFlags.remove(key);
     _endMove(key);
     _latestCredentials.remove(key);
     _readyCredentials.remove(key);
@@ -295,9 +297,7 @@ final class DiscordVoiceSignalingService
     bool selfDeaf = false,
     bool selfVideo = false,
   }) {
-    if (channelId == null) {
-      _lastFlags.remove(key);
-    } else {
+    if (channelId != null) {
       _lastFlags[key] = (mute: selfMute, deaf: selfDeaf, video: selfVideo);
     }
     final guildId = key.guildId;
@@ -318,6 +318,19 @@ final class DiscordVoiceSignalingService
       selfMute: selfMute,
       selfDeaf: selfDeaf,
       selfVideo: selfVideo,
+    );
+  }
+
+  /// Announces [channelId] again with the flags the session last sent, so a
+  /// re-announcement never unmutes anybody.
+  void _reannounce(VoiceSessionKey key, String channelId) {
+    final flags = _lastFlags[key];
+    _sendVoiceState(
+      key,
+      channelId,
+      selfMute: flags?.mute ?? false,
+      selfDeaf: flags?.deaf ?? false,
+      selfVideo: flags?.video ?? false,
     );
   }
 
@@ -459,17 +472,10 @@ final class DiscordVoiceSignalingService
     } else {
       _desiredChannels[key] = channelId;
       _moving.add(key);
-      _moveTimers[key] = Timer(_reissueFallbackDelay, () => _moveSettled(key));
-      if (wasRecovering) {
-        final flags = _lastFlags[key];
-        _sendVoiceState(
-          key,
-          channelId,
-          selfMute: flags?.mute ?? false,
-          selfDeaf: flags?.deaf ?? false,
-          selfVideo: flags?.video ?? false,
-        );
-      }
+      _moveTimers[key] = Timer(_moveSettleDelay, () => _moveSettled(key));
+      // The recovery announced the old channel, and Discord could act on
+      // that after the move.
+      if (wasRecovering) _reannounce(key, channelId);
       _reaimCredentials(key, channelId);
     }
     _emit(VoiceMovedToChannelEvent(guildId: guildId, channelId: channelId));
@@ -624,14 +630,7 @@ final class DiscordVoiceSignalingService
       sessionId: sessionId,
     );
     _generations[key] = (_generations[key] ?? 0) + 1;
-    final flags = _lastFlags[key];
-    _sendVoiceState(
-      key,
-      channelId,
-      selfMute: flags?.mute ?? false,
-      selfDeaf: flags?.deaf ?? false,
-      selfVideo: flags?.video ?? false,
-    );
+    _reannounce(key, channelId);
     _scheduleReissueFallback(key);
   }
 
@@ -685,15 +684,8 @@ final class DiscordVoiceSignalingService
       );
       return;
     }
-    final flags = _lastFlags[key];
     _sendVoiceState(key, null);
-    _sendVoiceState(
-      key,
-      channelId,
-      selfMute: flags?.mute ?? false,
-      selfDeaf: flags?.deaf ?? false,
-      selfVideo: flags?.video ?? false,
-    );
+    _reannounce(key, channelId);
     // The cycle is answered with a new pair or with nothing; both are waited
     // on, and the cap decides when waiting stops.
     _scheduleReissueFallback(key);
