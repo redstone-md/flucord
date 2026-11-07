@@ -1,5 +1,8 @@
 part of 'chat_controller.dart';
 
+/// The most of a send's upload the timeline shows while the send is out.
+const _uploadShownAtMost = 0.99;
+
 /// The messages this client is sending, per channel, in the order written.
 final class _OutgoingMessages {
   final Map<String, List<OutgoingMessage>> _byChannel = {};
@@ -106,12 +109,16 @@ extension ChatControllerOutgoing on ChatController {
         if (!_outgoing.holds(message)) return false;
         var lastPercent = -1;
         void onUploadProgress(double fraction) {
+          // The files going out is not the whole send: Discord still has to
+          // take the message. Complete is never shown, because the row leaves
+          // the timeline when the send returns.
+          final shown = fraction.clamp(0.0, _uploadShownAtMost);
           // Whole percents, so a large file does not redraw the app for each
           // chunk.
-          final percent = (fraction * 100).floor();
+          final percent = (shown * 100).floor();
           if (percent == lastPercent || _disposed) return;
           lastPercent = percent;
-          final progress = OutgoingSending(uploadProgress: fraction);
+          final progress = OutgoingSending(uploadProgress: shown);
           if (_outgoing.replace(message.withDelivery(progress))) _notify();
         }
 

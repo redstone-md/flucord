@@ -104,11 +104,18 @@ void main() {
     'a voice message shows at once as sending, then turns real on its echo',
     (tester, session) async {
       final answer = Completer<DiscordHttpResponse>();
+      final uploaded = Completer<void>();
       _routeUpload(session, SessionHarness.channelId);
-      session.transport.on('POST', _sendPath, (_) => answer.future);
+      session.transport
+        ..on('POST', _sendPath, (_) => answer.future)
+        ..holdBodyHalfway('PUT', _uploadPath, uploaded.future);
       await session.openChannel(SessionHarness.channelId);
 
       await _recordAndSend(tester, session);
+
+      expect(find.text('50%'), findsOneWidget);
+      uploaded.complete();
+      await session.settle();
 
       final nonce = _nonces(session).single;
       final row = session.messageRow(nonce);
@@ -121,10 +128,12 @@ void main() {
         ),
         findsOneWidget,
       );
+      // The file is up, but the message post is still on its way.
       expect(
-        find.descendant(of: row, matching: find.text('100%')),
+        find.descendant(of: row, matching: find.text('99%')),
         findsOneWidget,
       );
+      expect(find.text('100%'), findsNothing);
       expect(
         find.descendant(of: row, matching: find.text('Voice message')),
         findsOneWidget,
