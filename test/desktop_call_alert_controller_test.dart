@@ -24,6 +24,7 @@ void main() {
   late FakeDesktopAppSurface surface;
   late bool focused;
   late int windowShown;
+  late DesktopCallAlertController controller;
 
   setUp(() {
     gateway = FakeDesktopNotificationGateway();
@@ -31,7 +32,7 @@ void main() {
     surface = FakeDesktopAppSurface();
     focused = false;
     windowShown = 0;
-    final controller = DesktopCallAlertController(
+    controller = DesktopCallAlertController(
       isFocused: () async => focused,
       gateway: gateway,
       attention: attention,
@@ -69,6 +70,25 @@ void main() {
 
     expect(gateway.requests, isEmpty);
     expect(attention.calls, isEmpty);
+  });
+
+  test('a ring follows the window losing and gaining the focus', () async {
+    focused = true;
+    surface.ringingCall = _ring();
+    await settle();
+    expect(gateway.requests, isEmpty);
+
+    focused = false;
+    controller.windowFocusChanged(focused: false);
+    await settle();
+    expect(gateway.requests, hasLength(1));
+    expect(attention.calls, ['flash']);
+
+    focused = true;
+    controller.windowFocusChanged(focused: true);
+    await settle();
+    expect(gateway.dismissed, ['flucord-call-dm-mira']);
+    expect(attention.calls, ['flash', 'stop']);
   });
 
   test('clicking the toast brings the window up on the call', () async {

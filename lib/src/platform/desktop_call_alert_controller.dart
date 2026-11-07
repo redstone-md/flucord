@@ -10,7 +10,8 @@ import '../app_log.dart';
 /// The in-window card is all a ring has while the window is focused. When it
 /// is not (minimized, hidden in the tray, or behind other windows), this shows
 /// a native toast and flashes the taskbar button. Both go when the ring ends,
-/// however it ends.
+/// however it ends, and they follow the window while it rings: raised when it
+/// goes behind, lowered when it comes to the front.
 final class DesktopCallAlertController {
   DesktopCallAlertController({
     required DesktopFocusProbe isFocused,
@@ -53,6 +54,17 @@ final class DesktopCallAlertController {
     _ring = ringing?.identifier;
     unawaited(_lower());
     if (ringing != null) unawaited(_raise(ringing));
+  }
+
+  /// Told by the window when it gains or loses the focus.
+  void windowFocusChanged({required bool focused}) {
+    final ringing = _surface?.ringingCall;
+    if (ringing == null || ringing.identifier != _ring) return;
+    if (focused) {
+      unawaited(_lower());
+    } else if (_raised != ringing.identifier) {
+      unawaited(_raise(ringing));
+    }
   }
 
   Future<void> _raise(DesktopRingingCall ringing) async {
