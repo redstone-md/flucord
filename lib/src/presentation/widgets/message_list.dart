@@ -1,5 +1,6 @@
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../../application/slash_command_controller.dart';
@@ -316,6 +317,15 @@ class MessageListState extends State<MessageList>
     if (oldWidget.query.trim() != widget.query.trim()) {
       _recentre(awaiting: _openingMessageId);
     }
+    if (!setEquals(oldWidget.blockedUserIds, widget.blockedUserIds)) {
+      // An unblocked author's messages no longer fold, so they lose their
+      // open mark, and blocking the author again folds them again.
+      final folding = {
+        for (final message in _visibleMessages)
+          if (widget.blockedUserIds.contains(message.authorId)) message.id,
+      };
+      _openBlockedMessageIds.retainWhere(folding.contains);
+    }
     // The saved position's message is gone, so this opening goes on as if there
     // had been no position.
     if (_restoring != null &&
@@ -508,12 +518,16 @@ class MessageListState extends State<MessageList>
 
   /// The centre for this build. Only here does a held message that a jump was
   /// waiting for become the centre.
-  _TimelineCentre _centreIn(List<ChatMessage> messages) {
+  _TimelineCentre _centreIn(
+    List<ChatMessage> messages,
+    BlockedMessageFold fold,
+  ) {
     final awaitedId = _awaitedMessageId;
-    final awaited = awaitedId == null
-        ? null
-        : messages.where((message) => message.id == awaitedId).firstOrNull;
-    if (awaited != null) {
+    final awaitedIndex = awaitedId == null
+        ? -1
+        : messages.indexWhere((message) => message.id == awaitedId);
+    if (awaitedIndex >= 0) {
+      final awaited = messages[awaitedIndex];
       _awaitedMessageId = null;
       _isAtEnd = false;
       _viewportGeneration++;
@@ -523,13 +537,19 @@ class MessageListState extends State<MessageList>
         _highlightedMessageId = awaited.id;
         _highlight.forward(from: 0);
       }
+      // A folded message has no row of its own, so an unread or saved place
+      // inside a closed run lands on the run's bar.
+      final run = fold.runAt(awaitedIndex);
+      final folded = run != null && !run.isOpenIn(_openBlockedMessageIds);
       final restored = _restoring;
       _restoring = null;
-      _centreFromTop = restored?.messageId == awaited.id
+      _centreFromTop = !folded && restored?.messageId == awaited.id
           ? restored?.fromTop
           : null;
       if (_centreFromTop == null) _forgetPosition();
-      return _centre = _TimelineCentre.above(awaited);
+      return _centre = _TimelineCentre.above(
+        folded ? messages[run.start] : awaited,
+      );
     }
     // A new viewport at the end of the conversation. The place the reader was
     // before is behind them now, unless a saved position is still on its way.
@@ -703,9 +723,9 @@ class MessageListState extends State<MessageList>
       final held = {for (final message in messages) message.id};
       _messageKeys.removeWhere((id, _) => !held.contains(id));
     }
-    final centre = _centreIn(messages);
-    final centreIndex = centre.indexIn(messages);
     final fold = BlockedMessageFold(messages, widget.blockedUserIds);
+    final centre = _centreIn(messages, fold);
+    final centreIndex = centre.indexIn(messages);
     final outgoing = _outgoingByNonce;
     // A rebuild asks where each mounted row went, so this is built only then.
     late final rowIndexes = {

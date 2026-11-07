@@ -145,6 +145,28 @@ void main() {
     ready: _readyWithBlock(),
   );
 
+  testSession(
+    'a run opened before an unblock folds again on a new block',
+    (tester, session) async {
+      await _sendConversation(session);
+      await tester.tap(_toggle(_first));
+      await session.settle();
+
+      await session.dispatch('RELATIONSHIP_REMOVE', {
+        'id': SessionHarness.friendId,
+        'type': _blockedType,
+      });
+      await session.dispatch('RELATIONSHIP_ADD', _blockedRelationship());
+
+      expect(session.messageRow(_first), findsNothing);
+      expect(
+        find.descendant(of: _toggle(_first), matching: find.text('Show')),
+        findsOneWidget,
+      );
+    },
+    ready: _readyWithBlock(),
+  );
+
   group('a reply to a blocked message', () {
     const replyId = '900000000000000200';
     final preview = find.descendant(
