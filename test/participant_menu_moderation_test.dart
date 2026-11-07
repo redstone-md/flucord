@@ -79,6 +79,7 @@ final _moderator = DiscordPermissions.combine([
 Future<(StreamRoomHarness, FakeDiscordTransport)> _room(
   WidgetTester tester, {
   BigInt? everyone,
+  ChatWorkspace? workspace,
   List<StreamRoomSeat> seats = const [StreamRoomSeat(_friend)],
 }) async {
   await tester.binding.setSurfaceSize(const Size(1200, 800));
@@ -97,7 +98,9 @@ Future<(StreamRoomHarness, FakeDiscordTransport)> _room(
           baseUri: Uri.parse('https://discord.com/api/v9'),
         ),
       ),
-      permissions: WorkspacePermissions(_guildWhere(everyone ?? _moderator)),
+      permissions: WorkspacePermissions(
+        workspace ?? _guildWhere(everyone ?? _moderator),
+      ),
     ),
   );
   return (harness, transport);
@@ -159,6 +162,22 @@ void main() {
 
     testWidgets('an ordinary member gets none', (tester) async {
       await _room(tester, everyone: _member);
+
+      await _openFriendMenu(tester);
+
+      expect(find.text('Mute'), findsOneWidget);
+      for (final row in _rows) {
+        expect(find.text(row), findsNothing);
+      }
+    });
+
+    testWidgets('a guild with no role data gets none', (tester) async {
+      await _room(
+        tester,
+        workspace: streamRoomWorkspace.copyWith(
+          channels: [...streamRoomWorkspace.channels, _lounge],
+        ),
+      );
 
       await _openFriendMenu(tester);
 

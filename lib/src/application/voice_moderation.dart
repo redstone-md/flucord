@@ -21,10 +21,14 @@ final class VoiceModeration {
   final WorkspacePermissions _permissions;
 
   /// What this account may do to whoever holds [seat]. Null for a seat
-  /// outside a guild voice channel this account can see.
+  /// outside a guild voice channel this account can see, and in a guild
+  /// whose permissions this client was never told: channel permissions read
+  /// that gap as full, which must not offer moderation to anyone.
+  ///
+  /// Stage channels are voice channels here too, so Move to lists them.
   ParticipantModeration? of(VoiceParticipantStateEvent seat) {
     final guildId = seat.guildId;
-    if (guildId == null) return null;
+    if (guildId == null || _permissions.inSpace(guildId) == null) return null;
     final channels = _permissions.visibleChannelsFor(guildId);
     final room = channels.where((c) => c.id == seat.channelId).firstOrNull;
     if (room == null) return null;
