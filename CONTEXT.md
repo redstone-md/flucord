@@ -72,6 +72,10 @@ _Avoid_: frame, access unit, image
 The sound of what is being shared, travelling with the stream rather than with the room's voice.
 _Avoid_: system audio, loopback audio, desktop audio
 
+**Move**:
+Discord putting this account into another room of the same server, or out of voice, without the person asking: a moderator moved or disconnected it. The room follows, with mute and deafen kept. A stream the account sends ends, and so do its watched sessions from the old room, because a stream belongs to one channel.
+_Avoid_: drag, transfer, kick
+
 **Direct message (DM)**:
 A conversation outside any server, listed under Direct Messages. It has a list of recipients. A one-to-one DM has exactly one; a group DM has any number.
 _Avoid_: private channel (Discord's API name)

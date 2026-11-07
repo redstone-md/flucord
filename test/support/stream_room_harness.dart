@@ -111,6 +111,7 @@ final class StreamRoomHarness {
       streamViewer: viewer,
       selfVideo: camera,
       focus: focus,
+      workspace: composition.workspace,
     );
     composition.workspace
       ..reconcile(streamRoomWorkspace)

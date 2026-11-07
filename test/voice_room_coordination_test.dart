@@ -12,6 +12,7 @@ import 'package:flucord/src/application/streamer_mode_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/voice_overlay_controller.dart';
 import 'package:flucord/src/application/voice_room_coordination.dart';
+import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
@@ -132,6 +133,74 @@ void main() {
     // Discord forgets the room's watchers with the room; a client that did
     // not would offer "Stop watching" on a stream it no longer holds.
     expect(viewer.isOpen(key), isFalse);
+  });
+
+  group('a move by Discord', () {
+    const move = VoiceMovedToChannelEvent(
+      guildId: 'guild-1',
+      channelId: 'voice-2',
+    );
+
+    /// In voice-1 with its connection up.
+    Future<({_FakeVoiceSignalingService signaling, VoiceController voice})>
+    inRoom() async {
+      final signaling = _FakeVoiceSignalingService();
+      final voice = VoiceController(
+        const NoopVoiceMediaService(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(voice.dispose);
+      await voice.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(
+        const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+      );
+      await Future<void>.delayed(Duration.zero);
+      return (signaling: signaling, voice: voice);
+    }
+
+    test('ends the watched sessions of the old room', () async {
+      final room = await inRoom();
+      final viewer = StreamViewerController(
+        repositoryProvider: _FakeGoLiveRepository.new,
+        decoderFactory: StreamRoomDecoder.new,
+      );
+      addTearDown(viewer.dispose);
+      addTearDown(_buildRoom(voice: room.voice, streamViewer: viewer).dispose);
+      const key = GoLiveStreamKey.guild(
+        guildId: 'guild-1',
+        channelId: 'voice-1',
+        userId: 'them',
+      );
+      await viewer.requestWatch(key);
+
+      room.signaling.emit(move);
+      await Future<void>.delayed(Duration.zero);
+
+      // Watching needs a seat in the stream's channel, and that seat is gone.
+      expect(viewer.isOpen(key), isFalse);
+    });
+
+    test('takes the room on screen along, and nothing else', () async {
+      final room = await inRoom();
+      final workspace = WorkspaceController()..selectChannel('voice-1');
+      addTearDown(workspace.dispose);
+      addTearDown(_buildRoom(voice: room.voice, workspace: workspace).dispose);
+
+      room.signaling.emit(move);
+      await Future<void>.delayed(Duration.zero);
+      expect(workspace.selectedChannelId, 'voice-2');
+
+      // Reading another channel, the person stays where they are.
+      workspace.selectChannel('text-1');
+      room.signaling.emit(
+        const VoiceMovedToChannelEvent(
+          guildId: 'guild-1',
+          channelId: 'voice-3',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(workspace.selectedChannelId, 'text-1');
+    });
   });
 
   test('the stage focus follows its participant out of the room', () async {
@@ -281,6 +350,7 @@ VoiceRoomCoordination _buildRoom({
   StreamViewerController? streamViewer,
   SelfVideoController? selfVideo,
   RoomFocus? focus,
+  WorkspaceController? workspace,
 }) {
   final resolvedVoice =
       voice ??
@@ -326,6 +396,7 @@ VoiceRoomCoordination _buildRoom({
           announceSelfVideo: ({required bool enabled}) async => true,
         ),
     focus: focus ?? RoomFocus(),
+    workspace: workspace ?? WorkspaceController(),
   );
   return room;
 }

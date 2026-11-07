@@ -844,6 +844,7 @@ final class AppComposition {
       streamViewer: streamViewer,
       selfVideo: selfVideo,
       focus: roomFocus,
+      workspace: workspace,
     );
     _teardown.add(voiceRoomCoordination.dispose);
     // A window nothing of is on screen stops drawing what it is watching,
