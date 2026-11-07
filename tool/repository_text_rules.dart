@@ -9,8 +9,6 @@
 /// committed.
 library;
 
-import 'dart:io';
-
 final _snowflake = RegExp(r'(?<![0-9A-Fa-f])[0-9]{17,20}(?![0-9A-Fa-f])');
 
 /// The shape test fixtures number their ids in: one digit that is not zero,
@@ -26,9 +24,12 @@ const snowflakeAdvice =
     'short count: 100000000000000221). A value that is already in history and '
     'names no one goes in tool/allowed_snowflakes.txt with a comment.';
 
-/// The ids `tool/allowed_snowflakes.txt` lets through.
-Set<String> readAllowedSnowflakes() => File('tool/allowed_snowflakes.txt')
-    .readAsLinesSync()
+/// The file that lists the ids let through.
+const allowedSnowflakesPath = 'tool/allowed_snowflakes.txt';
+
+/// The ids [text], the contents of [allowedSnowflakesPath], lets through.
+Set<String> parseAllowedSnowflakes(String text) => text
+    .split('\n')
     .map((line) => line.trim())
     .where((line) => line.isNotEmpty && !line.startsWith('#'))
     .toSet();

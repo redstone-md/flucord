@@ -17,7 +17,9 @@ void main() {
     ]);
     expect(grep.exitCode, anyOf(0, 1), reason: '${grep.stderr}');
 
-    final allowed = readAllowedSnowflakes();
+    final allowed = parseAllowedSnowflakes(
+      File(allowedSnowflakesPath).readAsStringSync(),
+    );
     final offenders = <String>[];
     for (final match in (grep.stdout as String).split('\n')) {
       final separator = match.indexOf(':', match.indexOf(':') + 1);

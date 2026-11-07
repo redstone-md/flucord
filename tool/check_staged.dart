@@ -13,16 +13,22 @@ void main() {
     '--no-color',
     '--no-ext-diff',
     '-U0',
-    '--diff-filter=ACMR',
   ]);
   if (diff.exitCode != 0) {
     stderr.write(diff.stderr);
     exit(diff.exitCode);
   }
 
+  // The list as it will be committed, not as the working tree has it.
+  final allowed = Process.runSync('git', ['show', ':$allowedSnowflakesPath']);
+  if (allowed.exitCode != 0) {
+    stderr.write(allowed.stderr);
+    exit(allowed.exitCode);
+  }
+
   final problems = addedLineProblems(
     diff.stdout as String,
-    readAllowedSnowflakes(),
+    parseAllowedSnowflakes(allowed.stdout as String),
   );
   if (problems.isEmpty) return;
 
