@@ -14,6 +14,7 @@ import 'package:flucord/src/domain/client_sounds.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/voice_connection_bar.dart';
+import 'package:flucord/src/presentation/widgets/voice_control.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -142,6 +143,18 @@ void main() {
     expect(rig.voice.isDeafened, isTrue);
     expect(rig.gateway.voiceStates, isEmpty);
     expect(rig.sounds.played, [ClientSound.userMoved]);
+  });
+
+  test('a move into a channel with a server mute says so, as a join '
+      'does', () async {
+    final rig = await _MoveRig.inRoom();
+
+    rig.seatSelf('voice-2', serverMute: true);
+    await _flush();
+
+    expect(rig.voice.connectedChannelId, 'voice-2');
+    expect(rig.voice.isServerMuted, isTrue);
+    expect(VoiceControl.mute(rig.voice).tooltip, contains('Server muted'));
   });
 
   test('a move during a reconnect settles in the new channel without the '
@@ -345,14 +358,19 @@ final class _MoveRig {
 
   /// Discord's self voice state: this account seated in [channelId], or out
   /// of voice when it is null.
-  void seatSelf(String? channelId, {bool mute = false, bool deaf = false}) =>
-      seat('me', channelId, mute: mute, deaf: deaf);
+  void seatSelf(
+    String? channelId, {
+    bool mute = false,
+    bool deaf = false,
+    bool serverMute = false,
+  }) => seat('me', channelId, mute: mute, deaf: deaf, serverMute: serverMute);
 
   void seat(
     String userId,
     String? channelId, {
     bool mute = false,
     bool deaf = false,
+    bool serverMute = false,
   }) => gateway.dispatch('VOICE_STATE_UPDATE', {
     'guild_id': 'guild-1',
     'channel_id': channelId,
@@ -360,6 +378,7 @@ final class _MoveRig {
     'session_id': 'session-$userId',
     'self_mute': mute,
     'self_deaf': deaf,
+    'mute': serverMute,
   });
 
   void serverUpdate({required String token, required String endpoint}) =>
