@@ -609,6 +609,7 @@ List<ParticipantMark> participantMarks(
       selfDeafened: participant.selfDeafened,
       serverMuted: participant.serverMuted,
       serverDeafened: participant.serverDeafened,
+      speechBlock: participant.speechBlock,
     ),
   if (mutedForYou)
     (icon: FlucordIcons.volumeOff, label: 'Muted for you', byServer: false),
@@ -616,12 +617,14 @@ List<ParticipantMark> participantMarks(
 
 /// What somebody's voice state marks: deafened before muted, as deafening
 /// mutes too. A server mute still shows beside a self-deafen, because only
-/// a moderator can lift it.
+/// a moderator can lift it. A channel that does not let them speak is marked
+/// the same way, for the same reason.
 List<ParticipantMark> soundMarks({
   required bool selfMuted,
   required bool selfDeafened,
   required bool serverMuted,
   required bool serverDeafened,
+  SpeechBlock? speechBlock,
 }) => [
   if (serverDeafened)
     (icon: FlucordIcons.headphonesOff, label: 'Server deafened', byServer: true)
@@ -629,6 +632,17 @@ List<ParticipantMark> soundMarks({
     (icon: FlucordIcons.headphonesOff, label: 'Deafened', byServer: false),
   if (serverMuted && !serverDeafened)
     (icon: FlucordIcons.micOff, label: 'Server muted', byServer: true)
+  else if (speechBlock != null && !serverDeafened)
+    (
+      icon: FlucordIcons.micOff,
+      label: switch (speechBlock) {
+        // Only this account's own seat is judged by its permissions.
+        SpeechBlock.noPermission =>
+          'You do not have permission to speak in this channel',
+        SpeechBlock.suppressed => 'Suppressed',
+      },
+      byServer: true,
+    )
   else if (selfMuted && !selfDeafened && !serverDeafened)
     (icon: FlucordIcons.micOff, label: 'Muted', byServer: false),
 ];

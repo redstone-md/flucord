@@ -15,6 +15,7 @@ import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/voice_connection_bar.dart';
 import 'package:flucord/src/presentation/widgets/voice_control.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -155,6 +156,59 @@ void main() {
     expect(rig.voice.connectedChannelId, 'voice-2');
     expect(rig.voice.isServerMuted, isTrue);
     expect(VoiceControl.mute(rig.voice).tooltip, contains('Server muted'));
+  });
+
+  test('a move into a channel without Speak says why, as a server mute '
+      'does', () async {
+    final rig = await _MoveRig.inRoom();
+    rig.speech.value = {'voice-2': VoiceChannelSpeech.noPermission};
+
+    rig.seatSelf('voice-2');
+    await _flush();
+
+    final mute = VoiceControl.mute(rig.voice);
+    expect(
+      mute.tooltip,
+      'You do not have permission to speak in this channel · Mute',
+    );
+    expect(mute.byServer, isTrue);
+    expect(mute.icon, FlucordIcons.micOff);
+  });
+
+  test('a move into an AFK channel says the account is suppressed', () async {
+    final rig = await _MoveRig.inRoom();
+
+    // Discord suppresses everyone in the AFK channel.
+    rig.seatSelf('voice-2', suppress: true);
+    await _flush();
+
+    final mute = VoiceControl.mute(rig.voice);
+    expect(mute.tooltip, 'You are suppressed in this channel · Mute');
+    expect(mute.byServer, isTrue);
+  });
+
+  test('a suppressed seat in a Stage is left to the Stage', () async {
+    final rig = await _MoveRig.inRoom();
+    rig.speech.value = {'voice-2': VoiceChannelSpeech.stage};
+
+    rig.seatSelf('voice-2', suppress: true);
+    await _flush();
+
+    expect(VoiceControl.mute(rig.voice).tooltip, 'Mute');
+  });
+
+  test('gaining Speak in the room clears the mark at once', () async {
+    final rig = await _MoveRig.inRoom();
+    rig.speech.value = {'voice-1': VoiceChannelSpeech.noPermission};
+    expect(VoiceControl.mute(rig.voice).byServer, isTrue);
+    var redraws = 0;
+    rig.voice.addListener(() => redraws++);
+
+    rig.speech.value = const {};
+
+    expect(redraws, 1);
+    expect(VoiceControl.mute(rig.voice).tooltip, 'Mute');
+    expect(VoiceControl.mute(rig.voice).byServer, isFalse);
   });
 
   test('a move during a reconnect settles in the new channel without the '
@@ -311,6 +365,9 @@ final class _MoveRig {
     voice = VoiceController(
       const NoopVoiceMediaService(),
       signalingServiceProvider: () => service,
+      speechIn: (channelId) =>
+          speech.value[channelId] ?? VoiceChannelSpeech.open,
+      speechChanges: speech,
     );
     cues = VoiceSoundCues.forRoom(
       voice: voice,
@@ -326,6 +383,12 @@ final class _MoveRig {
   final FakeVoiceSocketDialer dialer = FakeVoiceSocketDialer();
   final _RecordingSounds sounds = _RecordingSounds();
   final ChangeNotifier _streams = ChangeNotifier();
+
+  /// Who may speak in each channel, as the workspace would answer. Open
+  /// where nothing is set.
+  final ValueNotifier<Map<String, VoiceChannelSpeech>> speech = ValueNotifier(
+    const {},
+  );
   late final DiscordVoiceSignalingService service;
   late final VoiceController voice;
   late final VoiceSoundCues cues;
@@ -363,7 +426,15 @@ final class _MoveRig {
     bool mute = false,
     bool deaf = false,
     bool serverMute = false,
-  }) => seat('me', channelId, mute: mute, deaf: deaf, serverMute: serverMute);
+    bool suppress = false,
+  }) => seat(
+    'me',
+    channelId,
+    mute: mute,
+    deaf: deaf,
+    serverMute: serverMute,
+    suppress: suppress,
+  );
 
   void seat(
     String userId,
@@ -371,6 +442,7 @@ final class _MoveRig {
     bool mute = false,
     bool deaf = false,
     bool serverMute = false,
+    bool suppress = false,
   }) => gateway.dispatch('VOICE_STATE_UPDATE', {
     'guild_id': 'guild-1',
     'channel_id': channelId,
@@ -379,6 +451,7 @@ final class _MoveRig {
     'self_mute': mute,
     'self_deaf': deaf,
     'mute': serverMute,
+    'suppress': suppress,
   });
 
   void serverUpdate({required String token, required String endpoint}) =>

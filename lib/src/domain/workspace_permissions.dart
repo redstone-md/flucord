@@ -3,6 +3,7 @@ import 'chat_models.dart';
 import 'discord_permissions.dart';
 import 'guild_membership.dart';
 import 'guild_permissions.dart';
+import 'voice_connection.dart';
 
 part 'guild_admin_capabilities.dart';
 
@@ -50,6 +51,14 @@ final class WorkspacePermissions {
 
   ChannelCapabilities capabilitiesIn(ConversationChannel channel) =>
       ChannelCapabilities.fromPermissions(inChannel(channel));
+
+  /// Who may speak in the voice [channel], for this account. A Stage
+  /// decides its speakers itself, so Speak is not asked there.
+  VoiceChannelSpeech speechIn(ConversationChannel channel) => channel.isStage
+      ? VoiceChannelSpeech.stage
+      : can(DiscordPermissions.speak, channel)
+      ? VoiceChannelSpeech.open
+      : VoiceChannelSpeech.noPermission;
 
   /// Guild-wide permissions in [spaceId], or `null` when this client holds no
   /// permission data for that guild.

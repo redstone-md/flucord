@@ -848,12 +848,16 @@ class VoiceSeatRow extends StatelessWidget {
     this.indented = false,
     this.onOpenProfile,
     this.participantMenu,
+    this.speechBlock,
     super.key,
   });
 
   final VoiceParticipantStateEvent state;
   final Member? member;
   final String spaceId;
+
+  /// Why they cannot be heard although nobody muted them, as the room says.
+  final SpeechBlock? speechBlock;
 
   /// Whether their voice is arriving right now, which rings the avatar.
   final bool speaking;
@@ -871,7 +875,8 @@ class VoiceSeatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final name = member?.displayNameFor(spaceId) ?? 'Unknown user';
-    final silenced = state.selfMuted || state.serverMuted;
+    final silenced =
+        state.selfMuted || state.serverMuted || speechBlock != null;
     final deafened = state.selfDeafened || state.serverDeafened;
     final nameColor = speaking
         ? surfaces.text
@@ -912,6 +917,7 @@ class VoiceSeatRow extends StatelessWidget {
               selfDeafened: state.selfDeafened,
               serverMuted: state.serverMuted,
               serverDeafened: state.serverDeafened,
+              speechBlock: speechBlock,
             ))
               _SeatMark(mark),
           ],

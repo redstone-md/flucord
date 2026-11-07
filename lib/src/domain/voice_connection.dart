@@ -212,6 +212,7 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
     required this.serverDeafened,
     required this.isStreaming,
     required this.isVideoEnabled,
+    this.isSuppressed = false,
   });
 
   final String userId;
@@ -225,6 +226,10 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   final bool serverDeafened;
   final bool isStreaming;
   final bool isVideoEnabled;
+
+  /// Discord's `suppress`: the server does not let this seat speak. Every
+  /// seat in an AFK channel is suppressed, and so is a Stage's audience.
+  final bool isSuppressed;
 
   /// The same person, reported as having left.
   ///
@@ -244,6 +249,20 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   );
 }
 
+/// Who may speak in a guild voice channel, for this account.
+enum VoiceChannelSpeech {
+  open,
+
+  /// The account lacks the Speak permission there.
+  noPermission,
+
+  /// A Stage, which decides its speakers itself.
+  stage,
+}
+
+/// Why a seat cannot be heard although nobody muted it.
+enum SpeechBlock { noPermission, suppressed }
+
 final class VoiceParticipant {
   const VoiceParticipant({
     required this.userId,
@@ -255,6 +274,7 @@ final class VoiceParticipant {
     this.serverDeafened = false,
     this.isStreaming = false,
     this.isVideoEnabled = false,
+    this.speechBlock,
   });
 
   final String userId;
@@ -271,6 +291,9 @@ final class VoiceParticipant {
   final bool isStreaming;
   final bool isVideoEnabled;
 
+  /// Set by the room from the seat and the channel, never by the transport.
+  final SpeechBlock? speechBlock;
+
   bool get isMuted => selfMuted || serverMuted;
   bool get isDeafened => selfDeafened || serverDeafened;
 
@@ -283,6 +306,7 @@ final class VoiceParticipant {
     bool? serverDeafened,
     bool? isStreaming,
     bool? isVideoEnabled,
+    SpeechBlock? speechBlock,
   }) => VoiceParticipant(
     userId: userId,
     ssrc: ssrc ?? this.ssrc,
@@ -293,6 +317,7 @@ final class VoiceParticipant {
     serverDeafened: serverDeafened ?? this.serverDeafened,
     isStreaming: isStreaming ?? this.isStreaming,
     isVideoEnabled: isVideoEnabled ?? this.isVideoEnabled,
+    speechBlock: speechBlock ?? this.speechBlock,
   );
 }
 

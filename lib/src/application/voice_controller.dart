@@ -24,6 +24,9 @@ enum VoiceState { idle, loading, ready, failure }
 typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
 typedef DirectCallServiceProvider = DirectCallService? Function();
 
+/// Who may speak in a guild voice channel, for this account.
+typedef VoiceSpeechRule = VoiceChannelSpeech Function(String channelId);
+
 final class VoiceController extends ChangeNotifier
     implements MicrophoneLevelSource {
   factory VoiceController(
@@ -54,6 +57,11 @@ final class VoiceController extends ChangeNotifier
     /// Turns other applications down while this account speaks. Null on a
     /// platform whose attenuation reports itself unavailable.
     ApplicationAttenuation? applicationAttenuation,
+
+    /// Who may speak where, asked again each time [speechChanges] fires.
+    /// Everyone may, without it.
+    VoiceSpeechRule? speechIn,
+    Listenable? speechChanges,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
@@ -66,6 +74,8 @@ final class VoiceController extends ChangeNotifier
     microphoneEnhancerFactory,
     processingRepository,
     applicationAttenuation,
+    speechIn ?? _openSpeech,
+    speechChanges,
   );
   VoiceController._(
     this._mediaService,
@@ -83,6 +93,8 @@ final class VoiceController extends ChangeNotifier
     microphoneEnhancerFactory,
     this._processingRepository,
     this._applicationAttenuation,
+    this._speechIn,
+    this._speechChanges,
   ) : _audioPipeline = audioCodecFactory == null
           ? null
           : VoiceAudioPipeline(
@@ -108,6 +120,7 @@ final class VoiceController extends ChangeNotifier
     _streamAudioEndedSubscription = streamAudioEnded?.listen(
       _handleStreamAudioEnded,
     );
+    _speechChanges?.addListener(_recheckSpeech);
   }
 
   final VoiceMediaService _mediaService;
@@ -117,6 +130,12 @@ final class VoiceController extends ChangeNotifier
   final VoiceAudioPipeline? _audioPipeline;
   final VoiceProcessingRepository? _processingRepository;
   final ApplicationAttenuation? _applicationAttenuation;
+  final VoiceSpeechRule _speechIn;
+  final Listenable? _speechChanges;
+
+  /// The rule last read for the room, so a change that moves nothing does
+  /// not redraw everything that listens here.
+  (String?, VoiceChannelSpeech)? _speechSeen;
   VoiceProcessingSettings _processing = const VoiceProcessingSettings();
 
   /// Set by the first user change, so a startup load that resolves late
@@ -265,6 +284,7 @@ final class VoiceController extends ChangeNotifier
             serverDeafened: state.serverDeafened,
             isStreaming: state.isStreaming,
             isVideoEnabled: state.isVideoEnabled,
+            speechBlock: speechBlockOf(state),
           );
     }
     // Anybody the transport knows about but the roster has not caught up on
@@ -340,6 +360,37 @@ final class VoiceController extends ChangeNotifier
 
   /// Whether a moderator deafened this account in the room.
   bool get isServerDeafened => _ownSeat?.serverDeafened ?? false;
+
+  /// Why this account cannot be heard in the room although nobody muted it.
+  SpeechBlock? get speechBlock => _ownSeat?.speechBlock;
+
+  /// Why [seat] cannot be heard although nobody muted it, as Discord marks
+  /// it. A permission is only judged for this account's own seat, and a
+  /// Stage's audience is the Stage's business.
+  SpeechBlock? speechBlockOf(VoiceParticipantStateEvent seat) {
+    final channelId = seat.channelId;
+    final isSelf = seat.userId == _selfUserId;
+    if (seat.guildId == null || channelId == null) return null;
+    if (!isSelf && !seat.isSuppressed) return null;
+    return switch (_speechIn(channelId)) {
+      VoiceChannelSpeech.stage => null,
+      VoiceChannelSpeech.noPermission when isSelf => SpeechBlock.noPermission,
+      _ when seat.isSuppressed => SpeechBlock.suppressed,
+      _ => null,
+    };
+  }
+
+  /// Redraws when the rule for the room changed, or the room did.
+  void _recheckSpeech() {
+    final channelId = _connectedChannelId;
+    final seen = (
+      channelId,
+      channelId == null ? VoiceChannelSpeech.open : _speechIn(channelId),
+    );
+    if (seen == _speechSeen) return;
+    _speechSeen = seen;
+    if (!_disposed) notifyListeners();
+  }
 
   VoiceParticipant? get _ownSeat => switch (_selfUserId) {
     final self? => participants.where((p) => p.userId == self).firstOrNull,
@@ -1130,6 +1181,7 @@ final class VoiceController extends ChangeNotifier
   @override
   void dispose() {
     _disposed = true;
+    _speechChanges?.removeListener(_recheckSpeech);
     _releaseDelayTimer?.cancel();
     for (final timer in _speakingTimers.values) {
       timer.cancel();
@@ -1157,6 +1209,8 @@ final class VoiceController extends ChangeNotifier
   static VoiceSignalingService? _noSignaling() => null;
 
   static DirectCallService? _noCalls() => null;
+
+  static VoiceChannelSpeech _openSpeech(String _) => VoiceChannelSpeech.open;
 }
 
 /// Announces that who is seated in the voice channels changed.

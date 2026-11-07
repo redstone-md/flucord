@@ -138,6 +138,7 @@ import 'domain/go_live_stream.dart';
 import 'domain/voice_connection.dart';
 import 'domain/voice_processing.dart' show ApplicationAttenuation;
 import 'domain/voice_message_recorder.dart';
+import 'domain/workspace_permissions.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
@@ -600,6 +601,10 @@ final class AppComposition {
             FileVoiceProcessingRepository(),
         applicationAttenuation:
             bootstrap.applicationAttenuation ?? _defaultAttenuation(),
+        // Asked again on every workspace change, so a role or overwrite
+        // edit reaches the room while the account sits in it.
+        speechIn: _speechIn,
+        speechChanges: chat,
       ),
     );
     unawaited(voice.loadProcessingSettings());
@@ -951,6 +956,15 @@ final class AppComposition {
   static GlobalKeyboardHook _defaultKeyboardHook() => Platform.isWindows
       ? WindowsGlobalKeyboardHook()
       : const UnavailableGlobalKeyboardHook();
+
+  /// Who may speak in [channelId], by the workspace as it is now. A channel
+  /// this client holds no record of is not judged.
+  VoiceChannelSpeech _speechIn(String channelId) {
+    final workspace = chat.workspace;
+    final channel = workspace?.channelOrNull(channelId);
+    if (workspace == null || channel == null) return VoiceChannelSpeech.open;
+    return WorkspacePermissions(workspace).speechIn(channel);
+  }
 
   /// The attenuation this platform has, or one that plainly says it has
   /// none. The plain construction opens the module lazily, so a platform
