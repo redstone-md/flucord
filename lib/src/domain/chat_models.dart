@@ -9,6 +9,7 @@ import 'message_component.dart';
 import 'guild_membership.dart';
 import 'message_embed.dart';
 import 'permission_overwrite.dart';
+import 'voice_message_recorder.dart';
 
 part 'community_space.dart';
 part 'message_models.dart';

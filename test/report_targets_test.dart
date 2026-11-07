@@ -12,6 +12,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/message_actions.dart';
+
 void main() {
   group('what a report names', () {
     test('a message report names the channel and the message', () {
@@ -187,19 +189,13 @@ Future<void> _pumpMessage(
               workspace: _workspace,
               grouped: false,
               isCurrentUser: isCurrentUser,
-              onReply: (_) {},
-              onEdit: (_, _) async => true,
-              onDelete: (_) async {},
-              onToggleReaction: (_, _) async {},
-              onLoadReactionUsers: (_, _, _, _) async =>
-                  const MemberPage(users: [], hasMore: false),
-              onAddReaction: (_, _) async {},
-              onCreateThread: (_, _, _) async => true,
-              onTogglePin: (_) async {},
-              onEndPoll: (_) async => true,
-              onForward: (_, _) async => true,
-              onToggleSuppressEmbeds: (_) async => true,
-              onReport: onReport,
+              actions: testMessageActions(
+                onLoadReactionUsers: (_, _, _, _) async =>
+                    const MemberPage(users: [], hasMore: false),
+                onForward: (_, _) async => true,
+                onToggleSuppressEmbeds: (_) async => true,
+                onReport: onReport,
+              ),
               linkLauncher: const _TestLinkLauncher(),
               onSelectChannel: (_) {},
             ),

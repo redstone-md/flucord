@@ -7,6 +7,8 @@ import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/message_actions.dart';
+
 void main() {
   testWidgets('uses the anchored picker and opens reaction details', (
     tester,
@@ -31,25 +33,17 @@ void main() {
                 workspace: _workspace,
                 grouped: false,
                 isCurrentUser: false,
-                onReply: (_) {},
-                onEdit: (_, _) async => true,
-                onDelete: (_) async {},
-                onToggleReaction: (_, _) async {},
-                onLoadReactionUsers: (_, _, _, _) async {
-                  detailLoads++;
-                  return const MemberPage(
-                    users: [_member],
-                    hasMore: false,
-                  );
-                },
-                onAddReaction: (_, emoji) async {
-                  selectedReaction = emoji;
-                },
-                onCreateThread: (_, _, _) async => true,
-                onTogglePin: (_) async {},
-                onEndPoll: (_) async => true,
-                onForward: (_, _) async => true,
-                onToggleSuppressEmbeds: (_) async => true,
+                actions: testMessageActions(
+                  onLoadReactionUsers: (_, _, _, _) async {
+                    detailLoads++;
+                    return const MemberPage(users: [_member], hasMore: false);
+                  },
+                  onAddReaction: (_, emoji) async {
+                    selectedReaction = emoji;
+                  },
+                  onForward: (_, _) async => true,
+                  onToggleSuppressEmbeds: (_) async => true,
+                ),
                 linkLauncher: const _TestLinkLauncher(),
                 onSelectChannel: (_) {},
               ),

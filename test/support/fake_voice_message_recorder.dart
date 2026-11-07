@@ -27,6 +27,9 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   /// and before it answers.
   List<VoiceMessageRecordingProgress> lastFrames = const [];
 
+  /// When set, [stop] answers only once this completes.
+  Completer<void>? holdStop;
+
   int startCount = 0;
   int cancelCount = 0;
   int deleteCount = 0;
@@ -50,6 +53,7 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
     lastFrames.forEach(emit);
     // A broadcast stream delivers on a later microtask.
     await Future<void>.delayed(Duration.zero);
+    await holdStop?.future;
     isRecording = false;
     return pending;
   }

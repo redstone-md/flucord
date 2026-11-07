@@ -15,6 +15,7 @@ import 'package:flucord/src/presentation/widgets/user_settings_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/fake_user_settings_repository.dart';
+import 'support/message_actions.dart';
 
 void main() {
   group('MessageTimestamp', () {
@@ -186,18 +187,12 @@ Future<void> _pumpMessage(
     workspace: _workspace,
     grouped: false,
     isCurrentUser: false,
-    onReply: (_) {},
-    onEdit: (_, _) async => true,
-    onDelete: (_) async {},
-    onToggleReaction: (_, _) async {},
-    onLoadReactionUsers: (_, _, _, _) async =>
-        const MemberPage(users: [_member], hasMore: false),
-    onAddReaction: (_, _) async {},
-    onCreateThread: (_, _, _) async => true,
-    onTogglePin: (_) async {},
-    onEndPoll: (_) async => true,
-    onForward: (_, _) async => true,
-    onToggleSuppressEmbeds: (_) async => true,
+    actions: testMessageActions(
+      onLoadReactionUsers: (_, _, _, _) async =>
+          const MemberPage(users: [_member], hasMore: false),
+      onForward: (_, _) async => true,
+      onToggleSuppressEmbeds: (_) async => true,
+    ),
     linkLauncher: const _TestLinkLauncher(),
     onSelectChannel: (_) {},
   );

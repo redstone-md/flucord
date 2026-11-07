@@ -8,6 +8,8 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/message_actions.dart';
+
 void main() {
   testWidgets('a valid invite shows the server under the message text', (
     tester,
@@ -157,18 +159,12 @@ Widget _row({
               ),
               grouped: false,
               isCurrentUser: authorId == 'jack',
-              onReply: (_) {},
-              onEdit: (_, _) async => true,
-              onDelete: (_) async {},
-              onToggleReaction: (_, _) async {},
-              onLoadReactionUsers: (_, _, _, _) async =>
-                  const MemberPage(users: [], hasMore: false),
-              onAddReaction: (_, _) async {},
-              onCreateThread: (_, _, _) async => true,
-              onTogglePin: (_) async {},
-              onEndPoll: (_) async => true,
-              onForward: (_, _) async => true,
-              onToggleSuppressEmbeds: (_) async => true,
+              actions: testMessageActions(
+                onLoadReactionUsers: (_, _, _, _) async =>
+                    const MemberPage(users: [], hasMore: false),
+                onForward: (_, _) async => true,
+                onToggleSuppressEmbeds: (_) async => true,
+              ),
               linkLauncher: const _NoLauncher(),
               onSelectChannel: (_) {},
             ),

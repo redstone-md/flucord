@@ -7,6 +7,10 @@ final class _OutgoingMessages {
   /// The last send queued in each channel. Each send waits for the one before
   /// it, so a channel's messages arrive in the order they were written.
   final Map<String, Future<bool>> _tails = {};
+
+  /// What to run, by nonce, once a message leaves the queue: sent, echoed or
+  /// deleted. A voice message lets go of its recording file here.
+  final Map<String, void Function()> _onLeave = {};
   int _lastNonceMillis = 0;
 
   List<OutgoingMessage> inChannel(String channelId) =>
@@ -21,8 +25,10 @@ final class _OutgoingMessages {
 
   bool holds(OutgoingMessage message) => _indexOf(message) >= 0;
 
-  void add(OutgoingMessage message) =>
-      (_byChannel[message.channelId] ??= []).add(message);
+  void add(OutgoingMessage message, {void Function()? onLeave}) {
+    (_byChannel[message.channelId] ??= []).add(message);
+    if (onLeave != null) _onLeave[message.nonce] = onLeave;
+  }
 
   /// Swaps in [message] for the held one with its nonce. Returns false when
   /// none is held: Discord's echo or a delete got there first.
@@ -38,7 +44,9 @@ final class _OutgoingMessages {
     final before = held?.length ?? 0;
     held?.removeWhere((message) => message.nonce == nonce);
     if (held != null && held.isEmpty) _byChannel.remove(channelId);
-    return (held?.length ?? 0) != before;
+    final removed = (held?.length ?? 0) != before;
+    if (removed) _onLeave.remove(nonce)?.call();
+    return removed;
   }
 
   int _indexOf(OutgoingMessage message) =>
@@ -80,11 +88,12 @@ extension ChatControllerOutgoing on ChatController {
     if (_outgoing.remove(message.channelId, message.nonce)) _notify();
   }
 
-  /// Shows [message] at once and queues its send.
-  Future<bool> _queueSend(OutgoingMessage message) {
+  /// Shows [message] at once and queues its send. [onLeave] runs once the
+  /// message leaves the queue, sent or deleted.
+  Future<bool> _queueSend(OutgoingMessage message, {void Function()? onLeave}) {
     final channelId = message.channelId;
     if (hasNewerMessages(channelId)) unawaited(jumpToPresent(channelId));
-    _outgoing.add(message);
+    _outgoing.add(message, onLeave: onLeave);
     _lastSentMessage = message.message;
     _notify();
     return _deliver(message);
@@ -95,31 +104,23 @@ extension ChatControllerOutgoing on ChatController {
   Future<bool> _deliver(OutgoingMessage message) =>
       _outgoing.afterEarlierSends(message.channelId, () async {
         if (!_outgoing.holds(message)) return false;
-        final draft = message.message;
         var lastPercent = -1;
+        void onUploadProgress(double fraction) {
+          // Whole percents, so a large file does not redraw the app for each
+          // chunk.
+          final percent = (fraction * 100).floor();
+          if (percent == lastPercent || _disposed) return;
+          lastPercent = percent;
+          final progress = OutgoingSending(uploadProgress: fraction);
+          if (_outgoing.replace(message.withDelivery(progress))) _notify();
+        }
+
         try {
-          final sent = await _repository.sendMessage(
-            channelId: draft.channelId,
-            authorId: draft.authorId,
-            body: draft.body,
-            nonce: message.nonce,
-            attachments: message.attachments,
-            replyToMessageId: message.replyToMessageId,
-            suppressNotifications: draft.suppressesNotifications,
-            textToSpeech: draft.isTextToSpeech,
+          final sent = await _send(
+            message,
             onUploadProgress: message.attachments.isEmpty
                 ? null
-                : (fraction) {
-                    // Whole percents, so a large file does not redraw the app
-                    // for each chunk.
-                    final percent = (fraction * 100).floor();
-                    if (percent == lastPercent || _disposed) return;
-                    lastPercent = percent;
-                    final progress = OutgoingSending(uploadProgress: fraction);
-                    if (_outgoing.replace(message.withDelivery(progress))) {
-                      _notify();
-                    }
-                  },
+                : onUploadProgress,
           );
           _outgoing.remove(message.channelId, message.nonce);
           _applySentMessage(sent);
@@ -136,6 +137,40 @@ extension ChatControllerOutgoing on ChatController {
           if (!_disposed) _notify();
         }
       });
+
+  /// Hands [message] to the repository, as text or as a voice message.
+  Future<ChatMessage> _send(
+    OutgoingMessage message, {
+    required UploadProgressListener? onUploadProgress,
+  }) {
+    final draft = message.message;
+    final repository = _repository;
+    return switch ((message.voiceMessage, repository)) {
+      (null, _) => repository.sendMessage(
+        channelId: draft.channelId,
+        authorId: draft.authorId,
+        body: draft.body,
+        nonce: message.nonce,
+        attachments: message.attachments,
+        replyToMessageId: message.replyToMessageId,
+        suppressNotifications: draft.suppressesNotifications,
+        textToSpeech: draft.isTextToSpeech,
+        onUploadProgress: onUploadProgress,
+      ),
+      (final voiceMessage?, final VoiceMessageRepository repository) =>
+        repository.sendVoiceMessage(
+          channelId: draft.channelId,
+          authorId: draft.authorId,
+          voiceMessage: voiceMessage,
+          nonce: message.nonce,
+          onUploadProgress: onUploadProgress,
+        ),
+      // The session changed to one without voice messages since the send.
+      _ => Future.error(
+        UnsupportedError('This session cannot send voice messages'),
+      ),
+    };
+  }
 
   /// Takes this client's own message out of the outgoing list when Discord
   /// echoes it with the nonce it was sent under.

@@ -682,11 +682,13 @@ final class DiscordRestClient {
     Uri url,
     List<int> bytes, {
     required String contentType,
+    BodySentListener? onBodySent,
   }) => _executor.sendTo(
     'PUT',
     url,
     headers: {HttpHeaders.contentTypeHeader: contentType},
     body: bytes,
+    onBodySent: onBodySent,
   );
 
   /// A request whose status and headers the caller needs, for the routes where

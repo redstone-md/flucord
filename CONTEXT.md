@@ -89,5 +89,5 @@ A DM Discord made as a group. It stays a group when only one other person, or no
 _Avoid_: group chat, group channel
 
 **Outgoing message**:
-A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place.
+A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place. A text message and a voice message are the two kinds, and both go through the same queue.
 _Avoid_: pending message, local echo

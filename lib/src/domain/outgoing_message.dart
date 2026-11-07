@@ -35,7 +35,16 @@ final class OutgoingMessage {
     required this.replyToMessageId,
     List<PendingAttachment> attachments = const [],
     this.delivery = const OutgoingSending(),
-  }) : attachments = List.unmodifiable(attachments);
+  }) : attachments = List.unmodifiable(attachments),
+       voiceMessage = null;
+
+  /// A voice message: [voiceMessage] is its recording, sent as its only file.
+  OutgoingMessage.voice({
+    required this.message,
+    required PendingVoiceMessage this.voiceMessage,
+    this.delivery = const OutgoingSending(),
+  }) : replyToMessageId = null,
+       attachments = List.unmodifiable([voiceMessage.attachment]);
 
   /// The message as the timeline draws it. Its id is the nonce.
   final ChatMessage message;
@@ -46,14 +55,25 @@ final class OutgoingMessage {
   final List<PendingAttachment> attachments;
   final OutgoingDelivery delivery;
 
+  /// The recording, when this is a voice message. Null for a text message.
+  final PendingVoiceMessage? voiceMessage;
+
   String get nonce => message.id;
   String get channelId => message.channelId;
   bool get hasFailed => delivery is OutgoingFailed;
 
-  OutgoingMessage withDelivery(OutgoingDelivery delivery) => OutgoingMessage(
-    message: message,
-    replyToMessageId: replyToMessageId,
-    attachments: attachments,
-    delivery: delivery,
-  );
+  OutgoingMessage withDelivery(OutgoingDelivery delivery) =>
+      switch (voiceMessage) {
+        final voiceMessage? => OutgoingMessage.voice(
+          message: message,
+          voiceMessage: voiceMessage,
+          delivery: delivery,
+        ),
+        null => OutgoingMessage(
+          message: message,
+          replyToMessageId: replyToMessageId,
+          attachments: attachments,
+          delivery: delivery,
+        ),
+      };
 }

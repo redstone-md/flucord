@@ -11,6 +11,8 @@ import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/message_actions.dart';
+
 void main() {
   testWidgets('sends silently and resets the compact composer toggle', (
     tester,
@@ -326,30 +328,24 @@ class _MessageFlagHarnessState extends State<_MessageFlagHarness> {
             workspace: _workspace,
             grouped: false,
             isCurrentUser: true,
-            onReply: (_) {},
-            onEdit: (_, _) async => true,
-            onDelete: (_) async {},
-            onToggleReaction: (_, _) async {},
-            onLoadReactionUsers: (_, _, _, _) async =>
-                const MemberPage(users: [], hasMore: false),
-            onAddReaction: (_, _) async {},
-            onCreateThread: (_, _, _) async => true,
-            onTogglePin: (_) async {},
-            onEndPoll: (_) async => true,
-            onForward: widget.sessionActions ? (_, _) async => true : null,
-            onToggleSuppressEmbeds: !widget.sessionActions
-                ? null
-                : (message) async {
-                    setState(() {
-                      final bit = DiscordMessageFlag.suppressEmbeds.bit;
-                      _message = message.copyWith(
-                        flags: message.suppressesEmbeds
-                            ? message.flags & ~bit
-                            : message.flags | bit,
-                      );
-                    });
-                    return true;
-                  },
+            actions: testMessageActions(
+              onLoadReactionUsers: (_, _, _, _) async =>
+                  const MemberPage(users: [], hasMore: false),
+              onForward: widget.sessionActions ? (_, _) async => true : null,
+              onToggleSuppressEmbeds: !widget.sessionActions
+                  ? null
+                  : (message) async {
+                      setState(() {
+                        final bit = DiscordMessageFlag.suppressEmbeds.bit;
+                        _message = message.copyWith(
+                          flags: message.suppressesEmbeds
+                              ? message.flags & ~bit
+                              : message.flags | bit,
+                        );
+                      });
+                      return true;
+                    },
+            ),
             linkLauncher: const _TestLinkLauncher(),
             onSelectChannel: (_) {},
           ),
