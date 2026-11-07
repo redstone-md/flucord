@@ -38,7 +38,7 @@ abstract final class FavoriteEmojisField {
 }
 
 abstract final class FavoriteSoundboardSoundsField {
-  /// `repeated fixed64` — snowflakes, written packed.
+  /// `repeated fixed64`: snowflakes, written packed.
   static const soundIds = 1;
 }
 
