@@ -2,13 +2,18 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/application/account_entitlements_controller.dart';
+import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/go_live_viewer.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
 import 'package:flucord/src/theme/flucord_icons.dart';
 
+import 'support/fake_expression_repository.dart';
 import 'support/flucord_icon_finder.dart';
 import 'support/stream_room_harness.dart';
 
@@ -40,6 +45,8 @@ Future<void> _connect(WidgetTester tester, StreamRoomHarness call) async {
 }
 
 void main() {
+  group('soundboard', _soundboardInCalls);
+
   testWidgets('a DM call sits above the messages, and the composer stays', (
     tester,
   ) async {
@@ -239,3 +246,68 @@ Finder _ringing(String userId) =>
 
 Finder _dimmed(String userId) =>
     _inPerson(userId, find.byKey(const ValueKey('call-band-away')));
+
+/// What Discord offers in a call: the soundboard needs Nitro there.
+void _soundboardInCalls() {
+  Future<FakeSoundboardRepository> pumpWith(
+    WidgetTester tester,
+    PremiumTier tier,
+  ) async {
+    final repository = FakeSoundboardRepository()
+      ..defaults = const [SoundboardSound(id: '3', name: 'quack')]
+      ..byGuild['guild-1'] = const [
+        SoundboardSound(id: '20', name: 'drum roll', guildId: 'guild-1'),
+      ];
+    final entitlements = AccountEntitlementsController(
+      () => _Entitlements(tier),
+    );
+    await tester.runAsync(entitlements.load);
+    final soundboard = SoundboardController(
+      () => repository,
+      entitlements: entitlements,
+    );
+    addTearDown(soundboard.dispose);
+    addTearDown(entitlements.dispose);
+    addTearDown(repository.close);
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [StreamRoomSeat('friend-1')],
+      soundboard: soundboard,
+    );
+    return repository;
+  }
+
+  testWidgets('without Nitro a call has no soundboard', (tester) async {
+    await pumpWith(tester, PremiumTier.nitroBasic);
+
+    expect(find.byKey(const ValueKey('soundboard-open')), findsNothing);
+  });
+
+  testWidgets('with Nitro a server sound plays into the DM call', (
+    tester,
+  ) async {
+    final repository = await pumpWith(tester, PremiumTier.nitro);
+
+    await tester.tap(_inBand(find.byKey(const ValueKey('soundboard-open'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('soundboard-sound-20')));
+    await tester.pumpAndSettle();
+
+    final (channelId, sound) = repository.played.single;
+    expect(channelId, streamRoomCall.id);
+    expect(sound.guildId, 'guild-1');
+  });
+}
+
+final class _Entitlements implements AccountEntitlementsRepository {
+  _Entitlements(this.tier);
+
+  final PremiumTier tier;
+
+  @override
+  Future<AccountEntitlements> loadEntitlements() async =>
+      AccountEntitlements(premiumTier: tier);
+}

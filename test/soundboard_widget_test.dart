@@ -1,7 +1,11 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
+import 'package:flucord/src/application/account_entitlements_controller.dart';
+import 'package:flucord/src/application/expression_favorites_controller.dart';
 import 'package:flucord/src/application/soundboard_controller.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/presentation/widgets/soundboard_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -9,21 +13,137 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Future<void> pump(WidgetTester tester, SoundboardController controller) =>
-      tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: Scaffold(
-            body: ListenableBuilder(
-              listenable: controller,
-              builder: (_, _) => SoundboardButton(
-                controller: controller,
-                channelId: 'voice-1',
-              ),
-            ),
+  Future<void> pump(
+    WidgetTester tester,
+    SoundboardController controller, {
+    ExpressionFavoritesController? favorites,
+  }) => tester.pumpWidget(
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: ListenableBuilder(
+          listenable: controller,
+          builder: (_, _) => SoundboardButton(
+            controller: controller,
+            channelId: 'voice-1',
+            favorites: favorites,
+            guildName: (guildId) => 'Server $guildId',
           ),
         ),
+      ),
+    ),
+  );
+
+  Future<void> openSheet(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('soundboard-open')));
+    await tester.pumpAndSettle();
+  }
+
+  group('every server', () {
+    const home = SoundboardSound(id: '10', name: 'airhorn', guildId: 'home');
+    const away = SoundboardSound(id: '20', name: 'drum roll', guildId: 'away');
+    const quack = SoundboardSound(id: '1', name: 'quack');
+
+    Future<(_FakeRepository, SoundboardController)> showHome(
+      WidgetTester tester, {
+      PremiumTier tier = PremiumTier.none,
+      ExpressionFavoritesController? favorites,
+    }) async {
+      final repository = _FakeRepository(sounds: const [away, home, quack]);
+      final entitlements = AccountEntitlementsController(
+        () => _FakeEntitlements(tier),
       );
+      await tester.runAsync(entitlements.load);
+      final controller = SoundboardController(
+        () => repository,
+        entitlements: entitlements,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(entitlements.dispose);
+      addTearDown(repository.close);
+      await pump(tester, controller, favorites: favorites);
+      controller.show('home');
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+      return (repository, controller);
+    }
+
+    testWidgets('this server first, then the defaults, then the rest', (
+      tester,
+    ) async {
+      await showHome(tester);
+
+      final order = [
+        tester.getTopLeft(find.text('SERVER HOME')).dy,
+        tester.getTopLeft(find.text('DEFAULT SOUNDS')).dy,
+        tester.getTopLeft(find.text('SERVER AWAY')).dy,
+      ];
+      expect(order, [...order]..sort());
+    });
+
+    testWidgets('without Nitro another server\'s sound is locked', (
+      tester,
+    ) async {
+      final (repository, _) = await showHome(tester);
+
+      expect(
+        find.text('Sounds from other servers need Nitro.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('soundboard-sound-20')));
+      await tester.pumpAndSettle();
+      expect(repository.played, isEmpty);
+    });
+
+    testWidgets('with Nitro another server\'s sound plays', (tester) async {
+      final (repository, _) = await showHome(tester, tier: PremiumTier.nitro);
+
+      expect(find.text('Sounds from other servers need Nitro.'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('soundboard-sound-20')));
+      await tester.pumpAndSettle();
+      expect(repository.played.single, away);
+    });
+
+    testWidgets('search keeps the sounds whose name matches', (tester) async {
+      await showHome(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('soundboard-search')),
+        'DRUM',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('drum roll'), findsOneWidget);
+      expect(find.text('airhorn'), findsNothing);
+      expect(find.text('quack'), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('soundboard-search')),
+        'nothing like it',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No sounds match.'), findsOneWidget);
+    });
+
+    testWidgets('a star puts the sound in the favourites section', (
+      tester,
+    ) async {
+      final store = _FavoritesStore();
+      final favorites = ExpressionFavoritesController(() => store);
+      addTearDown(favorites.dispose);
+      addTearDown(store.close);
+      await showHome(tester, favorites: favorites);
+      expect(find.text('FAVOURITES'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('soundboard-sound-star-20')));
+      await tester.pumpAndSettle();
+
+      expect(store.soundWrites.single, ('20', true));
+      expect(find.text('FAVOURITES'), findsOneWidget);
+      // Listed under favourites and under its own server.
+      expect(find.text('drum roll'), findsNWidgets(2));
+    });
+  });
 
   testWidgets('a transport with no soundboard shows no button', (tester) async {
     final controller = SoundboardController(() => null);
@@ -294,4 +414,69 @@ final class _FakeRepository implements SoundboardRepository {
     await _updates.close();
     await _playbacks.close();
   }
+}
+
+final class _FakeEntitlements implements AccountEntitlementsRepository {
+  _FakeEntitlements(this.tier);
+
+  final PremiumTier tier;
+
+  @override
+  Future<AccountEntitlements> loadEntitlements() async =>
+      AccountEntitlements(premiumTier: tier);
+}
+
+/// Holds starred sounds the way the frecency store does, and nothing else.
+final class _FavoritesStore implements ExpressionFavoritesRepository {
+  final StreamController<ExpressionFavorites> _updates =
+      StreamController.broadcast();
+  final List<(String, bool)> soundWrites = [];
+
+  @override
+  ExpressionFavorites current = ExpressionFavorites.empty;
+
+  @override
+  bool get isLoaded => true;
+
+  @override
+  Stream<ExpressionFavorites> get updates => _updates.stream;
+
+  @override
+  Future<ExpressionFavorites> load() async => current;
+
+  @override
+  Future<bool> setSoundFavorite({
+    required String soundId,
+    required bool favorite,
+  }) async {
+    soundWrites.add((soundId, favorite));
+    current = current.copyWith(
+      soundIds: [
+        ...current.soundIds.where((id) => id != soundId),
+        if (favorite) soundId,
+      ],
+    );
+    _updates.add(current);
+    return true;
+  }
+
+  @override
+  Future<bool> setGifFavorite({
+    required FavoriteGif gif,
+    required bool favorite,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<bool> setStickerFavorite({
+    required String stickerId,
+    required bool favorite,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<bool> setEmojiFavorite({
+    required String idOrName,
+    required bool favorite,
+  }) => throw UnimplementedError();
+
+  Future<void> close() => _updates.close();
 }

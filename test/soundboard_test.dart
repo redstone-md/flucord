@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flucord/src/application/account_entitlements_controller.dart';
 import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/data/discord/discord_soundboard_service.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,6 +25,81 @@ void main() {
       expect(fallback == Object(), isFalse);
       expect(fallback.volume, 1);
       expect(fallback.isAvailable, isTrue);
+    });
+  });
+
+  group('catalogue', () {
+    const quack = SoundboardSound(id: '1', name: 'quack');
+    const airhorn = SoundboardSound(id: '10', name: 'airhorn', guildId: 'home');
+    const drum = SoundboardSound(id: '20', name: 'Drum roll', guildId: 'away');
+    const catalogue = SoundboardCatalogue(
+      defaults: [quack],
+      byGuild: {
+        'away': [drum],
+        'home': [airhorn],
+      },
+    );
+
+    String describe(SoundboardSection section) => switch (section) {
+      FavoriteSoundsSection() => 'favourites',
+      GuildSoundsSection(:final guildId) => guildId,
+      DefaultSoundsSection() => 'defaults',
+    };
+
+    test('favourites, then this server, the defaults, and the rest', () {
+      final sections = catalogue.sections(
+        currentGuildId: 'home',
+        favoriteIds: const ['20', 'gone'],
+      );
+
+      expect(sections.map(describe), [
+        'favourites',
+        'home',
+        'defaults',
+        'away',
+      ]);
+      // A starred sound nobody holds any more is skipped, not drawn blank.
+      expect(sections.first.sounds, [drum]);
+    });
+
+    test('a DM call has no server of its own to put first', () {
+      expect(catalogue.sections().map(describe), ['defaults', 'away', 'home']);
+    });
+
+    test('search keeps the names that hold the query, any case', () {
+      final sections = catalogue.sections(
+        currentGuildId: 'home',
+        favoriteIds: const ['1'],
+        query: ' DRUM ',
+      );
+
+      expect(sections.map(describe), ['away']);
+      expect(sections.single.sounds, [drum]);
+    });
+
+    test('finds a sound by id in any server', () {
+      expect(catalogue.find('20'), drum);
+      expect(catalogue.find('1'), quack);
+      expect(catalogue.find('99'), isNull);
+    });
+
+    test('without Nitro, only this server and the defaults are in reach', () {
+      const reach = SoundboardReach(guildId: 'home');
+
+      expect(reach.allows(airhorn), isTrue);
+      expect(reach.allows(quack), isTrue);
+      expect(reach.allows(drum), isFalse);
+    });
+
+    test('Nitro reaches every server, a DM call included', () {
+      final everywhere = SoundboardReach(
+        everywhere: PremiumTier.nitro.usesSoundboardEverywhere,
+      );
+
+      expect(everywhere.allows(drum), isTrue);
+      expect(PremiumTier.nitroBoost.usesSoundboardEverywhere, isTrue);
+      expect(PremiumTier.nitroBasic.usesSoundboardEverywhere, isFalse);
+      expect(PremiumTier.none.usesSoundboardEverywhere, isFalse);
     });
   });
 
@@ -324,7 +401,7 @@ void main() {
       await controller.load();
 
       expect(controller.isSupported, isFalse);
-      expect(controller.sounds, isEmpty);
+      expect(controller.catalogue.byGuild, isEmpty);
       expect(
         await controller.play('c', const SoundboardSound(id: '1', name: 'x')),
         isFalse,
@@ -345,12 +422,12 @@ void main() {
       controller.show('guild-1');
       await Future<void>.delayed(Duration.zero);
 
-      expect(controller.sounds.single.name, 'airhorn');
+      expect(controller.catalogue.soundsFor('guild-1').single.name, 'airhorn');
       expect(controller.isLoading, isFalse);
 
       controller.show('guild-1');
       controller.show(null);
-      expect(controller.sounds, isEmpty);
+      expect(controller.isOffered, isFalse);
       controller.show('guild-1');
       await Future<void>.delayed(Duration.zero);
       // A server already read is not fetched again on the next opening.
@@ -457,30 +534,121 @@ void main() {
       expect(await first, isTrue);
     });
 
-    test('another server changing does not repaint this one', () async {
-      final service = DiscordSoundboardService(_FakeTransport());
-      final controller = SoundboardController(() => service);
-      addTearDown(controller.dispose);
-      addTearDown(service.close);
-      controller.show('guild-1');
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'any server changing repaints, since the sheet lists them all',
+      () async {
+        final service = DiscordSoundboardService(_FakeTransport());
+        final controller = SoundboardController(() => service);
+        addTearDown(controller.dispose);
+        addTearDown(service.close);
 
-      var notifications = 0;
-      controller.addListener(() => notifications++);
+        var notifications = 0;
+        controller.addListener(() => notifications++);
+        service.accept('GUILD_SOUNDBOARD_SOUND_CREATE', const {
+          'guild_id': 'guild-9',
+          'sound_id': '1',
+        });
+        await Future<void>.delayed(Duration.zero);
+        // Nothing is on screen yet, so nothing is redrawn.
+        expect(notifications, 0);
 
-      service.accept('GUILD_SOUNDBOARD_SOUND_CREATE', const {
-        'guild_id': 'guild-9',
-        'sound_id': '1',
+        controller.show('guild-1');
+        await Future<void>.delayed(Duration.zero);
+        notifications = 0;
+        service.accept('GUILD_SOUNDBOARD_SOUND_CREATE', const {
+          'guild_id': 'guild-9',
+          'sound_id': '2',
+        });
+        await Future<void>.delayed(Duration.zero);
+        expect(notifications, 1);
+      },
+    );
+
+    group('Nitro', () {
+      const away = SoundboardSound(id: '20', name: 'drum', guildId: 'guild-2');
+
+      Future<(SoundboardController, _FakeTransport)> controllerWith(
+        PremiumTier tier,
+      ) async {
+        final transport = _FakeTransport(
+          defaults: [
+            {'sound_id': 1, 'name': 'quack'},
+          ],
+        );
+        final service = DiscordSoundboardService(transport);
+        final entitlements = AccountEntitlementsController(
+          () => _FakeEntitlements(tier),
+        );
+        await entitlements.load();
+        final controller = SoundboardController(
+          () => service,
+          entitlements: entitlements,
+        );
+        addTearDown(controller.dispose);
+        addTearDown(entitlements.dispose);
+        addTearDown(service.close);
+        return (controller, transport);
+      }
+
+      test('without it, another server\'s sound is locked', () async {
+        final (controller, transport) = await controllerWith(PremiumTier.none);
+        controller.show('guild-1');
+
+        expect(controller.isLocked(away), isTrue);
+        expect(await controller.play('voice-1', away), isFalse);
+        expect(transport.played, isEmpty);
       });
-      await Future<void>.delayed(Duration.zero);
-      expect(notifications, 0);
 
-      service.accept('GUILD_SOUNDBOARD_SOUND_CREATE', const {
-        'guild_id': 'guild-1',
-        'sound_id': '1',
+      test(
+        'with it, another server\'s sound goes out with its source',
+        () async {
+          final (controller, transport) = await controllerWith(
+            PremiumTier.nitro,
+          );
+          controller.show('guild-1');
+
+          expect(controller.isLocked(away), isFalse);
+          expect(await controller.play('voice-1', away), isTrue);
+          expect(transport.played.single['source_guild_id'], 'guild-2');
+        },
+      );
+
+      test('a DM call offers the soundboard only with it', () async {
+        final (free, _) = await controllerWith(PremiumTier.nitroBasic);
+        free.showCall();
+        expect(free.isOffered, isFalse);
+
+        final (nitro, transport) = await controllerWith(PremiumTier.nitro);
+        nitro.showCall();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(nitro.isOffered, isTrue);
+        // A call has no server: only the defaults are read.
+        expect(transport.defaultReads, 1);
+        expect(transport.guildReads, 0);
+        expect(await nitro.play('dm-1', away), isTrue);
+        expect(transport.played.single['channel_id'], 'dm-1');
       });
-      await Future<void>.delayed(Duration.zero);
-      expect(notifications, 1);
+
+      test('arriving after the sheet opened repaints it', () async {
+        final service = DiscordSoundboardService(_FakeTransport());
+        final entitlements = AccountEntitlementsController(
+          () => _FakeEntitlements(PremiumTier.nitro),
+        );
+        final controller = SoundboardController(
+          () => service,
+          entitlements: entitlements,
+        );
+        addTearDown(controller.dispose);
+        addTearDown(entitlements.dispose);
+        addTearDown(service.close);
+        controller.showCall();
+        expect(controller.isOffered, isFalse);
+
+        await entitlements.load();
+
+        expect(controller.isOffered, isTrue);
+      });
     });
 
     test('swapping the transport forgets what was loaded', () async {
@@ -506,7 +674,10 @@ void main() {
       // The new session read the server for itself rather than trusting the
       // old one's record of having done it.
       expect(second.guildReads, 1);
-      expect(controller.sounds.single.name, 'new session');
+      expect(
+        controller.catalogue.soundsFor('guild-1').single.name,
+        'new session',
+      );
     });
   });
 }
@@ -569,4 +740,14 @@ final class _FakeGateway implements DiscordSoundboardGateway {
 
   @override
   void requestSoundboardSounds(List<String> guildIds) => requests.add(guildIds);
+}
+
+final class _FakeEntitlements implements AccountEntitlementsRepository {
+  _FakeEntitlements(this.tier);
+
+  final PremiumTier tier;
+
+  @override
+  Future<AccountEntitlements> loadEntitlements() async =>
+      AccountEntitlements(premiumTier: tier);
 }

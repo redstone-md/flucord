@@ -159,15 +159,20 @@ final class FakeExpressionRepository implements GuildExpressionRepository {
   final Map<String, List<SoundboardSound>> soundsByGuild = {};
 }
 
-/// The soundboard store the page lists sounds from.
+/// The soundboard store the page and the picker list sounds from.
 final class FakeSoundboardRepository implements SoundboardRepository {
   final StreamController<String> _updates = StreamController.broadcast();
   final StreamController<SoundboardPlayback> _playbacks =
       StreamController.broadcast();
   final Map<String, List<SoundboardSound>> byGuild = {};
+  List<SoundboardSound> defaults = const [];
+
+  /// Every sound played, with the channel it went into, oldest first.
+  final List<(String, SoundboardSound)> played = [];
 
   @override
-  SoundboardCatalogue get catalogue => SoundboardCatalogue(byGuild: byGuild);
+  SoundboardCatalogue get catalogue =>
+      SoundboardCatalogue(defaults: defaults, byGuild: byGuild);
 
   @override
   Stream<String> get updates => _updates.stream;
@@ -180,7 +185,8 @@ final class FakeSoundboardRepository implements SoundboardRepository {
       byGuild[guildId] ?? const [];
 
   @override
-  Future<void> playSound(String channelId, SoundboardSound sound) async {}
+  Future<void> playSound(String channelId, SoundboardSound sound) async =>
+      played.add((channelId, sound));
 
   Future<void> close() async {
     await _updates.close();
