@@ -43,6 +43,7 @@ import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
 import 'widgets/guild_join_gate_dialogs.dart';
 import 'widgets/message_composer.dart';
+import 'widgets/message_actions.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
 import 'widgets/report_dialog.dart';
@@ -1050,43 +1051,13 @@ class ConversationPaneState extends State<ConversationPane> {
     }
   }
 
-  Widget _timeline(
-    ChatController chat,
-    WorkspaceController workspaceController,
-    Set<String> blockedUserIds,
-  ) {
-    final channel = widget.channel;
+  /// What the timeline can do to a message in this session. An action the
+  /// session cannot carry out is null, so no row offers it.
+  MessageActions _messageActions(ChatController chat) {
     final sendsSuperReactions = _sendsSuperReactions(chat);
-    return MessageList(
-      key: _timelineKey,
-      blockedUserIds: blockedUserIds,
-      expressionFavorites: ExpressionFavoritesScope.read(context),
-      componentController: MessageComponentScope.read(context),
-      applicationCommands: SlashCommandScope.read(context),
-      workspace: widget.workspace,
-      capabilities: widget.capabilities,
-      externalLinkLauncher: ExternalLinkLauncherScope.maybeOf(context)!,
-      attachmentDownloadService: AttachmentDownloadScope.maybeOf(context)!,
-      channel: channel,
-      query: workspaceController.query,
-      targetMessageId: workspaceController.targetMessageId,
-      targetRequest: workspaceController.targetRequest,
-      lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
-      outgoing: chat.outgoingIn(channel.id),
-      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
-      onDiscardSend: (message) {
-        chat.discardSend(message);
-        unawaited(ClipboardAttachments.release(message.attachments));
-      },
-      hasNewerMessages: chat.hasNewerMessages(channel.id),
-      windowError: chat.historyWindowError(channel.id),
-      readingPositions: workspaceController.readingPositions,
-      onOpenMessage: (messageId) =>
-          _jumpToMessage(chat, workspaceController, channel.id, messageId),
-      onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
+    return MessageActions(
       onReply: (message) => _setReply(chat, message),
       onEdit: chat.editMessage,
-      onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.canListReactionUsers
@@ -1139,6 +1110,44 @@ class ConversationPaneState extends State<ConversationPane> {
       onToggleSuppressEmbeds: chat.canSuppressEmbeds
           ? chat.toggleSuppressEmbeds
           : null,
+      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
+      onDiscardSend: (message) {
+        chat.discardSend(message);
+        unawaited(ClipboardAttachments.release(message.attachments));
+      },
+    );
+  }
+
+  Widget _timeline(
+    ChatController chat,
+    WorkspaceController workspaceController,
+    Set<String> blockedUserIds,
+  ) {
+    final channel = widget.channel;
+    return MessageList(
+      key: _timelineKey,
+      blockedUserIds: blockedUserIds,
+      expressionFavorites: ExpressionFavoritesScope.read(context),
+      componentController: MessageComponentScope.read(context),
+      applicationCommands: SlashCommandScope.read(context),
+      workspace: widget.workspace,
+      capabilities: widget.capabilities,
+      externalLinkLauncher: ExternalLinkLauncherScope.maybeOf(context)!,
+      attachmentDownloadService: AttachmentDownloadScope.maybeOf(context)!,
+      channel: channel,
+      query: workspaceController.query,
+      targetMessageId: workspaceController.targetMessageId,
+      targetRequest: workspaceController.targetRequest,
+      lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      outgoing: chat.outgoingIn(channel.id),
+      hasNewerMessages: chat.hasNewerMessages(channel.id),
+      windowError: chat.historyWindowError(channel.id),
+      readingPositions: workspaceController.readingPositions,
+      onOpenMessage: (messageId) =>
+          _jumpToMessage(chat, workspaceController, channel.id, messageId),
+      onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
+      actions: _messageActions(chat),
+      onEditClosed: focusComposer,
       canLoadOlder: chat.canLoadOlderMessages(channel.id),
       isLoadingOlder: chat.isLoadingOlderMessages(channel.id),
       olderLoadError: chat.olderMessagesError(channel.id),

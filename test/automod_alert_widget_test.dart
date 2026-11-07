@@ -9,6 +9,8 @@ import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/message_actions.dart';
+
 Future<List<AutoModAlertAction>> _hoverAlert(
   WidgetTester tester, {
   required ChatMessage message,
@@ -34,21 +36,15 @@ Future<List<AutoModAlertAction>> _hoverAlert(
               grouped: false,
               isCurrentUser: false,
               capabilities: capabilities,
-              onReply: (_) {},
-              onEdit: (_, _) async => true,
-              onDelete: (_) async {},
-              onToggleReaction: (_, _) async {},
-              onLoadReactionUsers: (_, _, _, _) async =>
-                  const MemberPage(users: [], hasMore: false),
-              onAddReaction: (_, _) async {},
-              onCreateThread: (_, _, _) async => true,
-              onTogglePin: (_) async {},
-              onEndPoll: (_) async => true,
-              onForward: (_, _) async => true,
-              onToggleSuppressEmbeds: (_) async => true,
-              onResolveAlert: wired
-                  ? (_, action) async => taken.add(action)
-                  : null,
+              actions: testMessageActions(
+                onLoadReactionUsers: (_, _, _, _) async =>
+                    const MemberPage(users: [], hasMore: false),
+                onForward: (_, _) async => true,
+                onToggleSuppressEmbeds: (_) async => true,
+                onResolveAlert: wired
+                    ? (_, action) async => taken.add(action)
+                    : null,
+              ),
               linkLauncher: const _TestLinkLauncher(),
               onSelectChannel: (_) {},
             ),

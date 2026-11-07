@@ -1,5 +1,4 @@
 import '../../application/expression_favorites_controller.dart';
-import '../../domain/automod_rule.dart';
 import 'dart:async';
 
 import '../../theme/flucord_icons.dart';
@@ -31,6 +30,7 @@ import 'forwarded_message_view.dart';
 import 'leaving_site_dialog.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
+import 'message_actions.dart';
 import 'motion_scope.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
@@ -61,24 +61,7 @@ class MessageItem extends StatefulWidget {
     required this.isCurrentUser,
     this.quotesBlockedAuthor = false,
     this.capabilities = ChannelCapabilities.unrestricted,
-    required this.onReply,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onToggleReaction,
-    this.onLoadReactionUsers,
-    required this.onAddReaction,
-    this.onToggleSuperReaction,
-    this.onAddSuperReaction,
-    this.onMarkUnread,
-    required this.onCreateThread,
-    required this.onTogglePin,
-    this.onResolveAlert,
-    this.onReport,
-    required this.onEndPoll,
-    this.onVotePoll,
-    this.onLoadPollVoters,
-    this.onForward,
-    this.onToggleSuppressEmbeds,
+    required this.actions,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
@@ -134,51 +117,9 @@ class MessageItem extends StatefulWidget {
   /// Which actions this channel's permissions allow. Unrestricted by default
   /// so a host with no permission data keeps the toolbar it had.
   final ChannelCapabilities capabilities;
-  final ValueChanged<ChatMessage> onReply;
-  final Future<bool> Function(ChatMessage, String) onEdit;
-  final Future<void> Function(ChatMessage) onDelete;
-  final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
 
-  /// Loads who reacted, or null where the session cannot list them. Then the
-  /// list is not offered at all.
-  final ReactionUsersLoader? onLoadReactionUsers;
-  final Future<void> Function(ChatMessage, String) onAddReaction;
-
-  /// Takes back or adds the account's super reaction on a chip, and adds a
-  /// new one from the hover bar. Null where the account cannot send super
-  /// reactions. Then neither is offered.
-  final Future<void> Function(ChatMessage, MessageReaction)?
-  onToggleSuperReaction;
-  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
-
-  /// Makes this message and everything after it unread again. Null on a
-  /// transport with no read state.
-  final Future<void> Function(ChatMessage)? onMarkUnread;
-  final Future<bool> Function(ChatMessage, String, int) onCreateThread;
-  final Future<void> Function(ChatMessage) onTogglePin;
-
-  /// Acts on an AutoMod alert, or null where the transport cannot.
-  final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
-
-  /// Opens the report flow for a message, or null where there is none.
-  final void Function(ChatMessage)? onReport;
-  final Future<bool> Function(ChatMessage) onEndPoll;
-
-  /// Sets the account's whole vote in a poll, or null where the session
-  /// cannot vote. Then the answers take no tap.
-  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
-
-  /// Loads who voted for an answer, or null where the session cannot list
-  /// voters. Then the poll offers no list.
-  final PollVotersLoader? onLoadPollVoters;
-
-  /// Forwards a message, or null where the session cannot. Then the action
-  /// is not offered at all.
-  final ForwardMessageCallback? onForward;
-
-  /// Suppresses or restores a message's embeds, or null where the session
-  /// cannot. Then the action is not offered at all.
-  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
+  /// What this session can do to the message. A null action is not shown.
+  final MessageActions actions;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -309,7 +250,7 @@ class _MessageItemState extends State<MessageItem> {
     if (content.isEmpty) return;
     // Read first: the row may scroll away while the request runs.
     final onEditingChanged = widget.onEditingChanged;
-    final saved = await widget.onEdit(widget.message, content);
+    final saved = await widget.actions.onEdit(widget.message, content);
     if (!saved) return;
     if (mounted) {
       _closeEdit();
@@ -325,7 +266,7 @@ class _MessageItemState extends State<MessageItem> {
       message: 'This message will be permanently deleted.',
       confirmLabel: 'Delete',
     );
-    if (confirmed) await widget.onDelete(widget.message);
+    if (confirmed) await widget.actions.onDelete(widget.message);
   }
 
   @override
@@ -675,12 +616,12 @@ class _MessageItemState extends State<MessageItem> {
             child: MessagePollView(
               poll: poll,
               canEnd: widget.isCurrentUser,
-              onEnd: () => unawaited(widget.onEndPoll(message)),
-              onVote: switch (widget.onVotePoll) {
+              onEnd: () => unawaited(widget.actions.onEndPoll(message)),
+              onVote: switch (widget.actions.onVotePoll) {
                 final vote? => (answerIds) => vote(message, answerIds),
                 null => null,
               },
-              onShowVoters: switch (widget.onLoadPollVoters) {
+              onShowVoters: switch (widget.actions.onLoadPollVoters) {
                 final load? => () => unawaited(
                   PollVotersDialog.show(
                     context,
@@ -698,14 +639,14 @@ class _MessageItemState extends State<MessageItem> {
             message: message,
             workspace: widget.workspace,
             onToggle: (reaction) =>
-                unawaited(widget.onToggleReaction(message, reaction)),
-            onToggleSuper: switch (widget.onToggleSuperReaction) {
+                unawaited(widget.actions.onToggleReaction(message, reaction)),
+            onToggleSuper: switch (widget.actions.onToggleSuperReaction) {
               final toggle? => (reaction) => unawaited(
                 toggle(message, reaction),
               ),
               null => null,
             },
-            onShowDetails: widget.onLoadReactionUsers == null
+            onShowDetails: widget.actions.onLoadReactionUsers == null
                 ? null
                 : _showReactionDetails,
           ),
@@ -908,8 +849,8 @@ class _MessageItemState extends State<MessageItem> {
       message: widget.message,
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
-      canMarkUnread: widget.onMarkUnread != null,
-      canForward: widget.onForward != null,
+      canMarkUnread: widget.actions.onMarkUnread != null,
+      canForward: widget.actions.onForward != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
@@ -917,13 +858,13 @@ class _MessageItemState extends State<MessageItem> {
       case MessageMenuAction.addReaction:
         await _pickReactionAt(position);
       case MessageMenuAction.markUnread:
-        await widget.onMarkUnread?.call(widget.message);
+        await widget.actions.onMarkUnread?.call(widget.message);
       case MessageMenuAction.reply:
-        widget.onReply(widget.message);
+        widget.actions.onReply(widget.message);
       case MessageMenuAction.edit:
         widget.onEditingChanged?.call(true);
       case MessageMenuAction.pin:
-        await widget.onTogglePin(widget.message);
+        await widget.actions.onTogglePin(widget.message);
       case MessageMenuAction.forward:
         _showForwardDialog();
       case MessageMenuAction.createThread:
@@ -963,7 +904,7 @@ class _MessageItemState extends State<MessageItem> {
       favorites: widget.expressionFavorites,
     );
     if (emoji != null && mounted) {
-      await widget.onAddReaction(widget.message, emoji);
+      await widget.actions.onAddReaction(widget.message, emoji);
     }
   }
 
@@ -980,33 +921,34 @@ class _MessageItemState extends State<MessageItem> {
     workspace: _workspaceNow,
     capabilities: widget.capabilities,
     isCurrentUser: widget.isCurrentUser,
-    onReply: () => widget.onReply(widget.message),
+    onReply: () => widget.actions.onReply(widget.message),
     onAddReaction: (emoji) =>
-        unawaited(widget.onAddReaction(widget.message, emoji)),
+        unawaited(widget.actions.onAddReaction(widget.message, emoji)),
     onReactionPickerToggled: (isOpen) {
       if (mounted) _updateBar(() => _reactionPickerOpen = isOpen);
     },
-    onAddSuperReaction: switch (widget.onAddSuperReaction) {
+    onAddSuperReaction: switch (widget.actions.onAddSuperReaction) {
       final add? => (emoji) => unawaited(add(widget.message, emoji)),
       null => null,
     },
-    onShowReactionDetails: widget.onLoadReactionUsers == null
+    onShowReactionDetails: widget.actions.onLoadReactionUsers == null
         ? null
         : _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
-    onForward: widget.onForward == null ? null : _showForwardDialog,
-    onToggleSuppressEmbeds: switch (widget.onToggleSuppressEmbeds) {
+    onForward: widget.actions.onForward == null ? null : _showForwardDialog,
+    onToggleSuppressEmbeds: switch (widget.actions.onToggleSuppressEmbeds) {
       final toggle? => () => unawaited(toggle(widget.message)),
       null => null,
     },
     onEdit: () => widget.onEditingChanged?.call(true),
-    onTogglePin: () => widget.onTogglePin(widget.message),
-    onResolveAlert: widget.onResolveAlert == null
+    onTogglePin: () => widget.actions.onTogglePin(widget.message),
+    onResolveAlert: widget.actions.onResolveAlert == null
         ? null
-        : (action) => unawaited(widget.onResolveAlert!(widget.message, action)),
-    onReport: widget.onReport == null
+        : (action) =>
+              unawaited(widget.actions.onResolveAlert!(widget.message, action)),
+    onReport: widget.actions.onReport == null
         ? null
-        : () => widget.onReport!(widget.message),
+        : () => widget.actions.onReport!(widget.message),
     onDelete: _confirmDelete,
     onMore: (position) => unawaited(_openContextMenu(context, position)),
   );
@@ -1020,7 +962,7 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   void _showReactionDetails(MessageReaction reaction) {
-    final load = widget.onLoadReactionUsers;
+    final load = widget.actions.onLoadReactionUsers;
     if (load == null) return;
     unawaited(
       ReactionDetailsDialog.show(
@@ -1038,13 +980,13 @@ class _MessageItemState extends State<MessageItem> {
       CreateThreadDialog.show(
         context,
         onCreate: (name, duration) =>
-            widget.onCreateThread(widget.message, name, duration),
+            widget.actions.onCreateThread(widget.message, name, duration),
       ),
     );
   }
 
   void _showForwardDialog() {
-    final forward = widget.onForward;
+    final forward = widget.actions.onForward;
     if (forward == null) return;
     unawaited(
       MessageForwardDialog.show(
