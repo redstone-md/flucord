@@ -69,13 +69,11 @@ final class DiscordGoLiveService implements GoLiveRepository {
     // The key is composed locally because every later frame needs it, and
     // Discord's answer arrives asynchronously: waiting for STREAM_CREATE
     // before knowing what to ping would leave a window with no handle.
-    final key = guildId == null
-        ? GoLiveStreamKey.call(channelId: channelId, userId: userId)
-        : GoLiveStreamKey.guild(
-            guildId: guildId,
-            channelId: channelId,
-            userId: userId,
-          );
+    final key = GoLiveStreamKey.inRoom(
+      guildId: guildId,
+      channelId: channelId,
+      userId: userId,
+    );
     _gateway.sendStreamCreate(
       type: guildId == null ? 'call' : 'guild',
       channelId: channelId,

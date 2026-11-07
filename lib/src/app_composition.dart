@@ -990,15 +990,12 @@ final class AppComposition {
   bool _watchesStreamOf(String userId) {
     final channelId = voice.connectedChannelId;
     if (channelId == null) return false;
-    final guildId = voice.connectedGuildId;
     return streamViewer.isOpen(
-      guildId == null
-          ? GoLiveStreamKey.call(channelId: channelId, userId: userId)
-          : GoLiveStreamKey.guild(
-              guildId: guildId,
-              channelId: channelId,
-              userId: userId,
-            ),
+      GoLiveStreamKey.inRoom(
+        guildId: voice.connectedGuildId,
+        channelId: channelId,
+        userId: userId,
+      ),
     );
   }
 
