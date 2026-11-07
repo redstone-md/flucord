@@ -8,12 +8,12 @@ import 'package:ffi/ffi.dart';
 import '../../domain/stream_captures.dart';
 import 'screenshot_service.dart';
 
-/// What the window walk saw of one top-level window.
+/// What the window walk saw of one visible top-level window. The walk reads
+/// nothing more of a hidden one.
 final class WindowFacts {
   const WindowFacts({
     required this.title,
     required this.className,
-    required this.isVisible,
     required this.isMinimized,
     required this.isCloaked,
     required this.isToolWindow,
@@ -26,7 +26,6 @@ final class WindowFacts {
 
   final String title;
   final String className;
-  final bool isVisible;
   final bool isMinimized;
 
   /// Hidden by the compositor: on another virtual desktop, or a suspended
@@ -57,7 +56,6 @@ final class WindowFacts {
   /// own picker does, without this client's windows. A minimized window has
   /// no picture to send, so it is left out too.
   bool get isCapturable =>
-      isVisible &&
       !isMinimized &&
       !isCloaked &&
       !isOwnProcess &&
@@ -387,7 +385,6 @@ final class _User32 {
             className,
             _getClassName(window, className, _textCapacity),
           ),
-          isVisible: true,
           isMinimized: _isIconic(window) != 0,
           isCloaked: cloaked.value != 0,
           isToolWindow: exStyle & _wsExToolWindow != 0,

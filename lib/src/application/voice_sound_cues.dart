@@ -45,28 +45,6 @@ final class VoiceSoundSnapshot {
   /// The channel the server seats this account in, which differs from
   /// [channelId] when somebody else moved it.
   final String? selfSeatedIn;
-
-  VoiceSoundSnapshot copyWith({
-    String? channelId,
-    bool? connected,
-    bool? isStage,
-    bool? muted,
-    bool? deafened,
-    Set<String>? others,
-    Set<String>? streamers,
-    Set<String>? followed,
-    String? selfSeatedIn,
-  }) => VoiceSoundSnapshot(
-    channelId: channelId ?? this.channelId,
-    connected: connected ?? this.connected,
-    isStage: isStage ?? this.isStage,
-    muted: muted ?? this.muted,
-    deafened: deafened ?? this.deafened,
-    others: others ?? this.others,
-    streamers: streamers ?? this.streamers,
-    followed: followed ?? this.followed,
-    selfSeatedIn: selfSeatedIn ?? this.selfSeatedIn,
-  );
 }
 
 /// Join and leave sounds stop past this many people, as in Discord.

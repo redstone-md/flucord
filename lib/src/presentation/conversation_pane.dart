@@ -443,7 +443,7 @@ class ConversationPaneState extends State<ConversationPane> {
         pickSource: () => GoLiveSourceDialog.pick(
           context,
           sources: goLive.sources,
-          thumbnails: goLive.thumbnails,
+          thumbnails: goLive.captures.thumbnails,
         ),
         guildId: channel.guildId,
       ),

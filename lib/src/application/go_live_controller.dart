@@ -278,10 +278,8 @@ final class GoLiveController extends ChangeNotifier {
     if (_capture.canShareWindows) ..._shareSources.windows(),
   ];
 
-  /// A thumbnail for each of [sources] that could be captured, by source id.
-  Future<Map<String, CaptureThumbnail>> thumbnails(
-    List<StreamCapture> sources,
-  ) => _shareSources.thumbnails(sources);
+  /// Where the picker reads the open windows and their thumbnails.
+  CaptureCatalog get captures => _shareSources;
 
   /// Attaches to the active transport.
   void reconcile() => _bind();

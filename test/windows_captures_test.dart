@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 const _editor = WindowFacts(
   title: 'notes.txt - Editor',
   className: 'Notepad',
-  isVisible: true,
   isMinimized: false,
   isCloaked: false,
   isToolWindow: false,
@@ -19,7 +18,6 @@ const _editor = WindowFacts(
 WindowFacts _editorWith({
   String? title,
   String? className,
-  bool? isVisible,
   bool? isMinimized,
   bool? isCloaked,
   bool? isToolWindow,
@@ -30,7 +28,6 @@ WindowFacts _editorWith({
 }) => WindowFacts(
   title: title ?? _editor.title,
   className: className ?? _editor.className,
-  isVisible: isVisible ?? _editor.isVisible,
   isMinimized: isMinimized ?? _editor.isMinimized,
   isCloaked: isCloaked ?? _editor.isCloaked,
   isToolWindow: isToolWindow ?? _editor.isToolWindow,
@@ -47,9 +44,8 @@ void main() {
   });
 
   test('what Alt+Tab hides is not offered', () {
-    // Hidden, minimized, on another virtual desktop (cloaked), untitled,
-    // tool windows and owned pop-ups, and the desktop itself.
-    expect(_editorWith(isVisible: false).isCapturable, isFalse);
+    // Minimized, on another virtual desktop (cloaked), untitled, tool
+    // windows and owned pop-ups, and the desktop itself.
     expect(_editorWith(isMinimized: true).isCapturable, isFalse);
     expect(_editorWith(isCloaked: true).isCapturable, isFalse);
     expect(_editorWith(title: '  ').isCapturable, isFalse);
