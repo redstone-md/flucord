@@ -34,6 +34,7 @@ final class SoundboardController extends ChangeNotifier {
   bool _inCall = false;
   bool _isLoading = false;
   bool _isSending = false;
+  bool _loadFailed = false;
   Object? _error;
 
   /// What has been read on this session, by guild id, or '' for a call's
@@ -73,6 +74,10 @@ final class SoundboardController extends ChangeNotifier {
   bool get isSending => _isSending;
   Object? get error => _error;
 
+  /// Whether the last read for what is on screen failed. Sounds held from
+  /// before may still be listed, so this is apart from an empty sheet.
+  bool get loadFailed => _loadFailed;
+
   /// Points the controller at a server's voice channel, reading its sounds
   /// the first time. Null clears it.
   void show(String? guildId) => _point(guildId: guildId, inCall: false);
@@ -87,15 +92,25 @@ final class SoundboardController extends ChangeNotifier {
     if (repository == null || !_isShown || _isLoading) return;
     _isLoading = true;
     _error = null;
+    _loadFailed = false;
     _notify();
     try {
       await repository.loadSounds(guildId);
-      _loaded.add(guildId ?? '');
+      if (identical(repository, _repository)) _loaded.add(guildId ?? '');
     } on Object catch (error) {
-      _error = error;
+      // A failure for a place no longer on screen is not this one's.
+      if (_guildId == guildId) {
+        _error = error;
+        _loadFailed = true;
+      }
     } finally {
       _isLoading = false;
       _notify();
+    }
+    // Pointed somewhere else while this read was out, which turned that
+    // place's own read away. It starts now.
+    if (_isShown && !_loaded.contains(_guildId ?? '') && _guildId != guildId) {
+      unawaited(load());
     }
   }
 
@@ -149,6 +164,7 @@ final class SoundboardController extends ChangeNotifier {
     _guildId = guildId;
     _inCall = inCall;
     _error = null;
+    _loadFailed = false;
     _notify();
     if (_isShown && !_loaded.contains(guildId ?? '')) unawaited(load());
   }
@@ -160,8 +176,14 @@ final class SoundboardController extends ChangeNotifier {
     unawaited(_updates?.cancel());
     _repository = repository;
     _updates = repository?.updates.listen((_) => _notifyWhileShown());
-    // A new session has loaded nothing, whatever the last one had.
+    // A new session has loaded nothing, whatever the last one had. What is
+    // on screen reads again; after this call, since a build can bind.
     _loaded.clear();
+    if (_isShown && repository != null) {
+      scheduleMicrotask(() {
+        if (!_disposed) unawaited(load());
+      });
+    }
     return true;
   }
 

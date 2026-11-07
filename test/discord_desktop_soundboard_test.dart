@@ -74,6 +74,23 @@ void main() {
     expect(_soundRequests(socket), hasLength(2));
   });
 
+  test('a server back from an outage is asked for again', () async {
+    final (_, socket) = await _connect();
+    socket.receive(_ready([_home]));
+    await _waitFor(() => _soundRequests(socket).length == 1);
+
+    socket
+      ..receive(
+        _dispatch('GUILD_DELETE', {'id': _home, 'unavailable': true}, 3),
+      )
+      ..receive(_dispatch('GUILD_CREATE', {'id': _home, 'channels': []}, 4));
+    await _waitFor(() => _soundRequests(socket).length == 2);
+
+    expect(_soundRequests(socket).last, {
+      'guild_ids': [_home],
+    });
+  });
+
   test('a server the account left loses its sounds', () async {
     final (repository, socket) = await _connect();
     final soundboard = repository.soundboard!;

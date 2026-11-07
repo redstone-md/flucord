@@ -651,6 +651,41 @@ void main() {
       });
     });
 
+    test('a channel shown while another reads is read after it', () async {
+      final gate = Completer<void>();
+      final transport = _FakeTransport(gate: gate);
+      final service = DiscordSoundboardService(transport);
+      final controller = SoundboardController(() => service);
+      addTearDown(controller.dispose);
+      addTearDown(service.close);
+
+      controller.show('guild-1');
+      await Future<void>.delayed(Duration.zero);
+      controller.show('guild-2');
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(transport.guildReads, 2);
+    });
+
+    test('a new session reads the channel still on screen', () async {
+      var service = DiscordSoundboardService(_FakeTransport());
+      final controller = SoundboardController(() => service);
+      addTearDown(controller.dispose);
+      addTearDown(service.close);
+      controller.show('guild-1');
+      await Future<void>.delayed(Duration.zero);
+
+      final second = _FakeTransport();
+      service = DiscordSoundboardService(second);
+      addTearDown(service.close);
+      controller.show('guild-1');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(second.guildReads, 1);
+    });
+
     test('swapping the transport forgets what was loaded', () async {
       var service = DiscordSoundboardService(_FakeTransport());
       final controller = SoundboardController(() => service);

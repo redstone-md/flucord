@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 
 import '../../domain/soundboard.dart';
@@ -57,7 +58,10 @@ final class DiscordSoundboardService implements SoundboardRepository {
   @override
   SoundboardCatalogue get catalogue => SoundboardCatalogue(
     defaults: List.unmodifiable(_defaults),
-    byGuild: Map.unmodifiable(_byGuild),
+    byGuild: Map.unmodifiable({
+      for (final MapEntry(:key, :value) in _byGuild.entries)
+        key: UnmodifiableListView(value),
+    }),
   );
 
   @override
@@ -78,8 +82,12 @@ final class DiscordSoundboardService implements SoundboardRepository {
     // so reading it again would only repeat what is held.
     if (!_byGuild.containsKey(guildId)) {
       final payload = await _transport.listGuildSounds(guildId);
-      _byGuild[guildId] = _readSounds(_objects(payload['items']), guildId);
-      _publish(guildId);
+      // The gateway may have answered while the read was out. Its list is
+      // the newer one, so the read does not replace it.
+      if (!_byGuild.containsKey(guildId)) {
+        _byGuild[guildId] = _readSounds(_objects(payload['items']), guildId);
+        _publish(guildId);
+      }
     }
     return catalogue.soundsFor(guildId);
   }
@@ -135,8 +143,11 @@ final class DiscordSoundboardService implements SoundboardRepository {
   /// marked unavailable, and the server's sounds are still the account's.
   String? _forgetGuild(Map<String, Object?> data) {
     final id = _idOf(data);
-    if (id == null || data['unavailable'] == true) return null;
+    if (id == null) return null;
+    // Either way the server's next GUILD_CREATE asks again: changes made
+    // during an outage never reached this session.
     _requested.remove(id);
+    if (data['unavailable'] == true) return null;
     if (_byGuild.remove(id) == null) return null;
     return _publish(id);
   }

@@ -167,7 +167,27 @@ class _SoundboardSheetState extends State<SoundboardSheet> {
           ),
         ),
         const SizedBox(height: 8),
-        if (_controller.error != null)
+        if (_controller.loadFailed)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Discord did not return every sound.',
+                  key: const ValueKey('soundboard-error'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: FlucordType.caption,
+                  ),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('soundboard-retry'),
+                onPressed: () => unawaited(_controller.load()),
+                child: const Text('Try again'),
+              ),
+            ],
+          )
+        else if (_controller.error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
