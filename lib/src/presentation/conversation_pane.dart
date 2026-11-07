@@ -320,12 +320,18 @@ class ConversationPaneState extends State<ConversationPane> {
         channelId: channel.id,
         guildId: channel.spaceId.isEmpty ? null : channel.spaceId,
       );
-      // A soundboard belongs to a server, and only a voice channel can play
-      // one, so anything else clears the picker rather than offering sounds
-      // with nowhere to send them.
-      SoundboardScope.read(
-        context,
-      ).show(channel.kind == ChannelKind.voice ? channel.spaceId : null);
+      // Sounds play into a server's voice channel or a DM or group call, so
+      // anything else clears the picker rather than offering sounds with
+      // nowhere to send them. Whether a call offers it is the controller's
+      // call: it needs Nitro.
+      final soundboard = SoundboardScope.read(context);
+      if (channel.isDirectMessage) {
+        soundboard.showCall();
+      } else {
+        soundboard.show(
+          channel.kind == ChannelKind.voice ? channel.spaceId : null,
+        );
+      }
     });
   }
 
@@ -449,6 +455,17 @@ class ConversationPaneState extends State<ConversationPane> {
       ),
     );
 
+    // The same button in a server's Room and in a call's band.
+    Widget soundboardControl() => ListenableBuilder(
+      listenable: soundboard,
+      builder: (_, _) => SoundboardButton(
+        controller: soundboard,
+        channelId: channel.id,
+        guildName: (guildId) => widget.workspace.spaceById(guildId).name,
+        favorites: ExpressionFavoritesScope.read(context),
+      ),
+    );
+
     // Null while there is no share. Go Live is the only authority: the roster
     // reports a stream only once Discord echoes one back.
     VoidCallback? stopShare() =>
@@ -504,11 +521,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onClearFocus: focus.clear,
         goLive: goLiveControl(),
         camera: camera,
-        soundboard: ListenableBuilder(
-          listenable: soundboard,
-          builder: (_, _) =>
-              SoundboardButton(controller: soundboard, channelId: channel.id),
-        ),
+        soundboard: soundboardControl(),
         stageControls: channel.isStage
             ? ListenableBuilder(
                 listenable: stage,
@@ -583,6 +596,7 @@ class ConversationPaneState extends State<ConversationPane> {
               ringing: callController?.isRinging(channel.id) ?? false,
               camera: camera,
               goLive: goLiveControl(),
+              soundboard: soundboardControl(),
               participantMenu: participantMenu(),
               streams: streamControls(),
               onTapStream: focus.toggle,

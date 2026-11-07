@@ -8,7 +8,7 @@ import 'discord_user_settings_proto.dart';
 import 'discord_user_settings_transport.dart';
 import '../../app_log.dart';
 
-/// The starred GIFs, stickers and emoji of the desktop-user session.
+/// The starred GIFs, stickers, emoji and sounds of the desktop-user session.
 ///
 /// Unlike the preloaded settings, this blob is not in `READY`: it is fetched
 /// the first time a picker wants it and then kept current from dispatches. The
@@ -124,6 +124,20 @@ final class DiscordExpressionFavoritesRepository
     return _commit(
       held.copyWith(
         emojis: _toggled(held.emojis, idOrName, favorite: favorite),
+      ),
+    );
+  }
+
+  @override
+  Future<bool> setSoundFavorite({
+    required String soundId,
+    required bool favorite,
+  }) async {
+    final held = await _loaded();
+    if (favorite == held.isFavoriteSound(soundId)) return true;
+    return _commit(
+      held.copyWith(
+        soundIds: _toggled(held.soundIds, soundId, favorite: favorite),
       ),
     );
   }

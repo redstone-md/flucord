@@ -465,24 +465,17 @@ final class DiscordDesktopApiClient
   Future<Map<String, Object?>> listGuildSounds(String guildId) =>
       _rest.requestObject('GET', '/guilds/$guildId/soundboard-sounds');
 
-  /// `source_guild_id` goes out only for a server's own sound; Discord rejects
-  /// it on a default one.
+  /// The body Userdoccers documents: the sound, and `source_guild_id` only
+  /// for a server's own sound, since Discord rejects it on a default one.
   @override
   Future<void> sendSoundboardSound(
     String channelId, {
     required String soundId,
-    String? emojiId,
-    String? emojiName,
     String? sourceGuildId,
   }) => _rest.requestEmpty(
     'POST',
     '/channels/$channelId/send-soundboard-sound',
-    body: {
-      'sound_id': soundId,
-      'emoji_id': emojiId,
-      'emoji_name': emojiName,
-      'source_guild_id': ?sourceGuildId,
-    },
+    body: {'sound_id': soundId, 'source_guild_id': ?sourceGuildId},
   );
 
   @override

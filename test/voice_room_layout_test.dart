@@ -98,11 +98,14 @@ void main() {
       expect(order.toSet(), hasLength(order.length));
     });
 
-    testWidgets('a call has no soundboard', (tester) async {
+    testWidgets('a call offers no soundboard on a session without one', (
+      tester,
+    ) async {
       await pumpStreamRoom(tester, streamRoomCall);
 
       expect(find.byType(VoiceRoomControls), findsOneWidget);
-      expect(find.byType(SoundboardButton), findsNothing);
+      // With Nitro it would: dm_call_band_test covers that.
+      expect(find.byKey(const ValueKey('soundboard-open')), findsNothing);
     });
 
     testWidgets('hang up leaves the Room', (tester) async {

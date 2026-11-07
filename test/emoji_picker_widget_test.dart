@@ -515,6 +515,12 @@ final class _FavoritesStore implements ExpressionFavoritesRepository {
   }
 
   @override
+  Future<bool> setSoundFavorite({
+    required String soundId,
+    required bool favorite,
+  }) => throw UnimplementedError('The emoji picker stars no sounds');
+
+  @override
   Future<bool> setGifFavorite({
     required FavoriteGif gif,
     required bool favorite,

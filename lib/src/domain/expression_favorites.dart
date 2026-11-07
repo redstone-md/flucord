@@ -1,4 +1,4 @@
-/// The GIFs, stickers and emoji an account has starred.
+/// The GIFs, stickers, emoji and soundboard sounds an account has starred.
 ///
 /// These live in their own settings blob — `FrecencyUserSettings`, the second
 /// of the two `settings-proto` types — rather than in the preloaded one the
@@ -155,6 +155,7 @@ final class ExpressionFavorites {
     this.gifs = const [],
     this.stickerIds = const [],
     this.emojis = const [],
+    this.soundIds = const [],
     this.hideGifTooltip = false,
     this.stickerFrecency = ExpressionFrecency.empty,
     this.emojiFrecency = ExpressionFrecency.empty,
@@ -171,6 +172,9 @@ final class ExpressionFavorites {
   /// other sessions could not find.
   final List<String> emojis;
 
+  /// Starred soundboard sounds, by id, from any server or the defaults.
+  final List<String> soundIds;
+
   /// Whether the "you can favourite GIFs" hint has been shown its last time.
   /// Discord sets it once three GIFs are starred.
   final bool hideGifTooltip;
@@ -184,13 +188,16 @@ final class ExpressionFavorites {
 
   static const empty = ExpressionFavorites();
 
-  bool get isEmpty => gifs.isEmpty && stickerIds.isEmpty && emojis.isEmpty;
+  bool get isEmpty =>
+      gifs.isEmpty && stickerIds.isEmpty && emojis.isEmpty && soundIds.isEmpty;
 
   bool isFavoriteGif(String url) => gifs.any((gif) => gif.url == url);
 
   bool isFavoriteSticker(String stickerId) => stickerIds.contains(stickerId);
 
   bool isFavoriteEmoji(String idOrName) => emojis.contains(idOrName);
+
+  bool isFavoriteSound(String soundId) => soundIds.contains(soundId);
 
   /// The number to give the next GIF, so it sorts above everything held.
   int get nextGifOrder =>
@@ -204,6 +211,7 @@ final class ExpressionFavorites {
     List<FavoriteGif>? gifs,
     List<String>? stickerIds,
     List<String>? emojis,
+    List<String>? soundIds,
     bool? hideGifTooltip,
   }) => ExpressionFavorites(
     stickerFrecency: stickerFrecency,
@@ -211,6 +219,7 @@ final class ExpressionFavorites {
     gifs: gifs ?? this.gifs,
     stickerIds: stickerIds ?? this.stickerIds,
     emojis: emojis ?? this.emojis,
+    soundIds: soundIds ?? this.soundIds,
     hideGifTooltip: hideGifTooltip ?? this.hideGifTooltip,
   );
 
@@ -246,6 +255,11 @@ abstract interface class ExpressionFavoritesRepository {
 
   Future<bool> setEmojiFavorite({
     required String idOrName,
+    required bool favorite,
+  });
+
+  Future<bool> setSoundFavorite({
+    required String soundId,
     required bool favorite,
   });
 }

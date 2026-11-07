@@ -139,8 +139,6 @@ final class _UnusedSoundboardTransport implements DiscordSoundboardTransport {
   Future<void> sendSoundboardSound(
     String channelId, {
     required String soundId,
-    String? emojiId,
-    String? emojiName,
     String? sourceGuildId,
   }) async {}
 }
@@ -301,8 +299,8 @@ void main() {
       );
 
       expect(sound.id, 'sound-new');
-      expect(soundboard.soundsFor(_guildId).single.id, 'sound-new');
-      expect(soundboard.soundsFor(_guildId).single.volume, 0.4);
+      expect(soundboard.catalogue.soundsFor(_guildId).single.id, 'sound-new');
+      expect(soundboard.catalogue.soundsFor(_guildId).single.volume, 0.4);
     },
   );
 
@@ -362,7 +360,7 @@ void main() {
     );
 
     expect((await cache.readWorkspace())?.emojis, isEmpty);
-    expect(soundboard.soundsFor(_guildId), isEmpty);
+    expect(soundboard.catalogue.soundsFor(_guildId), isEmpty);
     expect(
       transport.calls.map((call) => '${call.method} ${call.path}'),
       containsAllInOrder(const [

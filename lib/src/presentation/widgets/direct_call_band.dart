@@ -32,6 +32,7 @@ class DirectCallBand extends StatelessWidget {
     this.ringing = false,
     this.camera,
     this.goLive,
+    this.soundboard,
     this.participantMenu,
     this.streams,
     this.onTapStream,
@@ -47,6 +48,10 @@ class DirectCallBand extends StatelessWidget {
   final bool ringing;
   final SelfVideoController? camera;
   final Widget? goLive;
+
+  /// The soundboard button. It hides itself where the account may not use
+  /// the soundboard in a call.
+  final Widget? soundboard;
   final ParticipantMenu? participantMenu;
 
   /// The Streams this client has open, and what their tiles offer.
@@ -154,6 +159,7 @@ class DirectCallBand extends StatelessWidget {
             controller: controller,
             camera: camera,
             goLive: goLive,
+            soundboard: soundboard,
           ),
         ],
       ),
