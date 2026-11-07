@@ -163,23 +163,26 @@ extension ChatControllerOutgoing on ChatController {
   }) {
     final draft = message.message;
     final repository = _repository;
-    return switch ((message.voiceMessage, repository)) {
-      (null, _) => repository.sendMessage(
+    return switch ((message.kind, repository)) {
+      (final OutgoingText text, _) => repository.sendMessage(
         channelId: draft.channelId,
         authorId: draft.authorId,
         body: draft.body,
         nonce: message.nonce,
-        attachments: message.attachments,
-        replyToMessageId: message.replyToMessageId,
+        attachments: text.attachments,
+        replyToMessageId: text.replyToMessageId,
         suppressNotifications: draft.suppressesNotifications,
         textToSpeech: draft.isTextToSpeech,
         onUploadProgress: onUploadProgress,
       ),
-      (final voiceMessage?, final VoiceMessageRepository repository) =>
+      (
+        OutgoingVoice(:final recording),
+        final VoiceMessageRepository repository,
+      ) =>
         repository.sendVoiceMessage(
           channelId: draft.channelId,
           authorId: draft.authorId,
-          voiceMessage: voiceMessage,
+          voiceMessage: recording,
           nonce: message.nonce,
           onUploadProgress: onUploadProgress,
         ),

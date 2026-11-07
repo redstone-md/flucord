@@ -27,14 +27,14 @@ extension ChatControllerVoiceMessages on ChatController {
       return Future.value(false);
     }
     return _queueSend(
-      OutgoingMessage.voice(
+      OutgoingMessage(
         message: voiceMessage.asMessage(
           id: _outgoing.nextNonce(),
           channelId: channelId,
           authorId: workspace.currentMemberId,
           sentAt: DateTime.now(),
         ),
-        voiceMessage: voiceMessage,
+        kind: OutgoingVoice(voiceMessage),
       ),
       onLeave: onReleased,
     );

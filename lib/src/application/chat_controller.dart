@@ -831,8 +831,10 @@ final class ChatController extends ChangeNotifier {
               : 0,
           isTextToSpeech: spoken.$1,
         ),
-        replyToMessageId: replyToMessageId,
-        attachments: attachments,
+        kind: OutgoingText(
+          replyToMessageId: replyToMessageId,
+          attachments: attachments,
+        ),
       ),
       onLeave: onReleased,
     );

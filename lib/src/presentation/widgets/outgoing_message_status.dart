@@ -53,10 +53,10 @@ class OutgoingMessageStatus extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    switch (files) {
-                      _ when message.voiceMessage != null => 'Voice message',
-                      [final file] => file.name,
-                      _ => '${files.length} files',
+                    switch ((message.kind, files)) {
+                      (OutgoingVoice(), _) => 'Voice message',
+                      (OutgoingText(), [final file]) => file.name,
+                      (OutgoingText(), _) => '${files.length} files',
                     },
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
