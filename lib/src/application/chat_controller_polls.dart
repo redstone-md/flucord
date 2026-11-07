@@ -67,7 +67,9 @@ extension ChatControllerPolls on ChatController {
         (!poll.allowMultiselect && answerIds.length > 1)) {
       return false;
     }
-    return _sendingIn(message.channelId, () async {
+    // Locked per poll, not per channel: a vote creates no message, so a
+    // message on its way in the channel must not turn the vote away.
+    return _sendingIn('poll-vote:${message.id}', what: 'poll vote', () async {
       final updated = await repository.votePoll(
         channelId: message.channelId,
         messageId: message.id,

@@ -677,9 +677,7 @@ class _MessageItemState extends State<MessageItem> {
               canEnd: widget.isCurrentUser,
               onEnd: () => unawaited(widget.onEndPoll(message)),
               onVote: switch (widget.onVotePoll) {
-                final vote? => (answerIds) => unawaited(
-                  vote(message, answerIds),
-                ),
+                final vote? => (answerIds) => vote(message, answerIds),
                 null => null,
               },
               onShowVoters: switch (widget.onLoadPollVoters) {

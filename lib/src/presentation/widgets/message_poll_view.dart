@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
@@ -7,7 +9,7 @@ import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
 /// A poll with its results. A tap on an answer votes while the poll is open.
-class MessagePollView extends StatelessWidget {
+class MessagePollView extends StatefulWidget {
   const MessagePollView({
     required this.poll,
     required this.canEnd,
@@ -23,16 +25,36 @@ class MessagePollView extends StatelessWidget {
 
   /// Sends the account's whole new vote, or null where the session cannot
   /// vote. An empty set takes the vote back.
-  final ValueChanged<Set<int>>? onVote;
+  final Future<void> Function(Set<int>)? onVote;
 
   /// Opens the list of who voted, or null where the session cannot list it.
   final VoidCallback? onShowVoters;
 
   @override
+  State<MessagePollView> createState() => _MessagePollViewState();
+}
+
+class _MessagePollViewState extends State<MessagePollView> {
+  /// Set while a vote is on its way. A second tap would be built from the
+  /// vote before it, so the answers take no tap until Discord has answered.
+  bool _voting = false;
+
+  MessagePoll get poll => widget.poll;
+
+  Future<void> _vote(Set<int> answerIds) async {
+    setState(() => _voting = true);
+    try {
+      await widget.onVote!(answerIds);
+    } finally {
+      if (mounted) setState(() => _voting = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final total = poll.totalVotes;
     final ended = !poll.isOpenAt(DateTime.now());
-    final vote = ended ? null : onVote;
+    final vote = ended || _voting || widget.onVote == null ? null : _vote;
     final ownVote = poll.ownVote;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
@@ -55,7 +77,7 @@ class MessagePollView extends StatelessWidget {
               total: total,
               onTap: vote == null
                   ? null
-                  : () => vote(_toggled(ownVote, answer)),
+                  : () => unawaited(vote(_toggled(ownVote, answer))),
             ),
             if (answer != poll.answers.last) const SizedBox(height: 5),
           ],
@@ -71,7 +93,7 @@ class MessagePollView extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onShowVoters case final show? when total > 0)
+              if (widget.onShowVoters case final show? when total > 0)
                 _PollTextButton(
                   key: const ValueKey('poll-voters'),
                   label: 'Show voters',
@@ -81,13 +103,13 @@ class MessagePollView extends StatelessWidget {
                 _PollTextButton(
                   key: const ValueKey('poll-remove-vote'),
                   label: 'Remove vote',
-                  onPressed: () => vote(const {}),
+                  onPressed: () => unawaited(vote(const {})),
                 ),
-              if (canEnd && !ended)
+              if (widget.canEnd && !ended)
                 _PollTextButton(
                   key: const ValueKey('end-poll'),
                   label: 'End poll',
-                  onPressed: onEnd,
+                  onPressed: widget.onEnd,
                 ),
             ],
           ),

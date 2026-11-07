@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -56,7 +58,7 @@ void main() {
       await _pumpPoll(
         tester,
         poll: _poll(multiselect: false, ownVote: const {}),
-        onVote: votes.add,
+        onVote: (ids) async => votes.add(ids),
       );
 
       await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
@@ -74,7 +76,7 @@ void main() {
       await _pumpPoll(
         tester,
         poll: _poll(multiselect: false, ownVote: const {1}),
-        onVote: votes.add,
+        onVote: (ids) async => votes.add(ids),
       );
 
       await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
@@ -91,7 +93,7 @@ void main() {
       await _pumpPoll(
         tester,
         poll: _poll(multiselect: true, ownVote: const {1}),
-        onVote: votes.add,
+        onVote: (ids) async => votes.add(ids),
       );
 
       await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
@@ -108,7 +110,7 @@ void main() {
       await _pumpPoll(
         tester,
         poll: _poll(multiselect: true, ownVote: const {1, 2}),
-        onVote: votes.add,
+        onVote: (ids) async => votes.add(ids),
       );
 
       await tester.tap(find.byKey(const ValueKey('poll-remove-vote')));
@@ -123,7 +125,7 @@ void main() {
       await _pumpPoll(
         tester,
         poll: _poll(ownVote: const {1}, expired: true),
-        onVote: votes.add,
+        onVote: (ids) async => votes.add(ids),
       );
 
       await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
@@ -132,6 +134,33 @@ void main() {
       expect(find.text('75%'), findsOneWidget);
       expect(find.textContaining('Poll ended'), findsOneWidget);
       expect(find.byKey(const ValueKey('poll-remove-vote')), findsNothing);
+    });
+
+    testWidgets('the answers take no tap while a vote is on its way', (
+      tester,
+    ) async {
+      final votes = <Set<int>>[];
+      final answer = Completer<void>();
+      await _pumpPoll(
+        tester,
+        poll: _poll(ownVote: const {}),
+        onVote: (ids) {
+          votes.add(ids);
+          return answer.future;
+        },
+      );
+
+      await tester.tap(find.byKey(const ValueKey('poll-answer-1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
+      expect(votes, [
+        {1},
+      ]);
+
+      answer.complete();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('poll-answer-2')));
+      expect(votes, hasLength(2));
     });
 
     testWidgets('a session that cannot vote offers no vote', (tester) async {
@@ -167,7 +196,7 @@ Future<void> _pumpPoll(
   required MessagePoll poll,
   bool canEnd = false,
   VoidCallback? onEnd,
-  ValueChanged<Set<int>>? onVote,
+  Future<void> Function(Set<int>)? onVote,
   VoidCallback? onShowVoters,
 }) => tester.pumpWidget(
   MaterialApp(
