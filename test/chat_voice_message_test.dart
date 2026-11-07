@@ -36,6 +36,35 @@ void main() {
   );
 
   test(
+    'closing the controller lets go of a voice message still sending',
+    () async {
+      final controller = ChatController(
+        MockChatRepository(latency: Duration.zero),
+      );
+      await controller.load();
+      var released = 0;
+
+      final sent = controller.sendVoiceMessage(
+        channelId: 'forge-general',
+        voiceMessage: PendingVoiceMessage(
+          name: 'voice.ogg',
+          path: r'C:\Temp\voice.ogg',
+          size: 2048,
+          durationSecs: 2.4,
+          waveform: 'AECA/w==',
+        ),
+        onReleased: () => released++,
+      );
+      // Before the queued send has started.
+      controller.dispose();
+
+      expect(released, 1);
+      expect(await sent, isFalse);
+      expect(released, 1);
+    },
+  );
+
+  test(
     'a transport without voice messages logs why nothing was sent',
     () async {
       final log = <String>[];

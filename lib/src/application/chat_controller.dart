@@ -356,6 +356,8 @@ final class ChatController extends ChangeNotifier {
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
     _lastSentAt.clear();
+    // Sends of the last account: a retry would go out as the new one.
+    _outgoing.releaseAll();
     // A new store, not a cleared one: a composer closing now, or a send failing
     // late, still writes to the store of the account it belongs to.
     _drafts = MemoryComposerDraftStore();
@@ -1006,6 +1008,7 @@ final class ChatController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _outgoing.releaseAll();
     _presenceFold?.cancel();
     presenceChanges.dispose();
     _clearTyping();

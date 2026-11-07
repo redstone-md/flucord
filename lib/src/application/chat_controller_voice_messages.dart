@@ -8,7 +8,7 @@ extension ChatControllerVoiceMessages on ChatController {
   /// a text message goes out. A failed one stays there with Retry and Delete.
   ///
   /// [onReleased] runs once the recording file is no longer needed: the
-  /// message was sent, or deleted unsent, or could not be queued at all.
+  /// message left the queue, or could not be queued at all.
   Future<bool> sendVoiceMessage({
     required String channelId,
     required PendingVoiceMessage voiceMessage,

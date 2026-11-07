@@ -236,6 +236,23 @@ void main() {
     voiceMessageRecorder: discarded,
   );
 
+  final signedOut = FakeVoiceMessageRecorder(pending: recording());
+  testSession(
+    'signing out lets go of a failed voice message and its recording',
+    (tester, session) async {
+      _routeUpload(session, SessionHarness.channelId);
+      _refuse(session, _slotPath);
+      await session.openChannel(SessionHarness.channelId);
+      await _recordAndSend(tester, session);
+      expect(signedOut.deleted, isEmpty);
+
+      await session.signOut();
+
+      expect(signedOut.deleted, [same(signedOut.pending)]);
+    },
+    voiceMessageRecorder: signedOut,
+  );
+
   testSession(
     'a channel without the voice message permission offers no microphone',
     (tester, session) async {

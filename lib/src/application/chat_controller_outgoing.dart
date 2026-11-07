@@ -11,8 +11,8 @@ final class _OutgoingMessages {
   /// it, so a channel's messages arrive in the order they were written.
   final Map<String, Future<bool>> _tails = {};
 
-  /// What to run, by nonce, once a message leaves the queue: sent, echoed or
-  /// deleted. A voice message lets go of its recording file here.
+  /// What to run, by nonce, once a message leaves the queue: sent, echoed,
+  /// deleted, or dropped when its session ends. Its files are let go here.
   final Map<String, void Function()> _onLeave = {};
   int _lastNonceMillis = 0;
 
@@ -50,6 +50,17 @@ final class _OutgoingMessages {
     final removed = (held?.length ?? 0) != before;
     if (removed) _onLeave.remove(nonce)?.call();
     return removed;
+  }
+
+  /// Drops every held message, sending or failed, for a session that ends.
+  /// A send already on the wire may still land; it is no longer shown here.
+  void releaseAll() {
+    _byChannel.clear();
+    final onLeave = [..._onLeave.values];
+    _onLeave.clear();
+    for (final release in onLeave) {
+      release();
+    }
   }
 
   int _indexOf(OutgoingMessage message) =>
@@ -92,7 +103,7 @@ extension ChatControllerOutgoing on ChatController {
   }
 
   /// Shows [message] at once and queues its send. [onLeave] runs once the
-  /// message leaves the queue, sent or deleted.
+  /// message leaves the queue, as [_OutgoingMessages] lists.
   Future<bool> _queueSend(OutgoingMessage message, {void Function()? onLeave}) {
     final channelId = message.channelId;
     if (hasNewerMessages(channelId)) unawaited(jumpToPresent(channelId));
