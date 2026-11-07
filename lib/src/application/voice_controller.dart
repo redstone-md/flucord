@@ -334,6 +334,24 @@ final class VoiceController extends ChangeNotifier
   /// Whether this account has silenced the room for itself.
   bool get isDeafened => _isDeafened;
 
+  /// Whether a moderator muted this account in the room. Only a moderator
+  /// lifts it, whatever [isMuted] says.
+  bool get isServerMuted => _ownSeat?.serverMuted ?? false;
+
+  /// Whether a moderator deafened this account in the room.
+  bool get isServerDeafened => _ownSeat?.serverDeafened ?? false;
+
+  VoiceParticipant? get _ownSeat => switch (_selfUserId) {
+    final self? => participants.where((p) => p.userId == self).firstOrNull,
+    null => null,
+  };
+
+  /// Where [userId] is seated in a guild voice channel, as far as this
+  /// client is told. A DM call is not a guild seat.
+  VoiceParticipantStateEvent? guildSeatOf(String userId) => [
+    for (final seats in seatedByChannel.values) ...seats,
+  ].where((seat) => seat.userId == userId && seat.guildId != null).firstOrNull;
+
   /// Whether this account's camera is announced to the room.
   ///
   /// Held here rather than on the camera controller because opcode 4 is a

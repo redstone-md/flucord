@@ -32,7 +32,8 @@ enum MessageMenuAction {
 /// Opens the menu at [position], answering what was chosen, or null.
 ///
 /// A non-empty [selectedText] adds a Copy item for that text. [canMarkUnread]
-/// says whether this transport keeps read state at all.
+/// says whether this transport keeps read state at all, and [canForward]
+/// whether it can forward.
 Future<MessageMenuAction?> showMessageContextMenu({
   required BuildContext context,
   required Offset position,
@@ -40,6 +41,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
   required ChannelCapabilities capabilities,
   required bool isCurrentUser,
   bool canMarkUnread = false,
+  bool canForward = false,
   String selectedText = '',
 }) {
   final overlay =
@@ -76,7 +78,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
         icon: FlucordIcons.pin,
         label: message.isPinned ? 'Unpin message' : 'Pin message',
       ),
-    if (capabilities.sendMessages)
+    if (canForward && capabilities.sendMessages && message.canForward)
       const FlucordMenuItem(
         key: ValueKey('message-menu-forward'),
         value: MessageMenuAction.forward,
@@ -201,6 +203,10 @@ class TimelineSelection extends InheritedWidget {
 /// menu. It would still do both if it only lost the gesture later, because it
 /// acts after 100 ms even with the gesture undecided. So this claims the press
 /// as soon as it lands, and the selection stays as it was.
+///
+/// Claims nest: the innermost one under the press takes it, and the ones
+/// around it leave it be. So a reaction chip opens its own list inside a
+/// message row that opens the message menu.
 class RightClickClaim extends StatelessWidget {
   const RightClickClaim({
     required this.onPressed,
@@ -214,11 +220,19 @@ class RightClickClaim extends StatelessWidget {
 
   static bool _isRightButton(int buttons) => buttons == kSecondaryMouseButton;
 
+  /// The press the innermost claim took. A press reaches the innermost
+  /// listener first, and each new press has a new pointer id.
+  static int? _claimedPointer;
+
   @override
   Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.translucent,
     onPointerDown: (event) {
-      if (_isRightButton(event.buttons)) onPressed(event.position);
+      if (!_isRightButton(event.buttons) || event.pointer == _claimedPointer) {
+        return;
+      }
+      _claimedPointer = event.pointer;
+      onPressed(event.position);
     },
     child: RawGestureDetector(
       behavior: HitTestBehavior.translucent,

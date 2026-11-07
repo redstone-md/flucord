@@ -270,6 +270,86 @@ extension _FlucordShellNavigation on FlucordShell {
   bool _canOpenSettings(GuildAdminCapabilities administration) =>
       administration.hasAnySurface && chatController.guildManagement != null;
 
+  /// Whether Invite people has a channel the account may invite to. Gated on
+  /// CREATE_INSTANT_INVITE per channel, not on admin rights.
+  bool _canInvitePeople(GuildAdminCapabilities administration) =>
+      chatController.guildManagement != null &&
+      administration.invitableChannels.isNotEmpty;
+
+  /// Whether Edit server profile has anything this account may change in
+  /// [administration]'s server: the nickname, or with Nitro the avatar,
+  /// banner and bio.
+  bool _canEditServerProfile(
+    BuildContext context,
+    GuildAdminCapabilities administration,
+  ) =>
+      chatController.guildManagement != null &&
+      _currentMember() != null &&
+      (administration.canChangeNickname || _hasServerProfiles(context));
+
+  Member? _currentMember() {
+    final workspace = chatController.workspace;
+    return workspace?.memberOrNull(workspace.currentMemberId);
+  }
+
+  bool _hasServerProfiles(BuildContext context) =>
+      AccountEntitlementsScope.maybeOf(
+        context,
+      )?.entitlements?.premiumTier.hasServerProfiles ??
+      false;
+
+  /// Opens Edit server profile for [space]. The new profile reaches the
+  /// member list, messages and profile card through the GUILD_MEMBER_UPDATE
+  /// Discord sends for the change, as it does for any other client.
+  Future<void> _editServerProfile(
+    BuildContext context,
+    CommunitySpace space,
+    GuildAdminCapabilities administration,
+  ) async {
+    final repository = chatController.guildManagement;
+    final self = _currentMember();
+    if (repository == null || self == null) return;
+    final controller = ServerProfileController(repository, guildId: space.id);
+    try {
+      await showServerProfileDialog(
+        context,
+        space: space,
+        self: self,
+        controller: controller,
+        canChangeNickname: administration.canChangeNickname,
+        hasServerProfiles: _hasServerProfiles(context),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  /// Opens Invite people for [space], with a link into the channel on
+  /// screen when the account may invite there, else into the first one it
+  /// may.
+  Future<void> _invitePeople(
+    BuildContext context,
+    CommunitySpace space,
+    GuildAdminCapabilities administration,
+  ) async {
+    final repository = chatController.guildManagement;
+    final channels = administration.invitableChannels;
+    if (repository == null || channels.isEmpty) return;
+    final selected = workspaceController.selectedChannelId;
+    final channel =
+        channels.where((item) => item.id == selected).firstOrNull ??
+        channels.first;
+    await showInvitePeopleDialog(
+      context,
+      space: space,
+      channel: channel,
+      createInvite: (options) => repository.createChannelInvite(
+        channelId: channel.id,
+        options: options,
+      ),
+    );
+  }
+
   /// The menu of a server on the rail, which may not be the one on screen. It
   /// holds what the server's header offers, and Mark as read up front.
   Future<void> _openSpaceMenu(
@@ -288,7 +368,10 @@ extension _FlucordShellNavigation on FlucordShell {
         ServerMenuAction.markRead,
         ServerMenuAction.notifications,
       },
+      if (_canInvitePeople(administration)) ServerMenuAction.invite,
       if (_canOpenSettings(administration)) ServerMenuAction.settings,
+      if (_canEditServerProfile(context, administration))
+        ServerMenuAction.editProfile,
       if (chatController.moderation != null) ServerMenuAction.report,
       if (chatController.guildManagement != null) ServerMenuAction.leave,
     });
@@ -309,10 +392,14 @@ extension _FlucordShellNavigation on FlucordShell {
     switch (action) {
       case ServerMenuAction.markRead:
         await chatController.markSpaceRead(space.id);
+      case ServerMenuAction.invite:
+        await _invitePeople(context, space, administration);
       case ServerMenuAction.settings:
         await _openGuildSettings(context, space, administration);
       case ServerMenuAction.notifications:
         await _openSpaceNotificationMenu(context, space, at);
+      case ServerMenuAction.editProfile:
+        await _editServerProfile(context, space, administration);
       case ServerMenuAction.report:
         await _reportSpace(context, space);
       case ServerMenuAction.leave:
@@ -863,7 +950,12 @@ extension _FlucordShellNavigation on FlucordShell {
         close();
         _openVoiceRoom(channelId);
       },
-      onOpenLink: (uri) => unawaited(externalLinkLauncher.open(uri)),
+      // A connection leaves the app like a link in a message, so it asks
+      // the same way.
+      onOpenLink: (uri) => unawaited(() async {
+        if (!await confirmLeavingFor(context, uri)) return;
+        await externalLinkLauncher.open(uri);
+      }()),
     );
     // A member's "In voice" follows the seats.
     return _onSeats(
@@ -894,11 +986,9 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
-  /// Opens the DM with [recipientId] and sends [text] there, when given.
-  ///
-  /// The text is sent before the DM opens: a text Discord refuses goes into
-  /// the DM's draft, which the box shows when it opens, so it can be sent
-  /// again. A box already open would not read a draft written under it.
+  /// Opens the DM with [recipientId] and sends [text] there, when given. The
+  /// message shows in the DM at once, and one Discord refuses stays there with
+  /// Retry.
   Future<void> _openDirectConversation(
     BuildContext context,
     String recipientId, {
@@ -912,15 +1002,9 @@ extension _FlucordShellNavigation on FlucordShell {
       );
       return;
     }
-    if (text.isNotEmpty &&
-        !await chatController.sendMessage(channelId: channelId, body: text)) {
-      final drafts = chatController.drafts;
-      drafts.write(
-        channelId,
-        drafts.read(channelId).withFailedSend(ComposerDraft(text: text)),
-      );
+    if (text.isNotEmpty) {
+      unawaited(chatController.sendMessage(channelId: channelId, body: text));
     }
-    if (!context.mounted) return;
     final channel = chatController.workspace!.channelById(channelId);
     _openDestination(spaceId: channel.spaceId, channelId: channel.id);
   }

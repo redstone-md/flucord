@@ -10,6 +10,20 @@ import '../../domain/video_encoder.dart';
 import 'native_camera_names.dart';
 import 'native_video_bindings.dart';
 
+/// What the capture thread's last word means, read with the module's last
+/// error: the window it followed was closed, or its source was lost and
+/// could not be reopened.
+VideoEncoderException nativeCaptureEnded({
+  int? platformCode,
+  int? platformStage,
+}) => VideoEncoderException(
+  platformStage == NativeVideoStage.windowClosed
+      ? VideoEncoderFailure.windowClosed
+      : VideoEncoderFailure.captureLost,
+  platformCode: platformCode,
+  platformStage: platformStage,
+);
+
 /// Screen capture and H.264 encoding through `flucord_video.dll`.
 ///
 /// The native lifecycle is owned here and nowhere else: frames are copied
@@ -26,6 +40,7 @@ final class NativeVideoEncoderService
         VideoEncoderService,
         VideoBitrateControl,
         VideoFrameSinkControl,
+        WindowCaptureSupport,
         Finalizable {
   NativeVideoEncoderService({NativeVideoBindings? bindings})
     : _bindings = bindings ?? _openLibrary(),
@@ -84,6 +99,9 @@ final class NativeVideoEncoderService
 
   @override
   int get displayCount => _bindings?.displayCount() ?? 0;
+
+  @override
+  bool get canCaptureWindows => _bindings?.openWindow != null;
 
   @override
   Stream<EncodedVideoFrame> get frames => _frames.stream;
@@ -167,12 +185,31 @@ final class NativeVideoEncoderService
         ..height = settings.height
         ..framesPerSecond = settings.framesPerSecond
         ..bitrate = settings.bitrate;
-      // The two openers take the same config and answer on the same callback;
+      // The openers take the same config and answer on the same callback;
       // only where the pictures come from differs.
-      final open = settings.source == VideoCaptureSource.camera
-          ? bindings.openCamera
-          : bindings.open;
-      final status = open(config, target, nullptr, out);
+      final status = switch (settings.source) {
+        VideoCaptureSource.display => bindings.open(
+          config,
+          target,
+          nullptr,
+          out,
+        ),
+        VideoCaptureSource.camera => bindings.openCamera(
+          config,
+          target,
+          nullptr,
+          out,
+        ),
+        VideoCaptureSource.window =>
+          bindings.openWindow?.call(
+                config,
+                settings.windowHandle,
+                target,
+                nullptr,
+                out,
+              ) ??
+              NativeVideoStatus.unsupported,
+      };
       if (status != NativeVideoStatus.ok) {
         callback?.close();
         throw VideoEncoderException(
@@ -244,8 +281,7 @@ final class NativeVideoEncoderService
       // refused. An encoder sample that happens to be empty carries a buffer.
       if (data == nullptr && length == 0 && !_failures.isClosed) {
         _failures.add(
-          VideoEncoderException(
-            VideoEncoderFailure.captureLost,
+          nativeCaptureEnded(
             platformCode: _bindings?.lastError?.call(),
             platformStage: _bindings?.lastErrorStage?.call(),
           ),
@@ -278,6 +314,8 @@ final class NativeVideoEncoderService
   static VideoEncoderFailure _failureFor(int status) => switch (status) {
     NativeVideoStatus.noDisplay => VideoEncoderFailure.noDisplay,
     NativeVideoStatus.noCamera => VideoEncoderFailure.noCamera,
+    NativeVideoStatus.noWindow => VideoEncoderFailure.windowClosed,
+    NativeVideoStatus.windowRefused => VideoEncoderFailure.windowRefused,
     NativeVideoStatus.encoder => VideoEncoderFailure.encoder,
     NativeVideoStatus.state => VideoEncoderFailure.state,
     _ => VideoEncoderFailure.unsupported,

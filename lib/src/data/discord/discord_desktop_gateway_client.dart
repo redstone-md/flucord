@@ -18,12 +18,17 @@ import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
 import 'discord_role_dispatch.dart';
+import 'discord_soundboard_service.dart';
 import '../../app_log.dart';
 
 export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
 
 final class DiscordDesktopGatewayClient
-    implements DiscordChatGateway, DiscordCallGateway, DiscordGoLiveGateway {
+    implements
+        DiscordChatGateway,
+        DiscordCallGateway,
+        DiscordGoLiveGateway,
+        DiscordSoundboardGateway {
   DiscordDesktopGatewayClient({
     required String authorization,
     required Map<String, Object?> properties,
@@ -321,6 +326,18 @@ final class DiscordDesktopGatewayClient
       'paused': paused,
     }),
   );
+
+  /// Opcode 31. Discord answers with `SOUNDBOARD_SOUNDS` for each guild.
+  @override
+  void requestSoundboardSounds(List<String> guildIds) {
+    if (guildIds.isEmpty) return;
+    _send(
+      DiscordDesktopGatewayFrame(
+        DiscordDesktopGatewayOpcode.requestSoundboardSounds,
+        {'guild_ids': guildIds},
+      ),
+    );
+  }
 
   void _acceptPayload(Map<String, Object?> payload) {
     if (_bootstrapCompleter?.isCompleted == false) {

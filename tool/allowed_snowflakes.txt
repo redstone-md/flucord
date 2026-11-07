@@ -80,3 +80,7 @@
 # test/friends_page_session_test.dart and
 # test/friends_requests_session_test.dart.
 777777777777777778
+# Legacy: made-up DM channel and read-cursor ids in the history of
+# test/direct_message_order_session_test.dart (FLUCORD-120).
+310000000000000031
+350000000000000031

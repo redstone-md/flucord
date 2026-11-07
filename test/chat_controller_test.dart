@@ -42,11 +42,13 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/expression_favorites.dart';
 
 part 'chat_controller_event_repository.dart';
+part 'chat_controller_outgoing_cases.dart';
 
 /// Long enough for a held presence to fold in.
 const _presenceWindow = Duration(milliseconds: 300);
 
 void main() {
+  _outgoingMessageTests();
   group('ChatController', () {
     test('loads workspace and appends a sent message', () async {
       final controller = ChatController(

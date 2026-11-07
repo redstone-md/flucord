@@ -13,7 +13,7 @@ Somebody in a room, including this account.
 _Avoid_: member, user, peer
 
 **Stream**:
-One participant's screen, sent into a room over a connection of its own.
+One participant's screen or one of their windows, sent into a room over a connection of its own.
 _Avoid_: share, screen share, broadcast, go-live
 
 **Stream key**:
@@ -61,7 +61,7 @@ Another window has the keyboard focus. The self-preview is not decoded while the
 _Avoid_: inactive, background, blurred
 
 **Capture**:
-The machine's one source of pictures, a display or a camera. Only one runs at a time.
+The machine's one source of pictures, a display, one window or a camera. Only one runs at a time.
 _Avoid_: source, device, input, recorder
 
 **Picture**:
@@ -83,3 +83,7 @@ _Avoid_: participant, peer, member
 **Group DM**:
 A DM Discord made as a group. It stays a group when only one other person, or nobody, is left in it. It may have its own name and picture; with no name, it goes by its recipients' names.
 _Avoid_: group chat, group channel
+
+**Outgoing message**:
+A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place.
+_Avoid_: pending message, local echo

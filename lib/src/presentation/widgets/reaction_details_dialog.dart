@@ -8,12 +8,12 @@ import '../../domain/reaction_repository.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'member_avatar.dart';
+import 'paged_people_pane.dart';
 import 'message_reaction_strip.dart';
 import 'flucord_dialog.dart';
 
 typedef ReactionUsersLoader =
-    Future<ReactionUsersPage> Function(
+    Future<MemberPage> Function(
       ChatMessage message,
       MessageReaction reaction,
       DiscordReactionType type,
@@ -236,35 +236,35 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
   );
 
   Widget _people(BuildContext context) {
-    final rows = [
-      for (final user in _normalUsers)
-        (user: user, type: DiscordReactionType.normal),
-      for (final user in _burstUsers)
-        (user: user, type: DiscordReactionType.burst),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final superMark = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _selectionSummary(context),
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
-        Expanded(
-          child: rows.isEmpty
-              ? _emptyState(context)
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    indent: 48,
-                    color: context.surfaces.border.withValues(alpha: 0.7),
-                  ),
-                  itemBuilder: (context, index) => _userRow(rows[index]),
-                ),
+        FlucordIcon(
+          FlucordIcons.superReaction,
+          size: 11,
+          color: context.surfaces.warning,
         ),
-        if (_error != null) _errorRow(context),
-        if ((_normalHasMore || _burstHasMore) && _error == null)
-          _loadMore(context),
+        const SizedBox(width: 4),
+        const Text('Super', style: TextStyle(fontSize: FlucordType.caption)),
       ],
+    );
+    return PagedPeoplePane(
+      header: _selectionSummary(context),
+      people: [
+        for (final user in _normalUsers) (member: user, trailing: null),
+        for (final user in _burstUsers) (member: user, trailing: superMark),
+      ],
+      loading: _loading,
+      failed: _error != null,
+      hasMore: _normalHasMore || _burstHasMore,
+      emptyLabel: 'No reactions to show',
+      loadingLabel: 'Loading people…',
+      failureLabel: 'Could not load reactions',
+      // A first page that failed left nothing to page on from, so its retry
+      // starts over.
+      onRetry: () => _load(reset: _normalUsers.isEmpty && _burstUsers.isEmpty),
+      onLoadMore: () => _load(reset: false),
+      loadMoreKey: const ValueKey('reaction-details-load-more'),
     );
   }
 
@@ -307,91 +307,11 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
       ],
     ),
   );
-
-  Widget _emptyState(BuildContext context) => Center(
-    child: Text(
-      _error == null && !_loading ? 'No reactions to show' : 'Loading people…',
-      style: TextStyle(
-        fontSize: FlucordType.caption,
-        color: context.surfaces.muted,
-      ),
-    ),
-  );
-
-  Widget _userRow(({Member user, DiscordReactionType type}) row) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-    child: Row(
-      children: [
-        MemberAvatar(member: row.user, size: 28),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            row.user.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        if (row.type == DiscordReactionType.burst) ...[
-          FlucordIcon(
-            FlucordIcons.superReaction,
-            size: 11,
-            color: context.surfaces.warning,
-          ),
-          const SizedBox(width: 4),
-          const Text('Super', style: TextStyle(fontSize: FlucordType.caption)),
-        ],
-      ],
-    ),
-  );
-
-  Widget _errorRow(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: context.surfaces.border)),
-    ),
-    child: Row(
-      children: [
-        FlucordIcon(
-          FlucordIcons.error,
-          size: 15,
-          color: context.surfaces.errorText,
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: Text(
-            'Could not load reactions',
-            style: TextStyle(fontSize: FlucordType.caption),
-          ),
-        ),
-        TextButton(
-          onPressed: () => _load(reset: false),
-          child: const Text('Retry'),
-        ),
-      ],
-    ),
-  );
-
-  Widget _loadMore(BuildContext context) => Container(
-    alignment: Alignment.centerLeft,
-    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: context.surfaces.border)),
-    ),
-    child: TextButton(
-      key: const ValueKey('reaction-details-load-more'),
-      onPressed: _loading ? null : () => _load(reset: false),
-      child: const Text('Load more'),
-    ),
-  );
 }
 
 final class _TypedReactionPage {
   const _TypedReactionPage(this.type, this.page);
 
   final DiscordReactionType type;
-  final ReactionUsersPage page;
+  final MemberPage page;
 }

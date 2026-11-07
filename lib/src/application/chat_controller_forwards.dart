@@ -1,6 +1,9 @@
 part of 'chat_controller.dart';
 
 extension ChatControllerForwards on ChatController {
+  /// Whether this session's transport can forward messages at all.
+  bool get canForwardMessages => _repository is MessageForwardRepository;
+
   Future<bool> forwardMessage(
     ChatMessage source,
     String targetChannelId,

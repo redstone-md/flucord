@@ -1,4 +1,5 @@
 import 'chat_models.dart';
+import 'guild_folders.dart';
 import 'user_settings.dart';
 
 /// The settings a caller wants changed, and nothing else.
@@ -38,6 +39,7 @@ final class UserSettingsPatch {
     this.customStatusExpiresAtMs,
     this.clearCustomStatus = false,
     this.showCurrentGame,
+    this.guildFolders,
   });
 
   final UserSettingsTheme? theme;
@@ -102,6 +104,10 @@ final class UserSettingsPatch {
   final bool clearCustomStatus;
   final bool? showCurrentGame;
 
+  /// The whole server list, folders and order, to store in place of the one
+  /// stored now.
+  final List<GuildFolder>? guildFolders;
+
   bool get touchesAppearance =>
       theme != null ||
       timestampHourCycle != null ||
@@ -140,12 +146,15 @@ final class UserSettingsPatch {
       clearCustomStatus ||
       showCurrentGame != null;
 
+  bool get touchesGuildFolders => guildFolders != null;
+
   bool get isEmpty =>
       !touchesAppearance &&
       !touchesTextAndImages &&
       !touchesNotifications &&
       !touchesPrivacy &&
-      !touchesStatus;
+      !touchesStatus &&
+      !touchesGuildFolders;
 }
 
 /// How urgently a change should reach Discord.

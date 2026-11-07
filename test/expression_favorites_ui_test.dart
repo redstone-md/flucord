@@ -568,4 +568,10 @@ final class _FakeStore implements ExpressionFavoritesRepository {
     );
     return true;
   }
+
+  @override
+  Future<bool> setSoundFavorite({
+    required String soundId,
+    required bool favorite,
+  }) => throw UnimplementedError('These pickers star no sounds');
 }

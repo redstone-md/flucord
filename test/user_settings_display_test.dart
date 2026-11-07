@@ -191,7 +191,7 @@ Future<void> _pumpMessage(
     onDelete: (_) async {},
     onToggleReaction: (_, _) async {},
     onLoadReactionUsers: (_, _, _, _) async =>
-        const ReactionUsersPage(users: [_member], hasMore: false),
+        const MemberPage(users: [_member], hasMore: false),
     onAddReaction: (_, _) async {},
     onCreateThread: (_, _, _) async => true,
     onTogglePin: (_) async {},

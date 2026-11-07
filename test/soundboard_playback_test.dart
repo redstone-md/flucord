@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flucord/src/application/soundboard_playback_controller.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/soundboard_playback.dart';
@@ -42,6 +43,37 @@ void main() {
     ));
     expect(controller.lastPlayed?.userId, 'someone');
     expect(controller.error, isNull);
+  });
+
+  test('another server\'s sound played into a DM call is heard', () async {
+    final repository = _FakeRepository(
+      sounds: const [
+        SoundboardSound(id: '10', name: 'airhorn', guildId: 'guild-2'),
+      ],
+    );
+    final player = _FakePlayer();
+    final controller = SoundboardPlaybackController(
+      repositoryProvider: () => repository,
+      connectedChannelId: () => 'dm-1',
+      player: player,
+    )..reconcile();
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    // A DM call has no server, so the effect names none.
+    repository.send(
+      const SoundboardPlayback(
+        channelId: 'dm-1',
+        userId: 'someone',
+        soundId: '10',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      player.played.single.$1,
+      'https://cdn.discordapp.com/soundboard-sounds/10',
+    );
   });
 
   test(
@@ -324,13 +356,16 @@ final class _FakePlayer implements SoundboardAudioPlayer {
   bool isDisposed = false;
 
   @override
-  Future<void> play(String url, {double volume = 1}) async {
+  Future<void> play(String url, {double volume = 1, bool loop = false}) async {
     if (fail) throw StateError('no audio device');
     played.add((url, volume));
   }
 
   @override
   Future<void> dispose() async => isDisposed = true;
+
+  @override
+  Future<void> stop() async {}
 }
 
 final class _FakeRepository implements SoundboardRepository {
@@ -343,8 +378,13 @@ final class _FakeRepository implements SoundboardRepository {
   void send(SoundboardPlayback playback) => _playbacks.add(playback);
 
   @override
-  List<SoundboardSound> soundsFor(String guildId) =>
-      sounds.where((sound) => sound.guildId == guildId).toList(growable: false);
+  SoundboardCatalogue get catalogue => SoundboardCatalogue(
+    defaults: [...sounds.where((sound) => sound.isDefault)],
+    byGuild: groupBy(
+      sounds.where((sound) => !sound.isDefault),
+      (sound) => sound.guildId!,
+    ),
+  );
 
   @override
   Stream<String> get updates => const Stream<String>.empty();
@@ -353,7 +393,7 @@ final class _FakeRepository implements SoundboardRepository {
   Stream<SoundboardPlayback> get playbacks => _playbacks.stream;
 
   @override
-  Future<List<SoundboardSound>> loadSounds(String guildId) async => sounds;
+  Future<List<SoundboardSound>> loadSounds(String? guildId) async => sounds;
 
   @override
   Future<void> playSound(String channelId, SoundboardSound sound) async {}

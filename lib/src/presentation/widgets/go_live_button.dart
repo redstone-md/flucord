@@ -7,6 +7,7 @@ import '../../application/go_live_controller.dart';
 import '../../application/stream_quality_controller.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/stream_quality.dart';
+import '../../domain/video_encoder.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -115,10 +116,11 @@ class GoLiveButton extends StatelessWidget {
             // What Discord actually said, rather than the fixed sentence the
             // room used to show for every refusal. "Missing permissions" and
             // "no encoder on this machine" need different things done about
-            // them, and only the answer says which happened.
-            message:
-                'Discord did not accept the stream: '
-                '${_describe(error)}',
+            // them, and only the answer says which happened. A capture that
+            // failed or ended is this machine's doing, and says so alone.
+            message: error is VideoEncoderException
+                ? _describe(error)
+                : 'Discord did not accept the stream: ${_describe(error)}',
             child: FlucordIcon(
               FlucordIcons.error,
               key: const ValueKey('go-live-error'),

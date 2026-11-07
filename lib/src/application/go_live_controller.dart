@@ -15,35 +15,7 @@ import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
 import '../app_log.dart';
 import 'go_live_self_preview.dart';
-
-/// A display this machine can share.
-///
-/// Named by the encoder rather than by a capture library: enumerating sources
-/// through WebRTC opens duplications of its own to build thumbnails with, and
-/// one of those left open is what refuses the share afterwards.
-final class GoLiveDisplay {
-  const GoLiveDisplay({required this.index, required this.name});
-
-  final int index;
-  final String name;
-
-  /// The id a picked screen travels as, `screen:<index>:<n>`, which is the
-  /// shape a capture source list uses. This client never varies the tail, but
-  /// the shape is not ours to change.
-  String get sourceId => 'screen:$index:0';
-
-  /// Which display a source id names, or the primary when it names none.
-  ///
-  /// A window, or a name this client does not make, is the primary display:
-  /// the capture takes it by default, and refusing a share over a shape
-  /// nobody here writes would be inventing a failure.
-  static int displayIndexFor(String? sourceId) {
-    if (sourceId == null || !sourceId.startsWith('screen:')) return 0;
-    final index = int.tryParse(sourceId.split(':').elementAtOrNull(1) ?? '');
-    if (index == null || index < 0) return 0;
-    return index;
-  }
-}
+import '../domain/stream_captures.dart';
 
 /// Drives Go Live: opening a stream, holding it alive, and ending it.
 ///
@@ -73,6 +45,10 @@ final class GoLiveController extends ChangeNotifier {
     /// screen (ADR-0001). Null on a build that cannot decode, whose sender
     /// tile says so.
     GoLiveSelfPreview? selfPreview,
+
+    /// The windows the picker offers next to the screens, and the
+    /// thumbnails it shows.
+    CaptureCatalog shareSources = const UnavailableCaptureCatalog(),
     SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
     VoiceOpusCodecFactory? opusCodecFactory,
     Duration pingInterval = const Duration(seconds: 30),
@@ -80,6 +56,7 @@ final class GoLiveController extends ChangeNotifier {
        _capture = capture,
        _media = media ?? InProcessGoLiveMediaPlane(frames: capture.frames),
        _preview = selfPreview,
+       _shareSources = shareSources,
        _systemAudio = systemAudio,
        _opusCodecFactory = opusCodecFactory,
        _pingInterval = pingInterval {
@@ -107,6 +84,8 @@ final class GoLiveController extends ChangeNotifier {
   /// Owned here: it lives exactly as long as this controller does, and runs
   /// exactly while a share does.
   final GoLiveSelfPreview? _preview;
+
+  final CaptureCatalog _shareSources;
 
   /// The Sender of the running stream, once its endpoint arrived.
   GoLiveSender? _sender;
@@ -287,10 +266,20 @@ final class GoLiveController extends ChangeNotifier {
   Object? get error => _error;
 
   /// The displays this machine can share.
-  List<GoLiveDisplay> get displays => [
+  List<DisplayCapture> get displays => [
     for (var index = 0; index < _capture.displayCount; index++)
-      GoLiveDisplay(index: index, name: 'Screen ${index + 1}'),
+      DisplayCapture(index: index, name: 'Screen ${index + 1}'),
   ];
+
+  /// Everything the picker can offer: the screens, then the open windows
+  /// when the encoder can capture one window on its own.
+  List<StreamCapture> get sources => [
+    ...displays,
+    if (_capture.canShareWindows) ..._shareSources.windows(),
+  ];
+
+  /// Where the picker reads the open windows and their thumbnails.
+  CaptureCatalog get captures => _shareSources;
 
   /// Attaches to the active transport.
   void reconcile() => _bind();
@@ -364,9 +353,12 @@ final class GoLiveController extends ChangeNotifier {
         _capture.frames,
         requestKeyframe: () async => await _lease?.requestKeyframe(),
       );
-      final lease = _lease = await _capture.startShare(
-        displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
-      );
+      final window = WindowCapture.handleFor(sourceId);
+      final lease = _lease = await (window != null
+          ? _capture.startWindowShare(windowHandle: window)
+          : _capture.startShare(
+              displayIndex: DisplayCapture.displayIndexFor(sourceId),
+            ));
       _leaseChanges = lease.settingsChanges.listen(
         _follow,
         onError: _qualityRefused,

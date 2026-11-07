@@ -1,5 +1,6 @@
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import '../../application/slash_command_controller.dart';
@@ -7,18 +8,22 @@ import '../../application/message_component_controller.dart';
 
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/navigation_memory.dart';
 import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'blocked_message_fold.dart';
 import 'direct_message_views.dart';
 import 'member_avatar.dart';
 import 'message_context_menu.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
+import 'outgoing_message_status.dart';
+import 'poll_voters_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'profile_card_route.dart';
@@ -47,16 +52,20 @@ class MessageList extends StatefulWidget {
     this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
-    required this.onLoadReactionUsers,
+    this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onToggleSuperReaction,
+    this.onAddSuperReaction,
     this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onVotePoll,
+    this.onLoadPollVoters,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
     required this.isLoadingOlder,
     required this.olderLoadError,
@@ -66,12 +75,26 @@ class MessageList extends StatefulWidget {
     this.onOpenMemberProfile,
     this.capabilities = ChannelCapabilities.unrestricted,
     this.attachmentDownloadService,
+    this.blockedUserIds = const {},
+    this.outgoing = const [],
+    this.onRetrySend,
+    this.onDiscardSend,
     super.key,
   });
+
+  /// The messages this client is sending here, oldest first. Each sits among
+  /// the held messages by its nonce until Discord's message replaces it.
+  final List<OutgoingMessage> outgoing;
+  final ValueChanged<OutgoingMessage>? onRetrySend;
+  final ValueChanged<OutgoingMessage>? onDiscardSend;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
   final ChatWorkspace workspace;
+
+  /// Everybody the account has blocked. Their messages fold, and a reply
+  /// hides what it quotes from them.
+  final Set<String> blockedUserIds;
 
   /// Interaction planes, threaded through to each message: the buttons an
   /// application put on it, and the Apps menu that acts on it.
@@ -115,8 +138,18 @@ class MessageList extends StatefulWidget {
   final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-  final ReactionUsersLoader onLoadReactionUsers;
+
+  /// Loads who reacted, or null where the session cannot list them. Then the
+  /// list is not offered at all.
+  final ReactionUsersLoader? onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Takes back or adds the account's super reaction on a chip, and adds a
+  /// new one from the hover bar. Null where the account cannot send super
+  /// reactions. Then neither is offered.
+  final Future<void> Function(ChatMessage, MessageReaction)?
+  onToggleSuperReaction;
+  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
   final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
@@ -125,8 +158,22 @@ class MessageList extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
-  final ForwardMessageCallback onForward;
-  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
+
+  /// Forwards a message, or null where the session cannot. Then the action
+  /// is not offered at all.
+  final ForwardMessageCallback? onForward;
+
+  /// Suppresses or restores a message's embeds, or null where the session
+  /// cannot. Then the action is not offered at all.
+  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final bool canLoadOlder;
   final bool isLoadingOlder;
   final Object? olderLoadError;
@@ -235,6 +282,9 @@ class MessageListState extends State<MessageList>
   /// The one row showing its edit field.
   String? _editingMessageId;
 
+  /// Messages from blocked people that the reader chose to see.
+  final Set<String> _openBlockedMessageIds = {};
+
   bool _didReachUnread = false;
 
   /// Whether the reader is at the newest message. While true, the list follows
@@ -259,12 +309,22 @@ class MessageListState extends State<MessageList>
     if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
       _editingMessageId = null;
+      _openBlockedMessageIds.clear();
       _didReachUnread = false;
       _openChannel();
       return;
     }
     if (oldWidget.query.trim() != widget.query.trim()) {
       _recentre(awaiting: _openingMessageId);
+    }
+    if (!setEquals(oldWidget.blockedUserIds, widget.blockedUserIds)) {
+      // An unblocked author's messages no longer fold, so they lose their
+      // open mark, and blocking the author again folds them again.
+      final folding = {
+        for (final message in _visibleMessages)
+          if (widget.blockedUserIds.contains(message.authorId)) message.id,
+      };
+      _openBlockedMessageIds.retainWhere(folding.contains);
     }
     // The saved position's message is gone, so this opening goes on as if there
     // had been no position.
@@ -343,10 +403,20 @@ class MessageListState extends State<MessageList>
     _restoring = saved;
   }
 
+  /// The outgoing messages by nonce, for the rows that draw them.
+  Map<String, OutgoingMessage> get _outgoingByNonce => {
+    for (final message in widget.outgoing) message.nonce: message,
+  };
+
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
     final query = source.query.trim().toLowerCase();
-    if (query.isEmpty) return messages;
+    // An old stretch of the channel ends before anything being sent now.
+    if (query.isEmpty) {
+      return source.hasNewerMessages
+          ? messages
+          : _withOutgoing(messages, source.outgoing);
+    }
     return messages
         .where((message) {
           final author = source.workspace.memberById(message.authorId);
@@ -366,6 +436,25 @@ class MessageListState extends State<MessageList>
         .toList(growable: false);
   }
 
+  /// [held] with each of [outgoing] slotted in by its nonce, so a failed
+  /// message keeps its place while newer messages arrive under it.
+  static List<ChatMessage> _withOutgoing(
+    List<ChatMessage> held,
+    List<OutgoingMessage> outgoing,
+  ) {
+    if (outgoing.isEmpty) return held;
+    final merged = [...held];
+    for (final message in outgoing) {
+      var index = merged.length;
+      while (index > 0 &&
+          DiscordSnowflake.compare(merged[index - 1].id, message.nonce) > 0) {
+        index--;
+      }
+      merged.insert(index, message.message);
+    }
+    return merged;
+  }
+
   void _setEditing(String messageId, {required bool editing}) {
     if (!mounted) return;
     if (editing) {
@@ -381,9 +470,11 @@ class MessageListState extends State<MessageList>
   /// there is one. A row that is not built yet is reached by a jump. One that
   /// is built brings itself into view when its field takes the focus.
   bool editLastOwnMessage() {
+    final outgoing = _outgoingByNonce;
     final own = _visibleMessages
         .where(
           (message) =>
+              !outgoing.containsKey(message.id) &&
               message.authorId == widget.workspace.currentMemberId &&
               message.canEdit &&
               !message.isSystem,
@@ -427,26 +518,38 @@ class MessageListState extends State<MessageList>
 
   /// The centre for this build. Only here does a held message that a jump was
   /// waiting for become the centre.
-  _TimelineCentre _centreIn(List<ChatMessage> messages) {
+  _TimelineCentre _centreIn(
+    List<ChatMessage> messages,
+    BlockedMessageFold fold,
+  ) {
     final awaitedId = _awaitedMessageId;
-    final awaited = awaitedId == null
-        ? null
-        : messages.where((message) => message.id == awaitedId).firstOrNull;
-    if (awaited != null) {
+    final awaitedIndex = awaitedId == null
+        ? -1
+        : messages.indexWhere((message) => message.id == awaitedId);
+    if (awaitedIndex >= 0) {
+      final awaited = messages[awaitedIndex];
       _awaitedMessageId = null;
       _isAtEnd = false;
       _viewportGeneration++;
       if (awaited.id == _targetMessageId) {
+        // A jump to a folded message opens its run, so the reader lands on it.
+        _openBlockedMessageIds.add(awaited.id);
         _highlightedMessageId = awaited.id;
         _highlight.forward(from: 0);
       }
+      // A folded message has no row of its own, so an unread or saved place
+      // inside a closed run lands on the run's bar.
+      final run = fold.runAt(awaitedIndex);
+      final folded = run != null && !run.isOpenIn(_openBlockedMessageIds);
       final restored = _restoring;
       _restoring = null;
-      _centreFromTop = restored?.messageId == awaited.id
+      _centreFromTop = !folded && restored?.messageId == awaited.id
           ? restored?.fromTop
           : null;
       if (_centreFromTop == null) _forgetPosition();
-      return _centre = _TimelineCentre.above(awaited);
+      return _centre = _TimelineCentre.above(
+        folded ? messages[run.start] : awaited,
+      );
     }
     // A new viewport at the end of the conversation. The place the reader was
     // before is behind them now, unless a saved position is still on its way.
@@ -620,8 +723,10 @@ class MessageListState extends State<MessageList>
       final held = {for (final message in messages) message.id};
       _messageKeys.removeWhere((id, _) => !held.contains(id));
     }
-    final centre = _centreIn(messages);
+    final fold = BlockedMessageFold(messages, widget.blockedUserIds);
+    final centre = _centreIn(messages, fold);
     final centreIndex = centre.indexIn(messages);
+    final outgoing = _outgoingByNonce;
     // A rebuild asks where each mounted row went, so this is built only then.
     late final rowIndexes = {
       for (final (index, message) in messages.indexed) message.id: index,
@@ -662,7 +767,12 @@ class MessageListState extends State<MessageList>
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => index == centreIndex
                                 ? _channelHead()
-                                : _messageAt(messages, centreIndex - 1 - index),
+                                : _messageAt(
+                                    messages,
+                                    centreIndex - 1 - index,
+                                    fold,
+                                    outgoing,
+                                  ),
                             childCount: centreIndex + 1,
                             findChildIndexCallback: (key) {
                               if (key == _headKey) return centreIndex;
@@ -679,8 +789,12 @@ class MessageListState extends State<MessageList>
                         ),
                         SliverList(
                           delegate: SliverChildBuilderDelegate(
-                            (context, index) =>
-                                _messageAt(messages, centreIndex + index),
+                            (context, index) => _messageAt(
+                              messages,
+                              centreIndex + index,
+                              fold,
+                              outgoing,
+                            ),
                             childCount: messages.length - centreIndex,
                             findChildIndexCallback: (key) {
                               final row = rowIndex(key);
@@ -766,8 +880,35 @@ class MessageListState extends State<MessageList>
     );
   }
 
-  Widget _messageAt(List<ChatMessage> messages, int index) {
+  void _setBlockedRunOpen(BlockedRun run, {required bool open}) {
+    final ids = [for (final message in run.messages) message.id];
+    setState(
+      () => open
+          ? _openBlockedMessageIds.addAll(ids)
+          : _openBlockedMessageIds.removeAll(ids),
+    );
+  }
+
+  Widget _messageAt(
+    List<ChatMessage> messages,
+    int index,
+    BlockedMessageFold fold,
+    Map<String, OutgoingMessage> outgoing,
+  ) {
     final message = messages[index];
+    final sending = outgoing[message.id];
+    final key = _messageKeys.putIfAbsent(
+      message.id,
+      () => _MessageRowKey(message.id),
+    );
+    final run = fold.runAt(index);
+    final isShown = run?.isOpenIn(_openBlockedMessageIds) ?? true;
+    final startsRun = run?.start == index;
+    // A folded message is drawn by the bar at the start of its run. It keeps
+    // its key, so the list can still find where it sits.
+    if (!isShown && !startsRun) {
+      return KeyedSubtree(key: key, child: const SizedBox.shrink());
+    }
     final previous = index > 0 ? messages[index - 1] : null;
     final startsUnread = message.id == _unreadMessageId;
     final startsDay =
@@ -783,10 +924,7 @@ class MessageListState extends State<MessageList>
         previous.authorId == message.authorId &&
         message.sentAt.difference(previous.sentAt).inMinutes < 7;
     return KeyedSubtree(
-      key: _messageKeys.putIfAbsent(
-        message.id,
-        () => _MessageRowKey(message.id),
-      ),
+      key: key,
       child: AnimatedBuilder(
         animation: _highlightFade,
         builder: (context, row) => ColoredBox(
@@ -801,7 +939,14 @@ class MessageListState extends State<MessageList>
           children: [
             if (startsDay) MessageDayDivider(day: message.sentAt),
             if (startsUnread) const UnreadMessageBoundary(),
-            if (message.isSystem)
+            if (run != null && startsRun)
+              BlockedMessagesBar(
+                key: ValueKey('blocked-messages-${message.id}'),
+                count: run.messages.length,
+                isOpen: isShown,
+                onToggle: () => _setBlockedRunOpen(run, open: !isShown),
+              ),
+            if (isShown && message.isSystem)
               SystemMessageItem(
                 key: ValueKey('message-${message.id}'),
                 message: message,
@@ -810,7 +955,7 @@ class MessageListState extends State<MessageList>
                 onJumpToMessage: widget.onOpenMessage,
                 onSelectChannel: widget.onSelectChannel,
               )
-            else
+            else if (isShown)
               MessageItem(
                 componentController: widget.componentController,
                 applicationCommands: widget.applicationCommands,
@@ -823,6 +968,9 @@ class MessageListState extends State<MessageList>
                 grouped: grouped,
                 isCurrentUser:
                     message.authorId == widget.workspace.currentMemberId,
+                quotesBlockedAuthor: widget.blockedUserIds.contains(
+                  message.reply?.authorId,
+                ),
                 onReply: widget.onReply,
                 onEdit: widget.onEdit,
                 isEditing: message.id == _editingMessageId,
@@ -833,12 +981,16 @@ class MessageListState extends State<MessageList>
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
                 onAddReaction: widget.onAddReaction,
+                onToggleSuperReaction: widget.onToggleSuperReaction,
+                onAddSuperReaction: widget.onAddSuperReaction,
                 onMarkUnread: widget.onMarkUnread,
                 onCreateThread: widget.onCreateThread,
                 onTogglePin: widget.onTogglePin,
                 onResolveAlert: widget.onResolveAlert,
                 onReport: widget.onReport,
                 onEndPoll: widget.onEndPoll,
+                onVotePoll: widget.onVotePoll,
+                onLoadPollVoters: widget.onLoadPollVoters,
                 onForward: widget.onForward,
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,
@@ -846,6 +998,14 @@ class MessageListState extends State<MessageList>
                 onOpenMemberProfile: widget.onOpenMemberProfile,
                 onOpenMessage: widget.onOpenMessage,
                 attachmentDownloadService: widget.attachmentDownloadService,
+                isSending: sending?.delivery is OutgoingSending,
+                deliveryStatus: sending == null
+                    ? null
+                    : OutgoingMessageStatus(
+                        message: sending,
+                        onRetry: () => widget.onRetrySend?.call(sending),
+                        onDiscard: () => widget.onDiscardSend?.call(sending),
+                      ),
               ),
           ],
         ),

@@ -27,6 +27,14 @@ abstract final class _SidebarMetrics {
   static const labelIconSize = 14.0;
   static const labelButtonSize = 18.0;
 
+  /// The button around a [labelIconSize] icon.
+  static final labelButtonStyle = IconButton.styleFrom(
+    fixedSize: const Size.square(labelButtonSize),
+    minimumSize: const Size.square(labelButtonSize),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   /// The DM search in the header.
   static const searchHeight = 28.0;
 
@@ -45,6 +53,8 @@ abstract final class _SidebarMetrics {
 class _ServerHeader extends StatelessWidget {
   const _ServerHeader({
     required this.title,
+    required this.onInvite,
+    required this.onEditProfile,
     required this.onOpenSettings,
     required this.onLeave,
     required this.onReport,
@@ -52,6 +62,8 @@ class _ServerHeader extends StatelessWidget {
   });
 
   final Widget title;
+  final VoidCallback? onInvite;
+  final VoidCallback? onEditProfile;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onLeave;
   final VoidCallback? onReport;
@@ -63,8 +75,10 @@ class _ServerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = serverMenuItems({
+      if (onInvite != null) ServerMenuAction.invite,
       if (onOpenSettings != null) ServerMenuAction.settings,
       if (onOpenNotifications != null) ServerMenuAction.notifications,
+      if (onEditProfile != null) ServerMenuAction.editProfile,
       if (onReport != null) ServerMenuAction.report,
       if (onLeave != null) ServerMenuAction.leave,
     });
@@ -93,10 +107,14 @@ class _ServerHeader extends StatelessWidget {
 
   void _perform(BuildContext context, ServerMenuAction action) {
     switch (action) {
+      case ServerMenuAction.invite:
+        onInvite?.call();
       case ServerMenuAction.settings:
         onOpenSettings?.call();
       case ServerMenuAction.notifications:
         onOpenNotifications?.call(context, menuBelow(context));
+      case ServerMenuAction.editProfile:
+        onEditProfile?.call();
       case ServerMenuAction.report:
         onReport?.call();
       case ServerMenuAction.leave:
@@ -115,17 +133,26 @@ class _ServerHeader extends StatelessWidget {
 /// or opening the conversation) closes it. Swapping the list in place keeps
 /// the question and its conversation one gesture apart, the way the official
 /// client does.
+///
+/// The conversations reorder as messages arrive. When the open one moves, the
+/// list scrolls just enough to keep it in view.
 class _DirectMessagesFolder extends StatefulWidget {
   const _DirectMessagesFolder({
     required this.requests,
-    required this.conversationRows,
+    required this.conversations,
+    required this.conversationRow,
     required this.requestRows,
+    required this.selectedChannelId,
     this.labelTrailing,
   });
 
   final List<ConversationChannel> requests;
-  final List<Widget> conversationRows;
+
+  /// The conversations in the order [ChannelSidebarOrder] gives them.
+  final List<ConversationChannel> conversations;
+  final Widget Function(ConversationChannel channel) conversationRow;
   final List<Widget> requestRows;
+  final String? selectedChannelId;
 
   /// What sits at the end of the "Direct messages" label, if anything.
   final Widget? labelTrailing;
@@ -137,12 +164,43 @@ class _DirectMessagesFolder extends StatefulWidget {
 class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
   bool _showingRequests = false;
 
-  // With the last request answered the toggle goes, so the folder closes:
-  // otherwise nothing would lead back to the conversations.
+  /// One key per conversation, so a row keeps its element when it moves and
+  /// the open one can be found to scroll to.
+  final Map<String, GlobalKey> _rowKeys = {};
+
   @override
   void didUpdateWidget(_DirectMessagesFolder oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // With the last request answered the toggle goes, so the folder closes:
+    // otherwise nothing would lead back to the conversations.
     if (widget.requests.isEmpty) _showingRequests = false;
+    final ids = {for (final channel in widget.conversations) channel.id};
+    _rowKeys.removeWhere((id, _) => !ids.contains(id));
+    _keepSelectedInView(oldWidget);
+  }
+
+  void _keepSelectedInView(_DirectMessagesFolder oldWidget) {
+    final selectedId = widget.selectedChannelId;
+    if (_showingRequests ||
+        selectedId == null ||
+        selectedId != oldWidget.selectedChannelId) {
+      return;
+    }
+    int indexIn(List<ConversationChannel> list) =>
+        list.indexWhere((channel) => channel.id == selectedId);
+    final before = indexIn(oldWidget.conversations);
+    final after = indexIn(widget.conversations);
+    if (before < 0 || after < 0 || before == after) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final row = _rowKeys[selectedId]?.currentContext;
+      if (row == null || !row.mounted) return;
+      Scrollable.ensureVisible(
+        row,
+        alignmentPolicy: after < before
+            ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+            : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
   }
 
   @override
@@ -166,7 +224,14 @@ class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
             onPressed: () =>
                 setState(() => _showingRequests = !_showingRequests),
           ),
-        ...(_showingRequests ? widget.requestRows : widget.conversationRows),
+        if (_showingRequests)
+          ...widget.requestRows
+        else
+          for (final channel in widget.conversations)
+            KeyedSubtree(
+              key: _rowKeys.putIfAbsent(channel.id, GlobalKey.new),
+              child: widget.conversationRow(channel),
+            ),
       ],
     );
   }
@@ -499,6 +564,7 @@ class _ChannelRow extends StatelessWidget {
     this.showsUnread = false,
     this.notificationLevel = MessageNotificationLevel.allMessages,
     this.onNotificationRequest,
+    this.onClose,
   });
 
   final ConversationChannel channel;
@@ -510,6 +576,10 @@ class _ChannelRow extends StatelessWidget {
   final bool showsUnread;
   final MessageNotificationLevel notificationLevel;
   final ValueChanged<NotificationMenuRequest>? onNotificationRequest;
+
+  /// Closes the DM or leaves the group, from a cross that shows while the
+  /// row is hovered or open.
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -638,7 +708,28 @@ class _ChannelRow extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          MotionHoverRegion(child: row),
+          MotionHoverRegion(
+            child: onClose == null
+                ? row
+                : Stack(
+                    children: [
+                      row,
+                      PositionedDirectional(
+                        end: _SidebarMetrics.rowPadding / 2,
+                        top: 0,
+                        bottom: 0,
+                        child: _CloseButton(
+                          key: ValueKey('close-direct-message-${channel.id}'),
+                          shown: selected,
+                          tooltip: channel.isGroupDirectMessage
+                              ? 'Leave group'
+                              : 'Close DM',
+                          onPressed: onClose!,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           // The selected row is read the moment it opens, so only the others
           // carry the marker.
           if (showsUnread && !selected)
@@ -690,6 +781,36 @@ class _ChannelRow extends StatelessWidget {
       isSpaceScope: false,
     );
     if (request != null) onNotificationRequest?.call(request);
+  }
+}
+
+/// A DM row's cross. Shows while the row is hovered, or always when [shown].
+class _CloseButton extends StatelessWidget {
+  const _CloseButton({
+    required this.shown,
+    required this.tooltip,
+    required this.onPressed,
+    super.key,
+  });
+
+  final bool shown;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!shown && MotionHoverRegion.hoveredOf(context) != true) {
+      return const SizedBox.shrink();
+    }
+    return Center(
+      child: IconButton(
+        tooltip: tooltip,
+        iconSize: _SidebarMetrics.labelIconSize,
+        style: _SidebarMetrics.labelButtonStyle,
+        icon: FlucordIcon(FlucordIcons.clear, color: context.surfaces.muted),
+        onPressed: onPressed,
+      ),
+    );
   }
 }
 
@@ -786,10 +907,13 @@ class VoiceSeatRow extends StatelessWidget {
             if (state.isStreaming)
               const _SeatStateIcon(FlucordIcons.screenShare),
             if (state.isVideoEnabled) const _SeatStateIcon(FlucordIcons.camera),
-            if (deafened)
-              const _SeatStateIcon(FlucordIcons.headphonesOff)
-            else if (silenced)
-              const _SeatStateIcon(FlucordIcons.micOff),
+            for (final mark in soundMarks(
+              selfMuted: state.selfMuted,
+              selfDeafened: state.selfDeafened,
+              serverMuted: state.serverMuted,
+              serverDeafened: state.serverDeafened,
+            ))
+              _SeatMark(mark),
           ],
         ),
       ),
@@ -880,9 +1004,12 @@ class _SeatAvatar extends StatelessWidget {
 
 /// A small state mark at the end of a seat: muted, deafened, video, stream.
 class _SeatStateIcon extends StatelessWidget {
-  const _SeatStateIcon(this.icon);
+  const _SeatStateIcon(this.icon, {this.color});
 
   final FlucordIconData icon;
+
+  /// The muted colour when null.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -890,7 +1017,24 @@ class _SeatStateIcon extends StatelessWidget {
     child: FlucordIcon(
       icon,
       size: _SidebarMetrics.iconSize,
-      color: context.surfaces.muted,
+      color: color ?? context.surfaces.muted,
+    ),
+  );
+}
+
+/// A seat's microphone or headphones mark, in the danger colour when a
+/// moderator set it.
+class _SeatMark extends StatelessWidget {
+  const _SeatMark(this.mark);
+
+  final ParticipantMark mark;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: mark.label,
+    child: _SeatStateIcon(
+      mark.icon,
+      color: mark.byServer ? context.surfaces.danger : null,
     ),
   );
 }

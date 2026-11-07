@@ -5,34 +5,27 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
   DiscordMapper get _mapper;
   ChatCache get _cache;
   String? get _currentMemberId;
-  DiscordMessageNonceFactory get _messageNonceFactory;
 
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
-    final payload = await _messageNonceFactory.sendDraft(
+    final payload = await _api.createMessage(
       channelId: channelId,
-      body: body,
+      content: body,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
+      nonce: nonce,
+      enforceNonce: true,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
-      send: (nonce) => _api.createMessage(
-        channelId: channelId,
-        content: body,
-        attachments: attachments,
-        replyToMessageId: replyToMessageId,
-        nonce: nonce,
-        enforceNonce: true,
-        suppressNotifications: suppressNotifications,
-        textToSpeech: textToSpeech,
-      ),
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);

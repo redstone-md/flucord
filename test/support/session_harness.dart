@@ -20,6 +20,7 @@ import 'package:flucord/src/data/file_navigation_memory_repository.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flucord/src/domain/channel_link.dart';
+import 'package:flucord/src/domain/client_sounds.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
@@ -206,6 +207,8 @@ final class SessionHarness {
         navigationMemoryRepository: _navigationMemory,
         captcha: _solvableCaptcha,
         externalLinkLauncher: _links,
+        // Discord's sounds are never fetched from a test.
+        clientSoundLibrary: const _NoClientSounds(),
       ),
     ),
   );
@@ -811,3 +814,15 @@ final class _WatchedNavigationMemory implements NavigationMemoryRepository {
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
+
+/// A sound library with nothing in it: every sound plays its bundled
+/// fallback, or nothing.
+final class _NoClientSounds implements ClientSoundLibrary {
+  const _NoClientSounds();
+
+  @override
+  Future<String?> localUrl(ClientSound sound) async => null;
+
+  @override
+  Future<void> fetchAll() async {}
+}

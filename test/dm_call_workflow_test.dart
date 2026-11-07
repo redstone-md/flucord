@@ -28,6 +28,7 @@ import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
+import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/expression_favorites.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
@@ -40,6 +41,7 @@ import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 
 const _call = ValueKey('toggle-call');
 const _band = ValueKey('call-band');
@@ -146,6 +148,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a ringing call reaches the desktop until it is declined', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _CallableRepository();
+    addTearDown(repository.dispose);
+    final desktop = _FakeDesktop();
+
+    // The DM exists, and the user has moved on to a guild channel.
+    await _openDirectMessage(tester, repository, desktop: desktop);
+    desktop.surface.openChannelLink(
+      const ChannelLink(spaceId: 'night', channelId: 'night-ops'),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(_call), findsNothing);
+    expect(desktop.surface.ringingCall, isNull);
+
+    repository.calls.emitIncoming(
+      const IncomingCall(channelId: 'dm-mira', callerId: 'mira'),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    final ringing = desktop.surface.ringingCall!;
+    // The demo transport names a DM recipient after their id.
+    expect(ringing.body, 'User mira is calling');
+    expect(ringing.showsToast, isTrue);
+    expect(desktop.announcedRings, contains('flucord-call-dm-mira'));
+
+    // What a click on the toast does once the window is up: the call's DM
+    // opens under the card.
+    desktop.surface.openChannelLink(ringing.link);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('incoming-call-card')), findsOneWidget);
+    expect(find.byKey(_call), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('incoming-call-decline')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(desktop.surface.ringingCall, isNull);
+    expect(desktop.announcedRings.last, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a DM call survives a compact window', (tester) async {
     await tester.binding.setSurfaceSize(const Size(620, 620));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -172,18 +222,42 @@ void main() {
   });
 }
 
-Widget _app(_CallableRepository repository) => FlucordApp(
-  bootstrap: AppBootstrap(
-    initialRepository: repository,
-    initialSessionMode: SessionMode.demo,
-  ),
-);
+Widget _app(_CallableRepository repository, {DesktopIntegration? desktop}) =>
+    FlucordApp(
+      bootstrap: AppBootstrap(
+        initialRepository: repository,
+        initialSessionMode: SessionMode.demo,
+        desktopIntegration: desktop,
+      ),
+    );
+
+/// The desktop layer, as far as the app can tell: it holds the surface it was
+/// given and keeps the ring the surface held at each announcement.
+final class _FakeDesktop implements DesktopIntegration {
+  late DesktopAppSurface surface;
+  final List<String?> announcedRings = [];
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  void attach(DesktopAppSurface surface) {
+    this.surface = surface;
+    surface.addListener(
+      () => announcedRings.add(surface.ringingCall?.identifier),
+    );
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
 
 Future<void> _openDirectMessage(
   WidgetTester tester,
-  _CallableRepository repository,
-) async {
-  await tester.pumpWidget(_app(repository));
+  _CallableRepository repository, {
+  DesktopIntegration? desktop,
+}) async {
+  await tester.pumpWidget(_app(repository, desktop: desktop));
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('member-row-mira')));
@@ -342,14 +416,17 @@ final class _CallableRepository implements ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
     body: body,
+    nonce: nonce,
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,

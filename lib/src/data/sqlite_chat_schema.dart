@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 31;
+  static const version = 32;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -58,6 +58,7 @@ abstract final class SqliteChatSchema {
         recipient_ids_json TEXT NOT NULL DEFAULT '[]',
         is_group_dm INTEGER NOT NULL DEFAULT 0,
         icon_url TEXT,
+        owner_id TEXT,
         is_message_request INTEGER NOT NULL DEFAULT 0,
         message_requested_at TEXT,
         permission_overwrites_json TEXT,
@@ -458,6 +459,11 @@ abstract final class SqliteChatSchema {
       // A row written before this version reads as a person with no avatar
       // decoration until Discord next sends the user.
       await _addColumn(database, 'members', 'decoration_json TEXT');
+    }
+    if (oldVersion < 32) {
+      // A group DM written before this version has no owner until Discord
+      // next sends the channel, which READY does.
+      await _addColumn(database, 'channels', 'owner_id TEXT');
     }
   }
 

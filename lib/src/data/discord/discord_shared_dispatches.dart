@@ -9,6 +9,7 @@ import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
 import 'discord_message_update_handler.dart';
+import 'discord_poll_vote_handler.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_role_dispatch.dart';
@@ -43,7 +44,8 @@ final class DiscordSharedDispatches {
          updatedMessage,
          events.publish,
        ),
-       _channels = DiscordChannelHandler(cache, mapper, events.publish);
+       _channels = DiscordChannelHandler(cache, mapper, events.publish),
+       _pollVotes = DiscordPollVoteHandler(cache, currentMemberId);
 
   final ChatCache _cache;
   final DiscordMapper _mapper;
@@ -53,6 +55,7 @@ final class DiscordSharedDispatches {
   final DiscordReactionHandler _reactions;
   final DiscordMessageUpdateHandler _updates;
   final DiscordChannelHandler _channels;
+  final DiscordPollVoteHandler _pollVotes;
 
   /// The step added last. See [inOrder].
   Future<void> _lastStep = Future.value();
@@ -93,6 +96,12 @@ final class DiscordSharedDispatches {
         member: member,
         isNew: true,
         mentionsCurrentMember: message.mentionsCurrentMember,
+        // Discord sends a nonce back as it came, string or number.
+        nonce: switch (payload['nonce']) {
+          final String nonce => nonce,
+          final int nonce => '$nonce',
+          _ => null,
+        },
       ),
     );
     await _cache.writeMessage(message, member: member);
@@ -103,10 +112,17 @@ final class DiscordSharedDispatches {
   void route(DiscordGatewayDispatch event) {
     switch (event.name) {
       case 'MESSAGE_REACTION_ADD' ||
+          'MESSAGE_REACTION_ADD_MANY' ||
           'MESSAGE_REACTION_REMOVE' ||
           'MESSAGE_REACTION_REMOVE_EMOJI' ||
           'MESSAGE_REACTION_REMOVE_ALL':
         inOrder(() => _reactions.apply(event));
+      case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
+        inOrder(() async {
+          if (await _pollVotes.apply(event) case final update?) {
+            _events.publish(update);
+          }
+        });
       case 'MESSAGE_UPDATE':
         inOrder(() => _updates.apply(event.data));
       case 'MESSAGE_DELETE':
@@ -160,6 +176,18 @@ final class DiscordSharedDispatches {
         );
       }
     });
+  }
+
+  /// Runs [step] on the same queue as the dispatches, as [inOrder] does, and
+  /// hands its result or its failure back to the caller.
+  ///
+  /// For a write of the repository's own that reads a cached message first,
+  /// so a dispatch about the same message cannot land between the read and
+  /// the write and be lost.
+  Future<T> queued<T>(Future<T> Function() step) {
+    final done = _lastStep.then((_) => step());
+    _lastStep = done.then((_) {}, onError: (_) {});
+    return done;
   }
 
   Future<void> _deleteMessage(Map<String, Object?> data) async {

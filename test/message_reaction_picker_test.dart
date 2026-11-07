@@ -37,7 +37,7 @@ void main() {
                 onToggleReaction: (_, _) async {},
                 onLoadReactionUsers: (_, _, _, _) async {
                   detailLoads++;
-                  return const ReactionUsersPage(
+                  return const MemberPage(
                     users: [_member],
                     hasMore: false,
                   );

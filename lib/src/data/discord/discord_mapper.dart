@@ -10,6 +10,7 @@ import '../../domain/guild_membership.dart';
 import '../../domain/message_search.dart';
 import '../../domain/monogram.dart';
 import '../../domain/permission_overwrite.dart';
+import '../../domain/reaction_repository.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
@@ -172,6 +173,7 @@ final class DiscordMapper {
         recipientIds: [for (final recipient in recipients) recipient.id],
         isGroupDirectMessage: type == 3,
         iconUrl: DiscordCdn.channelIcon(id, payload['icon'] as String?),
+        ownerId: type == 3 ? payload['owner_id'] as String? : null,
         isMessageRequest: payload['is_message_request'] as bool? ?? false,
         messageRequestedAt: _messageRequestTimestamp(
           payload['is_message_request_timestamp'],
@@ -310,6 +312,16 @@ final class DiscordMapper {
     );
   }
 
+  /// One page of the people who reacted, asked for [limit] at a time. A full
+  /// page may have more behind it.
+  MemberPage reactionUsers(
+    List<Map<String, Object?>> payloads, {
+    required int limit,
+  }) => MemberPage(
+    users: [for (final payload in payloads) member(payload, role: 'Reacted')],
+    hasMore: payloads.length == limit,
+  );
+
   Member member(
     Map<String, Object?> payload, {
     String role = 'Member',
@@ -414,8 +426,8 @@ final class DiscordMapper {
     );
   }
 
-  /// The standing half of a guild member payload: the nickname, and what
-  /// permissions depend on.
+  /// The standing half of a guild member payload: the nickname, the server
+  /// bio and banner when it carries them, and what permissions depend on.
   GuildMembership membership(Map<String, Object?> payload) {
     final timeout = payload['communication_disabled_until'] as String?;
     final joined = payload['joined_at'] as String?;
@@ -431,6 +443,12 @@ final class DiscordMapper {
       isPending: payload['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
       joinedAt: joined == null ? null : DateTime.tryParse(joined),
+      bio: payload['bio'] as String?,
+      // A key with null is a banner taken off, which is not the same as a
+      // payload that says nothing about it.
+      bannerHash: payload.containsKey('banner')
+          ? payload['banner'] as String? ?? ''
+          : null,
     );
   }
 

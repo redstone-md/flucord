@@ -28,6 +28,7 @@ import 'create_thread_dialog.dart';
 import 'destructive_confirmation.dart';
 import 'display_name.dart';
 import 'forwarded_message_view.dart';
+import 'leaving_site_dialog.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
 import 'motion_scope.dart';
@@ -37,6 +38,7 @@ import 'message_embed_view.dart';
 import 'message_invite_cards.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
+import 'poll_voters_dialog.dart';
 import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
 import 'message_reply_line.dart';
@@ -57,21 +59,26 @@ class MessageItem extends StatefulWidget {
     required this.workspace,
     required this.grouped,
     required this.isCurrentUser,
+    this.quotesBlockedAuthor = false,
     this.capabilities = ChannelCapabilities.unrestricted,
     required this.onReply,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
-    required this.onLoadReactionUsers,
+    this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onToggleSuperReaction,
+    this.onAddSuperReaction,
     this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
-    required this.onForward,
-    required this.onToggleSuppressEmbeds,
+    this.onVotePoll,
+    this.onLoadPollVoters,
+    this.onForward,
+    this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
@@ -83,8 +90,17 @@ class MessageItem extends StatefulWidget {
     this.isEditing = false,
     this.onEditingChanged,
     this.onEditClosed,
+    this.deliveryStatus,
+    this.isSending = false,
     super.key,
   });
+
+  /// Drawn under a message Discord does not have yet. Such a row has no
+  /// actions, since there is nothing on the server to act on.
+  final Widget? deliveryStatus;
+
+  /// The message is on its way, and its text shows dimmed until it arrives.
+  final bool isSending;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -111,6 +127,10 @@ class MessageItem extends StatefulWidget {
   final bool grouped;
   final bool isCurrentUser;
 
+  /// Whether the message this one replies to is from somebody the account
+  /// blocked. The reply line then hides the quote until the reader asks.
+  final bool quotesBlockedAuthor;
+
   /// Which actions this channel's permissions allow. Unrestricted by default
   /// so a host with no permission data keeps the toolbar it had.
   final ChannelCapabilities capabilities;
@@ -118,8 +138,18 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-  final ReactionUsersLoader onLoadReactionUsers;
+
+  /// Loads who reacted, or null where the session cannot list them. Then the
+  /// list is not offered at all.
+  final ReactionUsersLoader? onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Takes back or adds the account's super reaction on a chip, and adds a
+  /// new one from the hover bar. Null where the account cannot send super
+  /// reactions. Then neither is offered.
+  final Future<void> Function(ChatMessage, MessageReaction)?
+  onToggleSuperReaction;
+  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
 
   /// Makes this message and everything after it unread again. Null on a
   /// transport with no read state.
@@ -133,8 +163,22 @@ class MessageItem extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
-  final ForwardMessageCallback onForward;
-  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
+
+  /// Forwards a message, or null where the session cannot. Then the action
+  /// is not offered at all.
+  final ForwardMessageCallback? onForward;
+
+  /// Suppresses or restores a message's embeds, or null where the session
+  /// cannot. Then the action is not offered at all.
+  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -154,6 +198,9 @@ class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
   bool _barHovered = false;
   bool _reactionPickerOpen = false;
+
+  /// The reader asked to see a quote from a blocked person.
+  bool _blockedQuoteShown = false;
 
   /// The toolbar floats in the overlay. It reaches above the row, and a part
   /// of a row outside its own bounds would get no clicks.
@@ -197,11 +244,12 @@ class _MessageItemState extends State<MessageItem> {
   void _updateBar(VoidCallback change) {
     setState(change);
     final wanted =
-        _hovered ||
-        _barHovered ||
-        _reactionPickerOpen ||
-        _rowFocus.hasPrimaryFocus ||
-        _barFocus.hasFocus;
+        widget.deliveryStatus == null &&
+        (_hovered ||
+            _barHovered ||
+            _reactionPickerOpen ||
+            _rowFocus.hasPrimaryFocus ||
+            _barFocus.hasFocus);
     if (wanted == _barPortal.isShowing) return;
     wanted ? _barPortal.show() : _barPortal.hide();
   }
@@ -209,6 +257,10 @@ class _MessageItemState extends State<MessageItem> {
   @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A new block hides the quote again.
+    if (widget.quotesBlockedAuthor && !oldWidget.quotesBlockedAuthor) {
+      _blockedQuoteShown = false;
+    }
     if (widget.isEditing && !oldWidget.isEditing) {
       _editOpenedFromRow = _rowFocus.hasFocus;
       // Words given up last time do not come back.
@@ -414,7 +466,20 @@ class _MessageItemState extends State<MessageItem> {
           onOpen: (position) => unawaited(_openContextMenu(context, position)),
           onSelectionChanged: (content) =>
               _selectedText = content?.plainText ?? '',
-          child: _content(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.isSending)
+                Opacity(
+                  key: ValueKey('message-sending-${widget.message.id}'),
+                  opacity: 0.5,
+                  child: _content(context),
+                )
+              else
+                _content(context),
+              ?widget.deliveryStatus,
+            ],
+          ),
         ),
       ),
     ],
@@ -494,6 +559,7 @@ class _MessageItemState extends State<MessageItem> {
     final body = StreamerModeScope.redact(context, widget.message.body);
     return [
       _authorName,
+      if (widget.isSending) 'Sending',
       MessageTimestamp.longOf(context, widget.message.sentAt),
       if (body.isNotEmpty)
         messagePreviewText(
@@ -591,8 +657,7 @@ class _MessageItemState extends State<MessageItem> {
               messageId: message.id,
               applicationId: message.authorId,
               messageFlags: message.flags,
-              onOpenLink: (url) =>
-                  unawaited(widget.linkLauncher.open(Uri.parse(url))),
+              onOpenLink: (url) => unawaited(_openButtonLink(url)),
               directoryEntries: (component) => ComponentDirectory.entriesFor(
                 component,
                 workspace: _workspaceNow,
@@ -611,6 +676,20 @@ class _MessageItemState extends State<MessageItem> {
               poll: poll,
               canEnd: widget.isCurrentUser,
               onEnd: () => unawaited(widget.onEndPoll(message)),
+              onVote: switch (widget.onVotePoll) {
+                final vote? => (answerIds) => vote(message, answerIds),
+                null => null,
+              },
+              onShowVoters: switch (widget.onLoadPollVoters) {
+                final load? => () => unawaited(
+                  PollVotersDialog.show(
+                    context,
+                    message: message,
+                    onLoad: load,
+                  ),
+                ),
+                null => null,
+              },
             ),
           ),
         if (message.reactions.isNotEmpty && display.rendersReactions) ...[
@@ -620,7 +699,15 @@ class _MessageItemState extends State<MessageItem> {
             workspace: widget.workspace,
             onToggle: (reaction) =>
                 unawaited(widget.onToggleReaction(message, reaction)),
-            onShowDetails: _showReactionDetails,
+            onToggleSuper: switch (widget.onToggleSuperReaction) {
+              final toggle? => (reaction) => unawaited(
+                toggle(message, reaction),
+              ),
+              null => null,
+            },
+            onShowDetails: widget.onLoadReactionUsers == null
+                ? null
+                : _showReactionDetails,
           ),
         ],
       ],
@@ -752,6 +839,7 @@ class _MessageItemState extends State<MessageItem> {
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final open = widget.onOpenMessage;
     final author = widget.workspace.memberOrNull(reply.authorId);
+    final concealed = widget.quotesBlockedAuthor && !_blockedQuoteShown;
     return Row(
       children: [
         const MessageReplySpine(
@@ -761,10 +849,17 @@ class _MessageItemState extends State<MessageItem> {
         Expanded(
           child: _clickable(
             key: const ValueKey('message-reply-preview'),
-            label: 'Go to the replied message',
-            onTap: open == null ? null : () => open(reply.messageId),
+            label: concealed
+                ? 'Show the blocked message'
+                : 'Go to the replied message',
+            onTap: concealed
+                ? () => setState(() => _blockedQuoteShown = true)
+                : open == null
+                ? null
+                : () => open(reply.messageId),
             child: MessageReplyPreview(
               reply: reply,
+              concealed: concealed,
               author: author,
               workspace: widget.workspace,
               nameColor: author == null ? null : _nameColor(author),
@@ -804,6 +899,7 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
+    if (widget.deliveryStatus != null) return;
     final selectedText =
         TimelineSelection.maybeOf(context)?.text() ?? _selectedText;
     final action = await showMessageContextMenu(
@@ -813,6 +909,7 @@ class _MessageItemState extends State<MessageItem> {
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
       canMarkUnread: widget.onMarkUnread != null,
+      canForward: widget.onForward != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
@@ -889,11 +986,19 @@ class _MessageItemState extends State<MessageItem> {
     onReactionPickerToggled: (isOpen) {
       if (mounted) _updateBar(() => _reactionPickerOpen = isOpen);
     },
-    onShowReactionDetails: _showReactionDetails,
+    onAddSuperReaction: switch (widget.onAddSuperReaction) {
+      final add? => (emoji) => unawaited(add(widget.message, emoji)),
+      null => null,
+    },
+    onShowReactionDetails: widget.onLoadReactionUsers == null
+        ? null
+        : _showReactionDetails,
     onCreateThread: _showCreateThreadDialog,
-    onForward: _showForwardDialog,
-    onToggleSuppressEmbeds: () =>
-        unawaited(widget.onToggleSuppressEmbeds(widget.message)),
+    onForward: widget.onForward == null ? null : _showForwardDialog,
+    onToggleSuppressEmbeds: switch (widget.onToggleSuppressEmbeds) {
+      final toggle? => () => unawaited(toggle(widget.message)),
+      null => null,
+    },
     onEdit: () => widget.onEditingChanged?.call(true),
     onTogglePin: () => widget.onTogglePin(widget.message),
     onResolveAlert: widget.onResolveAlert == null
@@ -906,14 +1011,24 @@ class _MessageItemState extends State<MessageItem> {
     onMore: (position) => unawaited(_openContextMenu(context, position)),
   );
 
+  /// A link button an application put on the message. It leaves the app
+  /// like any other link in a message, so it asks the same way.
+  Future<void> _openButtonLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !await confirmLeavingFor(context, uri)) return;
+    await widget.linkLauncher.open(uri);
+  }
+
   void _showReactionDetails(MessageReaction reaction) {
+    final load = widget.onLoadReactionUsers;
+    if (load == null) return;
     unawaited(
       ReactionDetailsDialog.show(
         context,
         message: widget.message,
         workspace: _workspaceNow,
         initialReaction: reaction,
-        onLoad: widget.onLoadReactionUsers,
+        onLoad: load,
       ),
     );
   }
@@ -929,12 +1044,14 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   void _showForwardDialog() {
+    final forward = widget.onForward;
+    if (forward == null) return;
     unawaited(
       MessageForwardDialog.show(
         context,
         message: widget.message,
         workspace: _workspaceNow,
-        onForward: widget.onForward,
+        onForward: forward,
       ),
     );
   }

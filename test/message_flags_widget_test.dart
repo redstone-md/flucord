@@ -8,6 +8,7 @@ import 'package:flucord/src/domain/message_embed.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
+import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
@@ -177,6 +178,69 @@ void main() {
     expect(find.byTooltip('Suppress embeds'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a session that cannot forward or suppress embeds hides both', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness(sessionActions: false));
+
+    final row = find.byKey(const ValueKey('message-message-1'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(row));
+    await tester.pump();
+    expect(find.byTooltip('Edit'), findsOneWidget, reason: 'the bar is up');
+    expect(
+      find.byKey(const ValueKey('suppress-embeds-message-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('forward-message-message-1')),
+      findsNothing,
+    );
+
+    await tester.tap(row, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('message-menu-copy-id')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-menu-forward')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a session that cannot send stickers has no sticker picker', (
+    tester,
+  ) async {
+    Widget composer({SendStickersCallback? onSendStickers}) => MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: MessageComposer(
+            drafts: MemoryComposerDraftStore(),
+            channelId: 'channel-1',
+            channelName: 'native',
+            spaceName: 'Forge',
+            emojiSections: const [],
+            stickerSections: const [],
+            isSending: false,
+            onSend: (_, _, _, _) async => true,
+            onCreatePoll: (_) async => false,
+            onSendStickers: onSendStickers,
+            onCancelReply: () {},
+            onTyping: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(composer(onSendStickers: (_) async => true));
+    expect(find.byKey(const ValueKey('open-sticker-picker')), findsOneWidget);
+
+    await tester.pumpWidget(composer());
+    expect(find.byKey(const ValueKey('open-sticker-picker')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _MessageFlagHarness extends StatefulWidget {
@@ -185,12 +249,16 @@ class _MessageFlagHarness extends StatefulWidget {
     this.spoken = false,
     this.spoilerAttachment = false,
     this.plainAttachment = false,
+    this.sessionActions = true,
   });
 
   final bool silent;
   final bool spoken;
   final bool spoilerAttachment;
   final bool plainAttachment;
+
+  /// Whether the session can forward and suppress embeds at all.
+  final bool sessionActions;
 
   @override
   State<_MessageFlagHarness> createState() => _MessageFlagHarnessState();
@@ -263,23 +331,25 @@ class _MessageFlagHarnessState extends State<_MessageFlagHarness> {
             onDelete: (_) async {},
             onToggleReaction: (_, _) async {},
             onLoadReactionUsers: (_, _, _, _) async =>
-                const ReactionUsersPage(users: [], hasMore: false),
+                const MemberPage(users: [], hasMore: false),
             onAddReaction: (_, _) async {},
             onCreateThread: (_, _, _) async => true,
             onTogglePin: (_) async {},
             onEndPoll: (_) async => true,
-            onForward: (_, _) async => true,
-            onToggleSuppressEmbeds: (message) async {
-              setState(() {
-                final bit = DiscordMessageFlag.suppressEmbeds.bit;
-                _message = message.copyWith(
-                  flags: message.suppressesEmbeds
-                      ? message.flags & ~bit
-                      : message.flags | bit,
-                );
-              });
-              return true;
-            },
+            onForward: widget.sessionActions ? (_, _) async => true : null,
+            onToggleSuppressEmbeds: !widget.sessionActions
+                ? null
+                : (message) async {
+                    setState(() {
+                      final bit = DiscordMessageFlag.suppressEmbeds.bit;
+                      _message = message.copyWith(
+                        flags: message.suppressesEmbeds
+                            ? message.flags & ~bit
+                            : message.flags | bit,
+                      );
+                    });
+                    return true;
+                  },
             linkLauncher: const _TestLinkLauncher(),
             onSelectChannel: (_) {},
           ),

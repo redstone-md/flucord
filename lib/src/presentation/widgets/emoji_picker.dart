@@ -16,7 +16,7 @@ import 'user_settings_scope.dart';
 
 part 'emoji_picker_chrome.dart';
 
-enum EmojiPickerPurpose { message, reaction }
+enum EmojiPickerPurpose { message, reaction, superReaction }
 
 /// The emoji of one server, to be listed under the server's own name.
 final class EmojiServerSection {
@@ -193,9 +193,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
           ? widget.purpose.closeTooltip
           : widget.purpose.openTooltip,
       icon: FlucordIcon(
-        widget.purpose == EmojiPickerPurpose.reaction
-            ? FlucordIcons.addReaction
-            : FlucordIcons.emoji,
+        widget.purpose.icon,
         size: widget.iconSize,
         color: controller.isOpen ? context.surfaces.accentIcon : null,
       ),
@@ -759,7 +757,8 @@ final class _EmojiChoice {
 
   String valueFor(EmojiPickerPurpose purpose) => switch (purpose) {
     EmojiPickerPurpose.message => messageToken,
-    EmojiPickerPurpose.reaction => reactionKey,
+    EmojiPickerPurpose.reaction ||
+    EmojiPickerPurpose.superReaction => reactionKey,
   };
 }
 
@@ -767,15 +766,24 @@ extension on EmojiPickerPurpose {
   String get panelTitle => switch (this) {
     EmojiPickerPurpose.message => 'Emoji',
     EmojiPickerPurpose.reaction => 'Add reaction',
+    EmojiPickerPurpose.superReaction => 'Add super reaction',
   };
 
   String get openTooltip => switch (this) {
     EmojiPickerPurpose.message => 'Choose emoji',
     EmojiPickerPurpose.reaction => 'Add reaction',
+    EmojiPickerPurpose.superReaction => 'Add super reaction',
   };
 
   String get closeTooltip => switch (this) {
     EmojiPickerPurpose.message => 'Close emoji picker',
     EmojiPickerPurpose.reaction => 'Close reaction picker',
+    EmojiPickerPurpose.superReaction => 'Close super reaction picker',
+  };
+
+  FlucordIconData get icon => switch (this) {
+    EmojiPickerPurpose.message => FlucordIcons.emoji,
+    EmojiPickerPurpose.reaction => FlucordIcons.addReaction,
+    EmojiPickerPurpose.superReaction => FlucordIcons.superReaction,
   };
 }

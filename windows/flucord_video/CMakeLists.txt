@@ -5,10 +5,19 @@ project(flucord_video LANGUAGES CXX)
 # against Media Foundation, and a prebuilt binary in the tree would be one more
 # thing to trust and to rebuild by hand.
 add_library(flucord_video SHARED
+  "capture_fit.cpp"
   "flucord_video.cpp"
   "qpc_clock.cpp"
   "video_surface.cpp"
+  "window_capture.cpp"
 )
+
+# C++/WinRT, which the window capture is written in, wants the conforming
+# mode and C++20 coroutines: under C++17 it falls back to
+# <experimental/coroutine>, which current MSVC refuses. The rest of the module
+# is left as it was.
+set_source_files_properties("window_capture.cpp" PROPERTIES
+  COMPILE_OPTIONS "/permissive-;/std:c++20")
 
 target_include_directories(flucord_video PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(flucord_video PRIVATE cxx_std_17)
@@ -21,6 +30,7 @@ target_link_libraries(flucord_video PRIVATE
   mfplat
   mfuuid
   wmcodecdspuuid
+  runtimeobject
 )
 
 set_target_properties(flucord_video PROPERTIES
@@ -36,6 +46,13 @@ if(FLUCORD_VIDEO_BUILD_TESTS)
   )
   target_compile_features(flucord_video_clock_test PRIVATE cxx_std_17)
   add_test(NAME flucord_video_clock_test COMMAND flucord_video_clock_test)
+
+  add_executable(flucord_video_fit_test
+    "capture_fit_test.cpp"
+    "capture_fit.cpp"
+  )
+  target_compile_features(flucord_video_fit_test PRIVATE cxx_std_17)
+  add_test(NAME flucord_video_fit_test COMMAND flucord_video_fit_test)
 
   add_executable(flucord_video_surface_test
     "video_surface_test.cpp"

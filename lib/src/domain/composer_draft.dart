@@ -26,21 +26,6 @@ final class ComposerDraft {
     silent: silent,
     replyTo: replyTo,
   );
-
-  /// This draft with a failed send put back. Text written since that send is
-  /// newer and stays, with its own silent flag. The files can join it.
-  ComposerDraft withFailedSend(ComposerDraft failed) {
-    final keepsText = text.trim().isNotEmpty;
-    final files = PendingAttachmentSelection()
-      ..merge(attachments)
-      ..merge(failed.attachments);
-    return ComposerDraft(
-      text: keepsText ? text : failed.text,
-      attachments: files.items,
-      silent: keepsText ? silent : failed.silent,
-      replyTo: replyTo,
-    );
-  }
 }
 
 /// Holds one draft per channel, for one signed-in account.

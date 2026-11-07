@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_remote_auth.dart';
+import '../../domain/reaction_repository.dart';
 import '../../domain/voice_message_recorder.dart';
 import 'discord_captcha.dart';
 import 'discord_call_api.dart';
@@ -18,6 +19,8 @@ import 'discord_mfa_repository.dart';
 import 'discord_moderation_repository.dart';
 import 'discord_expression_service.dart';
 import 'discord_multipart_body.dart';
+import 'discord_poll_codec.dart';
+import 'discord_poll_routes.dart';
 import 'discord_safety_hub_repository.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
@@ -65,6 +68,8 @@ final class DiscordDesktopApiClient
   final DiscordRestClient _rest;
 
   DiscordThreadRoutes get threads => DiscordThreadRoutes(_rest);
+
+  DiscordPollRoutes get polls => DiscordPollRoutes(_rest);
 
   /// The browser user agent the session presents, which a captcha view must
   /// present too.
@@ -316,6 +321,41 @@ final class DiscordDesktopApiClient
         },
       );
 
+  /// `POST /users/@me/channels` with several recipients starts a group DM.
+  Future<Map<String, Object?>> createGroupDirectMessageChannel(
+    List<String> recipientIds,
+  ) => _rest.requestObject(
+    'POST',
+    '/users/@me/channels',
+    body: {'recipients': recipientIds},
+  );
+
+  /// `PUT /channels/{id}/recipients/{user}`: adds somebody to a group DM.
+  Future<void> putChannelRecipient(String channelId, String userId) =>
+      _rest.requestEmpty('PUT', _recipientPath(channelId, userId));
+
+  /// `DELETE /channels/{id}/recipients/{user}`: the owner removes somebody.
+  Future<void> deleteChannelRecipient(String channelId, String userId) =>
+      _rest.requestEmpty('DELETE', _recipientPath(channelId, userId));
+
+  /// `PATCH /channels/{id}` with a group DM's `name` or `icon`.
+  Future<Map<String, Object?>> patchGroupDirectMessage(
+    String channelId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject(
+    'PATCH',
+    '/channels/${Uri.encodeComponent(channelId)}',
+    body: body,
+  );
+
+  /// `DELETE /channels/{id}`: leaves a group DM or closes a DM.
+  Future<Map<String, Object?>> closePrivateChannel(String channelId) => _rest
+      .requestObject('DELETE', '/channels/${Uri.encodeComponent(channelId)}');
+
+  static String _recipientPath(String channelId, String userId) =>
+      '/channels/${Uri.encodeComponent(channelId)}'
+      '/recipients/${Uri.encodeComponent(userId)}';
+
   Future<Map<String, Object?>> createThreadFromMessage({
     required String channelId,
     required String messageId,
@@ -425,24 +465,17 @@ final class DiscordDesktopApiClient
   Future<Map<String, Object?>> listGuildSounds(String guildId) =>
       _rest.requestObject('GET', '/guilds/$guildId/soundboard-sounds');
 
-  /// `source_guild_id` goes out only for a server's own sound; Discord rejects
-  /// it on a default one.
+  /// The body Userdoccers documents: the sound, and `source_guild_id` only
+  /// for a server's own sound, since Discord rejects it on a default one.
   @override
   Future<void> sendSoundboardSound(
     String channelId, {
     required String soundId,
-    String? emojiId,
-    String? emojiName,
     String? sourceGuildId,
   }) => _rest.requestEmpty(
     'POST',
     '/channels/$channelId/send-soundboard-sound',
-    body: {
-      'sound_id': soundId,
-      'emoji_id': emojiId,
-      'emoji_name': emojiName,
-      'source_guild_id': ?sourceGuildId,
-    },
+    body: {'sound_id': soundId, 'source_guild_id': ?sourceGuildId},
   );
 
   @override
@@ -566,15 +599,31 @@ final class DiscordDesktopApiClient
   Future<void> leaveThread(String threadId) =>
       _rest.requestEmpty('DELETE', '/channels/$threadId/thread-members/@me');
 
+  /// `POST /channels/{id}/messages`, the one route every kind of send uses.
+  ///
+  /// A forward names its source in [forwardOf] and needs no content. Up to
+  /// three [stickerIds] may go with or without text. A [poll] needs no
+  /// content either. [onUploadProgress] hears how much of [attachments] has
+  /// gone out.
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
     required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    ({String channelId, String messageId})? forwardOf,
+    List<String> stickerIds = const [],
+    PendingPoll? poll,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
+    if (stickerIds.length > 3) {
+      throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
+    }
+    if (forwardOf != null && replyToMessageId != null) {
+      throw ArgumentError('A message cannot both forward and reply');
+    }
     final payload = <String, Object?>{
       'content': content,
       'nonce': nonce,
@@ -582,9 +631,19 @@ final class DiscordDesktopApiClient
       // gets the first message back, so a quick retry does not post twice.
       'enforce_nonce': true,
       'tts': textToSpeech,
-      'flags': suppressNotifications ? 4096 : 0,
-      if (replyToMessageId != null)
+      'flags': suppressNotifications
+          ? DiscordMessageFlag.suppressNotifications.bit
+          : 0,
+      if (forwardOf != null)
+        'message_reference': {
+          'type': DiscordMessageReferenceType.forward.discordValue,
+          'message_id': forwardOf.messageId,
+          'channel_id': forwardOf.channelId,
+        }
+      else if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
+      if (stickerIds.isNotEmpty) 'sticker_ids': stickerIds,
+      if (poll != null) 'poll': DiscordPollCodec.request(poll),
       if (attachments.isNotEmpty)
         'attachments': [
           for (var index = 0; index < attachments.length; index++)
@@ -606,6 +665,9 @@ final class DiscordDesktopApiClient
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
       guardedByNonce: true,
+      onBodySent: onUploadProgress == null
+          ? null
+          : (sent) => onUploadProgress(sent / multipart.bytes.length),
     );
     if (response is! Map) {
       throw const DiscordApiException(
@@ -682,6 +744,24 @@ final class DiscordDesktopApiClient
     body: {'content': content},
   );
 
+  /// Edits only the flags. A user may set just `SUPPRESS_EMBEDS` here. A
+  /// message built from version 2 components keeps that flag too, because
+  /// Discord does not let it be removed.
+  Future<Map<String, Object?>> editMessageFlags({
+    required String channelId,
+    required String messageId,
+    required bool suppressEmbeds,
+    bool componentsV2 = false,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/channels/$channelId/messages/$messageId',
+    body: {
+      'flags':
+          (suppressEmbeds ? DiscordMessageFlag.suppressEmbeds.bit : 0) |
+          (componentsV2 ? DiscordMessageFlag.componentsV2.bit : 0),
+    },
+  );
+
   Future<void> deleteMessage({
     required String channelId,
     required String messageId,
@@ -705,23 +785,54 @@ final class DiscordDesktopApiClient
     },
   );
 
+  /// The people who reacted with [emoji], one [type] at a time.
+  Future<List<Map<String, Object?>>> getReactions({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+    required DiscordReactionType type,
+    String? afterUserId,
+    int limit = 100,
+  }) => _rest.getList(
+    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}',
+    query: {
+      'type': '${type.discordValue}',
+      'limit': '${limit.clamp(1, 100)}',
+      'after': ?afterUserId,
+    },
+  );
+
+  /// A super reaction is the burst [type] on the same route.
   Future<void> addReaction({
     required String channelId,
     required String messageId,
     required String emoji,
+    DiscordReactionType type = DiscordReactionType.normal,
   }) => _rest.requestEmpty(
     'PUT',
     '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
+    query: type == DiscordReactionType.normal
+        ? null
+        : {'type': '${type.discordValue}'},
   );
 
+  /// A super reaction is taken back on the route that names its type. A
+  /// normal one keeps the short route, which means the same thing.
   Future<void> removeReaction({
     required String channelId,
     required String messageId,
     required String emoji,
-  }) => _rest.requestEmpty(
-    'DELETE',
-    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
-  );
+    DiscordReactionType type = DiscordReactionType.normal,
+  }) {
+    final reactions =
+        '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}';
+    return _rest.requestEmpty(
+      'DELETE',
+      type == DiscordReactionType.normal
+          ? '$reactions/@me'
+          : '$reactions/${type.discordValue}/@me',
+    );
+  }
 
   Future<void> setPinned({
     required String channelId,

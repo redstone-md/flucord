@@ -301,14 +301,17 @@ final class _PreviewingRepository implements ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) => _demo.sendMessage(
     channelId: channelId,
     authorId: authorId,
     body: body,
+    nonce: nonce,
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,
@@ -594,6 +597,16 @@ final class _PreviewingGuildManagement implements GuildManagementRepository {
     required String guildId,
     required String userId,
     String? reason,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<OwnServerProfile> loadOwnServerProfile(String guildId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<OwnServerProfile> saveOwnServerProfile({
+    required String guildId,
+    required ServerProfileEdit edit,
   }) => throw UnimplementedError();
 
   @override

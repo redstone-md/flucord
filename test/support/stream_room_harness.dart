@@ -12,9 +12,11 @@ import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/self_video_controller.dart';
+import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/application/stream_router.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/application/voice_moderation.dart';
 import 'package:flucord/src/application/voice_room_coordination.dart';
 import 'package:flucord/src/data/discord/discord_go_live_service.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
@@ -113,29 +115,45 @@ final class StreamRoomHarness {
     composition.workspace
       ..reconcile(streamRoomWorkspace)
       ..selectChannel(channel.id);
-    signaling.seated = {
-      channel.id: [
-        for (final seat in seats)
-          VoiceParticipantStateEvent(
-            userId: seat.userId,
-            guildId: channel.guildId,
-            channelId: channel.id,
-            selfMuted: seat.isMuted,
-            selfDeafened: false,
-            serverMuted: false,
-            serverDeafened: false,
-            isStreaming: seat.isStreaming,
-            isVideoEnabled: false,
-          ),
-      ],
-    };
+    signaling.seated = _seated(seats);
   }
+
+  Map<String, List<VoiceParticipantStateEvent>> _seated(
+    List<StreamRoomSeat> seats,
+  ) => {
+    channel.id: [
+      for (final seat in seats)
+        VoiceParticipantStateEvent(
+          userId: seat.userId,
+          guildId: channel.guildId,
+          channelId: channel.id,
+          selfMuted: seat.isMuted,
+          selfDeafened: false,
+          serverMuted: seat.isServerMuted,
+          serverDeafened: seat.isServerDeafened,
+          isStreaming: seat.isStreaming,
+          isVideoEnabled: false,
+        ),
+    ],
+  };
+
+  /// What Discord sends when somebody's voice state changes: the room is
+  /// seated as [seats] now.
+  void reseat(List<StreamRoomSeat> seats) =>
+      signaling.changeSeats(_seated(seats));
 
   final ConversationChannel channel;
   final List<StreamRoomSeat> seats;
 
   /// Whether the sender's own picture can be decoded.
   final bool selfPreviewOpens;
+
+  /// What the participant menu offers a voice moderator, or null for none.
+  VoiceModeration? moderation;
+
+  /// The soundboard the room offers, or null for the composition's, which
+  /// has none.
+  SoundboardController? soundboard;
 
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
@@ -225,6 +243,8 @@ final class StreamRoomHarness {
         camera: camera,
         focus: focus,
         fullScreen: fullScreen,
+        voiceModeration: moderation,
+        soundboard: soundboard,
       ),
     ),
   );
@@ -253,12 +273,17 @@ Future<StreamRoomHarness> pumpStreamRoom(
   ],
   bool join = true,
   bool selfPreviewOpens = true,
+  VoiceModeration? moderation,
+  SoundboardController? soundboard,
 }) async {
-  final harness = StreamRoomHarness(
-    channel: channel,
-    seats: seats,
-    selfPreviewOpens: selfPreviewOpens,
-  );
+  final harness =
+      StreamRoomHarness(
+          channel: channel,
+          seats: seats,
+          selfPreviewOpens: selfPreviewOpens,
+        )
+        ..moderation = moderation
+        ..soundboard = soundboard;
   addTearDown(harness.dispose);
   addTearDown(() => expect(tester.takeException(), isNull));
   if (join) await harness.joinRoom();
@@ -289,18 +314,22 @@ const streamRoomTransport = VoiceTransportSession(
   daveProtocolVersion: 0,
 );
 
-/// Somebody in the room, whether they are sending a stream, and whether
-/// they muted themselves.
+/// Somebody in the room, whether they are sending a stream, whether they
+/// muted themselves, and whether a moderator muted or deafened them.
 final class StreamRoomSeat {
   const StreamRoomSeat(
     this.userId, {
     this.isStreaming = false,
     this.isMuted = false,
+    this.isServerMuted = false,
+    this.isServerDeafened = false,
   });
 
   final String userId;
   final bool isStreaming;
   final bool isMuted;
+  final bool isServerMuted;
+  final bool isServerDeafened;
 }
 
 /// The DM call the tests walk into: a room without a guild.
@@ -410,6 +439,13 @@ final class StreamRoomSignaling implements VoiceSignalingService {
       StreamController.broadcast();
 
   Map<String, List<VoiceParticipantStateEvent>> seated = const {};
+  final StreamController<void> _seatedChanges = StreamController.broadcast();
+
+  /// Seats the rooms as [seated] and says so, as a voice state does.
+  void changeSeats(Map<String, List<VoiceParticipantStateEvent>> seated) {
+    this.seated = seated;
+    _seatedChanges.add(null);
+  }
 
   /// What the voice connection says next.
   void emit(VoiceSignalingEvent event) => _events.add(event);
@@ -437,7 +473,7 @@ final class StreamRoomSignaling implements VoiceSignalingService {
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => seated;
 
   @override
-  Stream<void> get seatedChanges => const Stream.empty();
+  Stream<void> get seatedChanges => _seatedChanges.stream;
 
   @override
   Future<void> joinVoiceChannel({

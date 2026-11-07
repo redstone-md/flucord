@@ -122,6 +122,26 @@ typedef VideoOpenDart =
       Pointer<Pointer<Void>>,
     );
 
+/// The config, the window's handle, the callback, its user data, and where
+/// the encoder handle goes.
+typedef VideoOpenWindowNative =
+    Int32 Function(
+      Pointer<NativeVideoConfig>,
+      Int64,
+      Pointer<NativeFunction<NativeFrameCallback>>,
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+    );
+
+typedef VideoOpenWindowDart =
+    int Function(
+      Pointer<NativeVideoConfig>,
+      int,
+      Pointer<NativeFunction<NativeFrameCallback>>,
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+    );
+
 typedef EncoderNameNative =
     Int32 Function(Pointer<Void>, Pointer<Uint8>, Int32);
 typedef EncoderNameDart = int Function(Pointer<Void>, Pointer<Uint8>, int);
@@ -221,7 +241,25 @@ final class NativeVideoBindings {
       encoderName = _lookUpEncoderName(library),
       stageTimings = _lookUpStageTimings(library),
       setBitrate = _lookUpSetBitrate(library),
+      openWindow = _lookUpOpenWindow(library),
       clip = ClipWriterBindings.lookUp(library);
+
+  /// Absent in a module built before a single window could be shared, and
+  /// null too when this Windows cannot capture one (before 10 version 1903).
+  static VideoOpenWindowDart? _lookUpOpenWindow(DynamicLibrary library) {
+    try {
+      final supported = library
+          .lookupFunction<Int32 Function(), int Function()>(
+            'flucord_video_window_capture_supported',
+          );
+      if (supported() == 0) return null;
+      return library.lookupFunction<VideoOpenWindowNative, VideoOpenWindowDart>(
+        'flucord_video_open_window',
+      );
+    } on Object {
+      return null;
+    }
+  }
 
   /// A zero-argument counter the module may or may not export, depending on
   /// when it was built. A build without it must still load.
@@ -377,6 +415,10 @@ final class NativeVideoBindings {
   /// module built before it existed.
   final SetBitrateDart? setBitrate;
 
+  /// The same pipeline, reading one window; null where no window can be
+  /// captured.
+  final VideoOpenWindowDart? openWindow;
+
   /// The MP4 writer, or null in a module built before clips existed.
   final ClipWriterBindings? clip;
 }
@@ -460,6 +502,12 @@ abstract final class NativeVideoStatus {
   static const encoder = 3;
   static const state = 4;
   static const noCamera = 5;
+
+  /// The window to share is no longer there.
+  static const noWindow = 6;
+
+  /// The window is there, and the platform would not capture it.
+  static const windowRefused = 7;
 }
 
 /// Which call produced the module's last HRESULT, as
@@ -478,4 +526,7 @@ abstract final class NativeVideoStage {
 
   /// The camera would not settle on the format the encoder was opened for.
   static const cameraOutputType = 9;
+
+  /// The shared window was closed. No HRESULT goes with it.
+  static const windowClosed = 10;
 }

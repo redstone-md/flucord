@@ -16,6 +16,7 @@ import '../../application/streamer_mode_controller.dart';
 import '../../application/self_video_controller.dart';
 import '../../application/stream_quality_controller.dart';
 import '../../application/theme_controller.dart';
+import '../../application/trusted_domains_controller.dart';
 import '../../application/voice_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
@@ -46,6 +47,8 @@ import 'stream_quality_section.dart';
 import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
+import 'trusted_domains_scope.dart';
+import 'trusted_domains_section.dart';
 import 'voice_devices_section.dart';
 import 'flucord_button.dart';
 import 'settings_layout.dart';
@@ -143,6 +146,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.themeController,
     this.voiceController,
     this.selfVideoController,
+    this.trustedDomainsController,
     super.key,
   });
 
@@ -213,6 +217,10 @@ class UserSettingsDialog extends StatefulWidget {
   /// The camera, which is chosen beside the audio devices for the same reason.
   final SelfVideoController? selfVideoController;
 
+  /// The sites links open on without asking, kept on the machine, so the
+  /// Chat page lists them whatever the session is.
+  final TrustedDomainsController? trustedDomainsController;
+
   /// Opens settings with every controller the scopes above [context]
   /// publish. Where the gear lives, nothing is threaded down to it.
   static Future<void> showFromScopes(
@@ -238,6 +246,7 @@ class UserSettingsDialog extends StatefulWidget {
     themeController: ThemeScope.maybeOf(context),
     voiceController: VoiceScope.maybeOf(context),
     selfVideoController: SelfVideoScope.maybeRead(context),
+    trustedDomainsController: TrustedDomainsScope.maybeOf(context),
   );
 
   static Future<void> show(
@@ -260,6 +269,7 @@ class UserSettingsDialog extends StatefulWidget {
     ThemeController? themeController,
     VoiceController? voiceController,
     SelfVideoController? selfVideoController,
+    TrustedDomainsController? trustedDomainsController,
   }) => showDialog<void>(
     context: context,
     builder: (_) => UserSettingsDialog(
@@ -281,6 +291,7 @@ class UserSettingsDialog extends StatefulWidget {
       themeController: themeController,
       voiceController: voiceController,
       selfVideoController: selfVideoController,
+      trustedDomainsController: trustedDomainsController,
     ),
   );
 
@@ -345,6 +356,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
         themeController: widget.themeController,
         voiceController: widget.voiceController,
         selfVideoController: widget.selfVideoController,
+        trustedDomainsController: widget.trustedDomainsController,
         category: _category,
       ),
     ),
@@ -371,6 +383,7 @@ class _Body extends StatelessWidget {
     required this.themeController,
     required this.voiceController,
     required this.selfVideoController,
+    required this.trustedDomainsController,
     required this.category,
   });
 
@@ -395,6 +408,7 @@ class _Body extends StatelessWidget {
   final ThemeController? themeController;
   final VoiceController? voiceController;
   final SelfVideoController? selfVideoController;
+  final TrustedDomainsController? trustedDomainsController;
   final UserSettingsCategory category;
 
   @override
@@ -628,6 +642,24 @@ class _Body extends StatelessWidget {
       }
       return AgeVerificationSection(controller: age);
     }
+    // The trusted sites are the machine's, so they show under the account's
+    // chat settings whether or not those could be read.
+    if (trustedDomainsController case final trust?
+        when category == UserSettingsCategory.chat) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _storeContent(),
+          const SizedBox(height: 28),
+          TrustedDomainsSection(controller: trust),
+        ],
+      );
+    }
+    return _storeContent();
+  }
+
+  /// The page for a category the account's settings store answers for.
+  Widget _storeContent() {
     if (!controller.isAvailable) {
       return const _NeedsAccountNotice(
         key: ValueKey('user-settings-unavailable'),

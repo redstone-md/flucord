@@ -28,6 +28,7 @@ final class ConversationChannel {
     this.recipientIds = const [],
     this.isGroupDirectMessage = false,
     this.iconUrl,
+    this.ownerId,
     this.isMessageRequest = false,
     this.messageRequestedAt,
     this.unread = false,
@@ -80,6 +81,10 @@ final class ConversationChannel {
 
   /// A group DM's own picture, or null for the group avatar.
   final String? iconUrl;
+
+  /// Who runs a group DM, the one person who may remove others from it.
+  /// Null outside a group.
+  final String? ownerId;
 
   /// A direct message the account has not answered yet, so it belongs in the
   /// message-request folder rather than the DM list.
@@ -156,16 +161,8 @@ final class ConversationChannel {
   ///
   /// The key is the only thing that says call or guild; everything downstream,
   /// watching and pausing and ending, carries the key rather than the channel.
-  GoLiveStreamKey streamKeyFor(String userId) {
-    final guildId = this.guildId;
-    return guildId == null
-        ? GoLiveStreamKey.call(channelId: id, userId: userId)
-        : GoLiveStreamKey.guild(
-            guildId: guildId,
-            channelId: id,
-            userId: userId,
-          );
-  }
+  GoLiveStreamKey streamKeyFor(String userId) =>
+      GoLiveStreamKey.inRoom(guildId: guildId, channelId: id, userId: userId);
 
   /// The channel whose thread browser this channel is browsed under: a thread
   /// under its parent, every other channel under itself.
@@ -181,6 +178,20 @@ final class ConversationChannel {
 
   bool get canAcceptMessageForward =>
       hasMessageTimeline && !(isThread && isArchived && isLocked);
+
+  /// The id that dates the latest activity here: the newest message, or the
+  /// channel id when that is newer. A conversation nobody wrote in yet counts
+  /// from when it was created.
+  String get latestActivityId {
+    final last = lastMessageId;
+    return last != null && DiscordSnowflake.compare(last, id) > 0 ? last : id;
+  }
+
+  /// Sorts the DM list: the latest activity first, as Discord does.
+  static int latestActivityFirst(
+    ConversationChannel left,
+    ConversationChannel right,
+  ) => DiscordSnowflake.compare(right.latestActivityId, left.latestActivityId);
 
   ConversationChannel markUnread({
     required String messageId,
@@ -262,6 +273,7 @@ final class ConversationChannel {
     recipientIds: recipientIds,
     isGroupDirectMessage: isGroupDirectMessage,
     iconUrl: iconUrl,
+    ownerId: ownerId,
     isMessageRequest: isMessageRequest ?? this.isMessageRequest,
     messageRequestedAt:
         identical(messageRequestedAt, _keepMessageRequestTimestamp)

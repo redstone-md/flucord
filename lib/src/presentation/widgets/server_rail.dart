@@ -1,15 +1,25 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/discord_rgb.dart';
+import '../../domain/guild_folders.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_icons.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
 
 import 'activity_label.dart';
 import 'count_badge.dart';
+import 'flucord_menu.dart';
+import 'folder_settings_dialog.dart';
 import 'rail_tile.dart';
+
+part 'server_rail_folders.dart';
 
 class ServerRail extends StatelessWidget {
   const ServerRail({
@@ -21,6 +31,10 @@ class ServerRail extends StatelessWidget {
     required this.onOpenConnections,
     required this.sessionMode,
     required this.isDark,
+    this.folders = const [],
+    this.openFolderIds = const {},
+    this.onToggleFolder,
+    this.onArrange,
     this.onAddServer,
     this.onOpenSpaceMenu,
     super.key,
@@ -41,6 +55,18 @@ class ServerRail extends StatelessWidget {
   final SessionMode sessionMode;
   final bool isDark;
 
+  /// The account's stored folders and server order.
+  final List<GuildFolder> folders;
+
+  /// The folders shown open, kept by the caller so they stay open across a
+  /// restart. Without [onToggleFolder] a folder does not open.
+  final Set<int> openFolderIds;
+  final ValueChanged<int>? onToggleFolder;
+
+  /// Saves a new server list, or null where nothing can be saved. Servers
+  /// and folders can be dragged and folders edited only with it.
+  final ValueChanged<List<GuildFolder>>? onArrange;
+
   /// Opens the add-server surface, or null on a transport that cannot join,
   /// create or leave anything. The button is hidden rather than disabled:
   /// a plus that can do nothing is a lie about what the app offers.
@@ -53,9 +79,41 @@ class ServerRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final directSpaces = spaces.where((space) => space.isDirectMessages);
     final directSpace = directSpaces.isEmpty ? null : directSpaces.first;
-    final guildSpaces = spaces
-        .where((space) => !space.isDirectMessages)
-        .toList(growable: false);
+    final guildSpaces = {
+      for (final space in spaces)
+        if (!space.isDirectMessages) space.id: space,
+    };
+    final rail = GuildRail.arrange(folders, guildSpaces.keys.toList());
+    final arrange = onArrange;
+    final layout = _RailLayout(
+      rail: rail,
+      spaces: guildSpaces,
+      activity: activity,
+      selectedSpaceId: selectedSpaceId,
+      onSelectSpace: onSelectSpace,
+      onOpenSpaceMenu: onOpenSpaceMenu,
+      onDrop: arrange == null
+          ? null
+          : (item, target) {
+              final next = rail.drop(item, target);
+              if (!listEquals(next.entries, rail.entries)) {
+                arrange(next.entries);
+              }
+            },
+      onEditFolder: arrange == null
+          ? null
+          : (folderId, settings) => arrange(
+              rail
+                  .editFolder(
+                    folderId,
+                    name: settings.name,
+                    colour: settings.colour,
+                  )
+                  .entries,
+            ),
+      isExpanded: openFolderIds.contains,
+      onToggleFolder: onToggleFolder ?? (_) {},
+    );
     return Container(
       key: const ValueKey('server-rail'),
       width: RailMetrics.width,
@@ -74,30 +132,17 @@ class ServerRail extends StatelessWidget {
           ),
           const RailDivider(),
           Expanded(
-            child: ListView.separated(
+            child: ListView.builder(
               // Room for the badge that hangs below the last tile.
               padding: const EdgeInsets.only(bottom: RailMetrics.gap),
-              itemCount: guildSpaces.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: RailMetrics.gap),
-              itemBuilder: (context, index) {
-                final space = guildSpaces[index];
-                return _SpaceButton(
-                  space: space,
-                  selected: space.id == selectedSpaceId,
-                  activity: activity[space.id] ?? SpaceActivity.none,
-                  onPressed: () => onSelectSpace(space.id),
-                  onOpenMenu: onOpenSpaceMenu == null
-                      ? null
-                      : (position) => onOpenSpaceMenu!(space.id, position),
-                );
-              },
+              itemCount: layout.itemCount,
+              itemBuilder: layout.entry,
             ),
           ),
-          if (onAddServer != null)
+          if (onAddServer case final onAddServer?)
             Padding(
               padding: const EdgeInsets.only(bottom: RailMetrics.gap),
-              child: _AddServerButton(onPressed: onAddServer!),
+              child: _AddServerButton(onPressed: onAddServer),
             ),
           IconButton(
             key: const ValueKey('open-connections'),

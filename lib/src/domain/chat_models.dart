@@ -14,6 +14,7 @@ part 'community_space.dart';
 part 'message_models.dart';
 part 'message_poll.dart';
 part 'message_sticker.dart';
+part 'outgoing_message.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
 part 'forum_models.dart';
@@ -278,6 +279,11 @@ final class ChatWorkspace {
   Member memberById(String id) => _memberById[id]!;
 
   Member? memberOrNull(String id) => _memberById[id];
+
+  /// Whether the account has yet to agree to [spaceId]'s rules. Discord lets
+  /// a pending member look around but not take part.
+  bool isPendingIn(String spaceId) =>
+      memberOrNull(currentMemberId)?.membershipIn(spaceId)?.isPending ?? false;
 
   ConversationChannel? channelOrNull(String id) => _channelById[id];
 

@@ -5,7 +5,7 @@ mixin _DiscordChatRepositoryReactions implements ReactionRepository {
   DiscordMapper get _mapper;
 
   @override
-  Future<ReactionUsersPage> loadReactionUsers({
+  Future<MemberPage> loadReactionUsers({
     required String channelId,
     required String messageId,
     required String emoji,
@@ -22,11 +22,6 @@ mixin _DiscordChatRepositoryReactions implements ReactionRepository {
       afterUserId: afterUserId,
       limit: pageLimit,
     );
-    return ReactionUsersPage(
-      users: payloads
-          .map((payload) => _mapper.member(payload, role: 'Reacted'))
-          .toList(growable: false),
-      hasMore: payloads.length == pageLimit,
-    );
+    return _mapper.reactionUsers(payloads, limit: pageLimit);
   }
 }

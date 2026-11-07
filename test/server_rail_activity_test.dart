@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/guild_folders.dart';
 import 'package:flucord/src/domain/workspace_activity.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
@@ -189,6 +190,58 @@ void main() {
       'Archive, muted',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a closed folder shows its servers\' marks together', (
+    tester,
+  ) async {
+    var open = <int>{};
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => ServerRail(
+              spaces: _workspace.spaces,
+              activity: _workspace.activityBySpace(),
+              folders: const [
+                GuildFolder(guildIds: ['guild-1', 'guild-2'], id: 9),
+              ],
+              openFolderIds: open,
+              onToggleFolder: (id) => setState(() => open = {...open, id}),
+              selectedSpaceId: CommunitySpace.directMessagesId,
+              onSelectSpace: (_) {},
+              onToggleTheme: () {},
+              onOpenConnections: () {},
+              sessionMode: SessionMode.discord,
+              isDark: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Forge holds three mentions; Archive is only unread.
+    expect(_badgeText(tester, 'folder-9'), '3');
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('space-indicator-folder-9')))
+          .height,
+      8,
+    );
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('space-semantics-folder-9')))
+          .label,
+      'Forge, Archive, 3 mentions',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('space-folder-9')));
+    await tester.pump();
+
+    // Open, the folder leaves the marks to its servers.
+    expect(find.byKey(const ValueKey('space-mention-folder-9')), findsNothing);
+    expect(_badgeText(tester, 'guild-1'), '3');
   });
 }
 

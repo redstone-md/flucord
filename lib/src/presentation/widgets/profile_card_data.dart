@@ -80,9 +80,28 @@ final class ProfileCardData {
     // A friend outside the workspace has no tags but the profile's.
     final tags = profile?.tags?.over(member.tags) ?? member.tags;
     final space = spaceId == null ? null : workspace?.spaceOrNull(spaceId);
-    final joined = spaceId == null
-        ? null
-        : member.membershipIn(spaceId)?.joinedAt;
+    final membership = spaceId == null ? null : member.membershipIn(spaceId);
+    final joined = membership?.joinedAt;
+    // The member payload is newer than a fetched profile the session holds,
+    // so what it carries of the server profile wins.
+    final serverBanner = switch ((membership?.bannerHash, spaceId)) {
+      ('', _) => null,
+      (final hash?, final guildId?) => DiscordCdn.guildMemberBanner(
+        guildId,
+        member.id,
+        hash,
+      ),
+      _ => switch (profile?.serverProfile) {
+        ServerProfile(:final guildId, bannerHash: final hash?) =>
+          DiscordCdn.guildMemberBanner(guildId, member.id, hash),
+        _ => null,
+      },
+    };
+    final serverBio = switch (membership?.bio) {
+      final bio? when bio.isNotEmpty => bio,
+      '' => profile?.bio,
+      _ => null,
+    };
     return ProfileCardData(
       userId: member.id,
       displayName: member.displayNameFor(spaceId),
@@ -92,11 +111,8 @@ final class ProfileCardData {
       avatarColorValue: member.colorValue,
       decorationUrl: _decorationUrl(tags.decoration),
       presence: presence,
-      bannerUrl: switch (profile?.serverProfile) {
-        ServerProfile(:final guildId, bannerHash: final hash?) =>
-          DiscordCdn.guildMemberBanner(guildId, member.id, hash),
-        _ => DiscordCdn.userBanner(member.id, profile?.bannerHash),
-      },
+      bannerUrl:
+          serverBanner ?? DiscordCdn.userBanner(member.id, profile?.bannerHash),
       accentColorValue: switch (profile?.accentColor) {
         final rgb? => DiscordRgb(rgb).opaque,
         null => member.colorValue,
@@ -118,7 +134,7 @@ final class ProfileCardData {
           if (workspace?.spaceOrNull(server.id) case final space?)
             (space: space, nickname: server.nickname),
       ],
-      bio: profile?.effectiveBio ?? '',
+      bio: serverBio ?? profile?.effectiveBio ?? '',
       // Discord's card shows a plain "Playing" too, not only rich presence.
       activity: presence.doing.firstOrNull,
       voiceRoom: voiceRoom,

@@ -8,12 +8,15 @@ import '../application/direct_call_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
+import 'clipboard_attachments.dart';
 import '../application/voice_channel_surface.dart';
+import '../application/voice_moderation.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
+import '../domain/discord_relationship.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
 import '../domain/voice_connection.dart';
@@ -31,13 +34,14 @@ import 'widgets/external_link_launcher_scope.dart';
 import 'widgets/forum_channel_view.dart';
 import 'widgets/gif_picker_scope.dart';
 import 'widgets/go_live_button.dart';
-import 'widgets/go_live_display_dialog.dart';
+import 'widgets/go_live_source_dialog.dart';
 import '../application/workspace_controller.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
 import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
+import 'widgets/guild_join_gate_dialogs.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
@@ -100,10 +104,17 @@ class ConversationPane extends StatefulWidget {
     required this.onOpenInbox,
     this.onOpenMemberProfile,
     this.onMessageMember,
+    this.onAddToGroup,
+    this.onOpenGroupSettings,
+    this.voiceModeration,
     super.key,
   });
 
   final ChatWorkspace workspace;
+
+  /// What a voice moderator may do from the participant menu, or null on a
+  /// session that cannot moderate.
+  final VoiceModeration? voiceModeration;
 
   /// What the account may do in [channel], resolved from its permissions.
   final ChannelCapabilities capabilities;
@@ -147,6 +158,11 @@ class ConversationPane extends StatefulWidget {
   /// Opens the direct message with a member, from the participant menu.
   final ValueChanged<String>? onMessageMember;
 
+  /// Adds friends to a group DM, and opens its settings. Null on a session
+  /// that cannot run a group.
+  final ValueChanged<ConversationChannel>? onAddToGroup;
+  final ValueChanged<ConversationChannel>? onOpenGroupSettings;
+
   @override
   State<ConversationPane> createState() => ConversationPaneState();
 }
@@ -154,11 +170,6 @@ class ConversationPane extends StatefulWidget {
 /// Public so the shell's keyboard map can reach the open conversation through a
 /// global key, as a form reaches its `FormState`.
 class ConversationPaneState extends State<ConversationPane> {
-  /// Holds a send failure's note clear of the composer, even with four lines
-  /// of text in it. A note at the window's edge would cover the restored text
-  /// and the Send button the user needs to try again.
-  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
-
   final _composerKey = GlobalKey<MessageComposerState>();
   final _timelineKey = GlobalKey<MessageListState>();
 
@@ -309,12 +320,18 @@ class ConversationPaneState extends State<ConversationPane> {
         channelId: channel.id,
         guildId: channel.spaceId.isEmpty ? null : channel.spaceId,
       );
-      // A soundboard belongs to a server, and only a voice channel can play
-      // one, so anything else clears the picker rather than offering sounds
-      // with nowhere to send them.
-      SoundboardScope.read(
-        context,
-      ).show(channel.kind == ChannelKind.voice ? channel.spaceId : null);
+      // Sounds play into a server's voice channel or a DM or group call, so
+      // anything else clears the picker rather than offering sounds with
+      // nowhere to send them. Whether a call offers it is the controller's
+      // call: it needs Nitro.
+      final soundboard = SoundboardScope.read(context);
+      if (channel.isDirectMessage) {
+        soundboard.showCall();
+      } else {
+        soundboard.show(
+          channel.kind == ChannelKind.voice ? channel.spaceId : null,
+        );
+      }
     });
   }
 
@@ -429,8 +446,23 @@ class ConversationPaneState extends State<ConversationPane> {
         controller: goLive,
         channelId: channel.id,
         quality: StreamQualityScope.maybeOf(context),
-        pickSource: () => GoLiveDisplayDialog.pick(context, goLive.displays),
+        pickSource: () => GoLiveSourceDialog.pick(
+          context,
+          sources: goLive.sources,
+          thumbnails: goLive.captures.thumbnails,
+        ),
         guildId: channel.guildId,
+      ),
+    );
+
+    // The same button in a server's Room and in a call's band.
+    Widget soundboardControl() => ListenableBuilder(
+      listenable: soundboard,
+      builder: (_, _) => SoundboardButton(
+        controller: soundboard,
+        channelId: channel.id,
+        guildName: (guildId) => widget.workspace.spaceById(guildId).name,
+        favorites: ExpressionFavoritesScope.read(context),
       ),
     );
 
@@ -474,6 +506,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onMessage: widget.onMessageMember,
         onMention: mention,
       ),
+      moderation: widget.voiceModeration,
     );
 
     // What the channel shows under its header: the voice Room, a forum's
@@ -488,11 +521,7 @@ class ConversationPaneState extends State<ConversationPane> {
         onClearFocus: focus.clear,
         goLive: goLiveControl(),
         camera: camera,
-        soundboard: ListenableBuilder(
-          listenable: soundboard,
-          builder: (_, _) =>
-              SoundboardButton(controller: soundboard, channelId: channel.id),
-        ),
+        soundboard: soundboardControl(),
         stageControls: channel.isStage
             ? ListenableBuilder(
                 listenable: stage,
@@ -567,6 +596,7 @@ class ConversationPaneState extends State<ConversationPane> {
               ringing: callController?.isRinging(channel.id) ?? false,
               camera: camera,
               goLive: goLiveControl(),
+              soundboard: soundboardControl(),
               participantMenu: participantMenu(),
               streams: streamControls(),
               onTapStream: focus.toggle,
@@ -672,6 +702,16 @@ class ConversationPaneState extends State<ConversationPane> {
                 }
               : null,
           onOpenInbox: widget.onOpenInbox,
+          onAddToGroup: switch (widget.onAddToGroup) {
+            final add? when channel.isGroupDirectMessage => () => add(channel),
+            _ => null,
+          },
+          onOpenGroupSettings: switch (widget.onOpenGroupSettings) {
+            final open? when channel.isGroupDirectMessage => () => open(
+              channel,
+            ),
+            _ => null,
+          },
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
@@ -684,6 +724,18 @@ class ConversationPaneState extends State<ConversationPane> {
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
+        else if (showsMessages && widget.workspace.isPendingIn(channel.spaceId))
+          PendingMemberNotice(
+            onReadRules: chat.canAnswerJoinGate
+                ? () => unawaited(
+                    showGuildRulesDialog(
+                      context,
+                      chat: chat,
+                      spaceId: channel.spaceId,
+                    ),
+                  )
+                : null,
+          )
         else if (showsMessages && !widget.capabilities.sendMessages)
           const ReadOnlyChannelNotice()
         else if (showsMessages)
@@ -733,10 +785,12 @@ class ConversationPaneState extends State<ConversationPane> {
             onTyping: () => chat.startTyping(channel.id),
             onCreatePoll: (poll) =>
                 chat.createPoll(channelId: channel.id, poll: poll),
-            onSendStickers: (stickerIds) => chat.sendStickers(
-              channelId: channel.id,
-              stickerIds: stickerIds,
-            ),
+            onSendStickers: chat.canSendStickers
+                ? (stickerIds) => chat.sendStickers(
+                    channelId: channel.id,
+                    stickerIds: stickerIds,
+                  )
+                : null,
             voiceMessageRecorder: VoiceMessageRecorderScope.maybeOf(context),
             onSendVoiceMessage:
                 chat.canSendVoiceMessages &&
@@ -747,42 +801,22 @@ class ConversationPaneState extends State<ConversationPane> {
                   )
                 : null,
             onSend:
-                (
-                  body,
-                  attachments,
-                  replyToMessageId,
-                  suppressNotifications,
-                ) async {
-                  final messenger = ScaffoldMessenger.maybeOf(context);
-                  final sent = await chat.sendMessage(
+                (body, attachments, replyToMessageId, suppressNotifications) {
+                  // The message is in the timeline from here on, failed or
+                  // not, so the reply is done with.
+                  final sent = chat.sendMessage(
                     channelId: channel.id,
                     body: body,
                     attachments: attachments,
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!sent) {
-                    messenger?.showSnackBar(
-                      SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        margin: _aboveComposer,
-                        content: Text(
-                          'Your message to ${_composerHintPrefix(channel)}'
-                          '${channel.name} did not send. '
-                          '${sendFailureReason(chat.error)}',
-                        ),
-                      ),
-                    );
-                    return false;
-                  }
-                  // A reply picked while this send ran is not this send's.
-                  // The user may be in another channel by now.
                   final draft = chat.drafts.read(channel.id);
                   if (draft.replyTo?.id == replyToMessageId) {
                     chat.drafts.write(channel.id, draft.withReply(null));
-                    if (mounted) setState(() {});
+                    setState(() {});
                   }
-                  return true;
+                  return sent;
                 },
           ),
       ],
@@ -799,6 +833,16 @@ class ConversationPaneState extends State<ConversationPane> {
     return (entitlements?.premiumTier ?? PremiumTier.none)
         .messageCharacterLimit;
   }
+
+  /// Whether this session and account may send super reactions. Until the
+  /// account's entitlements arrive the answer is no, so nothing is offered
+  /// that Discord would refuse.
+  bool _sendsSuperReactions(ChatController chat) =>
+      chat.canSendSuperReactions &&
+      (AccountEntitlementsScope.maybeOf(
+            context,
+          )?.entitlements?.premiumTier.sendsSuperReactions ??
+          false);
 
   /// The largest file this account may attach in this channel, or null while
   /// the account's entitlements have not arrived. The answer is whichever is
@@ -852,6 +896,17 @@ class ConversationPaneState extends State<ConversationPane> {
     ScaffoldMessenger.maybeOf(
       context,
     )?.showSnackBar(SnackBar(content: Text(callFailureReason(error))));
+  }
+
+  /// Waits for a super reaction and says why Discord refused it, if it did.
+  Future<void> _reportSuperReactionFailure(
+    ChatController chat,
+    Future<bool> sent,
+  ) async {
+    if (await sent || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(superReactionFailureReason(chat.error))),
+    );
   }
 
   /// The one other person in a DM, or null for a channel or a group DM.
@@ -911,29 +966,52 @@ class ConversationPaneState extends State<ConversationPane> {
         // for the life of the session; were one to be swapped, the timeline
         // would keep the old one.
         Expanded(
-          child: CachedSubtree(
-            dependencies: [
-              ...timelineDependencies(widget.workspace, channel),
-              channel,
-              widget.capabilities,
-              workspaceController.query,
-              workspaceController.targetMessageId,
-              workspaceController.targetRequest,
-              chat.hasNewerMessages(channel.id),
-              chat.historyWindowError(channel.id),
-              chat.lastSentMessageIdIn(channel.id),
-              chat.canLoadOlderMessages(channel.id),
-              chat.isLoadingOlderMessages(channel.id),
-              chat.olderMessagesError(channel.id),
-            ],
-            // One group, so Tab walks the rows in order. Without it, the order
-            // goes by height on screen and mixes in the rail and the sidebar.
-            builder: (_) => FocusTraversalGroup(
-              child: _timeline(chat, workspaceController),
+          child: _withBlockedUserIds(
+            chat,
+            (blockedUserIds) => CachedSubtree(
+              dependencies: [
+                ...timelineDependencies(widget.workspace, channel),
+                blockedUserIds,
+                channel,
+                widget.capabilities,
+                workspaceController.query,
+                workspaceController.targetMessageId,
+                workspaceController.targetRequest,
+                chat.hasNewerMessages(channel.id),
+                chat.historyWindowError(channel.id),
+                chat.lastSentMessageIdIn(channel.id),
+                chat.outgoingIn(channel.id),
+                chat.canLoadOlderMessages(channel.id),
+                chat.isLoadingOlderMessages(channel.id),
+                chat.olderMessagesError(channel.id),
+              ],
+              // One group, so Tab walks the rows in order. Without it, the
+              // order goes by height on screen and mixes in the rail and the
+              // sidebar.
+              builder: (_) => FocusTraversalGroup(
+                child: _timeline(chat, workspaceController, blockedUserIds),
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// Builds with the people the account has blocked, again whenever that
+  /// changes. A new session's graph starts over, so the last account's blocks
+  /// never reach it.
+  Widget _withBlockedUserIds(
+    ChatController chat,
+    Widget Function(Set<String> blockedUserIds) builder,
+  ) {
+    final relationships = chat.relationships;
+    return StreamBuilder<List<DiscordRelationship>>(
+      key: ObjectKey(relationships),
+      stream: relationships?.relationshipUpdates,
+      initialData: relationships?.relationships ?? const [],
+      builder: (context, snapshot) =>
+          builder(snapshot.requireData.blockedUserIds),
     );
   }
 
@@ -964,13 +1042,24 @@ class ConversationPaneState extends State<ConversationPane> {
     );
   }
 
+  /// A pasted picture stays on disk while its message may still be retried,
+  /// and goes once Discord has it.
+  Future<void> _retrySend(ChatController chat, OutgoingMessage message) async {
+    if (await chat.retrySend(message)) {
+      await ClipboardAttachments.release(message.attachments);
+    }
+  }
+
   Widget _timeline(
     ChatController chat,
     WorkspaceController workspaceController,
+    Set<String> blockedUserIds,
   ) {
     final channel = widget.channel;
+    final sendsSuperReactions = _sendsSuperReactions(chat);
     return MessageList(
       key: _timelineKey,
+      blockedUserIds: blockedUserIds,
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
       applicationCommands: SlashCommandScope.read(context),
@@ -983,6 +1072,12 @@ class ConversationPaneState extends State<ConversationPane> {
       targetMessageId: workspaceController.targetMessageId,
       targetRequest: workspaceController.targetRequest,
       lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      outgoing: chat.outgoingIn(channel.id),
+      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
+      onDiscardSend: (message) {
+        chat.discardSend(message);
+        unawaited(ClipboardAttachments.release(message.attachments));
+      },
       hasNewerMessages: chat.hasNewerMessages(channel.id),
       windowError: chat.historyWindowError(channel.id),
       readingPositions: workspaceController.readingPositions,
@@ -994,8 +1089,22 @@ class ConversationPaneState extends State<ConversationPane> {
       onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
-      onLoadReactionUsers: chat.loadReactionUsers,
+      onLoadReactionUsers: chat.canListReactionUsers
+          ? chat.loadReactionUsers
+          : null,
       onAddReaction: chat.addReaction,
+      onToggleSuperReaction: sendsSuperReactions
+          ? (message, reaction) => _reportSuperReactionFailure(
+              chat,
+              chat.toggleSuperReaction(message, reaction),
+            )
+          : null,
+      onAddSuperReaction: sendsSuperReactions
+          ? (message, emoji) => _reportSuperReactionFailure(
+              chat,
+              chat.addSuperReaction(message, emoji),
+            )
+          : null,
       onMarkUnread: chat.readStateRepository == null
           ? null
           : chat.markChannelUnreadFrom,
@@ -1013,13 +1122,23 @@ class ConversationPaneState extends State<ConversationPane> {
       onResolveAlert: chat.resolveAutoModAlert,
       onReport: (message) => unawaited(_reportMessage(context, message)),
       onEndPoll: chat.endPoll,
-      onForward: (message, targetChannelId) async {
-        final forwarded = await chat.forwardMessage(message, targetChannelId);
-        if (!forwarded) return false;
-        widget.onSelectChannel(targetChannelId);
-        return true;
-      },
-      onToggleSuppressEmbeds: chat.toggleSuppressEmbeds,
+      onVotePoll: chat.canVoteInPolls ? chat.votePoll : null,
+      onLoadPollVoters: chat.canListPollVoters ? chat.loadPollVoters : null,
+      // A session that cannot carry out an action does not offer it.
+      onForward: chat.canForwardMessages
+          ? (message, targetChannelId) async {
+              final forwarded = await chat.forwardMessage(
+                message,
+                targetChannelId,
+              );
+              if (!forwarded) return false;
+              widget.onSelectChannel(targetChannelId);
+              return true;
+            }
+          : null,
+      onToggleSuppressEmbeds: chat.canSuppressEmbeds
+          ? chat.toggleSuppressEmbeds
+          : null,
       canLoadOlder: chat.canLoadOlderMessages(channel.id),
       isLoadingOlder: chat.isLoadingOlderMessages(channel.id),
       olderLoadError: chat.olderMessagesError(channel.id),

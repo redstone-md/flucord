@@ -7,6 +7,25 @@ import '../app_log.dart';
 
 typedef DesktopFocusProbe = Future<bool> Function();
 
+/// Asks [probe] whether the window has the focus. A probe that fails is
+/// logged and answers no, so a message or a ring still reaches the person.
+Future<bool> isWindowFocused(DesktopFocusProbe probe) async {
+  try {
+    return await probe();
+  } on Object catch (error) {
+    AppLog.warning('desktop', 'window focus unavailable', error: error);
+    return false;
+  }
+}
+
+/// Whether somebody is already reading [channelId]: it is the open channel,
+/// in a focused window. A message there raises no toast and no sound.
+bool isReadingChannel(
+  String channelId, {
+  required String? activeChannelId,
+  required bool focused,
+}) => focused && activeChannelId == channelId;
+
 final class DesktopNotificationRequest {
   const DesktopNotificationRequest({
     required this.identifier,
@@ -27,6 +46,9 @@ abstract interface class DesktopNotificationGateway {
   Future<void> initialize();
 
   Future<void> show(DesktopNotificationRequest request);
+
+  /// Takes down the toast shown with [identifier], if it is still up.
+  Future<void> dismiss(String identifier);
 
   Future<void> dispose();
 }
@@ -82,6 +104,16 @@ final class LocalDesktopNotificationGateway
     } catch (_) {
       await _destroy(notification);
       rethrow;
+    }
+  }
+
+  @override
+  Future<void> dismiss(String identifier) async {
+    final shown = _notifications.where(
+      (notification) => notification.identifier == identifier,
+    );
+    for (final notification in shown.toList(growable: false)) {
+      await _destroy(notification);
     }
   }
 
@@ -174,8 +206,11 @@ final class DesktopMessageNotificationController {
     // next, and a toast is exactly what it exists to keep off a stream.
     if (_isSuppressed()) return;
 
-    if (surface.activeChannelId == notification.link.channelId &&
-        await _isFocusedSafely()) {
+    if (isReadingChannel(
+      notification.link.channelId,
+      activeChannelId: surface.activeChannelId,
+      focused: await isWindowFocused(_isFocused),
+    )) {
       return;
     }
 
@@ -194,15 +229,6 @@ final class DesktopMessageNotificationController {
       await _gateway.show(request);
     } on Object catch (error) {
       _debugFailure('notification delivery', error);
-    }
-  }
-
-  Future<bool> _isFocusedSafely() async {
-    try {
-      return await _isFocused();
-    } on Object catch (error) {
-      _debugFailure('window focus', error);
-      return false;
     }
   }
 

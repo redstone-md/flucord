@@ -5,8 +5,10 @@ import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/self_video_controller.dart';
+import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/application/voice_moderation.dart';
 import 'package:flucord/src/domain/channel_capabilities.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/workspace_permissions.dart';
@@ -53,6 +55,8 @@ Widget paneHarness(
   SelfVideoController? camera,
   RoomFocus? focus,
   WindowFullScreen? fullScreen,
+  VoiceModeration? voiceModeration,
+  SoundboardController? soundboard,
 }) => RoomFocusScope(
   focus: focus ?? composition.roomFocus,
   child: WindowFullScreenScope(
@@ -74,7 +78,7 @@ Widget paneHarness(
                   child: StageScope(
                     controller: composition.stage,
                     child: SoundboardScope(
-                      controller: composition.soundboard,
+                      controller: soundboard ?? composition.soundboard,
                       child: GoLiveScope(
                         controller: goLive ?? composition.goLive,
                         child: StreamViewerScope(
@@ -110,6 +114,7 @@ Widget paneHarness(
                                           onPickChannel: (_) {},
                                           onSelectChannel: (_) {},
                                           onOpenInbox: () {},
+                                          voiceModeration: voiceModeration,
                                         ),
                                       ),
                                     ),

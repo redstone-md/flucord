@@ -19,14 +19,14 @@ void main() {
         message,
         onLoad: (_, reaction, type, _) async {
           if (reaction.emojiName == '🔥') {
-            return ReactionUsersPage(
+            return MemberPage(
               users: type == DiscordReactionType.normal
                   ? const [_jack]
                   : const [_omar],
               hasMore: false,
             );
           }
-          return const ReactionUsersPage(users: [_roman], hasMore: false);
+          return const MemberPage(users: [_roman], hasMore: false);
         },
       ),
     );
@@ -61,14 +61,14 @@ void main() {
         _message(),
         onLoad: (_, _, type, after) async {
           if (type == DiscordReactionType.burst) {
-            return const ReactionUsersPage(users: [_omar], hasMore: false);
+            return const MemberPage(users: [_omar], hasMore: false);
           }
           calls++;
           if (after == null) {
-            return const ReactionUsersPage(users: [_jack], hasMore: true);
+            return const MemberPage(users: [_jack], hasMore: true);
           }
           if (calls == 2) throw StateError('temporary failure');
-          return const ReactionUsersPage(users: [_roman], hasMore: false);
+          return const MemberPage(users: [_roman], hasMore: false);
         },
       ),
     );
@@ -87,6 +87,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a first page that failed loads on retry', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var failing = true;
+
+    await tester.pumpWidget(
+      _host(
+        _message(),
+        onLoad: (_, _, type, after) async {
+          if (failing) throw StateError('temporary failure');
+          return type == DiscordReactionType.burst
+              ? const MemberPage(users: [_omar], hasMore: false)
+              : const MemberPage(users: [_jack], hasMore: false);
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load reactions'), findsOneWidget);
+
+    failing = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jack'), findsOneWidget);
+    expect(find.text('Omar'), findsOneWidget);
+  });
+
   testWidgets('keeps the reaction ledger usable at compact width', (
     tester,
   ) async {
@@ -96,7 +122,7 @@ void main() {
     await tester.pumpWidget(
       _host(
         _message(),
-        onLoad: (_, _, type, _) async => ReactionUsersPage(
+        onLoad: (_, _, type, _) async => MemberPage(
           users: type == DiscordReactionType.normal
               ? const [_jack, _roman]
               : const [_omar],

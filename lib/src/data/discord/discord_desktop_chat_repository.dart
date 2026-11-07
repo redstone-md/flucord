@@ -1,5 +1,7 @@
 import '../../domain/desktop_relationship_repository.dart';
+import '../../domain/direct_message_management.dart';
 import '../../domain/scheduled_event_repository.dart';
+import '../../domain/sticker_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
@@ -25,10 +27,14 @@ import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/guild_membership.dart';
 import '../../domain/guild_member_list_repository.dart';
+import '../../domain/message_flag_repository.dart';
+import '../../domain/message_forward_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
 import '../../domain/permission_overwrite.dart';
+import '../../domain/poll_repository.dart';
 import '../../domain/presence_repository.dart';
+import '../../domain/reaction_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
@@ -97,7 +103,15 @@ final class DiscordDesktopChatRepository
         ForumPostRepository,
         GuildMemberListRepository,
         ScheduledEventRepository,
-        VoiceMessageRepository {
+        VoiceMessageRepository,
+        MessageForwardRepository,
+        StickerRepository,
+        MessageFlagRepository,
+        DirectMessageManagementRepository,
+        PollRepository,
+        PollVoteRepository,
+        ReactionRepository,
+        SuperReactionRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -115,7 +129,7 @@ final class DiscordDesktopChatRepository
        _readState = DiscordReadStateRepository(_api),
        _threadMembership = DiscordThreadMembershipService(_api),
        _stages = DiscordStageService(_api),
-       _soundboard = DiscordSoundboardService(_api),
+       _soundboard = DiscordSoundboardService(_api, gateway: _gateway),
        _gifs = DiscordGifService(_api),
        _favorites = DiscordExpressionFavoritesRepository(_api),
        _applicationCommands = DiscordApplicationCommandService(
@@ -564,6 +578,59 @@ final class DiscordDesktopChatRepository
   }
 
   @override
+  Future<DirectConversation> createGroupDirectMessage(
+    List<String> recipientIds,
+  ) async {
+    final currentUserId = _currentMemberId;
+    if (currentUserId == null) throw StateError('Workspace is not loaded');
+    final payload = await _api.createGroupDirectMessageChannel(recipientIds);
+    return _directMessages.adoptOpened(payload, currentUserId);
+  }
+
+  /// The list changes with the `CHANNEL_RECIPIENT_ADD` that follows.
+  @override
+  Future<void> addGroupRecipient({
+    required String channelId,
+    required String userId,
+  }) => _api.putChannelRecipient(channelId, userId);
+
+  /// The list changes with the `CHANNEL_RECIPIENT_REMOVE` that follows.
+  @override
+  Future<void> removeGroupRecipient({
+    required String channelId,
+    required String userId,
+  }) => _api.deleteChannelRecipient(channelId, userId);
+
+  @override
+  Future<void> renameGroupDirectMessage(String channelId, String name) =>
+      _editGroupDirectMessage(channelId, {'name': name});
+
+  @override
+  Future<void> setGroupDirectMessageIcon(
+    String channelId,
+    String? iconDataUri,
+  ) => _editGroupDirectMessage(channelId, {'icon': iconDataUri});
+
+  /// Applies Discord's answer at once rather than waiting for the
+  /// `CHANNEL_UPDATE` that repeats it.
+  Future<void> _editGroupDirectMessage(
+    String channelId,
+    Map<String, Object?> body,
+  ) async {
+    final payload = await _api.patchGroupDirectMessage(channelId, body);
+    final currentUserId = _currentMemberId;
+    if (currentUserId != null) {
+      await _directMessages.acceptChannel(payload, currentUserId);
+    }
+  }
+
+  @override
+  Future<void> closeDirectMessage(String channelId) async {
+    await _api.closePrivateChannel(channelId);
+    await _directMessages.close(channelId);
+  }
+
+  @override
   Future<ConversationChannel> createThreadFromMessage({
     required String channelId,
     required String messageId,
@@ -615,27 +682,22 @@ final class DiscordDesktopChatRepository
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
-    final payload = await _nonceFactory.sendDraft(
+    final payload = await _api.createMessage(
       channelId: channelId,
-      body: body,
+      content: body,
+      nonce: nonce,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
-      send: (nonce) => _api.createMessage(
-        channelId: channelId,
-        content: body,
-        nonce: nonce,
-        attachments: attachments,
-        replyToMessageId: replyToMessageId,
-        suppressNotifications: suppressNotifications,
-        textToSpeech: textToSpeech,
-      ),
+      onUploadProgress: onUploadProgress,
     );
     return _storeSentMessage(payload);
   }
@@ -663,6 +725,152 @@ final class DiscordDesktopChatRepository
     return _storeSentMessage(payload);
   }
 
+  @override
+  Future<MemberPage> loadReactionUsers({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+    required DiscordReactionType type,
+    String? afterUserId,
+    int limit = 100,
+  }) async {
+    final pageLimit = limit.clamp(1, 100);
+    final payloads = await _api.getReactions(
+      channelId: channelId,
+      messageId: messageId,
+      emoji: emoji,
+      type: type,
+      afterUserId: afterUserId,
+      limit: pageLimit,
+    );
+    return _mapper.reactionUsers(payloads, limit: pageLimit);
+  }
+
+  @override
+  Future<void> addSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.addReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+    type: DiscordReactionType.burst,
+  );
+
+  @override
+  Future<void> removeSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.removeReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+    type: DiscordReactionType.burst,
+  );
+
+  /// A forward is a send with no words of its own: the reference names the
+  /// source, and Discord answers with the snapshot it took.
+  @override
+  Future<ChatMessage> forwardMessage({
+    required String sourceChannelId,
+    required String sourceMessageId,
+    required String targetChannelId,
+  }) async => _storeSentMessage(
+    await _api.createMessage(
+      channelId: targetChannelId,
+      content: '',
+      nonce: _nonceFactory.next(),
+      forwardOf: (channelId: sourceChannelId, messageId: sourceMessageId),
+    ),
+  );
+
+  @override
+  Future<ChatMessage> sendStickers({
+    required String channelId,
+    required String authorId,
+    required List<String> stickerIds,
+  }) async {
+    if (stickerIds.isEmpty) {
+      throw ArgumentError.value(stickerIds, 'stickerIds', 'must contain 1-3');
+    }
+    return _storeSentMessage(
+      await _api.createMessage(
+        channelId: channelId,
+        content: '',
+        nonce: _nonceFactory.next(),
+        stickerIds: stickerIds,
+      ),
+    );
+  }
+
+  @override
+  Future<ChatMessage> createPoll({
+    required String channelId,
+    required String authorId,
+    required PendingPoll poll,
+  }) async => _storeSentMessage(
+    await _api.createMessage(
+      channelId: channelId,
+      content: '',
+      nonce: _nonceFactory.next(),
+      poll: poll,
+    ),
+  );
+
+  @override
+  Future<ChatMessage> endPoll({
+    required String channelId,
+    required String messageId,
+  }) async => _storeMessage(
+    await _api.polls.endPoll(channelId: channelId, messageId: messageId),
+    fallback: await _cache.readMessage(messageId),
+  );
+
+  /// Discord answers a vote with no body, so the vote is counted here, on the
+  /// dispatch queue so a vote from somebody else is not written over. The
+  /// count only marks the account's own vote, so it and the dispatches that
+  /// echo it change nothing a second time, in whichever order they come.
+  @override
+  Future<ChatMessage> votePoll({
+    required String channelId,
+    required String messageId,
+    required Set<int> answerIds,
+  }) async {
+    await _api.polls.vote(
+      channelId: channelId,
+      messageId: messageId,
+      answerIds: answerIds.toList()..sort(),
+    );
+    return _sharedDispatches.queued(() async {
+      final held = await _cache.readMessage(messageId);
+      final poll = held?.poll;
+      if (held == null || poll == null) {
+        throw StateError('Poll message $messageId is not in the cache');
+      }
+      final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
+      await _cache.writeMessage(voted);
+      return voted;
+    });
+  }
+
+  @override
+  Future<MemberPage> loadPollVoters({
+    required String channelId,
+    required String messageId,
+    required int answerId,
+    String? afterUserId,
+    int limit = 100,
+  }) => _api.polls.answerVoters(
+    channelId: channelId,
+    messageId: messageId,
+    answerId: answerId,
+    mapper: _mapper,
+    afterUserId: afterUserId,
+    limit: limit,
+  );
+
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);
     // The gateway's copy may come later, and the channel must read as read
@@ -686,6 +894,22 @@ final class DiscordDesktopChatRepository
       payload,
       fallback: await _cache.readMessage(messageId),
     );
+  }
+
+  @override
+  Future<ChatMessage> setSuppressEmbeds({
+    required String channelId,
+    required String messageId,
+    required bool suppress,
+  }) async {
+    final held = await _cache.readMessage(messageId);
+    final payload = await _api.editMessageFlags(
+      channelId: channelId,
+      messageId: messageId,
+      suppressEmbeds: suppress,
+      componentsV2: held?.hasFlag(DiscordMessageFlag.componentsV2) ?? false,
+    );
+    return _storeMessage(payload, fallback: held);
   }
 
   @override

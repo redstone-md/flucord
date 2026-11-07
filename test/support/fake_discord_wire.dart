@@ -172,7 +172,9 @@ typedef FakeRoute =
 ///
 /// A request with no route goes to [fallback], which answers 404 unless a test
 /// says otherwise. The gateway lookup is routed from the start.
-final class FakeDiscordTransport implements DiscordHttpTransport {
+///
+/// A watched body goes out in two halves, so a test can see an upload move.
+final class FakeDiscordTransport implements DiscordUploadTransport {
   FakeDiscordTransport({this.fallback = notFound}) {
     on(
       'GET',
@@ -200,6 +202,7 @@ final class FakeDiscordTransport implements DiscordHttpTransport {
     required Uri uri,
     required Map<String, String> headers,
     List<int>? body,
+    BodySentListener? onBodySent,
   }) async {
     final request = RecordedRequest(
       method: method,
@@ -208,6 +211,10 @@ final class FakeDiscordTransport implements DiscordHttpTransport {
       body: body,
     );
     requests.add(request);
+    if (body != null && onBodySent != null) {
+      onBodySent(body.length ~/ 2);
+      onBodySent(body.length);
+    }
     return (_routes['$method ${uri.path}'] ?? fallback)(request);
   }
 

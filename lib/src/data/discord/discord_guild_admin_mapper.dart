@@ -110,6 +110,22 @@ abstract final class DiscordGuildAdminMapper {
     timeoutUntil: _timestamp(payload['communication_disabled_until']),
   );
 
+  /// This account's private member object for [guildId].
+  static OwnServerProfile ownServerProfile(
+    Map<String, Object?> payload, {
+    required String guildId,
+  }) => OwnServerProfile(
+    guildId: guildId,
+    userId: switch (payload['user']) {
+      {'id': final String id} => id,
+      _ => '',
+    },
+    nickname: _string(payload['nick']),
+    avatarHash: _string(payload['avatar']),
+    bannerHash: _string(payload['banner']),
+    bio: _string(payload['bio']) ?? '',
+  );
+
   static DateTime? _timestamp(Object? value) {
     final raw = _string(value);
     return raw == null ? null : DateTime.tryParse(raw);
