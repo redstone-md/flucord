@@ -129,11 +129,16 @@ void main() {
       expect(_inBio('site'), findsOneWidget);
       expect(_inBio('[site]'), findsNothing);
 
+      // A link leaving Discord asks first, as it does in a message.
       await tester.tapOnText(find.textRange.ofSubstring('site'));
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('leaving-site-visit')));
       await session.settle();
       await tester.tapOnText(
         find.textRange.ofSubstring('https://example.com/a'),
       );
+      await session.settle();
+      await tester.tap(find.byKey(const ValueKey('leaving-site-visit')));
       await session.settle();
 
       expect(session.openedLinks, [
