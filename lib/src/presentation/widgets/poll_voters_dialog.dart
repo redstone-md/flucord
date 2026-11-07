@@ -8,7 +8,7 @@ import '../../domain/poll_repository.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
-import 'member_avatar.dart';
+import 'paged_people_pane.dart';
 
 /// Loads one page of the voters of [answer], after the voter [afterUserId].
 typedef PollVotersLoader =
@@ -183,88 +183,16 @@ class _PollVotersDialogState extends State<PollVotersDialog> {
     ],
   );
 
-  Widget _people(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (_loading) const LinearProgressIndicator(minHeight: 2),
-      Expanded(
-        child: _voters.isEmpty
-            ? Center(
-                child: Text(
-                  _loading ? 'Loading voters…' : 'No votes for this answer',
-                  style: TextStyle(
-                    fontSize: FlucordType.caption,
-                    color: context.surfaces.muted,
-                  ),
-                ),
-              )
-            : ListView(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                children: [for (final voter in _voters) _voterRow(voter)],
-              ),
-      ),
-      if (_error != null)
-        _footer(
-          context,
-          label: 'Could not load voters',
-          action: 'Retry',
-          onPressed: () => _load(reset: _voters.isEmpty),
-        )
-      else if (_hasMore)
-        _footer(
-          context,
-          key: const ValueKey('poll-voters-load-more'),
-          action: 'Load more',
-          onPressed: _loading ? null : () => _load(reset: false),
-        ),
-    ],
-  );
-
-  Widget _voterRow(Member voter) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-    child: Row(
-      children: [
-        MemberAvatar(member: voter, size: 28),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            voter.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _footer(
-    BuildContext context, {
-    required String action,
-    required VoidCallback? onPressed,
-    String? label,
-    Key? key,
-  }) => Container(
-    padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: context.surfaces.border)),
-    ),
-    child: Row(
-      children: [
-        if (label != null)
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: FlucordType.caption),
-            ),
-          )
-        else
-          const Spacer(),
-        TextButton(key: key, onPressed: onPressed, child: Text(action)),
-      ],
-    ),
+  Widget _people(BuildContext context) => PagedPeoplePane(
+    people: [for (final voter in _voters) (member: voter, trailing: null)],
+    loading: _loading,
+    failed: _error != null,
+    hasMore: _hasMore,
+    emptyLabel: 'No votes for this answer',
+    loadingLabel: 'Loading voters…',
+    failureLabel: 'Could not load voters',
+    onRetry: () => _load(reset: _voters.isEmpty),
+    onLoadMore: () => _load(reset: false),
+    loadMoreKey: const ValueKey('poll-voters-load-more'),
   );
 }
