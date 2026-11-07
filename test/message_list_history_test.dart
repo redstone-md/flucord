@@ -12,6 +12,7 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/channel_history_fixture.dart';
 import 'support/fake_user_settings_repository.dart';
+import 'support/message_actions.dart';
 import 'support/zoomed_app.dart';
 
 void main() {
@@ -527,18 +528,12 @@ Widget _host(
     targetMessageId: targetMessageId,
     onOpenMessage: (_) {},
     onLoadPresent: () {},
-    onReply: (_) {},
-    onEdit: (_, _) async => true,
-    onDelete: (_) async {},
-    onToggleReaction: (_, _) async {},
-    onLoadReactionUsers: (_, _, _, _) async =>
-        const MemberPage(users: [], hasMore: false),
-    onAddReaction: (_, _) async {},
-    onCreateThread: (_, _, _) async => true,
-    onTogglePin: (_) async {},
-    onEndPoll: (_) async => true,
-    onForward: (_, _) async => true,
-    onToggleSuppressEmbeds: (_) async => true,
+    actions: testMessageActions(
+      onLoadReactionUsers: (_, _, _, _) async =>
+          const MemberPage(users: [], hasMore: false),
+      onForward: (_, _) async => true,
+      onToggleSuppressEmbeds: (_) async => true,
+    ),
     canLoadOlder: true,
     isLoadingOlder: isLoadingOlder,
     olderLoadError: olderLoadError,
