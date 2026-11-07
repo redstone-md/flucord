@@ -68,11 +68,66 @@ void main() {
       expect(transport.defaultReads, 1);
     });
 
+    test('a server the gateway answered for is not read again', () async {
+      final transport = _FakeTransport();
+      final service = DiscordSoundboardService(transport);
+      addTearDown(service.close);
+      service.accept('SOUNDBOARD_SOUNDS', const {
+        'guild_id': 'guild-1',
+        'soundboard_sounds': [
+          {'sound_id': '10', 'name': 'airhorn'},
+        ],
+      });
+
+      final sounds = await service.loadSounds('guild-1');
+
+      expect(sounds.single.name, 'airhorn');
+      expect(transport.guildReads, 0);
+    });
+
+    test('a DM call reads only the defaults', () async {
+      final transport = _FakeTransport(
+        defaults: [
+          {'sound_id': 1, 'name': 'quack'},
+        ],
+      );
+      final service = DiscordSoundboardService(transport);
+      addTearDown(service.close);
+
+      final sounds = await service.loadSounds(null);
+
+      expect(sounds.single.name, 'quack');
+      expect(transport.guildReads, 0);
+    });
+
+    test('a large account is asked for in frames of a hundred', () {
+      final gateway = _FakeGateway();
+      final service = DiscordSoundboardService(
+        _FakeTransport(),
+        gateway: gateway,
+      );
+      addTearDown(service.close);
+
+      service.accept('READY', {
+        'guilds': [
+          for (var index = 0; index < 150; index++) {'id': 'guild-$index'},
+          {'id': 'guild-down', 'unavailable': true},
+        ],
+      });
+
+      expect(gateway.requests.map((ids) => ids.length), [100, 50]);
+      // A server in an outage is asked for once it comes back.
+      expect(
+        gateway.requests.expand((ids) => ids),
+        isNot(contains('guild-down')),
+      );
+    });
+
     test('a guild nobody loaded has no sounds rather than none at all', () {
       final service = DiscordSoundboardService(_FakeTransport());
       addTearDown(service.close);
 
-      expect(service.soundsFor('guild-9'), isEmpty);
+      expect(service.catalogue.soundsFor('guild-9'), isEmpty);
     });
 
     test('playing names the source only for a server sound', () async {
@@ -97,8 +152,6 @@ void main() {
       expect(transport.played.first, {
         'channel_id': 'voice-1',
         'sound_id': '10',
-        'emoji_id': '55',
-        'emoji_name': null,
         'source_guild_id': 'guild-1',
       });
       expect(transport.played.last['source_guild_id'], isNull);
@@ -119,7 +172,7 @@ void main() {
         'name': 'louder airhorn',
       });
 
-      final sounds = service.soundsFor('guild-1');
+      final sounds = service.catalogue.soundsFor('guild-1');
       expect(sounds.single.name, 'louder airhorn');
     });
 
@@ -137,7 +190,7 @@ void main() {
         'sound_id': '10',
       });
 
-      expect(service.soundsFor('guild-1'), isEmpty);
+      expect(service.catalogue.soundsFor('guild-1'), isEmpty);
       // Deleting from a guild nothing is held for says nothing.
       expect(
         service.accept('GUILD_SOUNDBOARD_SOUND_DELETE', const {
@@ -164,7 +217,7 @@ void main() {
         ],
       });
 
-      expect(service.soundsFor('guild-1').single.name, 'kept');
+      expect(service.catalogue.soundsFor('guild-1').single.name, 'kept');
     });
 
     test('an effect somebody sent is reported', () async {
@@ -499,8 +552,6 @@ final class _FakeTransport implements DiscordSoundboardTransport {
   Future<void> sendSoundboardSound(
     String channelId, {
     required String soundId,
-    String? emojiId,
-    String? emojiName,
     String? sourceGuildId,
   }) async {
     await writeGate?.future;
@@ -508,9 +559,14 @@ final class _FakeTransport implements DiscordSoundboardTransport {
     played.add({
       'channel_id': channelId,
       'sound_id': soundId,
-      'emoji_id': emojiId,
-      'emoji_name': emojiName,
       'source_guild_id': sourceGuildId,
     });
   }
+}
+
+final class _FakeGateway implements DiscordSoundboardGateway {
+  final List<List<String>> requests = [];
+
+  @override
+  void requestSoundboardSounds(List<String> guildIds) => requests.add(guildIds);
 }

@@ -21,6 +21,7 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const streamWatch = 20;
   static const streamPing = 21;
   static const streamSetPaused = 22;
+  static const requestSoundboardSounds = 31;
   static const guildSubscriptionsBulk = 37;
   static const qosHeartbeat = 40;
 }

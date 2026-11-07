@@ -86,21 +86,13 @@ final class SoundboardPlaybackController extends ChangeNotifier {
     }
   }
 
-  /// Finds the sound in whichever server's catalogue holds it.
+  /// Finds the sound in whichever server's sounds hold it.
   ///
-  /// A default sound has no guild, so the effect names none and the lookup
-  /// falls back to the channel's own server, which is where the catalogue was
-  /// loaded under.
-  SoundboardSound? _soundFor(SoundboardPlayback playback) {
-    final repository = _repository;
-    if (repository == null) return null;
-    final guildId = playback.guildId;
-    if (guildId == null) return null;
-    for (final sound in repository.soundsFor(guildId)) {
-      if (sound.id == playback.soundId) return sound;
-    }
-    return null;
-  }
+  /// By id rather than by the effect's guild: the effect names the channel's
+  /// server, and a Nitro account may have played another server's sound
+  /// there, or one into a DM call that has no server at all.
+  SoundboardSound? _soundFor(SoundboardPlayback playback) =>
+      _repository?.catalogue.find(playback.soundId);
 
   bool _bind() {
     final repository = _repositoryProvider();

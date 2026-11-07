@@ -30,7 +30,7 @@ final class SoundboardController extends ChangeNotifier {
 
   List<SoundboardSound> get sounds => _guildId == null
       ? const []
-      : _repository?.soundsFor(_guildId!) ?? const [];
+      : _repository?.catalogue.soundsFor(_guildId!) ?? const [];
 
   bool get isLoading => _isLoading;
   bool get isSending => _isSending;

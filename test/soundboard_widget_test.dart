@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/presentation/widgets/soundboard_picker.dart';
@@ -254,11 +255,18 @@ final class _FakeRepository implements SoundboardRepository {
   final bool failWrites;
 
   List<SoundboardSound> sounds;
-  String? _loadedGuild;
+  bool _loaded = false;
 
   @override
-  List<SoundboardSound> soundsFor(String guildId) =>
-      _loadedGuild == guildId ? sounds : const [];
+  SoundboardCatalogue get catalogue => _loaded
+      ? SoundboardCatalogue(
+          defaults: [...sounds.where((sound) => sound.isDefault)],
+          byGuild: groupBy(
+            sounds.where((sound) => !sound.isDefault),
+            (sound) => sound.guildId!,
+          ),
+        )
+      : SoundboardCatalogue.empty;
 
   @override
   Stream<String> get updates => _updates.stream;
@@ -267,11 +275,11 @@ final class _FakeRepository implements SoundboardRepository {
   Stream<SoundboardPlayback> get playbacks => _playbacks.stream;
 
   @override
-  Future<List<SoundboardSound>> loadSounds(String guildId) async {
+  Future<List<SoundboardSound>> loadSounds(String? guildId) async {
     await gate?.future;
     if (failReads) throw StateError('unreachable');
-    _loadedGuild = guildId;
-    if (!_updates.isClosed) _updates.add(guildId);
+    _loaded = true;
+    if (!_updates.isClosed) _updates.add(guildId ?? '');
     return sounds;
   }
 

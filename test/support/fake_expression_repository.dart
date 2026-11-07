@@ -167,8 +167,7 @@ final class FakeSoundboardRepository implements SoundboardRepository {
   final Map<String, List<SoundboardSound>> byGuild = {};
 
   @override
-  List<SoundboardSound> soundsFor(String guildId) =>
-      byGuild[guildId] ?? const [];
+  SoundboardCatalogue get catalogue => SoundboardCatalogue(byGuild: byGuild);
 
   @override
   Stream<String> get updates => _updates.stream;
@@ -177,7 +176,7 @@ final class FakeSoundboardRepository implements SoundboardRepository {
   Stream<SoundboardPlayback> get playbacks => _playbacks.stream;
 
   @override
-  Future<List<SoundboardSound>> loadSounds(String guildId) async =>
+  Future<List<SoundboardSound>> loadSounds(String? guildId) async =>
       byGuild[guildId] ?? const [];
 
   @override
