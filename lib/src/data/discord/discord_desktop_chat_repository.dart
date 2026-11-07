@@ -69,6 +69,7 @@ import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
+import 'discord_pinned_messages.dart';
 import 'discord_scheduled_events.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_user_notes_repository.dart';

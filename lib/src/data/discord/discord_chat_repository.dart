@@ -55,6 +55,7 @@ import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_mapper.dart';
+import 'discord_pinned_messages.dart';
 import 'discord_scheduled_events.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_repository_events.dart';

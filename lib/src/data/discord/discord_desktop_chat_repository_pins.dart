@@ -6,21 +6,16 @@ mixin _DiscordDesktopChatRepositoryPins {
   DiscordMapper get _mapper;
   String? get _currentMemberId;
 
-  Future<ChannelHistory> loadPinnedMessages(String channelId) async {
-    try {
-      final history = _mapper.history(
+  Future<ChannelHistory> loadPinnedMessages(String channelId) =>
+      readPinsThroughCache(
+        _cache,
         channelId,
-        await _api.getChannelPins(channelId),
-        currentMemberId: _currentMemberId,
+        () async => _mapper.history(
+          channelId,
+          await _api.getChannelPins(channelId),
+          currentMemberId: _currentMemberId,
+        ),
       );
-      for (final message in history.messages) {
-        await _cache.writeMessage(message);
-      }
-      return history;
-    } on Object {
-      return _cache.readPinnedMessages(channelId);
-    }
-  }
 
   Future<void> pinMessage({
     required String channelId,
