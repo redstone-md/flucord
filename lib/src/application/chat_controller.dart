@@ -564,9 +564,10 @@ final class ChatController extends ChangeNotifier {
   Future<String?> openDirectConversation(String recipientId) async {
     final value = recipientId.trim();
     if (value.isEmpty || _workspace == null) return null;
+    final repository = _repository;
     try {
-      final conversation = await _repository.openDirectConversation(value);
-      _adoptConversation(conversation);
+      final conversation = await repository.openDirectConversation(value);
+      if (!_adoptConversation(conversation, from: repository)) return null;
       return conversation.channel.id;
     } catch (error) {
       _error = error;
@@ -575,15 +576,23 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
-  /// Puts a DM Discord just opened into the workspace.
-  void _adoptConversation(DirectConversation conversation) {
+  /// Puts a DM Discord just opened into the workspace. Answers false, and
+  /// changes nothing, when the account changed while Discord was asked: the
+  /// DM belongs to the account [from] served.
+  bool _adoptConversation(
+    DirectConversation conversation, {
+    required Object from,
+  }) {
+    final workspace = _workspace;
+    if (!identical(from, _repository) || workspace == null) return false;
     _workspace = conversation.recipients
         .fold(
-          _workspace!.upsertSpace(const CommunitySpace.directMessages()),
+          workspace.upsertSpace(const CommunitySpace.directMessages()),
           (workspace, recipient) => workspace.upsertMember(recipient),
         )
         .upsertChannel(conversation.channel);
     notifyListeners();
+    return true;
   }
 
   Future<void> loadOlderMessages(String channelId) async {

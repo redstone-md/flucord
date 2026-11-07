@@ -260,7 +260,9 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
       emptyLabel: 'No reactions to show',
       loadingLabel: 'Loading people…',
       failureLabel: 'Could not load reactions',
-      onRetry: () => _load(reset: false),
+      // A first page that failed left nothing to page on from, so its retry
+      // starts over.
+      onRetry: () => _load(reset: _normalUsers.isEmpty && _burstUsers.isEmpty),
       onLoadMore: () => _load(reset: false),
       loadMoreKey: const ValueKey('reaction-details-load-more'),
     );

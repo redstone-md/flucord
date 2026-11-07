@@ -77,7 +77,7 @@ class _GroupDirectMessageSettingsDialogState
     try {
       picked = await widget.imagePicker.pick();
     } on ProfileImageRejected catch (rejection) {
-      setState(() => _error = rejection.message);
+      if (mounted) setState(() => _error = rejection.message);
       return;
     }
     if (picked == null || !mounted) return;
@@ -89,7 +89,6 @@ class _GroupDirectMessageSettingsDialogState
 
   Future<void> _save() async {
     final name = _name.text.trim();
-    final navigator = Navigator.of(context);
     if (name != widget.channel.name &&
         !await _run(
           () => widget.onRename(name),
@@ -97,7 +96,8 @@ class _GroupDirectMessageSettingsDialogState
         )) {
       return;
     }
-    navigator.pop();
+    // Closed while the rename was out: a pop now would close what is under.
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override

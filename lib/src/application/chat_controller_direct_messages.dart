@@ -23,8 +23,10 @@ extension ChatControllerDirectMessages on ChatController {
       created = await repository.createGroupDirectMessage(recipientIds);
     });
     final conversation = created;
-    if (conversation == null) return null;
-    _adoptConversation(conversation);
+    if (conversation == null ||
+        !_adoptConversation(conversation, from: repository)) {
+      return null;
+    }
     return conversation.channel.id;
   }
 

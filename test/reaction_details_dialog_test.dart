@@ -87,6 +87,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a first page that failed loads on retry', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var failing = true;
+
+    await tester.pumpWidget(
+      _host(
+        _message(),
+        onLoad: (_, _, type, after) async {
+          if (failing) throw StateError('temporary failure');
+          return type == DiscordReactionType.burst
+              ? const MemberPage(users: [_omar], hasMore: false)
+              : const MemberPage(users: [_jack], hasMore: false);
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load reactions'), findsOneWidget);
+
+    failing = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jack'), findsOneWidget);
+    expect(find.text('Omar'), findsOneWidget);
+  });
+
   testWidgets('keeps the reaction ledger usable at compact width', (
     tester,
   ) async {
