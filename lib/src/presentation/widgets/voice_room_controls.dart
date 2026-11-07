@@ -63,7 +63,12 @@ class VoiceRoomControls extends StatelessWidget {
         key: ValueKey(key),
         onPressed: control.onPressed,
         tooltip: control.tooltip,
-        style: control.danger
+        style: control.byServer
+            ? IconButton.styleFrom(
+                backgroundColor: surfaces.danger,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              )
+            : control.danger
             ? IconButton.styleFrom(
                 backgroundColor: surfaces.danger.withValues(
                   alpha: _dangerFillAlpha,

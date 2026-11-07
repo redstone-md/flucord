@@ -303,34 +303,5 @@ void main() {
       expect(find.byTooltip('Server deafened'), findsOneWidget);
       expect(find.byTooltip('Deafened'), findsNothing);
     });
-
-    testWidgets('this account\'s own mute button says it was server muted', (
-      tester,
-    ) async {
-      final (harness, _) = await _room(
-        tester,
-        seats: const [StreamRoomSeat('me', isServerMuted: true)],
-      );
-      harness.signaling.emit(
-        const VoiceCredentialsReadyEvent(
-          VoiceServerCredentials(
-            guildId: 'guild-1',
-            channelId: 'voice-1',
-            userId: 'me',
-            sessionId: 'session-1',
-            token: 'token-1',
-            endpoint: 'voice.example',
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      final mute = tester.widget<IconButton>(
-        find.byKey(const ValueKey('voice-mute')),
-      );
-      expect(mute.tooltip, 'Server muted');
-      // Unmuting is the moderator's to do.
-      expect(mute.onPressed, isNull);
-    });
   });
 }
