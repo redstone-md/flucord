@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/presentation/widgets/flucord_dialog.dart';
 import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/account_entitlements.dart';
@@ -186,6 +188,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('required onboarding cannot be closed until a send fails', (
+    tester,
+  ) async {
+    final plane = _GatePlane(onboarding: _onboarding)..failOnboarding = true;
+    await _pumpShell(tester, plane);
+    await _join(tester);
+    final dialog = find.byKey(const ValueKey('guild-onboarding-dialog'));
+    bool canCancel() => tester
+        .widget<FlucordDialogCancel>(find.byType(FlucordDialogCancel))
+        .enabled;
+    expect(canCancel(), isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-option-garden')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('guild-onboarding-next')));
+    await tester.pumpAndSettle();
+
+    expect(dialog, findsOneWidget);
+    expect(
+      find.text('Discord did not take your answers. Try again.'),
+      findsOneWidget,
+    );
+    expect(canCancel(), isTrue);
+  });
+
   testWidgets('a server with neither is joined as before', (tester) async {
     final plane = _GatePlane();
     await _pumpShell(tester, plane);
@@ -352,6 +379,10 @@ final class _GatePlane
   final List<RulesScreening> accepted = [];
   final List<Set<String>> answers = [];
 
+  /// Set to make the next onboarding answer fail the way a dropped
+  /// connection does, rather than with a refusal.
+  bool failOnboarding = false;
+
   @override
   Future<InvitePreview> previewInvite(String code) async =>
       const InvitePreview(code: 'garden', name: 'Garden', guildId: _garden);
@@ -382,6 +413,7 @@ final class _GatePlane
     required Set<String> chosenOptionIds,
     required DateTime seenAt,
   }) async {
+    if (failOnboarding) throw const SocketException('offline');
     answers.add(chosenOptionIds);
     return _account({
       guildId: GuildMembership(

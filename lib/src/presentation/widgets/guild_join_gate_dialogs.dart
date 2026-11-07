@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../app_log.dart';
 import '../../application/chat_controller.dart';
 import '../../domain/guild_join_gate.dart';
 import '../../theme/flucord_theme.dart';
@@ -41,6 +42,20 @@ Future<void> showGuildRulesDialog(
   context: context,
   builder: (_) => GuildRulesDialog(chat: chat, spaceId: spaceId),
 );
+
+/// Sends a join step's answers. Answers what to tell the person when it
+/// failed, or null when Discord took them.
+Future<String?> _send(Future<void> Function() send) async {
+  try {
+    await send();
+    return null;
+  } on GuildJoinGateRefusal catch (refusal) {
+    return refusal.message;
+  } on Object catch (error) {
+    AppLog.warning('join-gate', 'answers not sent', error: error);
+    return 'Discord did not take your answers. Try again.';
+  }
+}
 
 /// A failed read of an optional step is the same as no step: the join
 /// already worked, and the server can still be used.
@@ -83,17 +98,17 @@ class _GuildRulesDialogState extends State<GuildRulesDialog> {
       _sending = true;
       _message = null;
     });
-    try {
-      await widget.chat.acceptRules(widget.spaceId, screening);
-    } on GuildJoinGateRefusal catch (refusal) {
-      if (!mounted) return;
+    final failure = await _send(
+      () => widget.chat.acceptRules(widget.spaceId, screening),
+    );
+    if (!mounted) return;
+    if (failure != null) {
       setState(() {
         _sending = false;
-        _message = refusal.message;
+        _message = failure;
       });
       return;
     }
-    if (!mounted) return;
     if (widget.chat.workspace?.isPendingIn(widget.spaceId) ?? false) {
       setState(() {
         _sending = false;
@@ -291,7 +306,16 @@ class _GuildOnboardingDialogState extends State<GuildOnboardingDialog> {
   final Set<String> _chosen = {};
   int _index = 0;
   bool _sending = false;
+
+  /// Set once a send failed, so a connection that is down does not hold the
+  /// window behind a dialog that cannot finish.
+  bool _failed = false;
   String? _message;
+
+  /// A required question is part of joining, so it cannot be skipped by
+  /// closing the dialog, unless Discord could not be reached.
+  bool get _canCancel =>
+      !_sending && (_failed || !_prompts.any((prompt) => prompt.required));
 
   List<OnboardingPrompt> get _prompts => widget.onboarding.prompts;
   OnboardingPrompt get _prompt => _prompts[_index];
@@ -318,17 +342,19 @@ class _GuildOnboardingDialogState extends State<GuildOnboardingDialog> {
       _sending = true;
       _message = null;
     });
-    try {
-      await widget.chat.answerOnboarding(widget.onboarding, {..._chosen});
-    } on GuildJoinGateRefusal catch (refusal) {
-      if (!mounted) return;
+    final failure = await _send(
+      () => widget.chat.answerOnboarding(widget.onboarding, {..._chosen}),
+    );
+    if (!mounted) return;
+    if (failure != null) {
       setState(() {
         _sending = false;
-        _message = refusal.message;
+        _failed = true;
+        _message = failure;
       });
       return;
     }
-    if (mounted) Navigator.of(context).pop();
+    Navigator.of(context).pop();
   }
 
   @override
@@ -373,7 +399,7 @@ class _GuildOnboardingDialogState extends State<GuildOnboardingDialog> {
           child: const Text('Back'),
         ),
     ],
-    cancelEnabled: !_sending,
+    cancelEnabled: _canCancel,
     confirm: FlucordDialogConfirm(
       key: const ValueKey('guild-onboarding-next'),
       label: _isLast ? 'Finish' : 'Next',
