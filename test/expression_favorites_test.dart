@@ -300,6 +300,29 @@ void main() {
       expect(written.messageAt(8)?.fixed64ListAt(1), [7, 1000000000002]);
     });
 
+    test('the arranged sound order is read first and written back', () {
+      // ordered_sound_ids = 2 is the order the person arranged in Discord.
+      final starred = ProtoMessage()
+        ..setMessage(
+          8,
+          ProtoMessage()
+            ..setFixed64List(1, [3, 4])
+            ..setFixed64List(2, [4, 3]),
+        );
+
+      expect(DiscordFrecencyProtoCodec.decodeMessage(starred).soundIds, [
+        '4',
+        '3',
+      ]);
+
+      final written = DiscordFrecencyProtoCodec.apply(
+        starred,
+        const ExpressionFavorites(soundIds: ['4', '3', '9']),
+      );
+      expect(written.messageAt(8)?.fixed64ListAt(1), [4, 3, 9]);
+      expect(written.messageAt(8)?.fixed64ListAt(2), [4, 3, 9]);
+    });
+
     test('a sticker id that is not a number is not written', () {
       // Nothing should ever put one here, but a fixed64 cannot carry it and
       // silently writing a zero would favourite a sticker nobody starred.

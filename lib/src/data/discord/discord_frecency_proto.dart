@@ -40,6 +40,9 @@ abstract final class FavoriteEmojisField {
 abstract final class FavoriteSoundboardSoundsField {
   /// `repeated fixed64`: snowflakes, written packed.
   static const soundIds = 1;
+
+  /// `repeated fixed64`: the same sounds in the order the person arranged.
+  static const orderedSoundIds = 2;
 }
 
 /// Field numbers inside `FrecencyItem`, which every frecency table holds.
@@ -86,12 +89,7 @@ abstract final class DiscordFrecencyProtoCodec {
           _snowflakeOf(id),
       ],
       emojis: emojis?.stringsAt(FavoriteEmojisField.emojis) ?? const [],
-      soundIds: [
-        for (final id
-            in sounds?.fixed64ListAt(FavoriteSoundboardSoundsField.soundIds) ??
-                const <int>[])
-          _snowflakeOf(id),
-      ],
+      soundIds: [for (final id in _favoriteSoundIds(sounds)) _snowflakeOf(id)],
       stickerFrecency: _decodeFrecency(
         root.messageAt(FrecencyUserSettingsField.stickerFrecency),
         keyed: _snowflakeKey,
@@ -120,8 +118,8 @@ abstract final class DiscordFrecencyProtoCodec {
       )
       ..setMessage(
         FrecencyUserSettingsField.favoriteSoundboardSounds,
-        ProtoMessage()..setFixed64List(
-          FavoriteSoundboardSoundsField.soundIds,
+        _encodeSounds(
+          root.messageAt(FrecencyUserSettingsField.favoriteSoundboardSounds),
           _fixed64s(favorites.soundIds),
         ),
       )
@@ -132,6 +130,24 @@ abstract final class DiscordFrecencyProtoCodec {
       );
     return next;
   }
+
+  /// The starred sounds, in the arranged order when a client wrote one.
+  static List<int> _favoriteSoundIds(ProtoMessage? sounds) {
+    if (sounds == null) return const [];
+    final ordered = sounds.fixed64ListAt(
+      FavoriteSoundboardSoundsField.orderedSoundIds,
+    );
+    return ordered.isNotEmpty
+        ? ordered
+        : sounds.fixed64ListAt(FavoriteSoundboardSoundsField.soundIds);
+  }
+
+  /// Writes both sound lists, so a client that reads the arranged order sees
+  /// the same stars. Other fields of the group are kept.
+  static ProtoMessage _encodeSounds(ProtoMessage? previous, List<int> ids) =>
+      (previous?.clone() ?? ProtoMessage())
+        ..setFixed64List(FavoriteSoundboardSoundsField.soundIds, ids)
+        ..setFixed64List(FavoriteSoundboardSoundsField.orderedSoundIds, ids);
 
   /// Snowflakes as fixed64 values. One that is not a number is skipped: a
   /// fixed64 cannot carry it, and a zero would star something nobody starred.
