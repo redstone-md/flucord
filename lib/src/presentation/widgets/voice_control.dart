@@ -16,19 +16,19 @@ final class VoiceControl {
   /// Mute and deafen rest outside a room: the controller keeps no flags
   /// there, so a press would do nothing. A room being joined still takes them.
   /// A moderator's mute or deafen gets its own mark, [byServer], and says so,
-  /// since only the moderator can lift it. A channel that does not let the
-  /// account speak is marked the same way. The button still toggles the
+  /// since only the moderator can lift it. Any other reason the account
+  /// cannot speak is marked the same way. The button still toggles the
   /// account's own mute underneath, as in Discord.
   VoiceControl.mute(VoiceController voice)
     : tooltip = _withServer(
-        _heldMute(voice),
+        _heldMute(voice.speechBlock),
         voice.isMuted ? 'Unmute' : 'Mute',
       ),
-      icon = voice.isMuted || _heldMute(voice) != null
+      icon = voice.isMuted || voice.speechBlock != null
           ? FlucordIcons.micOff
           : FlucordIcons.mic,
-      danger = voice.isMuted || _heldMute(voice) != null,
-      byServer = _heldMute(voice) != null,
+      danger = voice.isMuted || voice.speechBlock != null,
+      byServer = voice.speechBlock != null,
       active = false,
       onPressed = _inRoom(voice) ? (() => unawaited(voice.toggleMute())) : null;
 
@@ -103,15 +103,15 @@ final class VoiceControl {
   static bool _inRoom(VoiceController voice) =>
       voice.isConnected || voice.isBusy;
 
-  /// Why the account cannot be heard whatever its own mute says, or null.
-  static String? _heldMute(VoiceController voice) => voice.isServerMuted
-      ? 'Server muted'
-      : switch (voice.speechBlock) {
-          SpeechBlock.noPermission =>
-            'You do not have permission to speak in this channel',
-          SpeechBlock.suppressed => 'You are suppressed in this channel',
-          null => null,
-        };
+  /// What the tooltip says of [block], the reason the account cannot be
+  /// heard whatever its own mute says.
+  static String? _heldMute(SpeechBlock? block) => switch (block) {
+    SpeechBlock.serverMuted => 'Server muted',
+    SpeechBlock.noPermission =>
+      'You do not have permission to speak in this channel',
+    SpeechBlock.suppressed => 'You are suppressed in this channel',
+    null => null,
+  };
 
   static String _withServer(String? server, String action) =>
       server == null ? action : '$server · $action';

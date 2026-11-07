@@ -260,8 +260,17 @@ enum VoiceChannelSpeech {
   stage,
 }
 
-/// Why a seat cannot be heard although nobody muted it.
-enum SpeechBlock { noPermission, suppressed }
+/// Why a seat cannot be heard whatever its own mute says.
+enum SpeechBlock {
+  /// A moderator muted it.
+  serverMuted,
+
+  /// This account lacks the Speak permission in the channel.
+  noPermission,
+
+  /// Discord's `suppress`, as for every seat in an AFK channel.
+  suppressed,
+}
 
 final class VoiceParticipant {
   const VoiceParticipant({
@@ -291,7 +300,8 @@ final class VoiceParticipant {
   final bool isStreaming;
   final bool isVideoEnabled;
 
-  /// Set by the room from the seat and the channel, never by the transport.
+  /// Why they cannot be heard whatever their own mute says. Set by the room
+  /// from the seat and the channel, never by the transport.
   final SpeechBlock? speechBlock;
 
   bool get isMuted => selfMuted || serverMuted;

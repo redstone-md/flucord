@@ -81,7 +81,7 @@ class ChannelSidebar extends StatelessWidget {
     this.friends,
     this.seatedByChannel = const {},
     this.speakingUserIds = const {},
-    this.speechBlockOf = _noSpeechBlock,
+    this.speechBlockOf = _serverMuteOf,
     this.voiceConnectionBar,
     super.key,
   });
@@ -98,11 +98,12 @@ class ChannelSidebar extends StatelessWidget {
   /// client is in, so a seat elsewhere never shows the speaking ring.
   final Set<String> speakingUserIds;
 
-  /// Why a seat cannot be heard although nobody muted it, as the voice
-  /// controller judges it.
+  /// Why a seat cannot be heard whatever its own mute says, as the voice
+  /// controller judges it. Without one, only a server mute is marked.
   final SpeechBlock? Function(VoiceParticipantStateEvent seat) speechBlockOf;
 
-  static SpeechBlock? _noSpeechBlock(VoiceParticipantStateEvent _) => null;
+  static SpeechBlock? _serverMuteOf(VoiceParticipantStateEvent seat) =>
+      seat.serverMuted ? SpeechBlock.serverMuted : null;
 
   /// The strip that keeps a live voice connection reachable, or null when
   /// there is none. Passed in rather than built here so the sidebar does not

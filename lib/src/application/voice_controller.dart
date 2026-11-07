@@ -361,13 +361,14 @@ final class VoiceController extends ChangeNotifier
   /// Whether a moderator deafened this account in the room.
   bool get isServerDeafened => _ownSeat?.serverDeafened ?? false;
 
-  /// Why this account cannot be heard in the room although nobody muted it.
+  /// Why this account cannot be heard in the room whatever its own mute says.
   SpeechBlock? get speechBlock => _ownSeat?.speechBlock;
 
-  /// Why [seat] cannot be heard although nobody muted it, as Discord marks
+  /// Why [seat] cannot be heard whatever its own mute says, as Discord marks
   /// it. A permission is only judged for this account's own seat, and a
   /// Stage's audience is the Stage's business.
   SpeechBlock? speechBlockOf(VoiceParticipantStateEvent seat) {
+    if (seat.serverMuted) return SpeechBlock.serverMuted;
     final channelId = seat.channelId;
     final isSelf = seat.userId == _selfUserId;
     if (seat.guildId == null || channelId == null) return null;
