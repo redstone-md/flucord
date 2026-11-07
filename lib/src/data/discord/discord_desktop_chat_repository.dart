@@ -52,7 +52,6 @@ import '../../domain/user_profile.dart';
 import '../../domain/user_notes.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
-import '../../domain/voice_message_recorder.dart';
 import '../../domain/voice_message_repository.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_read_state_repository.dart';

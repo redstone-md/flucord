@@ -3,7 +3,7 @@ import 'package:flucord/src/app_log.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/disconnected_chat_repository.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
-import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 
 void main() {
   test(

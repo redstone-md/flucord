@@ -16,25 +16,11 @@ mixin _MockChatRepositoryVoiceMessages implements VoiceMessageRepository {
     UploadProgressListener? onUploadProgress,
   }) async {
     await _wait();
-    final messageId = 'local-${_messageSequence++}';
-    final message = ChatMessage(
-      id: messageId,
+    final message = voiceMessage.asMessage(
+      id: 'local-${_messageSequence++}',
       channelId: channelId,
       authorId: authorId,
-      body: '',
       sentAt: DateTime.now(),
-      flags: DiscordMessageFlag.voiceMessage.bit,
-      attachments: [
-        MessageAttachment(
-          id: '$messageId-voice',
-          fileName: voiceMessage.name,
-          url: Uri.file(voiceMessage.path).toString(),
-          size: voiceMessage.size,
-          contentType: 'audio/ogg',
-          durationSecs: voiceMessage.durationSecs,
-          waveform: voiceMessage.waveform,
-        ),
-      ],
     );
     _workspace = _workspace.upsertMessage(message);
     return message;

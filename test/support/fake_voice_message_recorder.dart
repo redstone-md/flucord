@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 /// A recorder with no microphone. A test reads its counts and feeds [emit].

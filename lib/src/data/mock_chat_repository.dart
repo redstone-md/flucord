@@ -42,7 +42,6 @@ import '../domain/user_settings_repository.dart';
 import '../domain/user_notes.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
-import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
 import 'mock_chat_seed.dart';
 

@@ -26,28 +26,13 @@ extension ChatControllerVoiceMessages on ChatController {
       onReleased?.call();
       return Future.value(false);
     }
-    final nonce = _outgoing.nextNonce();
     return _queueSend(
       OutgoingMessage.voice(
-        message: ChatMessage(
-          id: nonce,
+        message: voiceMessage.asMessage(
+          id: _outgoing.nextNonce(),
           channelId: channelId,
           authorId: workspace.currentMemberId,
-          body: '',
           sentAt: DateTime.now(),
-          flags: DiscordMessageFlag.voiceMessage.bit,
-          attachments: [
-            // The recording plays from the disk until Discord has it.
-            MessageAttachment(
-              id: '$nonce-voice',
-              fileName: voiceMessage.name,
-              url: Uri.file(voiceMessage.path).toString(),
-              size: voiceMessage.size,
-              contentType: 'audio/ogg',
-              durationSecs: voiceMessage.durationSecs,
-              waveform: voiceMessage.waveform,
-            ),
-          ],
         ),
         voiceMessage: voiceMessage,
       ),

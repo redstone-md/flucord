@@ -1,5 +1,4 @@
 import 'chat_models.dart';
-import 'voice_message_recorder.dart';
 
 abstract interface class VoiceMessageRepository {
   /// Sends [voiceMessage] under [nonce]. A retry passes the same nonce, so

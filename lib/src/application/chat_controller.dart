@@ -53,7 +53,6 @@ import '../domain/user_profile.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
-import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
 import '../domain/workspace_permissions.dart';
 import 'channel_activity_persistence.dart';

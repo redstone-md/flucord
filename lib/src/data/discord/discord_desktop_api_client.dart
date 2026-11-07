@@ -3,7 +3,6 @@ import 'dart:io';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_remote_auth.dart';
 import '../../domain/reaction_repository.dart';
-import '../../domain/voice_message_recorder.dart';
 import 'discord_captcha.dart';
 import 'discord_call_api.dart';
 import 'discord_account_connections_repository.dart';
@@ -692,7 +691,7 @@ final class DiscordDesktopApiClient
     await _rest.uploadTo(
       slot.url,
       bytes,
-      contentType: 'audio/ogg',
+      contentType: voiceMessageContentType,
       onBodySent: onUploadProgress == null
           ? null
           : (sent) => onUploadProgress(sent / bytes.length),

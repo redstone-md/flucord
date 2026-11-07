@@ -1,5 +1,4 @@
 import '../../domain/chat_models.dart';
-import '../../domain/voice_message_recorder.dart';
 
 /// The JSON body that posts [voiceMessage] as a voice message.
 ///

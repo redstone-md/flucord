@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
-import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';

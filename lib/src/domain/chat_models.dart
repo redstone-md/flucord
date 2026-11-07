@@ -9,13 +9,13 @@ import 'message_component.dart';
 import 'guild_membership.dart';
 import 'message_embed.dart';
 import 'permission_overwrite.dart';
-import 'voice_message_recorder.dart';
 
 part 'community_space.dart';
 part 'message_models.dart';
 part 'message_poll.dart';
 part 'message_sticker.dart';
 part 'outgoing_message.dart';
+part 'pending_voice_message.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
 part 'forum_models.dart';

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
-import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 // The composer holds the next send until slowmode ends, counted from
 // `lastSentAt`. Every kind of message starts that clock, not only text. The

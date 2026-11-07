@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 import '../application/voice_pcm_framer.dart';
+import '../domain/chat_models.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
 import '../domain/voice_message_recorder.dart';
