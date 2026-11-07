@@ -13,9 +13,11 @@ add_library(flucord_video SHARED
 )
 
 # C++/WinRT, which the window capture is written in, wants the conforming
-# mode; the rest of the module is left as it was.
+# mode and C++20 coroutines: under C++17 it falls back to
+# <experimental/coroutine>, which current MSVC refuses. The rest of the module
+# is left as it was.
 set_source_files_properties("window_capture.cpp" PROPERTIES
-  COMPILE_OPTIONS "/permissive-")
+  COMPILE_OPTIONS "/permissive-;/std:c++20")
 
 target_include_directories(flucord_video PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_features(flucord_video PRIVATE cxx_std_17)
