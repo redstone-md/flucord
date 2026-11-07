@@ -449,7 +449,14 @@ final class AppComposition {
       ThreadMembershipController(() => chat.threadMembership),
     );
     stage = _register(StageController(() => chat.stages));
-    soundboard = _register(SoundboardController(() => chat.soundboard));
+    // Nitro decides which servers' sounds play, and whether a call has a
+    // soundboard at all, so the picker follows the account's entitlements.
+    soundboard = _register(
+      SoundboardController(
+        () => chat.soundboard,
+        entitlements: accountEntitlements,
+      ),
+    );
     gifPicker = _register(GifPickerController(() => chat.gifs));
     expressionFavorites = _register(
       ExpressionFavoritesController(() => chat.expressionFavorites),

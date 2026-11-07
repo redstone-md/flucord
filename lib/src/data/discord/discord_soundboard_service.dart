@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import '../../domain/soundboard.dart';
 
@@ -10,31 +11,54 @@ abstract interface class DiscordSoundboardTransport {
   /// `GET /guilds/{id}/soundboard-sounds`.
   Future<Map<String, Object?>> listGuildSounds(String guildId);
 
-  /// `POST /channels/{id}/send-soundboard-sound`.
+  /// `POST /channels/{id}/send-soundboard-sound`. The same route serves a
+  /// guild voice channel and a DM or group call.
   Future<void> sendSoundboardSound(
     String channelId, {
     required String soundId,
-    String? emojiId,
-    String? emojiName,
     String? sourceGuildId,
   });
 }
 
+/// The gateway frame the soundboard sends.
+abstract interface class DiscordSoundboardGateway {
+  /// Opcode 31, `REQUEST_SOUNDBOARD_SOUNDS`. Discord answers with one
+  /// `SOUNDBOARD_SOUNDS` dispatch per guild.
+  void requestSoundboardSounds(List<String> guildIds);
+}
+
 /// Soundboard sounds and the effects other people send.
+///
+/// With a [gateway], every server's sounds are asked for at READY, which is
+/// how the desktop client learns the sounds a Nitro account may play from
+/// other servers. The REST read stays for the defaults, which the gateway does
+/// not carry, and for a server whose answer has not arrived yet.
 final class DiscordSoundboardService implements SoundboardRepository {
-  DiscordSoundboardService(this._transport);
+  DiscordSoundboardService(this._transport, {DiscordSoundboardGateway? gateway})
+    : _gateway = gateway;
+
+  /// How many guild ids go in one opcode 31 frame. Discord documents no
+  /// limit; this keeps a frame for the largest account a modest size.
+  static const _guildsPerRequest = 100;
 
   final DiscordSoundboardTransport _transport;
+  final DiscordSoundboardGateway? _gateway;
   final StreamController<String> _updates = StreamController.broadcast();
   final StreamController<SoundboardPlayback> _playbacks =
       StreamController.broadcast();
   final Map<String, List<SoundboardSound>> _byGuild = {};
 
+  /// The guilds asked for on this gateway session. A new READY starts a new
+  /// session, which may have missed changes, so it clears this.
+  final Set<String> _requested = {};
+
   List<SoundboardSound> _defaults = const [];
 
   @override
-  List<SoundboardSound> soundsFor(String guildId) =>
-      List.unmodifiable([...?_byGuild[guildId], ..._defaults]);
+  SoundboardCatalogue get catalogue => SoundboardCatalogue(
+    defaults: List.unmodifiable(_defaults),
+    byGuild: Map.unmodifiable(_byGuild),
+  );
 
   @override
   Stream<String> get updates => _updates.stream;
@@ -43,16 +67,21 @@ final class DiscordSoundboardService implements SoundboardRepository {
   Stream<SoundboardPlayback> get playbacks => _playbacks.stream;
 
   @override
-  Future<List<SoundboardSound>> loadSounds(String guildId) async {
+  Future<List<SoundboardSound>> loadSounds(String? guildId) async {
     // The defaults never change within a session, so they are read once and
     // shared by every server rather than fetched per picker opening.
     if (_defaults.isEmpty) {
       _defaults = _readSounds(await _transport.listDefaultSounds(), null);
     }
-    final payload = await _transport.listGuildSounds(guildId);
-    _byGuild[guildId] = _readSounds(_objects(payload['items']), guildId);
-    _publish(guildId);
-    return soundsFor(guildId);
+    if (guildId == null) return catalogue.defaults;
+    // A server the gateway already answered for is kept live by dispatches,
+    // so reading it again would only repeat what is held.
+    if (!_byGuild.containsKey(guildId)) {
+      final payload = await _transport.listGuildSounds(guildId);
+      _byGuild[guildId] = _readSounds(_objects(payload['items']), guildId);
+      _publish(guildId);
+    }
+    return catalogue.soundsFor(guildId);
   }
 
   @override
@@ -60,8 +89,6 @@ final class DiscordSoundboardService implements SoundboardRepository {
       _transport.sendSoundboardSound(
         channelId,
         soundId: sound.id,
-        emojiId: sound.emojiId,
-        emojiName: sound.emojiName,
         // Only a server's own sound names where it came from. Sending a guild
         // id for a default sound is what Discord answers with 400.
         sourceGuildId: sound.guildId,
@@ -75,8 +102,12 @@ final class DiscordSoundboardService implements SoundboardRepository {
         'GUILD_SOUNDBOARD_SOUND_CREATE' ||
         'GUILD_SOUNDBOARD_SOUND_UPDATE' => _upsert(data),
         'GUILD_SOUNDBOARD_SOUND_DELETE' => _remove(data),
-        'GUILD_SOUNDBOARD_SOUNDS_UPDATE' => _replace(data),
+        'GUILD_SOUNDBOARD_SOUNDS_UPDATE' ||
+        'SOUNDBOARD_SOUNDS' => _replace(data),
         'VOICE_CHANNEL_EFFECT_SEND' => _acceptEffect(data),
+        'READY' => _requestReadyGuilds(data),
+        'GUILD_CREATE' => _requestJoinedGuild(data),
+        'GUILD_DELETE' => _forgetGuild(data),
         _ => null,
       };
 
@@ -84,6 +115,47 @@ final class DiscordSoundboardService implements SoundboardRepository {
     if (!_updates.isClosed) await _updates.close();
     if (!_playbacks.isClosed) await _playbacks.close();
   }
+
+  String? _requestReadyGuilds(Map<String, Object?> data) {
+    _requested.clear();
+    _request([
+      for (final guild in _objects(data['guilds']))
+        // A server in an outage arrives later with GUILD_CREATE.
+        if (guild['unavailable'] != true) ?_idOf(guild),
+    ]);
+    return null;
+  }
+
+  String? _requestJoinedGuild(Map<String, Object?> data) {
+    if (_idOf(data) case final id?) _request([id]);
+    return null;
+  }
+
+  /// Drops a server the account left. An outage also sends GUILD_DELETE, but
+  /// marked unavailable, and the server's sounds are still the account's.
+  String? _forgetGuild(Map<String, Object?> data) {
+    final id = _idOf(data);
+    if (id == null || data['unavailable'] == true) return null;
+    _requested.remove(id);
+    if (_byGuild.remove(id) == null) return null;
+    return _publish(id);
+  }
+
+  /// Sends opcode 31 for the guilds not asked for yet on this session.
+  void _request(List<String> guildIds) {
+    final gateway = _gateway;
+    if (gateway == null) return;
+    final fresh = guildIds.where(_requested.add).toList(growable: false);
+    for (var start = 0; start < fresh.length; start += _guildsPerRequest) {
+      final end = min(start + _guildsPerRequest, fresh.length);
+      gateway.requestSoundboardSounds(fresh.sublist(start, end));
+    }
+  }
+
+  static String? _idOf(Map<String, Object?> data) => switch (data['id']) {
+    final String id when id.isNotEmpty => id,
+    _ => null,
+  };
 
   String? _upsert(Map<String, Object?> data) {
     final guildId = data['guild_id'];

@@ -12,6 +12,7 @@ import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/self_video_controller.dart';
+import 'package:flucord/src/application/soundboard_controller.dart';
 import 'package:flucord/src/application/stream_router.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
@@ -150,6 +151,10 @@ final class StreamRoomHarness {
   /// What the participant menu offers a voice moderator, or null for none.
   VoiceModeration? moderation;
 
+  /// The soundboard the room offers, or null for the composition's, which
+  /// has none.
+  SoundboardController? soundboard;
+
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
 
@@ -239,6 +244,7 @@ final class StreamRoomHarness {
         focus: focus,
         fullScreen: fullScreen,
         voiceModeration: moderation,
+        soundboard: soundboard,
       ),
     ),
   );
@@ -268,12 +274,16 @@ Future<StreamRoomHarness> pumpStreamRoom(
   bool join = true,
   bool selfPreviewOpens = true,
   VoiceModeration? moderation,
+  SoundboardController? soundboard,
 }) async {
-  final harness = StreamRoomHarness(
-    channel: channel,
-    seats: seats,
-    selfPreviewOpens: selfPreviewOpens,
-  )..moderation = moderation;
+  final harness =
+      StreamRoomHarness(
+          channel: channel,
+          seats: seats,
+          selfPreviewOpens: selfPreviewOpens,
+        )
+        ..moderation = moderation
+        ..soundboard = soundboard;
   addTearDown(harness.dispose);
   addTearDown(() => expect(tester.takeException(), isNull));
   if (join) await harness.joinRoom();

@@ -32,7 +32,7 @@ class VoiceRoomControls extends StatelessWidget {
   /// The Stream control (Go Live), or null where there is none.
   final Widget? goLive;
 
-  /// The soundboard button. Only a guild Room passes one.
+  /// The soundboard button, in a guild Room or a DM call.
   final Widget? soundboard;
 
   static const height = 72.0;

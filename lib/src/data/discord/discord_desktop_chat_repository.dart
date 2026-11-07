@@ -129,7 +129,7 @@ final class DiscordDesktopChatRepository
        _readState = DiscordReadStateRepository(_api),
        _threadMembership = DiscordThreadMembershipService(_api),
        _stages = DiscordStageService(_api),
-       _soundboard = DiscordSoundboardService(_api),
+       _soundboard = DiscordSoundboardService(_api, gateway: _gateway),
        _gifs = DiscordGifService(_api),
        _favorites = DiscordExpressionFavoritesRepository(_api),
        _applicationCommands = DiscordApplicationCommandService(

@@ -289,11 +289,12 @@ are excluded from the denominator and are never reported as implemented.
 - **Implemented**: also `FrecencyUserSettings`, the second settings type.
   `GET`/`PATCH /users/@me/settings-proto/2` is read and written over the same
   hand-written codec, and `USER_SETTINGS_PROTO_UPDATE` naming type 2 is applied
-  where before it was dropped for want of one. Three groups are modelled — the
+  where before it was dropped for want of one. Four groups are modelled: the
   starred GIFs (a `map<string, FavoriteGIF>`), stickers (packed `fixed64`
-  snowflakes) and emoji (custom ones by id, unicode ones by name, which is what
-  Discord stores rather than the surrogates). Everything else in the blob — the
-  frecency tables, the soundboard sounds, the command histories — is kept in
+  snowflakes), emoji (custom ones by id, unicode ones by name, which is what
+  Discord stores rather than the surrogates) and soundboard sounds (packed
+  `fixed64` ids in field 8). Everything else in the blob (the frecency
+  tables, the heard and played sound histories, the command histories) is kept in
   the buffer field for field and written back untouched, because a write
   replaces the whole blob and a codec that dropped what it did not model would
   erase those groups on the first starred GIF.
@@ -708,10 +709,14 @@ are excluded from the denominator and are never reported as implemented.
   by `tool/generate_unicode_emoji_data.py`), every joined server's emoji and
   stickers under that server's name with server attribution, favourites and
   frecency still leading, and colon autocomplete matching by name across
-  unicode and custom. The soundboard sends: a server's own sounds and the
-  shared defaults are listed together and played into a voice channel over
-  `POST /channels/{id}/send-soundboard-sound`, with `source_guild_id` carried
-  only for a server sound because Discord refuses it on a default one. Sounds
+  unicode and custom. The soundboard asks for every joined server's sounds
+  with gateway opcode 31 at `READY` (and for a server joined later on its
+  `GUILD_CREATE`), reads each `SOUNDBOARD_SOUNDS` answer, and reads the
+  defaults over REST. The sheet groups them by server with search and
+  favourites, and plays into a voice channel or, with Nitro, a DM or group
+  call over `POST /channels/{id}/send-soundboard-sound` with `sound_id`, and
+  `source_guild_id` only for a server sound because Discord refuses it on a
+  default one. Without Nitro another server's sound is locked. Sounds
   a server lost its boost level for stay listed and are refused locally rather
   than sent for a 403. Ids arrive as numbers for defaults and strings for
   guild sounds; both are read.
@@ -724,7 +729,8 @@ are excluded from the denominator and are never reported as implemented.
   file is refused in plain words rather than as a status code.
 - **Tests**: `discord_chat_repository_emojis_test.dart`,
   `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
-  `soundboard_widget_test.dart`, `expression_favorites_test.dart`,
+  `soundboard_widget_test.dart`, `discord_desktop_soundboard_test.dart`,
+  `dm_call_band_test.dart`, `expression_favorites_test.dart`,
   `expression_favorites_ui_test.dart`, `emoji_picker_widget_test.dart`,
   `unicode_emoji_catalog_test.dart`, `composer_autocomplete_catalog_test.dart`,
   `expression_file_picker_test.dart`, `guild_settings_expressions_test.dart`,

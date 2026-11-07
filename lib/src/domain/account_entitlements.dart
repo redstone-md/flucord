@@ -88,6 +88,11 @@ enum PremiumTier {
   bool get hasServerProfiles =>
       this == PremiumTier.nitro || this == PremiumTier.nitroBoost;
 
+  /// Whether the account may play any server's soundboard sounds anywhere,
+  /// DM and group calls included. Like server profiles, this comes with
+  /// Nitro and not with Nitro Basic.
+  bool get usesSoundboardEverywhere => hasServerProfiles;
+
   /// The largest file this account may attach anywhere, in bytes.
   int get uploadLimitBytes => switch (this) {
     PremiumTier.none => 20 * 1024 * 1024,
