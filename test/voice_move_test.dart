@@ -146,6 +146,21 @@ void main() {
     expect(rig.sounds.played, [ClientSound.userMoved]);
   });
 
+  test('a camera stays in the old room, and the new room is told', () async {
+    final rig = await _MoveRig.inRoom();
+    expect(await rig.voice.setCameraAnnounced(enabled: true), isTrue);
+    rig.forget();
+
+    rig.seatSelf('voice-2');
+    rig.serverUpdate(token: 'token-2', endpoint: 'voice-b.discord.media');
+    await _until(() => rig.gateway.voiceStates.isNotEmpty);
+
+    expect(rig.voice.isCameraOn, isFalse);
+    expect(rig.gateway.voiceStates.map((frame) => frame.channelId), [
+      'voice-2',
+    ]);
+  });
+
   test('a move into a channel with a server mute says so, as a join '
       'does', () async {
     final rig = await _MoveRig.inRoom();

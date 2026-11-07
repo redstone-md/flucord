@@ -884,6 +884,12 @@ final class VoiceController extends ChangeNotifier
     if (channelId == _connectedChannelId) return;
     _connectedChannelId = channelId;
     _joinedAt = clock.now();
+    // A camera belongs to the Room it was turned on in, as on a join. The
+    // new Room is told it is off.
+    if (_isCameraOn) {
+      _isCameraOn = false;
+      unawaited(_enqueue(_sendJoin));
+    }
     for (final userId in [..._participants.keys]) {
       if (userId != _selfUserId) _forgetParticipant(userId);
     }
