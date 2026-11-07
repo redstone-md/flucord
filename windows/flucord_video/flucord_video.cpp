@@ -2415,6 +2415,51 @@ void FinishDecoderClose(FlucordVideoDecoder* decoder) {
   MFShutdown();
   delete decoder;
 }
+// The checks every open makes on what it was handed.
+bool IsValidOpen(const FlucordVideoConfig* config,
+                 FlucordVideoFrameCallback callback,
+                 FlucordVideoEncoder** out_encoder) {
+  return config != nullptr && callback != nullptr && out_encoder != nullptr &&
+         config->width > 0 && config->height > 0 &&
+         config->frames_per_second > 0 && config->bitrate_bits_per_second > 0;
+}
+
+// A new encoder's state, before anything is opened for it.
+std::unique_ptr<FlucordVideoEncoder> NewEncoderState(
+    const FlucordVideoConfig* config,
+    FlucordVideoFrameCallback callback,
+    void* user_data) {
+  auto state = std::make_unique<FlucordVideoEncoder>();
+  state->config = *config;
+  state->callback = callback;
+  state->user_data = user_data;
+  return state;
+}
+
+// The hardware device a display or a window capture draws on, made on the
+// default adapter.
+HRESULT CreateCaptureDevice(FlucordVideoEncoder* state, UINT flags) {
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
+                           levels, ARRAYSIZE(levels), D3D11_SDK_VERSION,
+                           &state->device, nullptr, &state->context);
+}
+
+// Runs `loop` on the encoder's worker thread and hands the encoder over.
+FlucordVideoStatus StartWorker(std::unique_ptr<FlucordVideoEncoder> state,
+                               void (*loop)(FlucordVideoEncoder*),
+                               FlucordVideoEncoder** out_encoder) {
+  state->running.store(true);
+  FlucordVideoEncoder* raw = state.release();
+  raw->worker = std::thread([raw, loop]() {
+    loop(raw);
+    raw->worker_exit.Announce();
+  });
+  *out_encoder = raw;
+  return FLUCORD_VIDEO_OK;
+}
+
 }  // namespace
 
 extern "C" {
@@ -2592,11 +2637,7 @@ flucord_video_open(const FlucordVideoConfig* config,
                    FlucordVideoFrameCallback callback,
                    void* user_data,
                    FlucordVideoEncoder** out_encoder) {
-  if (config == nullptr || callback == nullptr || out_encoder == nullptr) {
-    return FLUCORD_VIDEO_ERROR_STATE;
-  }
-  if (config->width <= 0 || config->height <= 0 ||
-      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+  if (!IsValidOpen(config, callback, out_encoder)) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
 
@@ -2605,41 +2646,20 @@ flucord_video_open(const FlucordVideoConfig* config,
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
 
-  auto state = std::make_unique<FlucordVideoEncoder>();
-  state->config = *config;
-  state->callback = callback;
-  state->user_data = user_data;
-
-  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
-                                      D3D_FEATURE_LEVEL_10_1};
-  HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-                                 levels, ARRAYSIZE(levels), D3D11_SDK_VERSION,
-                                 &state->device, nullptr, &state->context);
-  if (FAILED(hr)) {
+  auto state = NewEncoderState(config, callback, user_data);
+  if (FAILED(CreateCaptureDevice(state.get(), 0))) {
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
-
-  hr = OpenDuplication(state.get());
-  if (FAILED(hr)) {
+  if (FAILED(OpenDuplication(state.get()))) {
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
   }
-
-  hr = ConfigureEncoder(state.get());
-  if (FAILED(hr)) {
+  if (FAILED(ConfigureEncoder(state.get()))) {
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_ENCODER;
   }
-
-  state->running.store(true);
-  FlucordVideoEncoder* raw = state.release();
-  raw->worker = std::thread([raw]() {
-    CaptureLoop(raw);
-    raw->worker_exit.Announce();
-  });
-  *out_encoder = raw;
-  return FLUCORD_VIDEO_OK;
+  return StartWorker(std::move(state), CaptureLoop, out_encoder);
 }
 
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
@@ -2647,11 +2667,7 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
                           FlucordVideoFrameCallback callback,
                           void* user_data,
                           FlucordVideoEncoder** out_encoder) {
-  if (config == nullptr || callback == nullptr || out_encoder == nullptr) {
-    return FLUCORD_VIDEO_ERROR_STATE;
-  }
-  if (config->width <= 0 || config->height <= 0 ||
-      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+  if (!IsValidOpen(config, callback, out_encoder)) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
   ComApartment com;
@@ -2660,10 +2676,7 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
   }
   ClearFailure();
 
-  auto state = std::make_unique<FlucordVideoEncoder>();
-  state->config = *config;
-  state->callback = callback;
-  state->user_data = user_data;
+  auto state = NewEncoderState(config, callback, user_data);
 
   // No Direct3D device here: the camera path never touches the desktop, and
   // demanding a GPU would refuse a machine that can plainly run a webcam.
@@ -2675,15 +2688,7 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_ENCODER;
   }
-
-  state->running.store(true);
-  FlucordVideoEncoder* raw = state.release();
-  raw->worker = std::thread([raw]() {
-    CameraLoop(raw);
-    raw->worker_exit.Announce();
-  });
-  *out_encoder = raw;
-  return FLUCORD_VIDEO_OK;
+  return StartWorker(std::move(state), CameraLoop, out_encoder);
 }
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_window_capture_supported(void) {
@@ -2697,12 +2702,7 @@ flucord_video_open_window(const FlucordVideoConfig* config,
                           FlucordVideoFrameCallback callback,
                           void* user_data,
                           FlucordVideoEncoder** out_encoder) {
-  if (config == nullptr || callback == nullptr || out_encoder == nullptr ||
-      window == 0) {
-    return FLUCORD_VIDEO_ERROR_STATE;
-  }
-  if (config->width <= 0 || config->height <= 0 ||
-      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+  if (!IsValidOpen(config, callback, out_encoder) || window == 0) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
   const HWND handle = reinterpret_cast<HWND>(static_cast<intptr_t>(window));
@@ -2714,20 +2714,13 @@ flucord_video_open_window(const FlucordVideoConfig* config,
   }
   ClearFailure();
 
-  auto state = std::make_unique<FlucordVideoEncoder>();
-  state->config = *config;
-  state->callback = callback;
-  state->user_data = user_data;
+  auto state = NewEncoderState(config, callback, user_data);
   state->window = std::make_unique<flucord_video::WindowCapture>(handle);
 
   // The window capture draws BGRA into textures of this device, and it may
   // sit on any display, so the device is the default adapter's.
-  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
-                                      D3D_FEATURE_LEVEL_10_1};
-  if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                               D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels,
-                               ARRAYSIZE(levels), D3D11_SDK_VERSION,
-                               &state->device, nullptr, &state->context))) {
+  if (FAILED(CreateCaptureDevice(state.get(),
+                                 D3D11_CREATE_DEVICE_BGRA_SUPPORT))) {
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
