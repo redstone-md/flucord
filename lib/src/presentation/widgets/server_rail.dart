@@ -102,8 +102,14 @@ class ServerRail extends StatelessWidget {
             },
       onEditFolder: arrange == null
           ? null
-          : (folderId, name, colour) => arrange(
-              rail.editFolder(folderId, name: name, colour: colour).entries,
+          : (folderId, settings) => arrange(
+              rail
+                  .editFolder(
+                    folderId,
+                    name: settings.name,
+                    colour: settings.colour,
+                  )
+                  .entries,
             ),
       isExpanded: openFolderIds.contains,
       onToggleFolder: onToggleFolder ?? (_) {},

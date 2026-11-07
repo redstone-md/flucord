@@ -25,7 +25,7 @@ final class _RailLayout {
 
   /// Null where the list cannot be saved, which turns dragging off.
   final void Function(RailDragItem item, RailDropTarget target)? onDrop;
-  final void Function(int folderId, String? name, int? colour)? onEditFolder;
+  final void Function(int folderId, FolderSettings settings)? onEditFolder;
   final bool Function(int folderId) isExpanded;
   final ValueChanged<int> onToggleFolder;
 
@@ -150,9 +150,7 @@ final class _RailLayout {
                 activity[id] ?? SpaceActivity.none,
             ]),
       onPressed: () => onToggleFolder(folderId),
-      onEdit: edit == null
-          ? null
-          : (name, colour) => edit(folderId, name, colour),
+      onEdit: edit == null ? null : (settings) => edit(folderId, settings),
       folder: folder,
     );
   }
@@ -303,7 +301,7 @@ class _FolderTile extends StatelessWidget {
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback onPressed;
-  final void Function(String? name, int? colour)? onEdit;
+  final ValueChanged<FolderSettings>? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +353,7 @@ class _FolderTile extends StatelessWidget {
   Future<void> _openMenu(
     BuildContext context,
     Offset position,
-    void Function(String? name, int? colour) edit,
+    ValueChanged<FolderSettings> edit,
   ) => showFlucordActionMenu(
     context,
     position: position,
@@ -371,13 +369,13 @@ class _FolderTile extends StatelessWidget {
 
   Future<void> _openSettings(
     BuildContext context,
-    void Function(String? name, int? colour) edit,
+    ValueChanged<FolderSettings> edit,
   ) async {
     final saved = await showDialog<FolderSettings>(
       context: context,
       builder: (_) =>
           FolderSettingsDialog(name: folder.name, colour: folder.colour),
     );
-    if (saved != null) edit(saved.name, saved.colour);
+    if (saved != null) edit(saved);
   }
 }
