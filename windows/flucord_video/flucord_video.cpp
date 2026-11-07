@@ -327,6 +327,10 @@ struct FlucordVideoEncoder {
   ComPtr<IMFSourceReader> reader;
   // Set instead of both when the source is one window.
   std::unique_ptr<flucord_video::WindowCapture> window;
+
+  // The CPU path's picture before it is placed inside the bars of a window
+  // share. Kept between frames so the fallback does not allocate per frame.
+  std::vector<uint8_t> fit_scratch;
   ComPtr<IMFTransform> encoder;
 
   // A hardware encoder MFT is driven differently: it asks for input through
@@ -993,21 +997,69 @@ void EncodeNv12(FlucordVideoEncoder* state,
 // Converts a BGRA frame into the encoder's NV12, in place in `state->nv12`.
 // Conversion and encoding are separate steps because a paced capture may
 // hold the converted frame for the still repeats that follow.
+// Converts `bgra` into an NV12 picture of `width` by `height`, scaling it
+// when the sizes differ.
+void BgraToNv12Sized(const uint8_t* bgra,
+                     int stride,
+                     int source_width,
+                     int source_height,
+                     int width,
+                     int height,
+                     uint8_t* nv12) {
+  if (source_width == width && source_height == height) {
+    BgraToNv12(bgra, stride, source_width, source_height, nv12);
+  } else {
+    BgraToNv12Scaled(bgra, stride, source_width, source_height, width, height,
+                     nv12);
+  }
+}
+
+// The CPU path's conversion into `state->nv12`. With `fit`, a window, the
+// picture keeps its shape inside black bars, as the GPU path draws it;
+// without, a display, it fills the output.
 void ConvertToNv12(FlucordVideoEncoder* state,
                    const uint8_t* bgra,
                    int stride,
                    int source_width,
-                   int source_height) {
-  const size_t nv12_size =
-      static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
+                   int source_height,
+                   bool fit) {
+  const int width = state->config.width;
+  const int height = state->config.height;
+  const size_t nv12_size = static_cast<size_t>(width) * height * 3 / 2;
   if (state->nv12.size() != nv12_size) state->nv12.resize(nv12_size);
-  if (source_width == state->config.width &&
-      source_height == state->config.height) {
-    BgraToNv12(bgra, stride, source_width, source_height, state->nv12.data());
-  } else {
-    BgraToNv12Scaled(bgra, stride, source_width, source_height,
-                     state->config.width, state->config.height,
-                     state->nv12.data());
+  const flucord_video::FitRect placed =
+      fit ? flucord_video::FitInside(source_width, source_height, width,
+                                     height)
+          : flucord_video::FitRect{0, 0, width, height};
+  const int placed_width = placed.right - placed.left;
+  const int placed_height = placed.bottom - placed.top;
+  if (placed_width == width && placed_height == height) {
+    BgraToNv12Sized(bgra, stride, source_width, source_height, width, height,
+                    state->nv12.data());
+    return;
+  }
+  // The bars are studio-range black, the range the encoder is given.
+  uint8_t* luma = state->nv12.data();
+  uint8_t* chroma = luma + static_cast<size_t>(width) * height;
+  memset(luma, 16, static_cast<size_t>(width) * height);
+  memset(chroma, 128, static_cast<size_t>(width) * height / 2);
+  std::vector<uint8_t>& picture = state->fit_scratch;
+  picture.resize(static_cast<size_t>(placed_width) * placed_height * 3 / 2);
+  BgraToNv12Sized(bgra, stride, source_width, source_height, placed_width,
+                  placed_height, picture.data());
+  const uint8_t* picture_chroma =
+      picture.data() + static_cast<size_t>(placed_width) * placed_height;
+  for (int y = 0; y < placed_height; ++y) {
+    memcpy(luma + static_cast<size_t>(placed.top + y) * width + placed.left,
+           picture.data() + static_cast<size_t>(y) * placed_width,
+           placed_width);
+  }
+  // FitInside keeps every edge even, so the chroma rows and columns line up.
+  for (int y = 0; y < placed_height / 2; ++y) {
+    memcpy(chroma + static_cast<size_t>(placed.top / 2 + y) * width +
+               placed.left,
+           picture_chroma + static_cast<size_t>(y) * placed_width,
+           placed_width);
   }
 }
 
@@ -1578,6 +1630,13 @@ void CaptureLoop(FlucordVideoEncoder* state) {
 
   while (state->running.load()) {
     if (state->paused.load()) {
+      // A window closed while the share is paused ends it now, not when the
+      // share resumes and asks for the next picture.
+      if (state->window && !state->window->IsOpen()) {
+        RecordAttemptFailure(kStageWindowClosed, S_OK);
+        AnnounceCaptureEnd(state);
+        break;
+      }
       Sleep(static_cast<DWORD>(frame_interval_ms));
       next_tick_ns = NowNs();
       continue;
@@ -1655,8 +1714,8 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         }
       }
       if (!converted) {
-        // The CPU path: read the picture back whole and convert it here. It
-        // stretches what is visible to the output, window or not.
+        // The CPU path: read the picture back whole and convert it here. A
+        // window keeps its shape inside black bars, as on the GPU path.
         if (staging == nullptr || staging_width != static_cast<int>(desc.Width) ||
             staging_height != static_cast<int>(desc.Height)) {
           D3D11_TEXTURE2D_DESC staging_desc = desc;
@@ -1681,7 +1740,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
             ConvertToNv12(state, static_cast<const uint8_t*>(mapped.pData),
                           static_cast<int>(mapped.RowPitch),
                           static_cast<int>(visible.right),
-                          static_cast<int>(visible.bottom));
+                          static_cast<int>(visible.bottom), source.fit);
             converted = true;
             state->context->Unmap(staging.Get(), 0);
           }

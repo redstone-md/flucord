@@ -54,6 +54,10 @@ class WindowCapture {
   // Hands the last picture back to the capture. Safe when there is none.
   void ReleaseFrame();
 
+  // Whether the window is still there. Cheap enough to ask on every tick,
+  // and the only way to hear of a close while no picture is taken.
+  bool IsOpen() const { return IsWindow(window_) != FALSE; }
+
   // Stops the capture and drops everything it made. Call on the capture
   // thread. Safe to call twice.
   void Stop();

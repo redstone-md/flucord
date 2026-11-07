@@ -158,7 +158,7 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
     // walks the rest in z-order.
     const gwChild = 5;
     const gwHwndNext = 2;
-    const gwlExStyle = -16;
+    const gwlExStyle = -20;
     const wsExToolWindow = 0x00000080;
     const classNameCapacity = 256;
 
