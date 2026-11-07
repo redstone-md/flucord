@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import '../../domain/stream_captures.dart';
+import '../../platform/windows_z_order.dart';
 import 'screenshot_service.dart';
 
 /// What the window walk saw of one visible top-level window. The walk reads
@@ -113,9 +114,9 @@ final class _BitmapInfoHeader extends Struct {
 /// on an isolate of their own: a screen capture can wait up to a second, and
 /// `PrintWindow` waits on the window's own thread.
 final class WindowsCaptureCatalog implements CaptureCatalog {
-  WindowsCaptureCatalog() : _user32 = _User32.open();
+  WindowsCaptureCatalog() : _windowsApi = _WindowsApi.open();
 
-  final _User32 _user32;
+  final _WindowsApi _windowsApi;
 
   /// How long the window thumbnails may take before the picker goes on
   /// without them. A window that stops answering would otherwise hold the
@@ -123,7 +124,7 @@ final class WindowsCaptureCatalog implements CaptureCatalog {
   static const _windowBudget = Duration(seconds: 2);
 
   @override
-  List<WindowCapture> windows() => _user32.shareableWindows();
+  List<WindowCapture> windows() => _windowsApi.shareableWindows();
 
   @override
   Future<Map<String, CaptureThumbnail>> thumbnails(
@@ -175,7 +176,7 @@ final class WindowsCaptureCatalog implements CaptureCatalog {
   static Map<String, CaptureThumbnail> _windowThumbnails(
     List<({String id, int handle})> windows,
   ) {
-    final user32 = _User32.open();
+    final user32 = _WindowsApi.open();
     return {
       for (final window in windows)
         window.id: ?user32.printWindow(window.handle),
@@ -183,18 +184,19 @@ final class WindowsCaptureCatalog implements CaptureCatalog {
   }
 }
 
-/// The Windows calls the catalog makes, looked up once.
-final class _User32 {
-  _User32._(DynamicLibrary user32, DynamicLibrary gdi32, DynamicLibrary dwmapi)
-    : _getWindow = user32
+/// The Windows calls the catalog makes, from `user32`, `gdi32`, `dwmapi` and
+/// `kernel32`, looked up once.
+final class _WindowsApi {
+  _WindowsApi._(
+    DynamicLibrary user32,
+    DynamicLibrary gdi32,
+    DynamicLibrary dwmapi,
+  ) : _zOrder = WindowsZOrder(user32),
+      _getWindow = user32
           .lookupFunction<
             _Handle Function(_Handle, Uint32),
             int Function(int, int)
           >('GetWindow'),
-      _getDesktopWindow = user32
-          .lookupFunction<_Handle Function(), int Function()>(
-            'GetDesktopWindow',
-          ),
       _isWindowVisible = user32
           .lookupFunction<Int32 Function(_Handle), int Function(int)>(
             'IsWindowVisible',
@@ -299,14 +301,12 @@ final class _User32 {
             'GetCurrentProcessId',
           )();
 
-  factory _User32.open() => _User32._(
+  factory _WindowsApi.open() => _WindowsApi._(
     DynamicLibrary.open('user32.dll'),
     DynamicLibrary.open('gdi32.dll'),
     DynamicLibrary.open('dwmapi.dll'),
   );
 
-  static const _gwChild = 5;
-  static const _gwHwndNext = 2;
   static const _gwOwner = 4;
   static const _gwlExStyle = -20;
   static const _wsExToolWindow = 0x00000080;
@@ -319,8 +319,8 @@ final class _User32 {
   static const _dibRgbColors = 0;
   static const _textCapacity = 256;
 
+  final WindowsZOrder _zOrder;
   final int Function(int, int) _getWindow;
-  final int Function() _getDesktopWindow;
   final int Function(int) _isWindowVisible;
   final int Function(int) _isIconic;
   final int Function(int) _isHung;
@@ -359,13 +359,7 @@ final class _User32 {
     final rect = calloc<_Rect>();
     try {
       final found = <WindowCapture>[];
-      // GW_CHILD from the desktop is the first top-level window; GW_HWNDNEXT
-      // walks the rest in z-order.
-      for (
-        var window = _getWindow(_getDesktopWindow(), _gwChild);
-        window != 0;
-        window = _getWindow(window, _gwHwndNext)
-      ) {
+      for (final window in _zOrder.windows) {
         // Most top-level windows are hidden; nothing more is read of those.
         if (_isWindowVisible(window) == 0) continue;
         process.value = 0;
