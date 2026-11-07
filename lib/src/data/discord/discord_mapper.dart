@@ -426,8 +426,8 @@ final class DiscordMapper {
     );
   }
 
-  /// The standing half of a guild member payload: the nickname, and what
-  /// permissions depend on.
+  /// The standing half of a guild member payload: the nickname, the server
+  /// bio and banner when it carries them, and what permissions depend on.
   GuildMembership membership(Map<String, Object?> payload) {
     final timeout = payload['communication_disabled_until'] as String?;
     final joined = payload['joined_at'] as String?;
@@ -443,6 +443,12 @@ final class DiscordMapper {
       isPending: payload['pending'] as bool? ?? false,
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
       joinedAt: joined == null ? null : DateTime.tryParse(joined),
+      bio: payload['bio'] as String?,
+      // A key with null is a banner taken off, which is not the same as a
+      // payload that says nothing about it.
+      bannerHash: payload.containsKey('banner')
+          ? payload['banner'] as String? ?? ''
+          : null,
     );
   }
 

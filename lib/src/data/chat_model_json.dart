@@ -217,6 +217,8 @@ final class ChatModelJson {
         'timeout': entry.value.timeoutUntil?.toIso8601String(),
         'joined': entry.value.joinedAt?.toIso8601String(),
         'nick': entry.value.nickname,
+        'bio': entry.value.bio,
+        'banner': entry.value.bannerHash,
       },
   });
 
@@ -245,6 +247,8 @@ final class ChatModelJson {
       timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
       joinedAt: joined == null ? null : DateTime.tryParse(joined),
       nickname: raw['nick'] as String?,
+      bio: raw['bio'] as String?,
+      bannerHash: raw['banner'] as String?,
     );
   }
 }
