@@ -1,12 +1,14 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/presentation/widgets/reaction_details_dialog.dart';
 
 import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
 const _idOf = ChannelHistoryFixture.idOf;
+const _reactedId = '900000000000000001';
 
 final _markUnread = find.byKey(const ValueKey('message-menu-mark-unread'));
 final _addReaction = find.byKey(const ValueKey('message-menu-add-reaction'));
@@ -108,6 +110,44 @@ void main() {
       platform: TargetPlatform.windows,
     );
   });
+
+  testSession(
+    'a right click on a reaction lists who reacted, not the message menu',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await session.dispatch('MESSAGE_CREATE', {
+        ...rawMessage(
+          id: _reactedId,
+          channelId: SessionHarness.channelId,
+          guildId: SessionHarness.guildId,
+          authorId: SessionHarness.friendId,
+          content: 'reacted to',
+        ),
+        'reactions': [
+          {
+            'emoji': {'id': null, 'name': '🚀'},
+            'count': 1,
+            'count_details': {'normal': 1, 'burst': 0},
+            'me': false,
+          },
+        ],
+      });
+
+      final mouse = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('reaction-custom-$_reactedId-null')),
+        ),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await mouse.up();
+      await session.settle();
+
+      expect(find.byType(ReactionDetailsDialog), findsOneWidget);
+      expect(_markUnread, findsNothing);
+    },
+    platform: TargetPlatform.windows,
+  );
 
   final reactionPath =
       '${ChannelHistoryFixture.messagesPath}/${_idOf(12)}'
