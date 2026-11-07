@@ -11,7 +11,8 @@ const _iconUrl = 'https://cdn.discordapp.com/channel-icons/group-1/a1.webp';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('a cached group DM keeps every recipient and its picture', () async {
+  test('a cached group DM keeps every recipient, its picture and its '
+      'owner', () async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
@@ -31,6 +32,7 @@ void main() {
             recipientIds: ['user-1', 'user-2'],
             isGroupDirectMessage: true,
             iconUrl: _iconUrl,
+            ownerId: 'user-2',
           ),
           ConversationChannel(
             id: 'duo',
@@ -53,6 +55,8 @@ void main() {
     expect(group.recipientIds, ['user-1', 'user-2']);
     expect(group.iconUrl, _iconUrl);
     expect(group.isGroupDirectMessage, isTrue);
+    // So Remove from group shows on a cold start, before READY.
+    expect(group.ownerId, 'user-2');
     final duo = restored.channelById('duo');
     expect(duo.isGroupDirectMessage, isTrue);
     expect(duo.soleRecipientId, isNull);

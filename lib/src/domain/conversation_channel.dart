@@ -83,7 +83,7 @@ final class ConversationChannel {
   final String? iconUrl;
 
   /// Who runs a group DM, the one person who may remove others from it.
-  /// Null outside a group, and on a group read from the local cache.
+  /// Null outside a group.
   final String? ownerId;
 
   /// A direct message the account has not answered yet, so it belongs in the

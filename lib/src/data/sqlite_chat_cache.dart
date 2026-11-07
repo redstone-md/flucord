@@ -777,6 +777,7 @@ final class SqliteChatCache
     'recipient_ids_json': ChatModelJson.strings(channel.recipientIds),
     'is_group_dm': channel.isGroupDirectMessage ? 1 : 0,
     'icon_url': channel.iconUrl,
+    'owner_id': channel.ownerId,
     'is_message_request': channel.isMessageRequest ? 1 : 0,
     'message_requested_at': channel.messageRequestedAt?.toIso8601String(),
     'permission_overwrites_json': ChatModelJson.permissionOverwrites(
@@ -829,6 +830,7 @@ final class SqliteChatCache
         ),
         isGroupDirectMessage: row['is_group_dm'] == 1,
         iconUrl: row['icon_url'] as String?,
+        ownerId: row['owner_id'] as String?,
         isMessageRequest: row['is_message_request'] == 1,
         messageRequestedAt: switch (row['message_requested_at']) {
           final String requestedAt => DateTime.parse(requestedAt),
