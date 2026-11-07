@@ -449,7 +449,7 @@ class ConversationPaneState extends State<ConversationPane> {
         pickSource: () => GoLiveSourceDialog.pick(
           context,
           sources: goLive.sources,
-          thumbnails: goLive.thumbnails,
+          thumbnails: goLive.captures.thumbnails,
         ),
         guildId: channel.guildId,
       ),
@@ -898,6 +898,17 @@ class ConversationPaneState extends State<ConversationPane> {
     )?.showSnackBar(SnackBar(content: Text(callFailureReason(error))));
   }
 
+  /// Waits for a super reaction and says why Discord refused it, if it did.
+  Future<void> _reportSuperReactionFailure(
+    ChatController chat,
+    Future<bool> sent,
+  ) async {
+    if (await sent || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(superReactionFailureReason(chat.error))),
+    );
+  }
+
   /// The one other person in a DM, or null for a channel or a group DM.
   Member? _recipientOf(ConversationChannel channel) =>
       switch (channel.soleRecipientId) {
@@ -1083,9 +1094,17 @@ class ConversationPaneState extends State<ConversationPane> {
           : null,
       onAddReaction: chat.addReaction,
       onToggleSuperReaction: sendsSuperReactions
-          ? chat.toggleSuperReaction
+          ? (message, reaction) => _reportSuperReactionFailure(
+              chat,
+              chat.toggleSuperReaction(message, reaction),
+            )
           : null,
-      onAddSuperReaction: sendsSuperReactions ? chat.addSuperReaction : null,
+      onAddSuperReaction: sendsSuperReactions
+          ? (message, emoji) => _reportSuperReactionFailure(
+              chat,
+              chat.addSuperReaction(message, emoji),
+            )
+          : null,
       onMarkUnread: chat.readStateRepository == null
           ? null
           : chat.markChannelUnreadFrom,

@@ -10,19 +10,19 @@ void main() {
     tester,
   ) async {
     final asked = <String>[];
-    Future<PollVotersPage> load(
+    Future<MemberPage> load(
       ChatMessage message,
       PollAnswer answer,
       String? after,
     ) async {
       asked.add('${answer.id} after $after');
       return switch ((answer.id, after)) {
-        (1, null) => PollVotersPage(
+        (1, null) => MemberPage(
           users: [_member('a', 'Ada')],
           hasMore: true,
         ),
-        (1, 'a') => PollVotersPage(users: [_member('b', 'Bo')], hasMore: false),
-        _ => PollVotersPage(users: [_member('c', 'Cy')], hasMore: false),
+        (1, 'a') => MemberPage(users: [_member('b', 'Bo')], hasMore: false),
+        _ => MemberPage(users: [_member('c', 'Cy')], hasMore: false),
       };
     }
 

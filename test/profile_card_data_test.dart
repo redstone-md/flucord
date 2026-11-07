@@ -1,3 +1,4 @@
+import 'package:flucord/src/data/discord/discord_mapper.dart';
 import 'package:flucord/src/data/discord/discord_user_profile_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
@@ -91,4 +92,58 @@ void main() {
       );
     },
   );
+
+  test('a server bio and banner the member payload carries win over a '
+      'profile fetched before they changed', () {
+    final member = _discordMapper.guildMember({
+      'user': {'id': '100000000000000501', 'username': 'mira'},
+      'roles': <Object?>[],
+      'bio': 'Smith by trade.',
+      'banner': 'c3d4',
+    }, '100000000000000601');
+    const stale = OtherUserProfile(
+      userId: '100000000000000501',
+      bio: 'Own bio',
+      serverProfile: ServerProfile(
+        guildId: '100000000000000601',
+        bio: 'Old server bio',
+        bannerHash: 'a1b2',
+      ),
+    );
+
+    final data = ProfileCardData.member(
+      member,
+      spaceId: '100000000000000601',
+      profile: stale,
+    );
+
+    expect(data.bio, 'Smith by trade.');
+    expect(data.bannerUrl, contains('c3d4'));
+  });
+
+  test('a member payload without a server bio leaves the fetched one', () {
+    final member = _discordMapper.guildMember({
+      'user': {'id': '100000000000000501', 'username': 'mira'},
+      'roles': <Object?>[],
+    }, '100000000000000601');
+    const fetched = OtherUserProfile(
+      userId: '100000000000000501',
+      serverProfile: ServerProfile(
+        guildId: '100000000000000601',
+        bio: 'Server bio',
+        bannerHash: 'a1b2',
+      ),
+    );
+
+    final data = ProfileCardData.member(
+      member,
+      spaceId: '100000000000000601',
+      profile: fetched,
+    );
+
+    expect(data.bio, 'Server bio');
+    expect(data.bannerUrl, contains('a1b2'));
+  });
 }
+
+final _discordMapper = DiscordMapper();

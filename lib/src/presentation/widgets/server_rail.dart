@@ -21,7 +21,7 @@ import 'rail_tile.dart';
 
 part 'server_rail_folders.dart';
 
-class ServerRail extends StatefulWidget {
+class ServerRail extends StatelessWidget {
   const ServerRail({
     required this.spaces,
     required this.activity,
@@ -32,6 +32,8 @@ class ServerRail extends StatefulWidget {
     required this.sessionMode,
     required this.isDark,
     this.folders = const [],
+    this.openFolderIds = const {},
+    this.onToggleFolder,
     this.onArrange,
     this.onAddServer,
     this.onOpenSpaceMenu,
@@ -56,6 +58,11 @@ class ServerRail extends StatefulWidget {
   /// The account's stored folders and server order.
   final List<GuildFolder> folders;
 
+  /// The folders shown open, kept by the caller so they stay open across a
+  /// restart. Without [onToggleFolder] a folder does not open.
+  final Set<int> openFolderIds;
+  final ValueChanged<int>? onToggleFolder;
+
   /// Saves a new server list, or null where nothing can be saved. Servers
   /// and folders can be dragged and folders edited only with it.
   final ValueChanged<List<GuildFolder>>? onArrange;
@@ -69,31 +76,22 @@ class ServerRail extends StatefulWidget {
   final void Function(String spaceId, Offset position)? onOpenSpaceMenu;
 
   @override
-  State<ServerRail> createState() => _ServerRailState();
-}
-
-class _ServerRailState extends State<ServerRail> {
-  /// The folders shown open. Kept on this device only, as Discord does.
-  final Set<int> _expanded = {};
-
-  @override
   Widget build(BuildContext context) {
-    final spaces = widget.spaces;
     final directSpaces = spaces.where((space) => space.isDirectMessages);
     final directSpace = directSpaces.isEmpty ? null : directSpaces.first;
     final guildSpaces = {
       for (final space in spaces)
         if (!space.isDirectMessages) space.id: space,
     };
-    final rail = GuildRail.arrange(widget.folders, guildSpaces.keys.toList());
-    final arrange = widget.onArrange;
+    final rail = GuildRail.arrange(folders, guildSpaces.keys.toList());
+    final arrange = onArrange;
     final layout = _RailLayout(
       rail: rail,
       spaces: guildSpaces,
-      activity: widget.activity,
-      selectedSpaceId: widget.selectedSpaceId,
-      onSelectSpace: widget.onSelectSpace,
-      onOpenSpaceMenu: widget.onOpenSpaceMenu,
+      activity: activity,
+      selectedSpaceId: selectedSpaceId,
+      onSelectSpace: onSelectSpace,
+      onOpenSpaceMenu: onOpenSpaceMenu,
       onDrop: arrange == null
           ? null
           : (item, target) {
@@ -104,13 +102,17 @@ class _ServerRailState extends State<ServerRail> {
             },
       onEditFolder: arrange == null
           ? null
-          : (folderId, name, colour) => arrange(
-              rail.editFolder(folderId, name: name, colour: colour).entries,
+          : (folderId, settings) => arrange(
+              rail
+                  .editFolder(
+                    folderId,
+                    name: settings.name,
+                    colour: settings.colour,
+                  )
+                  .entries,
             ),
-      isExpanded: _expanded.contains,
-      onToggleFolder: (folderId) => setState(() {
-        if (!_expanded.remove(folderId)) _expanded.add(folderId);
-      }),
+      isExpanded: openFolderIds.contains,
+      onToggleFolder: onToggleFolder ?? (_) {},
     );
     return Container(
       key: const ValueKey('server-rail'),
@@ -120,13 +122,13 @@ class _ServerRailState extends State<ServerRail> {
         children: [
           const SizedBox(height: RailMetrics.gap),
           _HomeButton(
-            selected: directSpace?.id == widget.selectedSpaceId,
+            selected: directSpace?.id == selectedSpaceId,
             activity: directSpace == null
                 ? SpaceActivity.none
-                : widget.activity[directSpace.id] ?? SpaceActivity.none,
+                : activity[directSpace.id] ?? SpaceActivity.none,
             onPressed: directSpace == null
                 ? null
-                : () => widget.onSelectSpace(directSpace.id),
+                : () => onSelectSpace(directSpace.id),
           ),
           const RailDivider(),
           Expanded(
@@ -137,26 +139,23 @@ class _ServerRailState extends State<ServerRail> {
               itemBuilder: layout.entry,
             ),
           ),
-          if (widget.onAddServer case final onAddServer?)
+          if (onAddServer case final onAddServer?)
             Padding(
               padding: const EdgeInsets.only(bottom: RailMetrics.gap),
               child: _AddServerButton(onPressed: onAddServer),
             ),
           IconButton(
             key: const ValueKey('open-connections'),
-            onPressed: widget.onOpenConnections,
+            onPressed: onOpenConnections,
             icon: FlucordIcon(
               FlucordIcons.link,
-              color: widget.sessionMode == SessionMode.discord
+              color: sessionMode == SessionMode.discord
                   ? context.surfaces.accentIcon
                   : null,
             ),
             tooltip: 'Connections',
           ),
-          RailThemeToggle(
-            isDark: widget.isDark,
-            onPressed: widget.onToggleTheme,
-          ),
+          RailThemeToggle(isDark: isDark, onPressed: onToggleTheme),
           const SizedBox(height: RailMetrics.gap),
         ],
       ),

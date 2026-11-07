@@ -55,11 +55,63 @@ final class RulesScreening {
       if (field.isRules) ...field.rules,
   ];
 
-  /// Whether Flucord can complete this screening. Only the rules can be
-  /// agreed to here; a required written or multiple-choice question has to
-  /// be answered in Discord's own client.
+  /// Whether Flucord can complete this screening: every required step is
+  /// one it can answer. A required email or phone verification has to be
+  /// done in Discord's own client.
   bool get canAccept =>
-      fields.every((field) => field.isRules || !field.required);
+      fields.every((field) => field.isAnswerable || !field.required);
+
+  /// Whether every required question has an answer. The rules are agreed to
+  /// apart from this, with the dialog's box.
+  bool get isAnswered => fields.every(
+    (field) => field.isRules || !field.required || field.answer != null,
+  );
+
+  /// This screening with [answer] given to the field at [index]. A null
+  /// answer clears it.
+  RulesScreening answer(int index, ScreeningAnswer? answer) => RulesScreening(
+    version: version,
+    description: description,
+    fields: [
+      for (final (at, field) in fields.indexed)
+        at == index ? field._answered(answer) : field,
+    ],
+  );
+}
+
+/// What the member answered to one written or multiple-choice question.
+sealed class ScreeningAnswer {
+  const ScreeningAnswer();
+
+  /// A written answer, sent trimmed. Empty text is no answer.
+  const factory ScreeningAnswer.text(String text) = ScreeningText;
+
+  /// The index of the picked choice.
+  const factory ScreeningAnswer.choice(int index) = ScreeningChoice;
+}
+
+final class ScreeningText extends ScreeningAnswer {
+  const ScreeningText(this.text);
+  final String text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ScreeningText && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+}
+
+final class ScreeningChoice extends ScreeningAnswer {
+  const ScreeningChoice(this.index);
+  final int index;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ScreeningChoice && other.index == index;
+
+  @override
+  int get hashCode => index.hashCode;
 }
 
 /// One step of a screening. [type] is Discord's own name for it, such as
@@ -72,9 +124,14 @@ final class RulesScreeningField {
     this.rules = const [],
     this.choices = const [],
     this.description,
+    this.placeholder,
+    this.answer,
   });
 
   static const rulesType = 'TERMS';
+  static const textInputType = 'TEXT_INPUT';
+  static const paragraphType = 'PARAGRAPH';
+  static const multipleChoiceType = 'MULTIPLE_CHOICE';
 
   final String type;
   final String label;
@@ -87,7 +144,40 @@ final class RulesScreeningField {
   final List<String> choices;
   final String? description;
 
+  /// The hint shown in an empty written answer.
+  final String? placeholder;
+
+  /// What the member answered here, or null for nothing yet.
+  final ScreeningAnswer? answer;
+
   bool get isRules => type == rulesType;
+  bool get isWritten => type == textInputType || type == paragraphType;
+  bool get isMultipleChoice => type == multipleChoiceType;
+
+  /// Whether Flucord can answer this step.
+  bool get isAnswerable => isRules || isWritten || isMultipleChoice;
+
+  /// The longest written answer Discord takes, or null for a step that is
+  /// not written.
+  int? get maxLength => switch (type) {
+    textInputType => 150,
+    paragraphType => 1000,
+    _ => null,
+  };
+
+  RulesScreeningField _answered(ScreeningAnswer? answer) => RulesScreeningField(
+    type: type,
+    label: label,
+    required: required,
+    rules: rules,
+    choices: choices,
+    description: description,
+    placeholder: placeholder,
+    answer: switch (answer) {
+      ScreeningText(:final text) when text.trim().isEmpty => null,
+      _ => answer,
+    },
+  );
 }
 
 /// A server's onboarding, from `GET /guilds/{id}/onboarding`, reduced to the

@@ -63,7 +63,8 @@ void _joinGateCases() {
       );
     });
 
-    test('a required written question cannot be accepted here', () async {
+    test('written and multiple-choice questions can be answered here, a '
+        'required verification cannot', () async {
       final transport = _Transport([
         _json({
           'version': null,
@@ -77,17 +78,84 @@ void _joinGateCases() {
             {
               'field_type': 'TEXT_INPUT',
               'label': 'Why are you here?',
+              'placeholder': 'A few words',
+              'required': true,
+            },
+            {
+              'field_type': 'MULTIPLE_CHOICE',
+              'label': 'Pick one',
+              'choices': ['Plants', 'Food'],
               'required': true,
             },
           ],
         }),
+        _json({
+          'version': null,
+          'form_fields': [
+            {'field_type': 'VERIFICATION', 'label': 'Verify', 'required': true},
+          ],
+        }),
       ]);
+      final repository = _repository(transport);
 
-      final screening = await _repository(
+      final questions = await repository.loadRulesScreening(_gateGuild);
+      final verification = await repository.loadRulesScreening(_gateGuild);
+
+      expect(questions?.canAccept, isTrue);
+      expect(questions?.fields[1].placeholder, 'A few words');
+      expect(questions?.fields[1].maxLength, 150);
+      expect(verification?.canAccept, isFalse);
+    });
+
+    test('accepting sends the answers to written and multiple-choice '
+        'questions', () async {
+      final transport = _Transport([
+        _json({'id': '100000000000000306', 'guild_id': _gateGuild}),
+        _json(_ownMember(pending: true)),
+      ]);
+      const screening = RulesScreening(
+        fields: [
+          RulesScreeningField(
+            type: RulesScreeningField.paragraphType,
+            label: 'Tell us about you',
+            required: true,
+          ),
+          RulesScreeningField(
+            type: RulesScreeningField.multipleChoiceType,
+            label: 'Pick one',
+            required: true,
+            choices: ['Plants', 'Food'],
+          ),
+        ],
+      );
+      final answered = screening
+          .answer(0, const ScreeningAnswer.text('  I grow tomatoes. '))
+          .answer(1, const ScreeningAnswer.choice(1));
+
+      expect(screening.isAnswered, isFalse);
+      expect(answered.isAnswered, isTrue);
+      await _repository(
         transport,
-      ).loadRulesScreening(_gateGuild);
+      ).acceptRules(guildId: _gateGuild, screening: answered);
 
-      expect(screening?.canAccept, isFalse);
+      final fields = (transport.requests.first.json! as Map)['form_fields'];
+      expect(fields, [
+        {
+          'field_type': 'PARAGRAPH',
+          'label': 'Tell us about you',
+          'required': true,
+          'description': null,
+          'response': 'I grow tomatoes.',
+        },
+        {
+          'field_type': 'MULTIPLE_CHOICE',
+          'label': 'Pick one',
+          'required': true,
+          'description': null,
+          'choices': ['Plants', 'Food'],
+          'response': 1,
+        },
+      ]);
     });
 
     test('accepting sends every field back agreed, then reads the member '

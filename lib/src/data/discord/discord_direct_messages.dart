@@ -35,6 +35,11 @@ final class DiscordDirectMessages {
   /// rebuilt from this payload: its own name and every other recipient.
   final Map<String, Map<String, Object?>> _payloads = {};
 
+  /// The payloads of DMs the account closed this session. An own message
+  /// names nobody else, so a DM the account writes in from another client
+  /// comes back from here, as Discord brings it back.
+  final Map<String, Map<String, Object?>> _closed = {};
+
   CommunitySpace get _space => _mapper.directMessagesSpace;
 
   /// The DMs the account holds after a READY or an offline launch.
@@ -134,7 +139,9 @@ final class DiscordDirectMessages {
   /// `CHANNEL_CREATE` adds it again.
   void forget(String channelId) {
     _knownChannelIds.remove(channelId);
-    _payloads.remove(channelId);
+    if (_payloads.remove(channelId) case final payload?) {
+      _closed[channelId] = payload;
+    }
   }
 
   /// Adopts the channel of a message when the channel is new here.
@@ -156,7 +163,14 @@ final class DiscordDirectMessages {
     final channelType = payload['channel_type'];
     if (channelType != null && channelType != 1) return;
     final author = payload['author'];
-    if (author is! Map || author['id'] == currentUserId) return;
+    if (author is! Map) return;
+    if (author['id'] == currentUserId) {
+      if (_closed.remove(channelId) case final closed?) {
+        await acceptChannel(closed, currentUserId);
+      }
+      return;
+    }
+    _closed.remove(channelId);
     await acceptChannel({
       'id': channelId,
       'type': 1,
@@ -182,6 +196,7 @@ final class DiscordDirectMessages {
   ) async {
     final channel = conversation.channel;
     _payloads[channel.id] = payload;
+    _closed.remove(channel.id);
     if (_knownChannelIds.add(channel.id)) {
       _onChannelAdded?.call(channel.id);
     }

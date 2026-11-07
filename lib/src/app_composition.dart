@@ -119,11 +119,11 @@ import 'data/video/native_video_decoder_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
-import 'data/video/windows_share_sources.dart';
+import 'data/video/windows_captures.dart';
 import 'domain/chat_models.dart' show Member, UserActivity;
 import 'domain/attachment_download.dart';
 import 'domain/game_detection.dart';
-import 'domain/go_live_sources.dart';
+import 'domain/stream_captures.dart';
 import 'domain/multi_factor_auth.dart'
     show
         SecurityKeyAccount,
@@ -544,8 +544,8 @@ final class AppComposition {
         ),
         // Windows to share next to the screens, and the picker's thumbnails.
         shareSources: Platform.isWindows
-            ? WindowsShareSourceCatalog()
-            : const UnavailableShareSourceCatalog(),
+            ? WindowsCaptureCatalog()
+            : const UnavailableCaptureCatalog(),
         systemAudio: Platform.isWindows
             ? WindowsSystemAudioCapture()
             : const UnavailableSystemAudioCapture(),
@@ -993,23 +993,20 @@ final class AppComposition {
       ? WindowsSecurityKeyCeremony()
       : const UnavailableSecurityKeyCeremony();
 
-  /// Records a constructed part for reverse-order teardown.
   /// Whether this account watches [userId]'s Stream in the room it is in.
   bool _watchesStreamOf(String userId) {
     final channelId = voice.connectedChannelId;
     if (channelId == null) return false;
-    final guildId = voice.connectedGuildId;
     return streamViewer.isOpen(
-      guildId == null
-          ? GoLiveStreamKey.call(channelId: channelId, userId: userId)
-          : GoLiveStreamKey.guild(
-              guildId: guildId,
-              channelId: channelId,
-              userId: userId,
-            ),
+      GoLiveStreamKey.inRoom(
+        guildId: voice.connectedGuildId,
+        channelId: channelId,
+        userId: userId,
+      ),
     );
   }
 
+  /// Records a constructed part for reverse-order teardown.
   T _register<T extends ChangeNotifier>(T controller) {
     _teardown.add(controller.dispose);
     return controller;

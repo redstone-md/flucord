@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
-import 'package:flucord/src/domain/go_live_sources.dart';
+import 'package:flucord/src/domain/stream_captures.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/go_live_media_plane.dart';
 import 'package:flucord/src/data/discord/go_live_sender.dart';
@@ -16,7 +16,7 @@ import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/fake_share_sources.dart';
+import 'support/fake_captures.dart';
 import 'support/fake_video_decoder.dart';
 import 'support/fake_video_encoder.dart';
 
@@ -43,7 +43,7 @@ GoLiveController _controller(
   _FakePlane? plane,
   StreamController<DiscordSenderEndpoint>? endpoints,
   GoLiveSelfPreview? preview,
-  ShareSourceCatalog shareSources = const UnavailableShareSourceCatalog(),
+  CaptureCatalog shareSources = const UnavailableCaptureCatalog(),
   Duration pingInterval = const Duration(seconds: 30),
 }) {
   final media = plane ?? _FakePlane();
@@ -430,8 +430,8 @@ void main() {
   });
 
   group('window sources', () {
-    final notes = FakeShareSourceCatalog(
-      windows: const [GoLiveWindow(handle: 0x2a, name: 'Notes')],
+    final notes = FakeCaptureCatalog(
+      windows: const [WindowCapture(handle: 0x2a, name: 'Notes')],
     );
 
     test('the picker lists every screen, then the open windows', () {

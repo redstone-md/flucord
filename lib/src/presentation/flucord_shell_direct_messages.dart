@@ -30,7 +30,7 @@ extension _FlucordShellDirectMessages on FlucordShell {
         title: 'Create group DM',
         confirmLabel: 'Create group DM',
         friends: _friendCandidates(),
-        room: groupDirectMessageCapacity - 1,
+        maxPicked: groupDirectMessageCapacity - 1,
         minPicked: 2,
       ),
     );
@@ -56,7 +56,7 @@ extension _FlucordShellDirectMessages on FlucordShell {
         title: 'Add friends to ${channel.name}',
         confirmLabel: 'Add',
         friends: _friendCandidates(except: channel.recipientIds.toSet()),
-        room: groupDirectMessageCapacity - 1 - channel.recipientIds.length,
+        maxPicked: groupDirectMessageCapacity - 1 - channel.recipientIds.length,
       ),
     );
     if (picked == null) return;

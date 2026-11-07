@@ -7,6 +7,7 @@ const _room = VoiceSoundSnapshot(
   channelId: 'voice-1',
   connected: true,
   others: {'friend-1'},
+  selfSeatedIn: 'voice-1',
 );
 
 void main() {
@@ -49,14 +50,44 @@ void main() {
       );
     });
 
+    test('following a move to the new channel makes no second sound', () {
+      final moved = _room.copyWith(selfSeatedIn: 'voice-2');
+      final followed = moved.copyWith(channelId: 'voice-2', others: {});
+
+      expect(voiceSoundBetween(_room, moved), ClientSound.userMoved);
+      expect(voiceSoundBetween(moved, followed), isNull);
+    });
+
+    test('the room as it is on entry makes no join sound, even when the '
+        'roster comes after the connection', () {
+      const connected = VoiceSoundSnapshot(
+        channelId: 'voice-1',
+        connected: true,
+      );
+      final roster = connected.copyWith(
+        others: {'friend-1', 'friend-2'},
+        selfSeatedIn: 'voice-1',
+      );
+
+      expect(voiceSoundBetween(connected, roster), isNull);
+      expect(
+        voiceSoundBetween(roster, roster.copyWith(others: {'friend-1'})),
+        ClientSound.userLeave,
+      );
+    });
+
     test('being moved by somebody else plays the moved sound', () {
       expect(
         voiceSoundBetween(_room, _room.copyWith(selfSeatedIn: 'voice-2')),
         ClientSound.userMoved,
       );
       // The account's own seat in the room it is in is no move.
+      const unseated = VoiceSoundSnapshot(
+        channelId: 'voice-1',
+        connected: true,
+      );
       expect(
-        voiceSoundBetween(_room, _room.copyWith(selfSeatedIn: 'voice-1')),
+        voiceSoundBetween(unseated, unseated.copyWith(selfSeatedIn: 'voice-1')),
         isNull,
       );
     });
@@ -147,4 +178,29 @@ final class _RecordingSounds implements ClientSoundPlayer {
 
   @override
   void stopLoop() {}
+}
+
+/// A snapshot with the parts given changed.
+extension on VoiceSoundSnapshot {
+  VoiceSoundSnapshot copyWith({
+    String? channelId,
+    bool? connected,
+    bool? isStage,
+    bool? muted,
+    bool? deafened,
+    Set<String>? others,
+    Set<String>? streamers,
+    Set<String>? followed,
+    String? selfSeatedIn,
+  }) => VoiceSoundSnapshot(
+    channelId: channelId ?? this.channelId,
+    connected: connected ?? this.connected,
+    isStage: isStage ?? this.isStage,
+    muted: muted ?? this.muted,
+    deafened: deafened ?? this.deafened,
+    others: others ?? this.others,
+    streamers: streamers ?? this.streamers,
+    followed: followed ?? this.followed,
+    selfSeatedIn: selfSeatedIn ?? this.selfSeatedIn,
+  );
 }

@@ -162,7 +162,7 @@ Widget _row({
               onDelete: (_) async {},
               onToggleReaction: (_, _) async {},
               onLoadReactionUsers: (_, _, _, _) async =>
-                  const ReactionUsersPage(users: [], hasMore: false),
+                  const MemberPage(users: [], hasMore: false),
               onAddReaction: (_, _) async {},
               onCreateThread: (_, _, _) async => true,
               onTogglePin: (_) async {},

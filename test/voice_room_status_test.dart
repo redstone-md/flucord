@@ -84,6 +84,41 @@ void main() {
     expect(find.byTooltip('Unmute'), findsOneWidget);
   });
 
+  testWidgets('a server mute and deafen have their own mark, and the own '
+      'buttons still toggle', (tester) async {
+    final room = await pumpStreamRoom(
+      tester,
+      streamRoomVoiceChannel,
+      seats: const [
+        StreamRoomSeat('me', isServerMuted: true, isServerDeafened: true),
+      ],
+    );
+    room.signaling.emit(
+      const VoiceCredentialsReadyEvent(
+        VoiceServerCredentials(
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          userId: 'me',
+          sessionId: 'session-1',
+          token: 'token',
+          endpoint: 'voice.discord.gg',
+        ),
+      ),
+    );
+    await _say(tester, room, VoiceConnectionStatus.ready);
+
+    expect(find.byTooltip('Server muted · Mute'), findsOneWidget);
+    expect(find.byTooltip('Server deafened · Deafen'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('voice-mute')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voice-deafen')));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Server muted · Unmute'), findsOneWidget);
+    expect(find.byTooltip('Server deafened · Undeafen'), findsOneWidget);
+  });
+
   testWidgets('a deafened Room still says it is connected', (tester) async {
     final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
     await _say(tester, room, VoiceConnectionStatus.ready);

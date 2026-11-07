@@ -10,7 +10,8 @@ import '../app_log.dart';
 /// The in-window card is all a ring has while the window is focused. When it
 /// is not (minimized, hidden in the tray, or behind other windows), this shows
 /// a native toast and flashes the taskbar button. Both go when the ring ends,
-/// however it ends.
+/// however it ends, and they follow the window while it rings: raised when it
+/// goes behind, lowered when it comes to the front.
 final class DesktopCallAlertController {
   DesktopCallAlertController({
     required DesktopFocusProbe isFocused,
@@ -55,11 +56,22 @@ final class DesktopCallAlertController {
     if (ringing != null) unawaited(_raise(ringing));
   }
 
+  /// Told by the window when it gains or loses the focus.
+  void windowFocusChanged({required bool focused}) {
+    final ringing = _surface?.ringingCall;
+    if (ringing == null || ringing.identifier != _ring) return;
+    if (focused) {
+      unawaited(_lower());
+    } else if (_raised != ringing.identifier) {
+      unawaited(_raise(ringing));
+    }
+  }
+
   Future<void> _raise(DesktopRingingCall ringing) async {
     final surface = _surface;
     final showWindow = _showWindow;
     if (surface == null || showWindow == null) return;
-    if (await _isFocusedSafely()) return;
+    if (await isWindowFocused(_isFocused)) return;
     // The ring may end at any await below; each step checks it is still on.
     if (_ring != ringing.identifier) return;
     _raised = ringing.identifier;
@@ -94,15 +106,6 @@ final class DesktopCallAlertController {
     _raised = null;
     await _guard('taskbar flash', _attention.cancel);
     await _guard('call notification', () => _gateway.dismiss(raised));
-  }
-
-  Future<bool> _isFocusedSafely() async {
-    try {
-      return await _isFocused();
-    } on Object catch (error) {
-      AppLog.warning('desktop', 'window focus unavailable', error: error);
-      return false;
-    }
   }
 
   Future<void> _guard(String feature, Future<void> Function() action) async {

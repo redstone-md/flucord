@@ -6,6 +6,7 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'message_context_menu.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
@@ -180,59 +181,60 @@ class _ReactionChip extends StatelessWidget {
       excludeSemantics: true,
       child: Tooltip(
         message: hint,
-        child: Material(
-          color: selected
-              ? context.surfaces.brand.withValues(alpha: 0.16)
-              : context.surfaces.inset,
-          borderRadius: FlucordRadius.small,
-          child: InkWell(
-            onTap: onToggle,
-            onSecondaryTap: onShowDetails,
+        child: _claimingRightClick(
+          Material(
+            color: selected
+                ? context.surfaces.brand.withValues(alpha: 0.16)
+                : context.surfaces.inset,
             borderRadius: FlucordRadius.small,
-            child: Container(
-              height: 24,
-              padding: const EdgeInsets.symmetric(horizontal: 7),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: selected
-                      ? context.surfaces.brand.withValues(alpha: 0.65)
-                      : context.surfaces.border,
-                ),
-                borderRadius: FlucordRadius.small,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  KeyedSubtree(
-                    key: ValueKey(
-                      'reaction-custom-${message.id}-${reaction.emojiId}'
-                      '${isSuper ? '-super' : ''}',
-                    ),
-                    child: ReactionGlyph(
-                      reaction: reaction,
-                      workspace: workspace,
-                      channelId: message.channelId,
-                    ),
+            child: InkWell(
+              onTap: onToggle,
+              borderRadius: FlucordRadius.small,
+              child: Container(
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: selected
+                        ? context.surfaces.brand.withValues(alpha: 0.65)
+                        : context.surfaces.border,
                   ),
-                  if (isSuper) ...[
-                    const SizedBox(width: 4),
-                    FlucordIcon(
-                      FlucordIcons.superReaction,
-                      size: 10,
-                      color: burstColor == null
-                          ? context.surfaces.warning
-                          : Color(burstColor),
+                  borderRadius: FlucordRadius.small,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    KeyedSubtree(
+                      key: ValueKey(
+                        'reaction-custom-${message.id}-${reaction.emojiId}'
+                        '${isSuper ? '-super' : ''}',
+                      ),
+                      child: ReactionGlyph(
+                        reaction: reaction,
+                        workspace: workspace,
+                        channelId: message.channelId,
+                      ),
+                    ),
+                    if (isSuper) ...[
+                      const SizedBox(width: 4),
+                      FlucordIcon(
+                        FlucordIcons.superReaction,
+                        size: 10,
+                        color: burstColor == null
+                            ? context.surfaces.warning
+                            : Color(burstColor),
+                      ),
+                    ],
+                    const SizedBox(width: 5),
+                    Text(
+                      '$count',
+                      style: const TextStyle(
+                        fontSize: FlucordType.caption,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ],
-                  const SizedBox(width: 5),
-                  Text(
-                    '$count',
-                    style: const TextStyle(
-                      fontSize: FlucordType.caption,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -240,4 +242,11 @@ class _ReactionChip extends StatelessWidget {
       ),
     );
   }
+
+  /// [chip], taking the right button for itself when it has details to
+  /// show, so the message row around it does not open its menu instead.
+  Widget _claimingRightClick(Widget chip) => switch (onShowDetails) {
+    final show? => RightClickClaim(onPressed: (_) => show(), child: chip),
+    null => chip,
+  };
 }

@@ -1,12 +1,7 @@
 import 'chat_models.dart';
+import 'member_page.dart';
 
-/// One page of the people who voted for a poll answer.
-final class PollVotersPage {
-  const PollVotersPage({required this.users, required this.hasMore});
-
-  final List<Member> users;
-  final bool hasMore;
-}
+export 'member_page.dart';
 
 abstract interface class PollRepository {
   Future<ChatMessage> createPoll({
@@ -22,7 +17,7 @@ abstract interface class PollRepository {
 
   /// Who voted for [answerId], oldest first. [afterUserId] is the last voter
   /// of the page before.
-  Future<PollVotersPage> loadPollVoters({
+  Future<MemberPage> loadPollVoters({
     required String channelId,
     required String messageId,
     required int answerId,

@@ -153,10 +153,14 @@ final class DesktopIntegrationFlow
   void onWindowFocus() {
     _surface?.setApplicationActive(true);
     _surface?.setWindowVisible(true);
+    _callAlerts.windowFocusChanged(focused: true);
   }
 
   @override
-  void onWindowBlur() => _surface?.setApplicationActive(false);
+  void onWindowBlur() {
+    _surface?.setApplicationActive(false);
+    _callAlerts.windowFocusChanged(focused: false);
+  }
 
   @override
   void onWindowMinimize() => _surface?.setWindowVisible(false);

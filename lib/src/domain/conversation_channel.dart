@@ -83,7 +83,7 @@ final class ConversationChannel {
   final String? iconUrl;
 
   /// Who runs a group DM, the one person who may remove others from it.
-  /// Null outside a group, and on a group read from the local cache.
+  /// Null outside a group.
   final String? ownerId;
 
   /// A direct message the account has not answered yet, so it belongs in the
@@ -161,16 +161,8 @@ final class ConversationChannel {
   ///
   /// The key is the only thing that says call or guild; everything downstream,
   /// watching and pausing and ending, carries the key rather than the channel.
-  GoLiveStreamKey streamKeyFor(String userId) {
-    final guildId = this.guildId;
-    return guildId == null
-        ? GoLiveStreamKey.call(channelId: id, userId: userId)
-        : GoLiveStreamKey.guild(
-            guildId: guildId,
-            channelId: id,
-            userId: userId,
-          );
-  }
+  GoLiveStreamKey streamKeyFor(String userId) =>
+      GoLiveStreamKey.inRoom(guildId: guildId, channelId: id, userId: userId);
 
   /// The channel whose thread browser this channel is browsed under: a thread
   /// under its parent, every other channel under itself.

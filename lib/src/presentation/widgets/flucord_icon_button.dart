@@ -19,6 +19,7 @@ class FlucordIconButton extends StatelessWidget {
     required this.onPressed,
     this.selected = false,
     this.danger = false,
+    this.byServer = false,
     this.color,
     this.fill,
     this.dimension = size,
@@ -38,12 +39,14 @@ class FlucordIconButton extends StatelessWidget {
          onPressed: control.onPressed,
          selected: control.active,
          danger: control.danger,
+         byServer: control.byServer,
          fill: fill,
          dimension: dimension,
          key: key,
        );
 
   static const size = 28.0;
+  static const _serverFillAlpha = 0.2;
   static const iconSize = 16.0;
 
   /// The 28 px square, for an icon button this class does not draw, such as
@@ -66,6 +69,10 @@ class FlucordIconButton extends StatelessWidget {
   /// notice, such as a muted microphone.
   final bool danger;
 
+  /// Fills the button in the danger colour too, for a state a moderator
+  /// holds, such as a server mute.
+  final bool byServer;
+
   /// An icon colour that means something, such as the accent on Send. Null
   /// keeps the theme's muted icon, which brightens on hover.
   final Color? color;
@@ -85,7 +92,13 @@ class FlucordIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final iconColor = danger ? surfaces.danger : color;
-    final background = fill ?? (selected ? surfaces.quietFill : null);
+    final background =
+        fill ??
+        (byServer
+            ? surfaces.danger.withValues(alpha: _serverFillAlpha)
+            : selected
+            ? surfaces.quietFill
+            : null);
     final button = IconButton(
       onPressed: onPressed,
       tooltip: tooltip,

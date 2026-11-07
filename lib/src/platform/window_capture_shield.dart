@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'windows_z_order.dart';
+
 /// Keeps this client's window out of screen recordings.
 ///
 /// Streamer mode's one switch that is not a matter of what the client draws:
@@ -124,15 +126,6 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
         .lookupFunction<Uint32 Function(), int Function()>(
           'GetCurrentProcessId',
         )();
-    final getWindow = user32
-        .lookupFunction<
-          Pointer<Void> Function(Pointer<Void>, Uint32),
-          Pointer<Void> Function(Pointer<Void>, int)
-        >('GetWindow');
-    final getDesktopWindow = user32
-        .lookupFunction<Pointer<Void> Function(), Pointer<Void> Function()>(
-          'GetDesktopWindow',
-        );
     final isVisible = user32
         .lookupFunction<
           Int32 Function(Pointer<Void>),
@@ -154,11 +147,7 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
           int Function(Pointer<Void>, int)
         >('GetWindowLongW');
 
-    // GW_CHILD from the desktop is the first top-level window; GW_HWNDNEXT
-    // walks the rest in z-order.
-    const gwChild = 5;
-    const gwHwndNext = 2;
-    const gwlExStyle = -16;
+    const gwlExStyle = -20;
     const wsExToolWindow = 0x00000080;
     const classNameCapacity = 256;
 
@@ -167,8 +156,8 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
     final handles = <Pointer<Void>>[];
     final candidates = <OwnWindowCandidate>[];
     try {
-      var window = getWindow(getDesktopWindow(), gwChild);
-      while (window != nullptr) {
+      for (final handle in WindowsZOrder(user32).windows) {
+        final window = Pointer<Void>.fromAddress(handle);
         owner.value = 0;
         threadProcess(window, owner);
         if (owner.value == currentProcessId && isVisible(window) != 0) {
@@ -184,7 +173,6 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
             ),
           );
         }
-        window = getWindow(window, gwHwndNext);
       }
       final index = pickOwnWindow(candidates);
       return index < 0 ? nullptr : handles[index];

@@ -228,7 +228,7 @@ class VoiceConnectionBar extends StatelessWidget {
             pickSource: () => GoLiveSourceDialog.pick(
               context,
               sources: goLive.sources,
-              thumbnails: goLive.thumbnails,
+              thumbnails: goLive.captures.thumbnails,
             ),
           ),
         ),

@@ -45,6 +45,10 @@ final class WorkspaceController extends ChangeNotifier {
   Set<String> get collapsedCategoryIds =>
       Set.unmodifiable(_memory.collapsedCategoryIds);
 
+  /// The server folders open on the rail. The same set until one is toggled,
+  /// so the rail can tell a rebuild that changed nothing.
+  Set<int> get openFolderIds => _memory.openFolderIds;
+
   /// Where the reader stopped in each channel.
   ReadingPositions get readingPositions => _memory;
 
@@ -308,6 +312,11 @@ final class WorkspaceController extends ChangeNotifier {
 
   void toggleCategory(String categoryId) {
     _memory.toggleCategory(categoryId);
+    notifyListeners();
+  }
+
+  void toggleFolder(int folderId) {
+    _memory.toggleFolder(folderId);
     notifyListeners();
   }
 

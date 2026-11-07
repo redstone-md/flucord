@@ -14,35 +14,34 @@ import '../../theme/flucord_icons.dart';
 final class VoiceControl {
   /// Mute and deafen rest outside a room: the controller keeps no flags
   /// there, so a press would do nothing. A room being joined still takes them.
-  /// They rest too while a moderator holds them, and say so: only the
-  /// moderator can lift a server mute or deafen.
+  /// A moderator's mute or deafen gets its own mark, [byServer], and says so,
+  /// since only the moderator can lift it. The button still toggles the
+  /// account's own mute underneath, as in Discord.
   VoiceControl.mute(VoiceController voice)
-    : tooltip = voice.isServerMuted
-          ? 'Server muted'
-          : voice.isMuted
-          ? 'Unmute'
-          : 'Mute',
+    : tooltip = _withServer(
+        voice.isServerMuted ? 'Server muted' : null,
+        voice.isMuted ? 'Unmute' : 'Mute',
+      ),
       icon = voice.isMuted || voice.isServerMuted
           ? FlucordIcons.micOff
           : FlucordIcons.mic,
       danger = voice.isMuted || voice.isServerMuted,
+      byServer = voice.isServerMuted,
       active = false,
-      onPressed = _inRoom(voice) && !voice.isServerMuted
-          ? (() => unawaited(voice.toggleMute()))
-          : null;
+      onPressed = _inRoom(voice) ? (() => unawaited(voice.toggleMute())) : null;
 
   VoiceControl.deafen(VoiceController voice)
-    : tooltip = voice.isServerDeafened
-          ? 'Server deafened'
-          : voice.isDeafened
-          ? 'Undeafen'
-          : 'Deafen',
+    : tooltip = _withServer(
+        voice.isServerDeafened ? 'Server deafened' : null,
+        voice.isDeafened ? 'Undeafen' : 'Deafen',
+      ),
       icon = voice.isDeafened || voice.isServerDeafened
           ? FlucordIcons.headphonesOff
           : FlucordIcons.headphones,
       danger = voice.isDeafened || voice.isServerDeafened,
+      byServer = voice.isServerDeafened,
       active = false,
-      onPressed = _inRoom(voice) && !voice.isServerDeafened
+      onPressed = _inRoom(voice)
           ? (() => unawaited(voice.toggleDeafen()))
           : null;
 
@@ -56,6 +55,7 @@ final class VoiceControl {
           : 'Turn camera on',
       icon = camera.isOn ? FlucordIcons.camera : FlucordIcons.cameraOff,
       danger = false,
+      byServer = false,
       active = camera.isOn,
       onPressed = camera.cameras.isEmpty || camera.isBusy
           ? null
@@ -85,6 +85,7 @@ final class VoiceControl {
            ? FlucordIcons.screenShareOff
            : FlucordIcons.screenShare,
        danger = false,
+       byServer = false,
        active = goLive?.isSharing ?? false;
 
   /// Discord Activities, which Flucord cannot launch yet. The button holds
@@ -93,17 +94,25 @@ final class VoiceControl {
     : tooltip = 'Activities are not supported yet',
       icon = FlucordIcons.activities,
       danger = false,
+      byServer = false,
       active = false,
       onPressed = null;
 
   static bool _inRoom(VoiceController voice) =>
       voice.isConnected || voice.isBusy;
 
+  static String _withServer(String? server, String action) =>
+      server == null ? action : '$server · $action';
+
   final String tooltip;
   final FlucordIconData icon;
 
   /// Something the person should notice: they cannot be heard, or cannot hear.
   final bool danger;
+
+  /// A moderator holds this state, which the person cannot lift. Drawn apart
+  /// from [danger], as the room's marks draw a server mute.
+  final bool byServer;
 
   /// The control is on, and that is not a problem.
   final bool active;

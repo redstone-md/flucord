@@ -15,7 +15,7 @@ import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
 import '../app_log.dart';
 import 'go_live_self_preview.dart';
-import '../domain/go_live_sources.dart';
+import '../domain/stream_captures.dart';
 
 /// Drives Go Live: opening a stream, holding it alive, and ending it.
 ///
@@ -48,7 +48,7 @@ final class GoLiveController extends ChangeNotifier {
 
     /// The windows the picker offers next to the screens, and the
     /// thumbnails it shows.
-    ShareSourceCatalog shareSources = const UnavailableShareSourceCatalog(),
+    CaptureCatalog shareSources = const UnavailableCaptureCatalog(),
     SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
     VoiceOpusCodecFactory? opusCodecFactory,
     Duration pingInterval = const Duration(seconds: 30),
@@ -85,7 +85,7 @@ final class GoLiveController extends ChangeNotifier {
   /// exactly while a share does.
   final GoLiveSelfPreview? _preview;
 
-  final ShareSourceCatalog _shareSources;
+  final CaptureCatalog _shareSources;
 
   /// The Sender of the running stream, once its endpoint arrived.
   GoLiveSender? _sender;
@@ -266,21 +266,20 @@ final class GoLiveController extends ChangeNotifier {
   Object? get error => _error;
 
   /// The displays this machine can share.
-  List<GoLiveDisplay> get displays => [
+  List<DisplayCapture> get displays => [
     for (var index = 0; index < _capture.displayCount; index++)
-      GoLiveDisplay(index: index, name: 'Screen ${index + 1}'),
+      DisplayCapture(index: index, name: 'Screen ${index + 1}'),
   ];
 
   /// Everything the picker can offer: the screens, then the open windows
   /// when the encoder can capture one window on its own.
-  List<GoLiveSource> get sources => [
+  List<StreamCapture> get sources => [
     ...displays,
     if (_capture.canShareWindows) ..._shareSources.windows(),
   ];
 
-  /// A thumbnail for each of [sources] that could be captured, by source id.
-  Future<Map<String, ShareThumbnail>> thumbnails(List<GoLiveSource> sources) =>
-      _shareSources.thumbnails(sources);
+  /// Where the picker reads the open windows and their thumbnails.
+  CaptureCatalog get captures => _shareSources;
 
   /// Attaches to the active transport.
   void reconcile() => _bind();
@@ -354,11 +353,11 @@ final class GoLiveController extends ChangeNotifier {
         _capture.frames,
         requestKeyframe: () async => await _lease?.requestKeyframe(),
       );
-      final window = GoLiveWindow.handleFor(sourceId);
+      final window = WindowCapture.handleFor(sourceId);
       final lease = _lease = await (window != null
           ? _capture.startWindowShare(windowHandle: window)
           : _capture.startShare(
-              displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
+              displayIndex: DisplayCapture.displayIndexFor(sourceId),
             ));
       _leaseChanges = lease.settingsChanges.listen(
         _follow,

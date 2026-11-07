@@ -48,6 +48,11 @@ String sendingTooFast(String wait) =>
 String callFailureReason(Object? error) =>
     refusalOr(error, 'The call could not start. Try again.');
 
+/// Why a super reaction did not go through, such as an account with none
+/// left this month, in Discord's words when it gave some.
+String superReactionFailureReason(Object? error) =>
+    refusalOr(error, 'The Super Reaction did not go through. Try again.');
+
 /// Discord's own refusal of [error] when it gave one, else [fallback].
 String refusalOr(Object? error, String fallback) => switch (error) {
   DiscordApiException(statusCode: < 500, :final message)

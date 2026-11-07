@@ -51,6 +51,29 @@ const _rules = RulesScreening(
   ],
 );
 
+/// Rules with a written question and a multiple-choice one, both required.
+const _questions = RulesScreening(
+  fields: [
+    RulesScreeningField(
+      type: RulesScreeningField.rulesType,
+      label: 'Read and agree to the server rules',
+      required: true,
+      rules: ['Be kind to every plant.'],
+    ),
+    RulesScreeningField(
+      type: RulesScreeningField.textInputType,
+      label: 'What do you grow?',
+      required: true,
+    ),
+    RulesScreeningField(
+      type: RulesScreeningField.multipleChoiceType,
+      label: 'How often do you water?',
+      required: true,
+      choices: ['Daily', 'Weekly'],
+    ),
+  ],
+);
+
 const _onboarding = GuildOnboarding(
   guildId: _garden,
   prompts: [
@@ -104,6 +127,37 @@ void main() {
     expect(find.byKey(const ValueKey('guild-rules-dialog')), findsNothing);
     expect(find.byKey(const ValueKey('pending-member-notice')), findsNothing);
     expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a written and a multiple-choice question are answered here', (
+    tester,
+  ) async {
+    final plane = _GatePlane(rules: _questions);
+    await _pumpShell(tester, plane, pendingAtHome: true);
+    await tester.tap(find.byKey(const ValueKey('pending-member-read-rules')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('guild-rules-agree')));
+    await tester.pump();
+
+    // Agreeing is not enough while a required question is unanswered.
+    await tester.tap(find.byKey(const ValueKey('guild-rules-submit')));
+    await tester.pumpAndSettle();
+    expect(plane.accepted, isEmpty);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('guild-rules-answer-1')),
+      'Basil',
+    );
+    await tester.tap(find.byKey(const ValueKey('guild-rules-answer-2-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('guild-rules-submit')));
+    await tester.pumpAndSettle();
+
+    final sent = plane.accepted.single.fields;
+    expect(sent[1].answer, const ScreeningAnswer.text('Basil'));
+    expect(sent[2].answer, const ScreeningAnswer.choice(1));
+    expect(find.byKey(const ValueKey('guild-rules-dialog')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -290,10 +344,12 @@ JoinedGuild _gardenGuild() => JoinedGuild(
 /// The join and join-gate routes, in memory.
 final class _GatePlane
     implements GuildManagementRepository, GuildJoinGateRepository {
-  _GatePlane({this.onboarding});
+  _GatePlane({this.onboarding, this.rules = _rules});
 
   final GuildOnboarding? onboarding;
+  final RulesScreening rules;
   final List<String> acceptedIn = [];
+  final List<RulesScreening> accepted = [];
   final List<Set<String>> answers = [];
 
   @override
@@ -304,7 +360,7 @@ final class _GatePlane
   Future<JoinedGuild> joinGuild(String code) async => _gardenGuild();
 
   @override
-  Future<RulesScreening?> loadRulesScreening(String guildId) async => _rules;
+  Future<RulesScreening?> loadRulesScreening(String guildId) async => rules;
 
   @override
   Future<Member?> acceptRules({
@@ -312,6 +368,7 @@ final class _GatePlane
     required RulesScreening screening,
   }) async {
     acceptedIn.add(guildId);
+    accepted.add(screening);
     return _account({guildId: const GuildMembership()});
   }
 

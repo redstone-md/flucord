@@ -195,22 +195,27 @@ void main() {
   testWidgets('a closed folder shows its servers\' marks together', (
     tester,
   ) async {
+    var open = <int>{};
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
         home: Scaffold(
-          body: ServerRail(
-            spaces: _workspace.spaces,
-            activity: _workspace.activityBySpace(),
-            folders: const [
-              GuildFolder(guildIds: ['guild-1', 'guild-2'], id: 9),
-            ],
-            selectedSpaceId: CommunitySpace.directMessagesId,
-            onSelectSpace: (_) {},
-            onToggleTheme: () {},
-            onOpenConnections: () {},
-            sessionMode: SessionMode.discord,
-            isDark: true,
+          body: StatefulBuilder(
+            builder: (context, setState) => ServerRail(
+              spaces: _workspace.spaces,
+              activity: _workspace.activityBySpace(),
+              folders: const [
+                GuildFolder(guildIds: ['guild-1', 'guild-2'], id: 9),
+              ],
+              openFolderIds: open,
+              onToggleFolder: (id) => setState(() => open = {...open, id}),
+              selectedSpaceId: CommunitySpace.directMessagesId,
+              onSelectSpace: (_) {},
+              onToggleTheme: () {},
+              onOpenConnections: () {},
+              sessionMode: SessionMode.discord,
+              isDark: true,
+            ),
           ),
         ),
       ),

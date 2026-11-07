@@ -16,6 +16,14 @@ final class GoLiveStreamKey {
   const GoLiveStreamKey.call({required this.channelId, required this.userId})
     : guildId = null;
 
+  /// A stream in the room of [channelId]: a guild's voice channel with a
+  /// [guildId], a call without one.
+  const GoLiveStreamKey.inRoom({
+    required this.guildId,
+    required this.channelId,
+    required this.userId,
+  });
+
   final String? guildId;
   final String channelId;
   final String userId;

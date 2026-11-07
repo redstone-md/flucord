@@ -14,6 +14,8 @@ final class GuildMembership {
     this.timeoutUntil,
     this.joinedAt,
     this.nickname,
+    this.bio,
+    this.bannerHash,
   });
 
   /// Member flag `IS_GUEST`.
@@ -41,6 +43,15 @@ final class GuildMembership {
   /// `nick`, or null when they go by their own name in this guild.
   final String? nickname;
 
+  /// The server bio, empty for none, or null when the payload did not carry
+  /// one. Discord sends it only on some member payloads, so null means the
+  /// profile route has the answer.
+  final String? bio;
+
+  /// The server banner's hash, empty for none, or null when the payload did
+  /// not carry the field, as with [bio].
+  final String? bannerHash;
+
   bool get isGuest => flags & guestFlag != 0;
 
   bool get isQuarantined => flags & quarantinedFlags != 0;
@@ -61,6 +72,8 @@ final class GuildMembership {
       timeoutUntil: timeoutUntil,
       joinedAt: joinedAt,
       nickname: nickname,
+      bio: bio,
+      bannerHash: bannerHash,
     );
   }
 
@@ -72,6 +85,8 @@ final class GuildMembership {
       other.timeoutUntil == timeoutUntil &&
       other.joinedAt == joinedAt &&
       other.nickname == nickname &&
+      other.bio == bio &&
+      other.bannerHash == bannerHash &&
       _sameRoles(other.roleIds);
 
   bool _sameRoles(List<String> other) {
@@ -90,5 +105,7 @@ final class GuildMembership {
     timeoutUntil,
     joinedAt,
     nickname,
+    bio,
+    bannerHash,
   );
 }

@@ -23,6 +23,56 @@ class DirectMessageDialog extends StatefulWidget {
 }
 
 class _DirectMessageDialogState extends State<DirectMessageDialog> {
+  void _open(DirectMessageCandidate person) =>
+      Navigator.pop(context, person.id);
+
+  @override
+  Widget build(BuildContext context) => FlucordDialog(
+    title: const Text('New message'),
+    content: CandidateSearch(
+      people: widget.people,
+      searchKey: const ValueKey('direct-message-search'),
+      hint: 'Search friends and members',
+      emptyLabel: 'Nobody found',
+      onSubmitFirst: _open,
+      row: (person) =>
+          _PersonRow(person: person, onPressed: () => _open(person)),
+    ),
+    actions: const [FlucordDialogCancel()],
+  );
+}
+
+/// A search box over [people], with the ones that match listed below it in
+/// the order given. Both people pickers use it: one person for a DM, several
+/// friends for a group.
+class CandidateSearch extends StatefulWidget {
+  const CandidateSearch({
+    required this.people,
+    required this.searchKey,
+    required this.hint,
+    required this.emptyLabel,
+    required this.row,
+    this.onSubmitFirst,
+    super.key,
+  });
+
+  final List<DirectMessageCandidate> people;
+  final Key searchKey;
+  final String hint;
+
+  /// What the list says when nobody matches.
+  final String emptyLabel;
+  final Widget Function(DirectMessageCandidate person) row;
+
+  /// Takes the first match when the search is submitted, or null to do
+  /// nothing then.
+  final ValueChanged<DirectMessageCandidate>? onSubmitFirst;
+
+  @override
+  State<CandidateSearch> createState() => _CandidateSearchState();
+}
+
+class _CandidateSearchState extends State<CandidateSearch> {
   String _query = '';
 
   List<DirectMessageCandidate> get _matches {
@@ -34,53 +84,46 @@ class _DirectMessageDialogState extends State<DirectMessageDialog> {
     ];
   }
 
-  void _open(DirectMessageCandidate person) =>
-      Navigator.pop(context, person.id);
-
   @override
   Widget build(BuildContext context) {
     final matches = _matches;
-    return FlucordDialog(
-      title: const Text('New message'),
-      content: SizedBox(
-        width: 360,
-        height: 320,
-        child: Column(
-          children: [
-            TextField(
-              key: const ValueKey('direct-message-search'),
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                hintText: 'Search friends and members',
-                prefixIcon: FlucordIcon(FlucordIcons.search, size: 16),
-              ),
-              onChanged: (value) => setState(() => _query = value),
-              onSubmitted: (_) {
-                if (matches.isNotEmpty) _open(matches.first);
-              },
+    final submit = widget.onSubmitFirst;
+    return SizedBox(
+      width: 360,
+      height: 320,
+      child: Column(
+        children: [
+          TextField(
+            key: widget.searchKey,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              prefixIcon: const FlucordIcon(FlucordIcons.search, size: 16),
             ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: matches.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Nobody found',
-                        style: TextStyle(color: context.surfaces.muted),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: matches.length,
-                      itemBuilder: (_, index) => _PersonRow(
-                        person: matches[index],
-                        onPressed: () => _open(matches[index]),
-                      ),
+            onChanged: (value) => setState(() => _query = value),
+            onSubmitted: submit == null
+                ? null
+                : (_) {
+                    if (matches.isNotEmpty) submit(matches.first);
+                  },
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: matches.isEmpty
+                ? Center(
+                    child: Text(
+                      widget.emptyLabel,
+                      style: TextStyle(color: context.surfaces.muted),
                     ),
-            ),
-          ],
-        ),
+                  )
+                : ListView.builder(
+                    itemCount: matches.length,
+                    itemBuilder: (_, index) => widget.row(matches[index]),
+                  ),
+          ),
+        ],
       ),
-      actions: const [FlucordDialogCancel()],
     );
   }
 }
