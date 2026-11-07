@@ -22,6 +22,7 @@ import '../../application/slash_command_controller.dart';
 import 'accessibility_dials.dart';
 import 'accessibility_scope.dart';
 import 'emoji_picker.dart';
+import 'flucord_button.dart';
 import 'flucord_icon_button.dart';
 import 'flucord_menu.dart';
 import 'gif_picker.dart';
@@ -572,8 +573,6 @@ class MessageComposerState extends State<MessageComposer>
 
   Future<void> _send() async {
     if (!_canSend || widget.isSending || _runTypedCommand()) return;
-    final channelId = widget.channelId;
-    final drafts = widget.drafts;
     final content = _boxContent;
     final send = widget.onSend(
       content.text,
@@ -593,17 +592,9 @@ class MessageComposerState extends State<MessageComposer>
       _suppressNotifications = false;
     });
     _focusNode.requestFocus();
-    final sent = await send;
-    if (sent) {
-      await ClipboardAttachments.release(content.attachments);
-      return;
-    }
-    if (mounted && widget.channelId == channelId) {
-      setState(() => _showInBox(_boxContent.withFailedSend(content)));
-    } else {
-      // The user has left that channel, so its draft takes the message.
-      drafts.write(channelId, drafts.read(channelId).withFailedSend(content));
-    }
+    // A failed message stays in the timeline with Retry, so the box does not
+    // take it back, and a pasted picture stays on disk for the retry.
+    if (await send) await ClipboardAttachments.release(content.attachments);
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
@@ -1044,6 +1035,51 @@ final class _PasteAction extends Action<PasteTextIntent> {
 }
 
 enum _ComposerMenuAction { attach, poll, silent }
+
+/// Stands in for the composer while the account has yet to agree to the
+/// server's rules: Discord lets a pending member read, not talk.
+/// [onReadRules] is null on a session that cannot show the rules.
+class PendingMemberNotice extends StatelessWidget {
+  const PendingMemberNotice({this.onReadRules, super.key});
+
+  final VoidCallback? onReadRules;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('pending-member-notice'),
+    constraints: const BoxConstraints(minHeight: 52),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    decoration: BoxDecoration(
+      color: context.surfaces.surface,
+      border: Border(top: BorderSide(color: context.surfaces.border)),
+    ),
+    child: Row(
+      children: [
+        FlucordIcon(
+          FlucordIcons.readOnly,
+          size: FlucordIconButton.iconSize,
+          color: context.surfaces.muted,
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            'Agree to this server\'s rules before you can talk here.',
+            style: FlucordTextRole.caption.style.copyWith(
+              color: context.surfaces.bodyText,
+            ),
+          ),
+        ),
+        if (onReadRules case final read?)
+          FlucordButton(
+            key: const ValueKey('pending-member-read-rules'),
+            kind: FlucordButtonKind.primary,
+            label: 'Read the rules',
+            onPressed: read,
+          ),
+      ],
+    ),
+  );
+}
 
 /// Stands in for the composer in a channel the account may read but not post
 /// in, which is what `SEND_MESSAGES` withheld actually looks like: Discord

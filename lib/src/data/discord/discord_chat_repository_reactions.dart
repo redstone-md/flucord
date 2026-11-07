@@ -22,11 +22,6 @@ mixin _DiscordChatRepositoryReactions implements ReactionRepository {
       afterUserId: afterUserId,
       limit: pageLimit,
     );
-    return ReactionUsersPage(
-      users: payloads
-          .map((payload) => _mapper.member(payload, role: 'Reacted'))
-          .toList(growable: false),
-      hasMore: payloads.length == pageLimit,
-    );
+    return _mapper.reactionUsers(payloads, limit: pageLimit);
   }
 }

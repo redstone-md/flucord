@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
+import 'client_sounds_scope.dart';
 import 'user_settings_controls.dart';
 
 /// Signature the sections use to hand an edit back to the controller.
@@ -311,6 +312,18 @@ class NotificationSettingsSection extends StatelessWidget {
                 onEdit(UserSettingsPatch(showInAppNotifications: value)),
           ),
         ),
+        // Kept on this machine, not on the account, as Discord keeps it.
+        if (ClientSoundsScope.maybeOf(context) case final sounds?)
+          SettingRow(
+            title: 'Sounds',
+            description: 'Messages, calls, and voice.',
+            support: UserSettingSupport.applied,
+            child: SettingSwitch(
+              key: const ValueKey('setting-client-sounds'),
+              value: sounds.enabled,
+              onChanged: (value) => sounds.setEnabled(enabled: value),
+            ),
+          ),
       ],
     );
   }

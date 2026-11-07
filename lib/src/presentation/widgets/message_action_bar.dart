@@ -24,7 +24,8 @@ class MessageActionBar extends StatelessWidget {
     required this.onReply,
     required this.onAddReaction,
     required this.onReactionPickerToggled,
-    required this.onShowReactionDetails,
+    this.onAddSuperReaction,
+    this.onShowReactionDetails,
     required this.onCreateThread,
     this.onForward,
     this.onToggleSuppressEmbeds,
@@ -56,7 +57,14 @@ class MessageActionBar extends StatelessWidget {
   final VoidCallback onReply;
   final ValueChanged<String> onAddReaction;
   final ValueChanged<bool> onReactionPickerToggled;
-  final ValueChanged<MessageReaction> onShowReactionDetails;
+
+  /// Adds a super reaction, or null where the account cannot send one. Then
+  /// there is no button.
+  final ValueChanged<String>? onAddSuperReaction;
+
+  /// Opens the list of who reacted, or null where the session cannot list
+  /// them. Then there is no button.
+  final ValueChanged<MessageReaction>? onShowReactionDetails;
   final VoidCallback onCreateThread;
 
   /// Null where the session cannot forward, and then there is no button.
@@ -104,7 +112,19 @@ class MessageActionBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (capabilities.addReactions) _reactionPicker(),
+          if (capabilities.addReactions) ...[
+            _reactionPicker(
+              buttonKey: ValueKey('add-reaction-${message.id}'),
+              purpose: EmojiPickerPurpose.reaction,
+              onSelected: onAddReaction,
+            ),
+            if (onAddSuperReaction case final addSuper?)
+              _reactionPicker(
+                buttonKey: ValueKey('add-super-reaction-${message.id}'),
+                purpose: EmojiPickerPurpose.superReaction,
+                onSelected: addSuper,
+              ),
+          ],
           if (capabilities.sendMessages)
             _ActionButton(
               icon: FlucordIcons.reply,
@@ -119,12 +139,13 @@ class MessageActionBar extends StatelessWidget {
               onPressed: onCreateThread,
             ),
           ?apps,
-          if (message.reactions.isNotEmpty)
+          if (onShowReactionDetails case final showDetails?
+              when message.reactions.isNotEmpty)
             _ActionButton(
               buttonKey: ValueKey('view-reactions-${message.id}'),
               icon: FlucordIcons.members,
               tooltip: 'View reactions',
-              onPressed: () => onShowReactionDetails(message.reactions.first),
+              onPressed: () => showDetails(message.reactions.first),
             ),
           if (onForward case final forward? when message.canForward)
             _ActionButton(
@@ -226,18 +247,22 @@ class MessageActionBar extends StatelessWidget {
     );
   }
 
-  Widget _reactionPicker() {
+  Widget _reactionPicker({
+    required Key buttonKey,
+    required EmojiPickerPurpose purpose,
+    required ValueChanged<String> onSelected,
+  }) {
     final channel = workspace.channelById(message.channelId);
     final space = workspace.spaceById(channel.spaceId);
     return EmojiPickerButton(
-      buttonKey: ValueKey('add-reaction-${message.id}'),
+      buttonKey: buttonKey,
       spaceName: space.name,
       emojiSections: emojiSectionsFromWorkspace(workspace, channel.spaceId),
-      purpose: EmojiPickerPurpose.reaction,
+      purpose: purpose,
       dimension: buttonSize,
       iconSize: 16,
       onMenuStateChanged: onReactionPickerToggled,
-      onSelected: onAddReaction,
+      onSelected: onSelected,
       favorites: expressionFavorites,
     );
   }

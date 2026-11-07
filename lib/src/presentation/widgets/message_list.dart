@@ -7,6 +7,7 @@ import '../../application/message_component_controller.dart';
 
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/navigation_memory.dart';
@@ -20,6 +21,8 @@ import 'message_context_menu.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
+import 'outgoing_message_status.dart';
+import 'poll_voters_dialog.dart';
 import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'profile_card_route.dart';
@@ -48,14 +51,18 @@ class MessageList extends StatefulWidget {
     this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
-    required this.onLoadReactionUsers,
+    this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onToggleSuperReaction,
+    this.onAddSuperReaction,
     this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
+    this.onVotePoll,
+    this.onLoadPollVoters,
     this.onForward,
     this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
@@ -68,8 +75,17 @@ class MessageList extends StatefulWidget {
     this.capabilities = ChannelCapabilities.unrestricted,
     this.attachmentDownloadService,
     this.blockedUserIds = const {},
+    this.outgoing = const [],
+    this.onRetrySend,
+    this.onDiscardSend,
     super.key,
   });
+
+  /// The messages this client is sending here, oldest first. Each sits among
+  /// the held messages by its nonce until Discord's message replaces it.
+  final List<OutgoingMessage> outgoing;
+  final ValueChanged<OutgoingMessage>? onRetrySend;
+  final ValueChanged<OutgoingMessage>? onDiscardSend;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -121,8 +137,18 @@ class MessageList extends StatefulWidget {
   final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-  final ReactionUsersLoader onLoadReactionUsers;
+
+  /// Loads who reacted, or null where the session cannot list them. Then the
+  /// list is not offered at all.
+  final ReactionUsersLoader? onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Takes back or adds the account's super reaction on a chip, and adds a
+  /// new one from the hover bar. Null where the account cannot send super
+  /// reactions. Then neither is offered.
+  final Future<void> Function(ChatMessage, MessageReaction)?
+  onToggleSuperReaction;
+  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
   final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
@@ -131,6 +157,14 @@ class MessageList extends StatefulWidget {
   /// Opens the report flow for a message, or null where there is none.
   final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
+
+  /// Sets the account's whole vote in a poll, or null where the session
+  /// cannot vote. Then the answers take no tap.
+  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
+
+  /// Loads who voted for an answer, or null where the session cannot list
+  /// voters. Then the poll offers no list.
+  final PollVotersLoader? onLoadPollVoters;
 
   /// Forwards a message, or null where the session cannot. Then the action
   /// is not offered at all.
@@ -359,10 +393,20 @@ class MessageListState extends State<MessageList>
     _restoring = saved;
   }
 
+  /// The outgoing messages by nonce, for the rows that draw them.
+  Map<String, OutgoingMessage> get _outgoingByNonce => {
+    for (final message in widget.outgoing) message.nonce: message,
+  };
+
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
     final query = source.query.trim().toLowerCase();
-    if (query.isEmpty) return messages;
+    // An old stretch of the channel ends before anything being sent now.
+    if (query.isEmpty) {
+      return source.hasNewerMessages
+          ? messages
+          : _withOutgoing(messages, source.outgoing);
+    }
     return messages
         .where((message) {
           final author = source.workspace.memberById(message.authorId);
@@ -382,6 +426,25 @@ class MessageListState extends State<MessageList>
         .toList(growable: false);
   }
 
+  /// [held] with each of [outgoing] slotted in by its nonce, so a failed
+  /// message keeps its place while newer messages arrive under it.
+  static List<ChatMessage> _withOutgoing(
+    List<ChatMessage> held,
+    List<OutgoingMessage> outgoing,
+  ) {
+    if (outgoing.isEmpty) return held;
+    final merged = [...held];
+    for (final message in outgoing) {
+      var index = merged.length;
+      while (index > 0 &&
+          DiscordSnowflake.compare(merged[index - 1].id, message.nonce) > 0) {
+        index--;
+      }
+      merged.insert(index, message.message);
+    }
+    return merged;
+  }
+
   void _setEditing(String messageId, {required bool editing}) {
     if (!mounted) return;
     if (editing) {
@@ -397,9 +460,11 @@ class MessageListState extends State<MessageList>
   /// there is one. A row that is not built yet is reached by a jump. One that
   /// is built brings itself into view when its field takes the focus.
   bool editLastOwnMessage() {
+    final outgoing = _outgoingByNonce;
     final own = _visibleMessages
         .where(
           (message) =>
+              !outgoing.containsKey(message.id) &&
               message.authorId == widget.workspace.currentMemberId &&
               message.canEdit &&
               !message.isSystem,
@@ -641,6 +706,7 @@ class MessageListState extends State<MessageList>
     final centre = _centreIn(messages);
     final centreIndex = centre.indexIn(messages);
     final fold = BlockedMessageFold(messages, widget.blockedUserIds);
+    final outgoing = _outgoingByNonce;
     // A rebuild asks where each mounted row went, so this is built only then.
     late final rowIndexes = {
       for (final (index, message) in messages.indexed) message.id: index,
@@ -685,6 +751,7 @@ class MessageListState extends State<MessageList>
                                     messages,
                                     centreIndex - 1 - index,
                                     fold,
+                                    outgoing,
                                   ),
                             childCount: centreIndex + 1,
                             findChildIndexCallback: (key) {
@@ -702,8 +769,12 @@ class MessageListState extends State<MessageList>
                         ),
                         SliverList(
                           delegate: SliverChildBuilderDelegate(
-                            (context, index) =>
-                                _messageAt(messages, centreIndex + index, fold),
+                            (context, index) => _messageAt(
+                              messages,
+                              centreIndex + index,
+                              fold,
+                              outgoing,
+                            ),
                             childCount: messages.length - centreIndex,
                             findChildIndexCallback: (key) {
                               final row = rowIndex(key);
@@ -802,8 +873,10 @@ class MessageListState extends State<MessageList>
     List<ChatMessage> messages,
     int index,
     BlockedMessageFold fold,
+    Map<String, OutgoingMessage> outgoing,
   ) {
     final message = messages[index];
+    final sending = outgoing[message.id];
     final key = _messageKeys.putIfAbsent(
       message.id,
       () => _MessageRowKey(message.id),
@@ -888,12 +961,16 @@ class MessageListState extends State<MessageList>
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
                 onAddReaction: widget.onAddReaction,
+                onToggleSuperReaction: widget.onToggleSuperReaction,
+                onAddSuperReaction: widget.onAddSuperReaction,
                 onMarkUnread: widget.onMarkUnread,
                 onCreateThread: widget.onCreateThread,
                 onTogglePin: widget.onTogglePin,
                 onResolveAlert: widget.onResolveAlert,
                 onReport: widget.onReport,
                 onEndPoll: widget.onEndPoll,
+                onVotePoll: widget.onVotePoll,
+                onLoadPollVoters: widget.onLoadPollVoters,
                 onForward: widget.onForward,
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,
@@ -901,6 +978,14 @@ class MessageListState extends State<MessageList>
                 onOpenMemberProfile: widget.onOpenMemberProfile,
                 onOpenMessage: widget.onOpenMessage,
                 attachmentDownloadService: widget.attachmentDownloadService,
+                isSending: sending?.delivery is OutgoingSending,
+                deliveryStatus: sending == null
+                    ? null
+                    : OutgoingMessageStatus(
+                        message: sending,
+                        onRetry: () => widget.onRetrySend?.call(sending),
+                        onDiscard: () => widget.onDiscardSend?.call(sending),
+                      ),
               ),
           ],
         ),

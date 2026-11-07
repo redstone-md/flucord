@@ -74,12 +74,16 @@ void main() {
   });
 }
 
-/// media_kit's `Player` is a concrete class, so the fake extends it and
-/// records only the three calls this wrapper makes.
+/// media_kit's `Player` is a concrete class, so the fake implements it and
+/// records only the calls this wrapper makes.
 final class _FakePlayer implements Player {
   final List<double> volumes = [];
   final List<String> opened = [];
+  final List<PlaylistMode> modes = [];
   bool isDisposed = false;
+
+  @override
+  Future<void> setPlaylistMode(PlaylistMode mode) async => modes.add(mode);
 
   @override
   Future<void> setVolume(double volume) async => volumes.add(volume);

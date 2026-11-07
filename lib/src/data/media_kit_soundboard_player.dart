@@ -22,15 +22,21 @@ final class MediaKitSoundboardPlayer implements SoundboardAudioPlayer {
   bool _disposed = false;
 
   @override
-  Future<void> play(String url, {double volume = 1}) async {
+  Future<void> play(String url, {double volume = 1, bool loop = false}) async {
     if (_disposed) return;
     final player = _player ??= _playerFactory();
     // Discord stores the volume as 0–1 and media_kit takes 0–100. Clamping
     // rather than trusting the payload keeps a malformed value from blasting
     // the speakers.
     await player.setVolume((volume.clamp(0, 1) * 100).toDouble());
+    await player.setPlaylistMode(
+      loop ? PlaylistMode.single : PlaylistMode.none,
+    );
     await player.open(Media(url));
   }
+
+  @override
+  Future<void> stop() async => _player?.stop();
 
   @override
   Future<void> dispose() async {

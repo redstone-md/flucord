@@ -43,22 +43,6 @@ void main() {
     );
   });
 
-  testSession('a failed send brings the text back and says why', (
-    tester,
-    session,
-  ) async {
-    _refuseSend(session, 'Missing Permissions');
-    await session.openChannel(SessionHarness.channelId);
-
-    await _typeAndSend(tester, session, 'hello');
-
-    expect(_boxText(tester), 'hello');
-    expect(
-      find.text('Your message to #general did not send. Missing Permissions'),
-      findsOneWidget,
-    );
-  });
-
   testSession('a send that fails with no answer still says it did not go out', (
     tester,
     session,
@@ -72,14 +56,11 @@ void main() {
 
     await _typeAndSend(tester, session, 'hello');
 
-    expect(_boxText(tester), 'hello');
-    expect(
-      find.text('Your message to #general did not send. Try again.'),
-      findsOneWidget,
-    );
+    expect(_boxText(tester), isEmpty);
+    expect(find.text('Not sent. Try again.'), findsOneWidget);
   });
 
-  testSession('a failed send can be sent again as it was, silent flag too', (
+  testSession('Retry sends a failed message as it was, silent flag too', (
     tester,
     session,
   ) async {
@@ -90,16 +71,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('send-silently')));
     await tester.pumpAndSettle();
     await _typeAndSend(tester, session, 'quiet');
-    expect(
-      find.byKey(const ValueKey('composer-silent-notice')),
-      findsOneWidget,
-    );
 
     session.transport.on('POST', _sendPath, (_) => _sentMessage('quiet'));
-    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.tap(find.byKey(const ValueKey('outgoing-retry')));
     await session.settle();
 
-    expect(_boxText(tester), isEmpty);
     final sends = _posted(session, _sendPath);
     expect(sends, hasLength(2));
     expect(sends.last.json, containsPair('content', 'quiet'));
@@ -120,7 +96,7 @@ void main() {
     await session.settle();
 
     expect(_boxText(tester), 'second');
-    expect(find.textContaining('did not send'), findsOneWidget);
+    expect(find.textContaining('Not sent'), findsOneWidget);
   });
 
   group('a send that finishes after a channel switch', () {
@@ -150,7 +126,7 @@ void main() {
     });
 
     testSession(
-      'leaves the new box alone when it fails, and names the channel',
+      'leaves the new box alone when it fails, and fails in its own channel',
       (tester, session) async {
         final answer = await sendThenSwitch(tester, session);
 
@@ -158,12 +134,9 @@ void main() {
         await session.settle();
 
         expect(_boxText(tester), 'draft here');
-        expect(
-          find.text(
-            'Your message to #general did not send. Missing Permissions',
-          ),
-          findsOneWidget,
-        );
+        expect(find.textContaining('Not sent'), findsNothing);
+        await session.openChannel(SessionHarness.channelId);
+        expect(find.textContaining('Not sent'), findsOneWidget);
       },
     );
 
@@ -317,6 +290,8 @@ void main() {
       await session.openChannel(SessionHarness.channelId);
 
       await _typeAndSend(tester, session, 'first');
+      await tester.enterText(find.byKey(_composer), 'second');
+      await session.settle();
 
       expect(sendEnabled(tester), isTrue);
     }, ready: _slowmodeReady());

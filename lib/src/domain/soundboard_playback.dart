@@ -6,9 +6,12 @@
 /// locally. A client that only reported the event would show the effect and
 /// stay silent.
 abstract interface class SoundboardAudioPlayer {
-  /// Plays the asset at [url]. Returns once playback has been started, not
-  /// once it has finished.
-  Future<void> play(String url, {double volume = 1});
+  /// Plays the asset at [url], over and over when [loop] is set. Returns once
+  /// playback has been started, not once it has finished.
+  Future<void> play(String url, {double volume = 1, bool loop = false});
+
+  /// Stops what is playing, a loop included.
+  Future<void> stop();
 
   /// Stops anything still playing and releases the device.
   Future<void> dispose();

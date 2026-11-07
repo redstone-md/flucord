@@ -23,7 +23,10 @@ import 'application/chat_session_coordination.dart';
 import 'application/connection_controller.dart';
 import 'application/developer_check.dart';
 import 'application/desktop_app_surface.dart';
+import 'application/client_sounds_controller.dart';
 import 'application/direct_call_controller.dart';
+import 'application/message_sound_cue.dart';
+import 'application/voice_sound_cues.dart';
 import 'application/discord_account_connection_controller.dart';
 import 'application/discord_desktop_login_controller.dart';
 import 'application/discord_friends_controller.dart';
@@ -63,6 +66,7 @@ import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/stream_suspension.dart';
 import 'application/accessibility_controller.dart';
+import 'application/trusted_domains_controller.dart';
 import 'application/navigation_memory_store.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
@@ -85,6 +89,8 @@ import 'data/chat_image_cache.dart';
 import 'presentation/clipboard_attachments.dart';
 import 'data/disconnected_chat_repository.dart';
 import 'data/file_voice_processing_repository.dart';
+import 'data/discord_sound_library.dart';
+import 'data/file_client_sound_settings_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
 import 'data/windows_message_speech_player.dart';
 import 'data/windows_application_attenuation.dart';
@@ -102,6 +108,7 @@ import 'data/file_keybind_repository.dart';
 import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'data/file_accessibility_repository.dart';
+import 'data/file_trusted_domains_repository.dart';
 import 'data/file_navigation_memory_repository.dart';
 import 'data/spell_check/word_list_spell_check_service.dart';
 import 'data/noop_voice_media_service.dart';
@@ -127,6 +134,7 @@ import 'domain/video_capture_hub.dart';
 import 'domain/discord_social_activity.dart';
 import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
+import 'domain/go_live_stream.dart';
 import 'domain/voice_connection.dart';
 import 'domain/voice_processing.dart' show ApplicationAttenuation;
 import 'domain/voice_message_recorder.dart';
@@ -229,6 +237,9 @@ final class AppComposition {
   /// The local spell checker, one instance whose dictionary is read once.
   late final SpellCheckService spellCheck;
   late final VoiceController voice;
+  late final ClientSoundsController clientSounds;
+  late final VoiceSoundCues voiceSounds;
+  late final MessageSoundCue messageSounds;
   late final DirectCallController directCall;
   late final SoundboardPlaybackController soundboardPlayback;
   late final TextToSpeechPlaybackController textToSpeech;
@@ -241,6 +252,7 @@ final class AppComposition {
   /// cannot go full screen. The Stream then fills the window alone.
   late final WindowFullScreen? windowFullScreen;
   late final AccessibilityController accessibility;
+  late final TrustedDomainsController trustedDomains;
   late final ScreenshotService screenshot;
   late final ClipRecorder clipRecorder;
   late final VoiceOverlayController voiceOverlay;
@@ -584,13 +596,36 @@ final class AppComposition {
       ),
     );
     unawaited(voice.loadProcessingSettings());
+    // Discord's own sounds, on the same playback layer the soundboard uses,
+    // so a test overrides one seam for both. Streamer mode is built later,
+    // and read only when a sound plays.
+    clientSounds = _register(
+      ClientSoundsController(
+        library: bootstrap.clientSoundLibrary ?? DiscordSoundLibrary(),
+        repository:
+            bootstrap.clientSoundSettingsRepository ??
+            FileClientSoundSettingsRepository(),
+        playerFactory: () =>
+            bootstrap.soundboardAudioPlayer ?? MediaKitSoundboardPlayer(),
+        isSilenced: () => streamerMode.silencesSounds,
+      ),
+    );
+    unawaited(clientSounds.load());
+    voiceSounds = VoiceSoundCues.forRoom(
+      voice: voice,
+      sounds: clientSounds,
+      streams: streamViewer,
+      selfUserId: () => chat.workspace?.currentMemberId,
+      isStage: (channelId) =>
+          chat.workspace?.channelOrNull(channelId)?.isStage ?? false,
+      watches: _watchesStreamOf,
+    );
+    _teardown.add(voiceSounds.dispose);
     directCall = _register(
       DirectCallController(
         serviceProvider: () => chat.directCallService,
         voiceController: voice,
-        // Ring, accept, and hang-up sounds: the same playback layer the
-        // soundboard uses, so a test overrides one seam for both.
-        sounds: bootstrap.soundboardAudioPlayer ?? MediaKitSoundboardPlayer(),
+        sounds: clientSounds,
       ),
     );
     // Discord does not mix a soundboard sound into the voice stream: every
@@ -682,6 +717,12 @@ final class AppComposition {
       ),
     );
     unawaited(accessibility.load());
+    trustedDomains = _register(
+      TrustedDomainsController(
+        bootstrap.trustedDomainsRepository ?? FileTrustedDomainsRepository(),
+      ),
+    );
+    unawaited(trustedDomains.load());
     screenshot =
         bootstrap.screenshotService ??
         (Platform.isWindows
@@ -766,6 +807,13 @@ final class AppComposition {
         onProtocolUri: (uri) => unawaited(oauth.handleProtocolUri(uri)),
       ),
     );
+    messageSounds = MessageSoundCue(
+      notifications: desktopSurface.messageNotifications,
+      activeChannelId: () => desktopSurface.activeChannelId,
+      window: windowVisible,
+      sounds: clientSounds,
+    );
+    _teardown.add(messageSounds.dispose);
     sessionCoordination = ChatSessionCoordination(
       chat: chat,
       voice: voice,
@@ -835,6 +883,8 @@ final class AppComposition {
     connection.initialize(
       restoreSavedSession: bootstrap.restoreSavedSession && !_demo,
     );
+    // Fetched ahead of need, so the first sound is already Discord's.
+    if (!_demo) clientSounds.prefetch();
     oauth.initialize();
     socialSdk.initialize();
   }
@@ -937,6 +987,22 @@ final class AppComposition {
       : const UnavailableSecurityKeyCeremony();
 
   /// Records a constructed part for reverse-order teardown.
+  /// Whether this account watches [userId]'s Stream in the room it is in.
+  bool _watchesStreamOf(String userId) {
+    final channelId = voice.connectedChannelId;
+    if (channelId == null) return false;
+    final guildId = voice.connectedGuildId;
+    return streamViewer.isOpen(
+      guildId == null
+          ? GoLiveStreamKey.call(channelId: channelId, userId: userId)
+          : GoLiveStreamKey.guild(
+              guildId: guildId,
+              channelId: channelId,
+              userId: userId,
+            ),
+    );
+  }
+
   T _register<T extends ChangeNotifier>(T controller) {
     _teardown.add(controller.dispose);
     return controller;

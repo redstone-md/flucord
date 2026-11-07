@@ -8,6 +8,7 @@ import '../application/direct_call_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/send_failure.dart';
+import 'clipboard_attachments.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/voice_moderation.dart';
 import '../application/stream_viewer_controller.dart';
@@ -40,6 +41,7 @@ import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
 import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
+import 'widgets/guild_join_gate_dialogs.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
@@ -168,11 +170,6 @@ class ConversationPane extends StatefulWidget {
 /// Public so the shell's keyboard map can reach the open conversation through a
 /// global key, as a form reaches its `FormState`.
 class ConversationPaneState extends State<ConversationPane> {
-  /// Holds a send failure's note clear of the composer, even with four lines
-  /// of text in it. A note at the window's edge would cover the restored text
-  /// and the Send button the user needs to try again.
-  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
-
   final _composerKey = GlobalKey<MessageComposerState>();
   final _timelineKey = GlobalKey<MessageListState>();
 
@@ -713,6 +710,18 @@ class ConversationPaneState extends State<ConversationPane> {
           ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
+        else if (showsMessages && widget.workspace.isPendingIn(channel.spaceId))
+          PendingMemberNotice(
+            onReadRules: chat.canAnswerJoinGate
+                ? () => unawaited(
+                    showGuildRulesDialog(
+                      context,
+                      chat: chat,
+                      spaceId: channel.spaceId,
+                    ),
+                  )
+                : null,
+          )
         else if (showsMessages && !widget.capabilities.sendMessages)
           const ReadOnlyChannelNotice()
         else if (showsMessages)
@@ -778,42 +787,22 @@ class ConversationPaneState extends State<ConversationPane> {
                   )
                 : null,
             onSend:
-                (
-                  body,
-                  attachments,
-                  replyToMessageId,
-                  suppressNotifications,
-                ) async {
-                  final messenger = ScaffoldMessenger.maybeOf(context);
-                  final sent = await chat.sendMessage(
+                (body, attachments, replyToMessageId, suppressNotifications) {
+                  // The message is in the timeline from here on, failed or
+                  // not, so the reply is done with.
+                  final sent = chat.sendMessage(
                     channelId: channel.id,
                     body: body,
                     attachments: attachments,
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!sent) {
-                    messenger?.showSnackBar(
-                      SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        margin: _aboveComposer,
-                        content: Text(
-                          'Your message to ${_composerHintPrefix(channel)}'
-                          '${channel.name} did not send. '
-                          '${sendFailureReason(chat.error)}',
-                        ),
-                      ),
-                    );
-                    return false;
-                  }
-                  // A reply picked while this send ran is not this send's.
-                  // The user may be in another channel by now.
                   final draft = chat.drafts.read(channel.id);
                   if (draft.replyTo?.id == replyToMessageId) {
                     chat.drafts.write(channel.id, draft.withReply(null));
-                    if (mounted) setState(() {});
+                    setState(() {});
                   }
-                  return true;
+                  return sent;
                 },
           ),
       ],
@@ -830,6 +819,16 @@ class ConversationPaneState extends State<ConversationPane> {
     return (entitlements?.premiumTier ?? PremiumTier.none)
         .messageCharacterLimit;
   }
+
+  /// Whether this session and account may send super reactions. Until the
+  /// account's entitlements arrive the answer is no, so nothing is offered
+  /// that Discord would refuse.
+  bool _sendsSuperReactions(ChatController chat) =>
+      chat.canSendSuperReactions &&
+      (AccountEntitlementsScope.maybeOf(
+            context,
+          )?.entitlements?.premiumTier.sendsSuperReactions ??
+          false);
 
   /// The largest file this account may attach in this channel, or null while
   /// the account's entitlements have not arrived. The answer is whichever is
@@ -956,6 +955,7 @@ class ConversationPaneState extends State<ConversationPane> {
                 chat.hasNewerMessages(channel.id),
                 chat.historyWindowError(channel.id),
                 chat.lastSentMessageIdIn(channel.id),
+                chat.outgoingIn(channel.id),
                 chat.canLoadOlderMessages(channel.id),
                 chat.isLoadingOlderMessages(channel.id),
                 chat.olderMessagesError(channel.id),
@@ -1017,12 +1017,21 @@ class ConversationPaneState extends State<ConversationPane> {
     );
   }
 
+  /// A pasted picture stays on disk while its message may still be retried,
+  /// and goes once Discord has it.
+  Future<void> _retrySend(ChatController chat, OutgoingMessage message) async {
+    if (await chat.retrySend(message)) {
+      await ClipboardAttachments.release(message.attachments);
+    }
+  }
+
   Widget _timeline(
     ChatController chat,
     WorkspaceController workspaceController,
     Set<String> blockedUserIds,
   ) {
     final channel = widget.channel;
+    final sendsSuperReactions = _sendsSuperReactions(chat);
     return MessageList(
       key: _timelineKey,
       blockedUserIds: blockedUserIds,
@@ -1038,6 +1047,12 @@ class ConversationPaneState extends State<ConversationPane> {
       targetMessageId: workspaceController.targetMessageId,
       targetRequest: workspaceController.targetRequest,
       lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      outgoing: chat.outgoingIn(channel.id),
+      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
+      onDiscardSend: (message) {
+        chat.discardSend(message);
+        unawaited(ClipboardAttachments.release(message.attachments));
+      },
       hasNewerMessages: chat.hasNewerMessages(channel.id),
       windowError: chat.historyWindowError(channel.id),
       readingPositions: workspaceController.readingPositions,
@@ -1049,8 +1064,14 @@ class ConversationPaneState extends State<ConversationPane> {
       onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
-      onLoadReactionUsers: chat.loadReactionUsers,
+      onLoadReactionUsers: chat.canListReactionUsers
+          ? chat.loadReactionUsers
+          : null,
       onAddReaction: chat.addReaction,
+      onToggleSuperReaction: sendsSuperReactions
+          ? chat.toggleSuperReaction
+          : null,
+      onAddSuperReaction: sendsSuperReactions ? chat.addSuperReaction : null,
       onMarkUnread: chat.readStateRepository == null
           ? null
           : chat.markChannelUnreadFrom,
@@ -1068,6 +1089,8 @@ class ConversationPaneState extends State<ConversationPane> {
       onResolveAlert: chat.resolveAutoModAlert,
       onReport: (message) => unawaited(_reportMessage(context, message)),
       onEndPoll: chat.endPoll,
+      onVotePoll: chat.canVoteInPolls ? chat.votePoll : null,
+      onLoadPollVoters: chat.canListPollVoters ? chat.loadPollVoters : null,
       // A session that cannot carry out an action does not offer it.
       onForward: chat.canForwardMessages
           ? (message, targetChannelId) async {

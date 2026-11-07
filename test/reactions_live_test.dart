@@ -181,6 +181,38 @@ void main() {
     );
   });
 
+  testSession(
+    'a debounced batch of reactions adds every person to the counts',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await session.dispatch('MESSAGE_REACTION_ADD_MANY', {
+        'channel_id': SessionHarness.channelId,
+        'message_id': _messageId,
+        'guild_id': SessionHarness.guildId,
+        'reactions': [
+          {
+            'emoji': _fireEmoji,
+            'users': [SessionHarness.friendId, SessionHarness.currentUserId],
+          },
+          {
+            'emoji': _sparkEmoji,
+            'users': [_strangerId],
+          },
+        ],
+      });
+
+      expect(
+        tester.getSemantics(_chip(3)),
+        isSemantics(hasToggledState: true, isToggled: true),
+      );
+      expect(_chip(1, emoji: _spark), findsOneWidget);
+    },
+    routes: (transport) => _routeHistory(transport, [
+      _message(reactions: [_rawReaction(_fireEmoji, count: 1)]),
+    ]),
+  );
+
   // The cache keeps the newest messages of a channel. The workspace keeps all
   // it was given, so the oldest row of a longer page is held but not cached.
   const prunedId = '800000000000000001';

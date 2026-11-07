@@ -94,36 +94,28 @@ void main() {
     routes: _routeOpenDm,
   );
 
-  testSession(
-    'a message Discord refuses waits in the DM box',
-    (tester, session) async {
-      session.transport.on(
-        'POST',
-        '/api/v9/channels/${SessionHarness.dmChannelId}/messages',
-        (_) => jsonResponse({
-          'code': 50007,
-          'message': 'Cannot send messages to this user',
-        }, statusCode: 403),
-      );
-      await _openAuthorCard(tester, session);
+  testSession('a message Discord refuses stays in the DM with Retry', (
+    tester,
+    session,
+  ) async {
+    session.transport.on(
+      'POST',
+      '/api/v9/channels/${SessionHarness.dmChannelId}/messages',
+      (_) => jsonResponse({
+        'code': 50007,
+        'message': 'Cannot send messages to this user',
+      }, statusCode: 403),
+    );
+    await _openAuthorCard(tester, session);
 
-      await tester.enterText(_messageField, 'gg');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
-      await session.settle();
+    await tester.enterText(_messageField, 'gg');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await session.settle();
 
-      expect(_card, findsNothing);
-      expect(
-        tester
-            .widget<TextField>(
-              find.byKey(const ValueKey('message-composer')),
-            )
-            .controller!
-            .text,
-        'gg',
-      );
-    },
-    routes: _routeOpenDm,
-  );
+    expect(_card, findsNothing);
+    expect(find.text('gg'), findsOneWidget);
+    expect(find.byKey(const ValueKey('outgoing-retry')), findsOneWidget);
+  }, routes: _routeOpenDm);
 
   testSession('add friend asks Discord for a friendship', (
     tester,

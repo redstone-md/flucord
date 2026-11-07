@@ -324,13 +324,16 @@ final class _FakePlayer implements SoundboardAudioPlayer {
   bool isDisposed = false;
 
   @override
-  Future<void> play(String url, {double volume = 1}) async {
+  Future<void> play(String url, {double volume = 1, bool loop = false}) async {
     if (fail) throw StateError('no audio device');
     played.add((url, volume));
   }
 
   @override
   Future<void> dispose() async => isDisposed = true;
+
+  @override
+  Future<void> stop() async {}
 }
 
 final class _FakeRepository implements SoundboardRepository {

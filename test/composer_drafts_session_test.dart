@@ -253,7 +253,7 @@ void main() {
   });
 
   group('a send that fails after a switch', () {
-    testSession('returns to the draft of its own channel, whole', (
+    testSession('stays in its own timeline and leaves both drafts alone', (
       tester,
       session,
     ) async {
@@ -270,13 +270,13 @@ void main() {
       await session.settle();
 
       expect(_boxText(tester), 'for random');
-      expect(find.textContaining('did not send'), findsOneWidget);
 
       await session.openChannel(SessionHarness.channelId);
-      expect(_boxText(tester), 'answer');
-      expect(find.text('notes.txt'), findsOneWidget);
-      expect(_replyBar, findsOneWidget);
-      expect(_silentNotice, findsOneWidget);
+      expect(_boxText(tester), isEmpty);
+      expect(find.text('answer'), findsOneWidget);
+      expect(find.textContaining('Not sent'), findsOneWidget);
+      expect(_replyBar, findsNothing);
+      expect(_silentNotice, findsNothing);
     });
 
     testSession('does not overwrite text typed after it', (
@@ -297,7 +297,7 @@ void main() {
     });
 
     testSession(
-      'returns to the draft when no composer is open',
+      'shows in its channel when no composer was open',
       (tester, session) async {
         final answer = _holdSend(session);
         await session.openChannel(SessionHarness.channelId);
@@ -309,7 +309,8 @@ void main() {
         await session.settle();
         await session.openChannel(SessionHarness.channelId);
 
-        expect(_boxText(tester), 'first');
+        expect(_boxText(tester), isEmpty);
+        expect(find.textContaining('Not sent'), findsOneWidget);
       },
       ready: _readyWithReadOnlyOtherChannel(),
     );

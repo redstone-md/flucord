@@ -32,7 +32,9 @@ import '../../domain/message_forward_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
 import '../../domain/permission_overwrite.dart';
+import '../../domain/poll_repository.dart';
 import '../../domain/presence_repository.dart';
+import '../../domain/reaction_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
@@ -105,7 +107,11 @@ final class DiscordDesktopChatRepository
         MessageForwardRepository,
         StickerRepository,
         MessageFlagRepository,
-        DirectMessageManagementRepository {
+        DirectMessageManagementRepository,
+        PollRepository,
+        PollVoteRepository,
+        ReactionRepository,
+        SuperReactionRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -676,27 +682,22 @@ final class DiscordDesktopChatRepository
     required String channelId,
     required String authorId,
     required String body,
+    required String nonce,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
     bool textToSpeech = false,
+    UploadProgressListener? onUploadProgress,
   }) async {
-    final payload = await _nonceFactory.sendDraft(
+    final payload = await _api.createMessage(
       channelId: channelId,
-      body: body,
+      content: body,
+      nonce: nonce,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
-      send: (nonce) => _api.createMessage(
-        channelId: channelId,
-        content: body,
-        nonce: nonce,
-        attachments: attachments,
-        replyToMessageId: replyToMessageId,
-        suppressNotifications: suppressNotifications,
-        textToSpeech: textToSpeech,
-      ),
+      onUploadProgress: onUploadProgress,
     );
     return _storeSentMessage(payload);
   }
@@ -723,6 +724,51 @@ final class DiscordDesktopChatRepository
     );
     return _storeSentMessage(payload);
   }
+
+  @override
+  Future<ReactionUsersPage> loadReactionUsers({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+    required DiscordReactionType type,
+    String? afterUserId,
+    int limit = 100,
+  }) async {
+    final pageLimit = limit.clamp(1, 100);
+    final payloads = await _api.getReactions(
+      channelId: channelId,
+      messageId: messageId,
+      emoji: emoji,
+      type: type,
+      afterUserId: afterUserId,
+      limit: pageLimit,
+    );
+    return _mapper.reactionUsers(payloads, limit: pageLimit);
+  }
+
+  @override
+  Future<void> addSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.addReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+    type: DiscordReactionType.burst,
+  );
+
+  @override
+  Future<void> removeSuperReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.removeReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+    type: DiscordReactionType.burst,
+  );
 
   /// A forward is a send with no words of its own: the reference names the
   /// source, and Discord answers with the snapshot it took.
@@ -758,6 +804,68 @@ final class DiscordDesktopChatRepository
       ),
     );
   }
+
+  @override
+  Future<ChatMessage> createPoll({
+    required String channelId,
+    required String authorId,
+    required PendingPoll poll,
+  }) async => _storeSentMessage(
+    await _api.createMessage(
+      channelId: channelId,
+      content: '',
+      nonce: _nonceFactory.next(),
+      poll: poll,
+    ),
+  );
+
+  @override
+  Future<ChatMessage> endPoll({
+    required String channelId,
+    required String messageId,
+  }) async => _storeMessage(
+    await _api.polls.endPoll(channelId: channelId, messageId: messageId),
+    fallback: await _cache.readMessage(messageId),
+  );
+
+  /// Discord answers a vote with no body, so the vote is counted here. The
+  /// account's own vote dispatches that follow then change nothing.
+  @override
+  Future<ChatMessage> votePoll({
+    required String channelId,
+    required String messageId,
+    required Set<int> answerIds,
+  }) async {
+    await _api.polls.vote(
+      channelId: channelId,
+      messageId: messageId,
+      answerIds: answerIds.toList()..sort(),
+    );
+    final held = await _cache.readMessage(messageId);
+    final poll = held?.poll;
+    if (held == null || poll == null) {
+      throw StateError('Poll message $messageId is not in the cache');
+    }
+    final voted = held.copyWith(poll: poll.withOwnVote(answerIds));
+    await _cache.writeMessage(voted);
+    return voted;
+  }
+
+  @override
+  Future<PollVotersPage> loadPollVoters({
+    required String channelId,
+    required String messageId,
+    required int answerId,
+    String? afterUserId,
+    int limit = 100,
+  }) => _api.polls.answerVoters(
+    channelId: channelId,
+    messageId: messageId,
+    answerId: answerId,
+    mapper: _mapper,
+    afterUserId: afterUserId,
+    limit: limit,
+  );
 
   Future<ChatMessage> _storeSentMessage(Map<String, Object?> payload) async {
     final message = await _storeMessage(payload);

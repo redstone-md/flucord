@@ -257,6 +257,7 @@ abstract final class FlucordIcons {
   );
   static const chevronUp = FlucordIconData(HugeIcons.strokeRoundedArrowUp01);
   static const server = FlucordIconData(HugeIcons.strokeRoundedServerStack01);
+  static const folder = FlucordIconData(HugeIcons.strokeRoundedFolder01);
   static const qrCode = FlucordIconData(HugeIcons.strokeRoundedQrCode);
   static const phone = FlucordIconData(HugeIcons.strokeRoundedSmartPhone01);
   static const bot = FlucordIconData(HugeIcons.strokeRoundedRobot01);
