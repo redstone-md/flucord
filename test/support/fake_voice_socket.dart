@@ -24,10 +24,27 @@ final class FakeVoiceSocketConnector implements DiscordVoiceSocketConnector {
   }
 }
 
+/// Hands every dial a new socket, the way each connection is its own socket
+/// in production. A test plays the server on [dials].
+final class FakeVoiceSocketDialer implements DiscordVoiceSocketConnector {
+  /// Every socket dialled, oldest first, with the address it was dialled on.
+  final List<({Uri uri, FakeVoiceWebSocket socket})> dials = [];
+
+  @override
+  Future<DiscordVoiceWebSocket> connect(Uri uri) async {
+    final socket = FakeVoiceWebSocket();
+    dials.add((uri: uri, socket: socket));
+    return socket;
+  }
+}
+
 final class FakeVoiceWebSocket implements DiscordVoiceWebSocket {
   final StreamController<Object?> _messages = StreamController.broadcast();
   final List<Object> sent = [];
   bool _closed = false;
+
+  /// Whether either side closed the socket.
+  bool get isClosed => _closed;
 
   @override
   int? closeCode;

@@ -77,6 +77,16 @@ final class VoiceServerCredentials {
   /// The voice gateway identifies against `server_id`, which is the guild for
   /// guild voice and the channel for a private call (R08).
   String get serverId => guildId ?? channelId;
+
+  /// The same credentials, for the channel Discord moved the account to.
+  VoiceServerCredentials inChannel(String channelId) => VoiceServerCredentials(
+    guildId: guildId,
+    channelId: channelId,
+    userId: userId,
+    sessionId: sessionId,
+    token: token,
+    endpoint: endpoint,
+  );
 }
 
 final class VoiceTransportSession {
@@ -122,6 +132,19 @@ final class VoiceEncryptionRequiredException implements Exception {
   @override
   String toString() =>
       'Discord requires end-to-end encrypted voice (DAVE) here (code 4017)';
+}
+
+/// Discord moved this account to another voice channel of the same guild, or
+/// out of voice when [channelId] is null: a moderator moved or disconnected
+/// it. The room follows this one event.
+final class VoiceMovedToChannelEvent extends VoiceSignalingEvent {
+  const VoiceMovedToChannelEvent({
+    required this.guildId,
+    required this.channelId,
+  });
+
+  final String guildId;
+  final String? channelId;
 }
 
 final class VoiceCredentialsReadyEvent extends VoiceSignalingEvent {
@@ -189,6 +212,7 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
     required this.serverDeafened,
     required this.isStreaming,
     required this.isVideoEnabled,
+    this.isSuppressed = false,
   });
 
   final String userId;
@@ -202,6 +226,10 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   final bool serverDeafened;
   final bool isStreaming;
   final bool isVideoEnabled;
+
+  /// Discord's `suppress`: the server does not let this seat speak. Every
+  /// seat in an AFK channel is suppressed, and so is a Stage's audience.
+  final bool isSuppressed;
 
   /// The same person, reported as having left.
   ///
@@ -221,6 +249,29 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   );
 }
 
+/// Who may speak in a guild voice channel, for this account.
+enum VoiceChannelSpeech {
+  open,
+
+  /// The account lacks the Speak permission there.
+  noPermission,
+
+  /// A Stage, which decides its speakers itself.
+  stage,
+}
+
+/// Why a seat cannot be heard whatever its own mute says.
+enum SpeechBlock {
+  /// A moderator muted it.
+  serverMuted,
+
+  /// This account lacks the Speak permission in the channel.
+  noPermission,
+
+  /// Discord's `suppress`, as for every seat in an AFK channel.
+  suppressed,
+}
+
 final class VoiceParticipant {
   const VoiceParticipant({
     required this.userId,
@@ -232,6 +283,7 @@ final class VoiceParticipant {
     this.serverDeafened = false,
     this.isStreaming = false,
     this.isVideoEnabled = false,
+    this.speechBlock,
   });
 
   final String userId;
@@ -248,6 +300,10 @@ final class VoiceParticipant {
   final bool isStreaming;
   final bool isVideoEnabled;
 
+  /// Why they cannot be heard whatever their own mute says. Set by the room
+  /// from the seat and the channel, never by the transport.
+  final SpeechBlock? speechBlock;
+
   bool get isMuted => selfMuted || serverMuted;
   bool get isDeafened => selfDeafened || serverDeafened;
 
@@ -260,6 +316,7 @@ final class VoiceParticipant {
     bool? serverDeafened,
     bool? isStreaming,
     bool? isVideoEnabled,
+    SpeechBlock? speechBlock,
   }) => VoiceParticipant(
     userId: userId,
     ssrc: ssrc ?? this.ssrc,
@@ -270,6 +327,7 @@ final class VoiceParticipant {
     serverDeafened: serverDeafened ?? this.serverDeafened,
     isStreaming: isStreaming ?? this.isStreaming,
     isVideoEnabled: isVideoEnabled ?? this.isVideoEnabled,
+    speechBlock: speechBlock ?? this.speechBlock,
   );
 }
 

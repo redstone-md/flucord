@@ -157,5 +157,47 @@ void _outgoingMessageTests() {
       expect((outgoing.delivery as OutgoingSending).uploadProgress, 0.5);
       answer.complete(delivered(''));
     });
+
+    test('an upload that starts again does not move the bar back', () async {
+      final answer = Completer<ChatMessage>();
+      repository.answerSend = (_, onUploadProgress) {
+        onUploadProgress!(0.6);
+        // The transport sends the files again from the start.
+        onUploadProgress(0.1);
+        return answer.future;
+      };
+
+      unawaited(
+        controller.sendMessage(
+          channelId: 'forge-general',
+          body: '',
+          attachments: const [
+            PendingAttachment(name: 'a.png', path: '/tmp/a.png', size: 10),
+          ],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final outgoing = controller.outgoingIn('forge-general').single;
+      expect((outgoing.delivery as OutgoingSending).uploadProgress, 0.6);
+      answer.complete(delivered(''));
+    });
+
+    test('a send that lands after an account switch stays with the old '
+        'account', () async {
+      final answer = Completer<ChatMessage>();
+      repository.answerSend = (_, _) => answer.future;
+      final sent = controller.sendMessage(
+        channelId: 'forge-general',
+        body: 'From the last account',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await controller.useRepository(_EventRepository());
+      answer.complete(delivered('From the last account'));
+      await sent;
+
+      expect(heldBodies(), isNot(contains('From the last account')));
+    });
   });
 }

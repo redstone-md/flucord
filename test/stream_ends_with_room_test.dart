@@ -85,6 +85,21 @@ void main() {
     expect(harness.repository.ended, [_key]);
   });
 
+  testWidgets('a move by Discord to another channel ends the stream', (
+    tester,
+  ) async {
+    final harness = await _liveRoom(tester);
+
+    harness.signaling.emit(
+      const VoiceMovedToChannelEvent(guildId: 'guild-1', channelId: 'voice-2'),
+    );
+    await tester.pumpAndSettle();
+
+    // The stream's key names the old channel, and Discord ends it there.
+    _expectEnded(harness);
+    expect(harness.repository.ended, [_key]);
+  });
+
   testWidgets('moving from a server room into a call ends the stream', (
     tester,
   ) async {

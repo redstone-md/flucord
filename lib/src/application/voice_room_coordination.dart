@@ -9,6 +9,7 @@ import 'stream_viewer_controller.dart';
 import 'streamer_mode_controller.dart';
 import 'voice_controller.dart';
 import 'voice_overlay_controller.dart';
+import 'workspace_controller.dart';
 
 /// Keeps the room's side effects following the room.
 ///
@@ -17,7 +18,8 @@ import 'voice_overlay_controller.dart';
 /// mode moves it, streamer mode's automatic switch follows this client's own
 /// stream, watched streams and this client's own stream end with the room, the
 /// camera goes off with it, and the stage's focus follows its participant out
-/// of it. These rules used to sit in the app widget, where no test could reach
+/// of it. When the room moves to another channel, its screen goes along.
+/// These rules used to sit in the app widget, where no test could reach
 /// them without pumping the whole client.
 final class VoiceRoomCoordination {
   VoiceRoomCoordination({
@@ -29,6 +31,7 @@ final class VoiceRoomCoordination {
     required StreamViewerController streamViewer,
     required SelfVideoController selfVideo,
     required RoomFocus focus,
+    required WorkspaceController workspace,
   }) : _voice = voice,
        _remoteCameras = remoteCameras,
        _overlay = overlay,
@@ -36,9 +39,11 @@ final class VoiceRoomCoordination {
        _goLive = goLive,
        _streamViewer = streamViewer,
        _selfVideo = selfVideo,
-       _focus = focus {
+       _focus = focus,
+       _workspace = workspace,
+       _room = voice.connectedChannelId {
+    _voice.addListener(_followRoom);
     _voice.addListener(_syncRemoteCameras);
-    _voice.addListener(_endWatchesWithRoom);
     _voice.addListener(_endShareWithRoom);
     _voice.addListener(_endCameraWithRoom);
     _voice.addListener(_keepCameraOnConnection);
@@ -58,12 +63,16 @@ final class VoiceRoomCoordination {
   final StreamViewerController _streamViewer;
   final SelfVideoController _selfVideo;
   final RoomFocus _focus;
+  final WorkspaceController _workspace;
+
+  /// The channel the room was in when the voice controller last changed.
+  String? _room;
   StreamSubscription<String>? _camerasGoneSubscription;
   StreamSubscription<VoicePictureAsk>? _pictureAsksSubscription;
 
   void dispose() {
+    _voice.removeListener(_followRoom);
     _voice.removeListener(_syncRemoteCameras);
-    _voice.removeListener(_endWatchesWithRoom);
     _voice.removeListener(_endShareWithRoom);
     _voice.removeListener(_endCameraWithRoom);
     _voice.removeListener(_keepCameraOnConnection);
@@ -90,12 +99,20 @@ final class VoiceRoomCoordination {
     }
   }
 
-  /// Discord forgets a room's watchers with the room. A viewer that kept its
-  /// asks would offer "Stop watching" on streams it no longer holds, and
-  /// carry withdrawals into the next room.
-  void _endWatchesWithRoom() {
-    if (_roomIsUp) return;
-    unawaited(_streamViewer.stop());
+  /// Watches end when the room goes down or to another channel, by a
+  /// moderator move or the person's own. Discord forgets a room's watchers
+  /// with the room, and a viewer that kept its asks would offer "Stop
+  /// watching" on streams it no longer holds. On a move, the screen showing
+  /// the old room shows the new one.
+  void _followRoom() {
+    final previous = _room;
+    final current = _voice.connectedChannelId;
+    _room = current;
+    final moved = previous != null && current != null && current != previous;
+    if (!_roomIsUp || moved) unawaited(_streamViewer.stop());
+    if (moved && _workspace.selectedChannelId == previous) {
+      _workspace.selectChannel(current);
+    }
   }
 
   /// The stream ends with the room, and the capture behind it is released.
@@ -110,14 +127,12 @@ final class VoiceRoomCoordination {
     unawaited(_goLive.stop());
   }
 
-  /// Whether the running stream was sent into the voice session this client
-  /// holds now. Moving to another guild or call changes the session without
-  /// the status ever saying the room went down. A stream still being created
-  /// has no key yet, so there is nothing to compare.
+  /// Whether the running stream was sent into the channel this client is in
+  /// now. Its key names the channel, and a move changes the channel without
+  /// the status going down. A stream still being created has no key yet.
   bool get _shareIsInThisSession => switch (_goLive.streamKey) {
     null => true,
-    final key when key.isCall => key.channelId == _voice.connectedChannelId,
-    final key => key.guildId == _voice.connectedGuildId,
+    final key => key.channelId == _voice.connectedChannelId,
   };
 
   /// The camera goes off with the room, without announcing it: the voice

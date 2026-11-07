@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 /// A recorder with no microphone. A test reads its counts and feeds [emit].
@@ -27,6 +28,12 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   /// and before it answers.
   List<VoiceMessageRecordingProgress> lastFrames = const [];
 
+  /// When set, [stop] answers only once this completes.
+  Completer<void>? holdStop;
+
+  /// When set, [start] answers only once this completes.
+  Completer<void>? holdStart;
+
   int startCount = 0;
   int cancelCount = 0;
   int deleteCount = 0;
@@ -42,6 +49,7 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
   @override
   Future<void> start() async {
     startCount++;
+    await holdStart?.future;
     isRecording = true;
   }
 
@@ -50,6 +58,7 @@ final class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
     lastFrames.forEach(emit);
     // A broadcast stream delivers on a later microtask.
     await Future<void>.delayed(Duration.zero);
+    await holdStop?.future;
     isRecording = false;
     return pending;
   }

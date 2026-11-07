@@ -132,6 +132,26 @@ VoiceParticipantStateEvent _seatState({
   isVideoEnabled: false,
 );
 
+/// A sidebar seat row for [state], with the reason the room judged it
+/// cannot speak.
+Widget _seatRow(VoiceParticipantStateEvent state, {SpeechBlock? block}) =>
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Material(
+        child: VoiceSeatRow(
+          state: state,
+          member: null,
+          spaceId: 'guild-1',
+          speechBlock: block,
+        ),
+      ),
+    );
+
+final _serverMutedSeatRow = _seatRow(
+  _seatState(serverMuted: true),
+  block: SpeechBlock.serverMuted,
+);
+
 Future<void> _openFriendMenu(WidgetTester tester) async {
   await tester.tapAt(
     tester.getCenter(find.byKey(_friendTile)),
@@ -291,24 +311,51 @@ void main() {
       );
     });
 
+    testWidgets('a suppressed seat is marked as a server mute is', (
+      tester,
+    ) async {
+      await _room(
+        tester,
+        seats: const [
+          StreamRoomSeat(_friend, isSuppressed: true),
+          StreamRoomSeat('friend-2', isServerMuted: true),
+        ],
+      );
+
+      expect(find.byTooltip('Suppressed'), findsOneWidget);
+      expect(
+        _markColour(tester, 'Suppressed'),
+        _markColour(tester, 'Server muted'),
+      );
+    });
+
     testWidgets('a seat in the sidebar marks a server mute apart', (
       tester,
     ) async {
-      Widget seat(VoiceParticipantStateEvent state) => MaterialApp(
-        theme: FlucordTheme.dark,
-        home: Material(
-          child: VoiceSeatRow(state: state, member: null, spaceId: 'guild-1'),
-        ),
-      );
-
-      await tester.pumpWidget(seat(_seatState(selfMuted: true)));
+      await tester.pumpWidget(_seatRow(_seatState(selfMuted: true)));
       final selfMute = _markColour(tester, 'Muted');
-      await tester.pumpWidget(seat(_seatState(serverMuted: true)));
+      await tester.pumpWidget(_serverMutedSeatRow);
       final serverMute = _markColour(tester, 'Server muted');
-      await tester.pumpWidget(seat(_seatState(serverDeafened: true)));
+      await tester.pumpWidget(_seatRow(_seatState(serverDeafened: true)));
 
       expect(serverMute, isNot(selfMute));
       expect(find.byTooltip('Server deafened'), findsOneWidget);
+    });
+
+    testWidgets('a seat in the sidebar that cannot speak says why', (
+      tester,
+    ) async {
+      const why = 'You do not have permission to speak in this channel';
+
+      await tester.pumpWidget(_serverMutedSeatRow);
+      final serverMute = _markColour(tester, 'Server muted');
+      await tester.pumpWidget(
+        _seatRow(_seatState(selfMuted: true), block: SpeechBlock.noPermission),
+      );
+
+      expect(find.byTooltip(why), findsOneWidget);
+      expect(find.byTooltip('Muted'), findsNothing);
+      expect(_markColour(tester, why), serverMute);
     });
 
     testWidgets('a server deafen is marked apart from a self-deafen', (

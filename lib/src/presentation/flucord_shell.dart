@@ -600,6 +600,8 @@ class FlucordShell extends StatelessWidget {
                                       channelOf: _channelOf,
                                       seatedByChannel: seats,
                                       speakingUserIds: speaking,
+                                      speechBlockOf:
+                                          voiceController.speechBlockOf,
                                       // The left button opens a seat's profile,
                                       // the right one the participant menu.
                                       onOpenMemberProfile: openProfile,

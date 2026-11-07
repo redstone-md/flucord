@@ -30,30 +30,55 @@ final class OutgoingFailed extends OutgoingDelivery {
 /// the nonce on the message it creates, which is how the real message takes
 /// this one's place.
 final class OutgoingMessage {
-  OutgoingMessage({
+  const OutgoingMessage({
     required this.message,
-    required this.replyToMessageId,
-    List<PendingAttachment> attachments = const [],
+    required this.kind,
     this.delivery = const OutgoingSending(),
-  }) : attachments = List.unmodifiable(attachments);
+  });
 
   /// The message as the timeline draws it. Its id is the nonce.
   final ChatMessage message;
-
-  /// The message this one answers. Kept apart from [ChatMessage.reply], which
-  /// is null when the answered message is not held.
-  final String? replyToMessageId;
-  final List<PendingAttachment> attachments;
+  final OutgoingKind kind;
   final OutgoingDelivery delivery;
 
   String get nonce => message.id;
   String get channelId => message.channelId;
+  List<PendingAttachment> get attachments => kind.attachments;
   bool get hasFailed => delivery is OutgoingFailed;
 
-  OutgoingMessage withDelivery(OutgoingDelivery delivery) => OutgoingMessage(
-    message: message,
-    replyToMessageId: replyToMessageId,
-    attachments: attachments,
-    delivery: delivery,
-  );
+  OutgoingMessage withDelivery(OutgoingDelivery delivery) =>
+      OutgoingMessage(message: message, kind: kind, delivery: delivery);
+}
+
+/// What an outgoing message sends besides its text.
+sealed class OutgoingKind {
+  const OutgoingKind();
+
+  /// The files the send uploads.
+  List<PendingAttachment> get attachments;
+}
+
+/// A text message, with any files and the message it answers.
+final class OutgoingText extends OutgoingKind {
+  OutgoingText({
+    required this.replyToMessageId,
+    List<PendingAttachment> attachments = const [],
+  }) : attachments = List.unmodifiable(attachments);
+
+  /// The message this one answers. Kept apart from [ChatMessage.reply], which
+  /// is null when the answered message is not held.
+  final String? replyToMessageId;
+
+  @override
+  final List<PendingAttachment> attachments;
+}
+
+/// A voice message: [recording] is sent as its only file.
+final class OutgoingVoice extends OutgoingKind {
+  OutgoingVoice(this.recording) : attachments = [recording.attachment];
+
+  final PendingVoiceMessage recording;
+
+  @override
+  final List<PendingAttachment> attachments;
 }

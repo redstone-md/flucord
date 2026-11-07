@@ -42,6 +42,7 @@ abstract final class DiscordVoiceStateReader {
       serverDeafened: state['deaf'] == true,
       isStreaming: state['self_stream'] == true,
       isVideoEnabled: state['self_video'] == true,
+      isSuppressed: state['suppress'] == true,
     );
   }
 

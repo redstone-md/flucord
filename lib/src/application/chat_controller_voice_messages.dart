@@ -4,28 +4,39 @@ extension ChatControllerVoiceMessages on ChatController {
   /// Whether this session's transport can send voice messages at all.
   bool get canSendVoiceMessages => _repository is VoiceMessageRepository;
 
+  /// Shows [voiceMessage] at once in the timeline and queues its send, the way
+  /// a text message goes out. A failed one stays there with Retry and Delete.
+  ///
+  /// [onReleased] runs once the recording file is no longer needed: the
+  /// message left the queue, or could not be queued at all.
   Future<bool> sendVoiceMessage({
     required String channelId,
     required PendingVoiceMessage voiceMessage,
-  }) async {
+    void Function()? onReleased,
+  }) {
     final workspace = _workspace;
-    if (_repository is! VoiceMessageRepository) {
+    if (!canSendVoiceMessages) {
       AppLog.warning(
         'chat.send',
         'Voice message not sent: ${_repository.runtimeType} cannot send '
             'voice messages',
       );
-      return false;
     }
-    final repository = _repository as VoiceMessageRepository;
-    if (workspace == null) return false;
-    return _sendingIn(channelId, what: 'voice message', () async {
-      final message = await repository.sendVoiceMessage(
-        channelId: channelId,
-        authorId: workspace.currentMemberId,
-        voiceMessage: voiceMessage,
-      );
-      _applySentMessage(message);
-    });
+    if (!canSendVoiceMessages || workspace == null) {
+      onReleased?.call();
+      return Future.value(false);
+    }
+    return _queueSend(
+      OutgoingMessage(
+        message: voiceMessage.asMessage(
+          id: _outgoing.nextNonce(),
+          channelId: channelId,
+          authorId: workspace.currentMemberId,
+          sentAt: DateTime.now(),
+        ),
+        kind: OutgoingVoice(voiceMessage),
+      ),
+      onLeave: onReleased,
+    );
   }
 }

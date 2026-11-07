@@ -5,20 +5,20 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
 
   /// Fed per frame without a rebuild: only the waveform and clock listen.
   final VoiceRecordingLevels _voiceLevels = VoiceRecordingLevels();
-  PendingVoiceMessage? _pendingVoiceMessage;
-  Object? _voiceError;
   bool _isRecordingVoice = false;
 
+  /// Until the recorder answers the start. Send waits for it: a stop sent to
+  /// a recorder that has not started fails.
+  bool _isStartingVoice = false;
+
   /// Between the stop and the recorder's answer, while the capture hands
-  /// over its last frames.
+  /// over its last frames and the file is written.
   bool _isStoppingVoice = false;
-  bool _isUploadingVoice = false;
   int _voiceGeneration = 0;
 
   bool get _hasRegularMessageContent;
   bool get _isHeldBySlowmode;
-  bool get _hasVoiceSession =>
-      _isRecordingVoice || _pendingVoiceMessage != null || _isUploadingVoice;
+  bool get _hasVoiceSession => _isRecordingVoice || _isStoppingVoice;
   bool get _canRecordVoice =>
       widget.voiceMessageRecorder != null &&
       widget.onSendVoiceMessage != null &&
@@ -47,123 +47,68 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     _voiceLevels.clear();
     setState(() {
       _isRecordingVoice = true;
-      _voiceError = null;
+      _isStartingVoice = true;
     });
     try {
       await recorder.start();
       if (generation != _voiceGeneration && recorder.isRecording) {
         await recorder.cancel();
+      } else if (mounted && generation == _voiceGeneration) {
+        setState(() => _isStartingVoice = false);
       }
     } catch (error) {
       if (!mounted || generation != _voiceGeneration) return;
       setState(() {
         _isRecordingVoice = false;
-        _voiceError = error;
+        _isStartingVoice = false;
       });
       _showVoiceFailure('The microphone could not be started.');
     }
   }
 
+  /// Stops the recording and hands it over to be sent. The message shows in
+  /// the timeline from here, so the composer is free again at once.
   Future<void> _stopAndSendVoiceMessage() async {
-    if (!_isRecordingVoice || _isUploadingVoice) return;
+    if (!_isRecordingVoice || _isStartingVoice) return;
     final recorder = widget.voiceMessageRecorder!;
     final send = widget.onSendVoiceMessage!;
     final generation = _voiceGeneration;
     setState(() {
       _isRecordingVoice = false;
-      _isUploadingVoice = true;
-      _voiceError = null;
+      _isStoppingVoice = true;
     });
-    _isStoppingVoice = true;
     try {
-      final PendingVoiceMessage pending;
-      try {
-        pending = await recorder.stop();
-      } finally {
-        _isStoppingVoice = false;
-      }
+      final pending = await recorder.stop();
       if (!mounted || generation != _voiceGeneration) {
         await _deleteVoiceMessageIgnoringErrors(recorder, pending);
         return;
       }
-      setState(() => _pendingVoiceMessage = pending);
-      await _uploadVoiceMessage(pending, send, generation);
-    } catch (error) {
+      send(
+        pending,
+        () => unawaited(_deleteVoiceMessageIgnoringErrors(recorder, pending)),
+      );
+    } catch (_) {
       if (!mounted || generation != _voiceGeneration) return;
-      setState(() {
-        _isUploadingVoice = false;
-        _voiceError = error;
-      });
       _showVoiceFailure('The voice recording could not be prepared.');
+    } finally {
+      // A newer generation already reset this state.
+      if (mounted && generation == _voiceGeneration) {
+        _voiceLevels.clear();
+        setState(() => _isStoppingVoice = false);
+      }
     }
-  }
-
-  Future<void> _retryVoiceMessage() async {
-    final pending = _pendingVoiceMessage;
-    final send = widget.onSendVoiceMessage;
-    if (pending == null || send == null || _isUploadingVoice) return;
-    await _uploadVoiceMessage(pending, send, _voiceGeneration);
-  }
-
-  Future<void> _uploadVoiceMessage(
-    PendingVoiceMessage pending,
-    SendVoiceMessageCallback send,
-    int generation,
-  ) async {
-    setState(() {
-      _isUploadingVoice = true;
-      _voiceError = null;
-    });
-    Object? failure;
-    var sent = false;
-    try {
-      sent = await send(pending);
-    } catch (error) {
-      failure = error;
-    }
-    if (!mounted || generation != _voiceGeneration) {
-      await _deleteVoiceMessageIgnoringErrors(
-        widget.voiceMessageRecorder,
-        pending,
-      );
-      return;
-    }
-    if (sent) {
-      await _deleteVoiceMessageIgnoringErrors(
-        widget.voiceMessageRecorder,
-        pending,
-      );
-      if (!mounted || generation != _voiceGeneration) return;
-      _voiceLevels.clear();
-      setState(() {
-        _pendingVoiceMessage = null;
-        _isUploadingVoice = false;
-        _voiceError = null;
-      });
-      return;
-    }
-    setState(() {
-      _isUploadingVoice = false;
-      _voiceError = failure ?? StateError('Voice message upload failed');
-    });
   }
 
   Future<void> _cancelVoiceMessage() async {
     final recorder = widget.voiceMessageRecorder;
-    final pending = _pendingVoiceMessage;
     _voiceGeneration++;
     _voiceLevels.clear();
     setState(() {
       _isRecordingVoice = false;
-      _isUploadingVoice = false;
-      _pendingVoiceMessage = null;
-      _voiceError = null;
+      _isStartingVoice = false;
     });
     if (recorder?.isRecording ?? false) {
       await _cancelVoiceRecordingIgnoringErrors(recorder);
-    }
-    if (pending != null) {
-      await _deleteVoiceMessageIgnoringErrors(recorder, pending);
     }
   }
 
@@ -171,24 +116,20 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
     if (!mounted || !_isRecordingVoice) return;
     await _cancelVoiceMessage();
     if (!mounted) return;
-    _voiceError = error;
     _showVoiceFailure('Recording stopped because the microphone failed.');
   }
 
+  /// Drops a recording in progress. One that is stopping is deleted by the
+  /// stop, once the recorder hands it back.
   void _discardVoiceState(VoiceMessageRecorder? recorder) {
-    final pending = _pendingVoiceMessage;
-    final wasUploading = _isUploadingVoice;
+    final wasStopping = _isStoppingVoice;
     _voiceGeneration++;
     _isRecordingVoice = false;
-    _isUploadingVoice = false;
-    _pendingVoiceMessage = null;
-    _voiceError = null;
+    _isStartingVoice = false;
+    _isStoppingVoice = false;
     _voiceLevels.clear();
-    if ((recorder?.isRecording ?? false) && !wasUploading) {
+    if ((recorder?.isRecording ?? false) && !wasStopping) {
       unawaited(_cancelVoiceRecordingIgnoringErrors(recorder));
-    }
-    if (pending != null && !wasUploading) {
-      unawaited(_deleteVoiceMessageIgnoringErrors(recorder, pending));
     }
   }
 
@@ -224,20 +165,16 @@ class _VoiceMessageComposerBar extends StatelessWidget {
   const _VoiceMessageComposerBar({
     required this.levels,
     required this.isRecording,
-    required this.isUploading,
-    required this.hasPendingMessage,
-    required this.error,
     required this.onCancel,
-    required this.onPrimaryAction,
+    required this.onSend,
   });
 
   final VoiceRecordingLevels levels;
+
+  /// False while the recording stops and its file is written.
   final bool isRecording;
-  final bool isUploading;
-  final bool hasPendingMessage;
-  final Object? error;
   final VoidCallback? onCancel;
-  final VoidCallback? onPrimaryAction;
+  final VoidCallback? onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -255,9 +192,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
           IconButton(
             key: const ValueKey('cancel-voice-message'),
             onPressed: onCancel,
-            tooltip: isRecording
-                ? 'Cancel voice recording'
-                : 'Discard voice message',
+            tooltip: 'Cancel voice recording',
             icon: const FlucordIcon(FlucordIcons.delete, size: 20),
           ),
           if (isRecording) ...[
@@ -292,44 +227,27 @@ class _VoiceMessageComposerBar extends StatelessWidget {
             levels: levels,
             color: context.surfaces.muted,
           ),
-          if (error != null) ...[
-            const SizedBox(width: 4),
-            Tooltip(
-              message: hasPendingMessage
-                  ? 'Voice message could not be sent'
-                  : 'Voice recording failed',
-              child: FlucordIcon(
-                FlucordIcons.error,
-                size: 17,
-                color: errorColor,
-              ),
-            ),
-          ],
           const SizedBox(width: 4),
-          if (isUploading)
+          if (isRecording)
+            IconButton(
+              key: const ValueKey('send-voice-message'),
+              onPressed: onSend,
+              tooltip: 'Stop and send voice message',
+              icon: FlucordIcon(
+                FlucordIcons.send,
+                size: 20,
+                color: context.surfaces.accentIcon,
+              ),
+            )
+          else
             const SizedBox.square(
-              key: ValueKey('voice-message-uploading'),
+              key: ValueKey('voice-message-stopping'),
               dimension: 48,
               child: Center(
                 child: SizedBox.square(
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ),
-            )
-          else
-            IconButton(
-              key: ValueKey(
-                isRecording ? 'send-voice-message' : 'retry-voice-message',
-              ),
-              onPressed: onPrimaryAction,
-              tooltip: isRecording
-                  ? 'Stop and send voice message'
-                  : 'Retry voice message',
-              icon: FlucordIcon(
-                isRecording ? FlucordIcons.send : FlucordIcons.refresh,
-                size: 20,
-                color: context.surfaces.accentIcon,
               ),
             ),
         ],

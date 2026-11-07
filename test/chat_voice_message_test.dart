@@ -3,7 +3,7 @@ import 'package:flucord/src/app_log.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/disconnected_chat_repository.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
-import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 
 void main() {
   test(
@@ -32,6 +32,35 @@ void main() {
       expect(message.body, isEmpty);
       expect(message.attachments.single.durationSecs, 2.4);
       expect(message.attachments.single.waveform, 'AECA/w==');
+    },
+  );
+
+  test(
+    'closing the controller lets go of a voice message still sending',
+    () async {
+      final controller = ChatController(
+        MockChatRepository(latency: Duration.zero),
+      );
+      await controller.load();
+      var released = 0;
+
+      final sent = controller.sendVoiceMessage(
+        channelId: 'forge-general',
+        voiceMessage: PendingVoiceMessage(
+          name: 'voice.ogg',
+          path: r'C:\Temp\voice.ogg',
+          size: 2048,
+          durationSecs: 2.4,
+          waveform: 'AECA/w==',
+        ),
+        onReleased: () => released++,
+      );
+      // Before the queued send has started.
+      controller.dispose();
+
+      expect(released, 1);
+      expect(await sent, isFalse);
+      expect(released, 1);
     },
   );
 

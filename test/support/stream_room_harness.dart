@@ -56,6 +56,8 @@ final class StreamRoomHarness {
     // Whether the sender's own picture can be decoded: off is the tile
     // showing why not.
     this.selfPreviewOpens = true,
+    // Who may speak where; everyone everywhere without it.
+    VoiceSpeechRule? speechIn,
   }) {
     voice = VoiceController(
       media,
@@ -63,6 +65,7 @@ final class StreamRoomHarness {
       callServiceProvider: () => callService,
       playbackService: SoLoudVoicePlaybackService(player: audio),
       streamAudio: receivedAudio.stream,
+      speechIn: speechIn,
     );
     calls = DirectCallController(
       serviceProvider: () => callService,
@@ -111,6 +114,7 @@ final class StreamRoomHarness {
       streamViewer: viewer,
       selfVideo: camera,
       focus: focus,
+      workspace: composition.workspace,
     );
     composition.workspace
       ..reconcile(streamRoomWorkspace)
@@ -133,6 +137,7 @@ final class StreamRoomHarness {
           serverDeafened: seat.isServerDeafened,
           isStreaming: seat.isStreaming,
           isVideoEnabled: false,
+          isSuppressed: seat.isSuppressed,
         ),
     ],
   };
@@ -275,12 +280,14 @@ Future<StreamRoomHarness> pumpStreamRoom(
   bool selfPreviewOpens = true,
   VoiceModeration? moderation,
   SoundboardController? soundboard,
+  VoiceSpeechRule? speechIn,
 }) async {
   final harness =
       StreamRoomHarness(
           channel: channel,
           seats: seats,
           selfPreviewOpens: selfPreviewOpens,
+          speechIn: speechIn,
         )
         ..moderation = moderation
         ..soundboard = soundboard;
@@ -315,7 +322,7 @@ const streamRoomTransport = VoiceTransportSession(
 );
 
 /// Somebody in the room, whether they are sending a stream, whether they
-/// muted themselves, and whether a moderator muted or deafened them.
+/// muted themselves, and whether a moderator or the channel silenced them.
 final class StreamRoomSeat {
   const StreamRoomSeat(
     this.userId, {
@@ -323,6 +330,7 @@ final class StreamRoomSeat {
     this.isMuted = false,
     this.isServerMuted = false,
     this.isServerDeafened = false,
+    this.isSuppressed = false,
   });
 
   final String userId;
@@ -330,6 +338,9 @@ final class StreamRoomSeat {
   final bool isMuted;
   final bool isServerMuted;
   final bool isServerDeafened;
+
+  /// Discord's `suppress`, as in an AFK channel.
+  final bool isSuppressed;
 }
 
 /// The DM call the tests walk into: a room without a guild.

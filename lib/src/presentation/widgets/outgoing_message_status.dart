@@ -6,8 +6,8 @@ import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 
-/// What a message on its way shows under its text: the upload of its files
-/// while it sends, or why it failed, with Retry and Delete.
+/// What a message on its way shows under its text or its voice message: the
+/// upload of its files while it sends, or why it failed, with Retry and Delete.
 class OutgoingMessageStatus extends StatelessWidget {
   const OutgoingMessageStatus({
     required this.message,
@@ -53,9 +53,11 @@ class OutgoingMessageStatus extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    files.length == 1
-                        ? files.single.name
-                        : '${files.length} files',
+                    switch ((message.kind, files)) {
+                      (OutgoingVoice(), _) => 'Voice message',
+                      (OutgoingText(), [final file]) => file.name,
+                      (OutgoingText(), _) => '${files.length} files',
+                    },
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: caption,

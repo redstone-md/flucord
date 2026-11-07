@@ -58,12 +58,14 @@ void main() {
     await _typeAndSend(tester, session, 'with a file');
 
     expect(find.text('proof.txt'), findsOneWidget);
-    expect(find.text('100%'), findsOneWidget);
+    // The whole body is out, but Discord has not answered yet.
+    expect(find.text('99%'), findsOneWidget);
+    expect(find.text('100%'), findsNothing);
     expect(
       tester
           .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
           .value,
-      1.0,
+      lessThan(1.0),
     );
     answer.complete(jsonResponse(_ownMessage('with a file')));
     await session.settle();

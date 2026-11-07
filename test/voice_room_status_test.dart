@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/guild_membership.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/workspace_permissions.dart';
 
 import 'support/stream_room_harness.dart';
 
@@ -117,6 +121,57 @@ void main() {
 
     expect(find.byTooltip('Server muted · Unmute'), findsOneWidget);
     expect(find.byTooltip('Server deafened · Undeafen'), findsOneWidget);
+  });
+
+  testWidgets('a Room joined without Speak marks the account and says '
+      'why', (tester) async {
+    // `@everyone` may join the channel and nothing more.
+    final workspace = streamRoomWorkspace.copyWith(
+      roles: [
+        CommunityRole(
+          id: 'guild-1',
+          spaceId: 'guild-1',
+          name: '@everyone',
+          position: 0,
+          permissions:
+              DiscordPermissions.viewChannel | DiscordPermissions.connect,
+        ),
+      ],
+      members: [
+        for (final member in streamRoomWorkspace.members)
+          member.id == 'me'
+              ? member.copyWith(
+                  spaceIds: const {'guild-1'},
+                  membershipsBySpace: const {'guild-1': GuildMembership()},
+                )
+              : member,
+      ],
+    );
+    final room = await pumpStreamRoom(
+      tester,
+      streamRoomVoiceChannel,
+      seats: const [StreamRoomSeat('me')],
+      speechIn: (channelId) => WorkspacePermissions(
+        workspace,
+      ).speechIn(workspace.channelOrNull(channelId)!),
+    );
+    room.signaling.emit(
+      const VoiceCredentialsReadyEvent(
+        VoiceServerCredentials(
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          userId: 'me',
+          sessionId: 'session-1',
+          token: 'token',
+          endpoint: 'voice.discord.gg',
+        ),
+      ),
+    );
+    await _say(tester, room, VoiceConnectionStatus.ready);
+
+    const why = 'You do not have permission to speak in this channel';
+    expect(find.byTooltip('$why · Mute'), findsOneWidget);
+    expect(find.byTooltip(why), findsOneWidget);
   });
 
   testWidgets('a deafened Room still says it is connected', (tester) async {

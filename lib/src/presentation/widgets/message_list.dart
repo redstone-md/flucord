@@ -1,5 +1,4 @@
 import '../../application/expression_favorites_controller.dart';
-import '../../domain/automod_rule.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -20,11 +19,9 @@ import 'direct_message_views.dart';
 import 'member_avatar.dart';
 import 'message_context_menu.dart';
 import 'message_day_divider.dart';
+import 'message_actions.dart';
 import 'message_item.dart';
-import 'message_forward_dialog.dart';
 import 'outgoing_message_status.dart';
-import 'poll_voters_dialog.dart';
-import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'profile_card_route.dart';
 import 'unread_message_boundary.dart';
@@ -47,25 +44,8 @@ class MessageList extends StatefulWidget {
     this.readingPositions,
     required this.onOpenMessage,
     required this.onLoadPresent,
-    required this.onReply,
-    required this.onEdit,
+    required this.actions,
     this.onEditClosed,
-    required this.onDelete,
-    required this.onToggleReaction,
-    this.onLoadReactionUsers,
-    required this.onAddReaction,
-    this.onToggleSuperReaction,
-    this.onAddSuperReaction,
-    this.onMarkUnread,
-    required this.onCreateThread,
-    required this.onTogglePin,
-    this.onResolveAlert,
-    this.onReport,
-    required this.onEndPoll,
-    this.onVotePoll,
-    this.onLoadPollVoters,
-    this.onForward,
-    this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
     required this.isLoadingOlder,
     required this.olderLoadError,
@@ -77,16 +57,12 @@ class MessageList extends StatefulWidget {
     this.attachmentDownloadService,
     this.blockedUserIds = const {},
     this.outgoing = const [],
-    this.onRetrySend,
-    this.onDiscardSend,
     super.key,
   });
 
   /// The messages this client is sending here, oldest first. Each sits among
   /// the held messages by its nonce until Discord's message replaces it.
   final List<OutgoingMessage> outgoing;
-  final ValueChanged<OutgoingMessage>? onRetrySend;
-  final ValueChanged<OutgoingMessage>? onDiscardSend;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -130,50 +106,13 @@ class MessageList extends StatefulWidget {
   /// The message this client last sent in this channel. A new value takes a
   /// reader who has scrolled up to the end of the conversation.
   final String? lastSentMessageId;
-  final ValueChanged<ChatMessage> onReply;
-  final Future<bool> Function(ChatMessage, String) onEdit;
+
+  /// What this session can do to a message, handed to each row.
+  final MessageActions actions;
 
   /// An edit field closed, saved or not, and it was not opened from its row, so
   /// the keyboard can go back to where the next message is written.
   final VoidCallback? onEditClosed;
-  final Future<void> Function(ChatMessage) onDelete;
-  final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
-
-  /// Loads who reacted, or null where the session cannot list them. Then the
-  /// list is not offered at all.
-  final ReactionUsersLoader? onLoadReactionUsers;
-  final Future<void> Function(ChatMessage, String) onAddReaction;
-
-  /// Takes back or adds the account's super reaction on a chip, and adds a
-  /// new one from the hover bar. Null where the account cannot send super
-  /// reactions. Then neither is offered.
-  final Future<void> Function(ChatMessage, MessageReaction)?
-  onToggleSuperReaction;
-  final Future<void> Function(ChatMessage, String)? onAddSuperReaction;
-  final Future<void> Function(ChatMessage)? onMarkUnread;
-  final Future<bool> Function(ChatMessage, String, int) onCreateThread;
-  final Future<void> Function(ChatMessage) onTogglePin;
-  final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
-
-  /// Opens the report flow for a message, or null where there is none.
-  final void Function(ChatMessage)? onReport;
-  final Future<bool> Function(ChatMessage) onEndPoll;
-
-  /// Sets the account's whole vote in a poll, or null where the session
-  /// cannot vote. Then the answers take no tap.
-  final Future<bool> Function(ChatMessage, Set<int>)? onVotePoll;
-
-  /// Loads who voted for an answer, or null where the session cannot list
-  /// voters. Then the poll offers no list.
-  final PollVotersLoader? onLoadPollVoters;
-
-  /// Forwards a message, or null where the session cannot. Then the action
-  /// is not offered at all.
-  final ForwardMessageCallback? onForward;
-
-  /// Suppresses or restores a message's embeds, or null where the session
-  /// cannot. Then the action is not offered at all.
-  final Future<bool> Function(ChatMessage)? onToggleSuppressEmbeds;
   final bool canLoadOlder;
   final bool isLoadingOlder;
   final Object? olderLoadError;
@@ -971,28 +910,11 @@ class MessageListState extends State<MessageList>
                 quotesBlockedAuthor: widget.blockedUserIds.contains(
                   message.reply?.authorId,
                 ),
-                onReply: widget.onReply,
-                onEdit: widget.onEdit,
+                actions: widget.actions,
                 isEditing: message.id == _editingMessageId,
                 onEditingChanged: (editing) =>
                     _setEditing(message.id, editing: editing),
                 onEditClosed: widget.onEditClosed,
-                onDelete: widget.onDelete,
-                onToggleReaction: widget.onToggleReaction,
-                onLoadReactionUsers: widget.onLoadReactionUsers,
-                onAddReaction: widget.onAddReaction,
-                onToggleSuperReaction: widget.onToggleSuperReaction,
-                onAddSuperReaction: widget.onAddSuperReaction,
-                onMarkUnread: widget.onMarkUnread,
-                onCreateThread: widget.onCreateThread,
-                onTogglePin: widget.onTogglePin,
-                onResolveAlert: widget.onResolveAlert,
-                onReport: widget.onReport,
-                onEndPoll: widget.onEndPoll,
-                onVotePoll: widget.onVotePoll,
-                onLoadPollVoters: widget.onLoadPollVoters,
-                onForward: widget.onForward,
-                onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,
                 onSelectChannel: widget.onSelectChannel,
                 onOpenMemberProfile: widget.onOpenMemberProfile,
@@ -1003,8 +925,10 @@ class MessageListState extends State<MessageList>
                     ? null
                     : OutgoingMessageStatus(
                         message: sending,
-                        onRetry: () => widget.onRetrySend?.call(sending),
-                        onDiscard: () => widget.onDiscardSend?.call(sending),
+                        onRetry: () =>
+                            widget.actions.onRetrySend?.call(sending),
+                        onDiscard: () =>
+                            widget.actions.onDiscardSend?.call(sending),
                       ),
               ),
           ],

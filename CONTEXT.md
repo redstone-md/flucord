@@ -72,6 +72,10 @@ _Avoid_: frame, access unit, image
 The sound of what is being shared, travelling with the stream rather than with the room's voice.
 _Avoid_: system audio, loopback audio, desktop audio
 
+**Move**:
+Discord putting this account into another room of the same server, or out of voice, without the person asking: a moderator moved or disconnected it. The room follows, with mute and deafen kept. A stream the account sends ends, and so do its watched sessions from the old room, because a stream belongs to one channel.
+_Avoid_: drag, transfer, kick
+
 **Direct message (DM)**:
 A conversation outside any server, listed under Direct Messages. It has a list of recipients. A one-to-one DM has exactly one; a group DM has any number.
 _Avoid_: private channel (Discord's API name)
@@ -85,5 +89,5 @@ A DM Discord made as a group. It stays a group when only one other person, or no
 _Avoid_: group chat, group channel
 
 **Outgoing message**:
-A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place.
+A message this client sent that Discord has not confirmed yet. It shows in the timeline at once, as sending or as failed, under its nonce, until the message Discord echoes with that nonce takes its place. A text message and a voice message are the two kinds, and both go through the same queue.
 _Avoid_: pending message, local echo

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/composer_draft.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -19,13 +20,14 @@ void main() {
     final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
     PendingVoiceMessage? sent;
+    void Function()? release;
 
     await tester.pumpWidget(
       _composerApp(
         recorder: recorder,
-        onSendVoiceMessage: (message) async {
+        onSendVoiceMessage: (message, releaseFile) {
           sent = message;
-          return true;
+          release = releaseFile;
         },
       ),
     );
@@ -58,20 +60,75 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(sent, same(recorder.pending));
-    expect(recorder.deleted, [same(recorder.pending)]);
     expect(find.byKey(const ValueKey('record-voice-message')), findsOneWidget);
+    expect(recorder.deleted, isEmpty);
+
+    release!();
+    await tester.pumpAndSettle();
+
+    expect(recorder.deleted, [same(recorder.pending)]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Send waits until the microphone has started', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recorder = FakeVoiceMessageRecorder()..holdStart = Completer();
+    addTearDown(recorder.dispose);
+    final sent = <PendingVoiceMessage>[];
+
+    await tester.pumpWidget(
+      _composerApp(
+        recorder: recorder,
+        onSendVoiceMessage: (message, _) => sent.add(message),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
+    await tester.pump();
+    expect(sent, isEmpty);
+
+    recorder.holdStart!.complete();
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
+    await tester.pumpAndSettle();
+
+    expect(sent, [same(recorder.pending)]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('losing the voice message permission ends the recording', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recorder = FakeVoiceMessageRecorder();
+    addTearDown(recorder.dispose);
+
+    await tester.pumpWidget(
+      _composerApp(recorder: recorder, onSendVoiceMessage: (_, _) {}),
+    );
+    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
+    await tester.pump();
+
+    await tester.pumpWidget(
+      _composerApp(recorder: recorder, onSendVoiceMessage: null),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('send-voice-message')), findsNothing);
+    expect(recorder.cancelCount, 1);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('the frames a stop hands over still count', (tester) async {
     final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
-    final upload = Completer<bool>();
+    final stopping = recorder.holdStop = Completer<void>();
     await tester.pumpWidget(
-      _composerApp(
-        recorder: recorder,
-        onSendVoiceMessage: (_) => upload.future,
-      ),
+      _composerApp(recorder: recorder, onSendVoiceMessage: (_, _) {}),
     );
 
     await tester.tap(find.byKey(const ValueKey('record-voice-message')));
@@ -93,7 +150,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('00:02'), findsOneWidget);
-    upload.complete(true);
+    stopping.complete();
     await tester.pumpAndSettle();
   });
 
@@ -103,7 +160,7 @@ void main() {
     final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
     await tester.pumpWidget(
-      _composerApp(recorder: recorder, onSendVoiceMessage: (_) async => true),
+      _composerApp(recorder: recorder, onSendVoiceMessage: (_, _) {}),
     );
     await tester.tap(find.byKey(const ValueKey('record-voice-message')));
     await tester.pump();
@@ -124,49 +181,6 @@ void main() {
     expect(find.text('00:01'), findsOneWidget);
   });
 
-  testWidgets('retains a failed upload for retry at compact width', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(280, 420));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final recorder = FakeVoiceMessageRecorder();
-    addTearDown(recorder.dispose);
-    var attempts = 0;
-
-    await tester.pumpWidget(
-      _composerApp(
-        recorder: recorder,
-        onSendVoiceMessage: (_) async => ++attempts > 1,
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('record-voice-message')));
-    await tester.pump();
-    recorder.emit(
-      const VoiceMessageRecordingProgress(
-        duration: Duration(seconds: 2),
-        level: 0.7,
-      ),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('send-voice-message')));
-    await tester.pumpAndSettle();
-
-    expect(attempts, 1);
-    expect(find.byKey(const ValueKey('retry-voice-message')), findsOneWidget);
-    expect(find.byKey(const ValueKey('cancel-voice-message')), findsOneWidget);
-    expect(recorder.deleted, isEmpty);
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.byKey(const ValueKey('retry-voice-message')));
-    await tester.pumpAndSettle();
-
-    expect(attempts, 2);
-    expect(recorder.deleted, [same(recorder.pending)]);
-    expect(find.byKey(const ValueKey('record-voice-message')), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('channel change cancels an active voice recording', (
     tester,
   ) async {
@@ -181,7 +195,7 @@ void main() {
         builder: (context, value, _) => _composerApp(
           channelId: value,
           recorder: recorder,
-          onSendVoiceMessage: (_) async => true,
+          onSendVoiceMessage: (_, _) {},
         ),
       ),
     );
@@ -196,32 +210,29 @@ void main() {
     expect(find.byKey(const ValueKey('record-voice-message')), findsOneWidget);
   });
 
-  testWidgets('cleanup failure cannot turn a successful upload into a retry', (
+  testWidgets('a failed file cleanup does not reach the sender', (
     tester,
   ) async {
     final recorder = FakeVoiceMessageRecorder(
       deleteError: StateError('temporary file is busy'),
     );
     addTearDown(recorder.dispose);
-    var sends = 0;
+    void Function()? release;
 
     await tester.pumpWidget(
       _composerApp(
         recorder: recorder,
-        onSendVoiceMessage: (_) async {
-          sends++;
-          return true;
-        },
+        onSendVoiceMessage: (_, releaseFile) => release = releaseFile,
       ),
     );
     await tester.tap(find.byKey(const ValueKey('record-voice-message')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('send-voice-message')));
     await tester.pumpAndSettle();
+    release!();
+    await tester.pumpAndSettle();
 
-    expect(sends, 1);
     expect(recorder.deleteCount, 1);
-    expect(find.byKey(const ValueKey('retry-voice-message')), findsNothing);
     expect(find.byKey(const ValueKey('record-voice-message')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -230,7 +241,7 @@ void main() {
 Widget _composerApp({
   String channelId = 'channel-1',
   required FakeVoiceMessageRecorder recorder,
-  required SendVoiceMessageCallback onSendVoiceMessage,
+  required SendVoiceMessageCallback? onSendVoiceMessage,
 }) => MaterialApp(
   theme: FlucordTheme.dark,
   home: Scaffold(

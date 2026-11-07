@@ -1,5 +1,8 @@
 part of 'chat_controller.dart';
 
+/// The most of a send's upload the timeline shows while the send is out.
+const _uploadShownAtMost = 0.99;
+
 /// The messages this client is sending, per channel, in the order written.
 final class _OutgoingMessages {
   final Map<String, List<OutgoingMessage>> _byChannel = {};
@@ -7,6 +10,10 @@ final class _OutgoingMessages {
   /// The last send queued in each channel. Each send waits for the one before
   /// it, so a channel's messages arrive in the order they were written.
   final Map<String, Future<bool>> _tails = {};
+
+  /// What to run, by nonce, once a message leaves the queue: sent, echoed,
+  /// deleted, or dropped when its session ends. Its files are let go here.
+  final Map<String, void Function()> _onLeave = {};
   int _lastNonceMillis = 0;
 
   List<OutgoingMessage> inChannel(String channelId) =>
@@ -21,8 +28,10 @@ final class _OutgoingMessages {
 
   bool holds(OutgoingMessage message) => _indexOf(message) >= 0;
 
-  void add(OutgoingMessage message) =>
-      (_byChannel[message.channelId] ??= []).add(message);
+  void add(OutgoingMessage message, {void Function()? onLeave}) {
+    (_byChannel[message.channelId] ??= []).add(message);
+    if (onLeave != null) _onLeave[message.nonce] = onLeave;
+  }
 
   /// Swaps in [message] for the held one with its nonce. Returns false when
   /// none is held: Discord's echo or a delete got there first.
@@ -38,7 +47,20 @@ final class _OutgoingMessages {
     final before = held?.length ?? 0;
     held?.removeWhere((message) => message.nonce == nonce);
     if (held != null && held.isEmpty) _byChannel.remove(channelId);
-    return (held?.length ?? 0) != before;
+    final removed = (held?.length ?? 0) != before;
+    if (removed) _onLeave.remove(nonce)?.call();
+    return removed;
+  }
+
+  /// Drops every held message, sending or failed, for a session that ends.
+  /// A send already on the wire may still land; it is no longer shown here.
+  void releaseAll() {
+    _byChannel.clear();
+    final onLeave = [..._onLeave.values];
+    _onLeave.clear();
+    for (final release in onLeave) {
+      release();
+    }
   }
 
   int _indexOf(OutgoingMessage message) =>
@@ -80,11 +102,12 @@ extension ChatControllerOutgoing on ChatController {
     if (_outgoing.remove(message.channelId, message.nonce)) _notify();
   }
 
-  /// Shows [message] at once and queues its send.
-  Future<bool> _queueSend(OutgoingMessage message) {
+  /// Shows [message] at once and queues its send. [onLeave] runs once the
+  /// message leaves the queue, as [_OutgoingMessages] lists.
+  Future<bool> _queueSend(OutgoingMessage message, {void Function()? onLeave}) {
     final channelId = message.channelId;
     if (hasNewerMessages(channelId)) unawaited(jumpToPresent(channelId));
-    _outgoing.add(message);
+    _outgoing.add(message, onLeave: onLeave);
     _lastSentMessage = message.message;
     _notify();
     return _deliver(message);
@@ -95,32 +118,34 @@ extension ChatControllerOutgoing on ChatController {
   Future<bool> _deliver(OutgoingMessage message) =>
       _outgoing.afterEarlierSends(message.channelId, () async {
         if (!_outgoing.holds(message)) return false;
-        final draft = message.message;
         var lastPercent = -1;
+        void onUploadProgress(double fraction) {
+          // The files going out is not the whole send: Discord still has to
+          // take the message. Complete is never shown, because the row leaves
+          // the timeline when the send returns.
+          final shown = fraction.clamp(0.0, _uploadShownAtMost);
+          // Whole percents, so a large file does not redraw the app for each
+          // chunk.
+          // A transport that sends the files again starts from zero; the bar
+          // holds where it was.
+          final percent = (shown * 100).floor();
+          if (percent <= lastPercent || _disposed) return;
+          lastPercent = percent;
+          final progress = OutgoingSending(uploadProgress: shown);
+          if (_outgoing.replace(message.withDelivery(progress))) _notify();
+        }
+
+        final repository = _repository;
         try {
-          final sent = await _repository.sendMessage(
-            channelId: draft.channelId,
-            authorId: draft.authorId,
-            body: draft.body,
-            nonce: message.nonce,
-            attachments: message.attachments,
-            replyToMessageId: message.replyToMessageId,
-            suppressNotifications: draft.suppressesNotifications,
-            textToSpeech: draft.isTextToSpeech,
+          final sent = await _send(
+            message,
             onUploadProgress: message.attachments.isEmpty
                 ? null
-                : (fraction) {
-                    // Whole percents, so a large file does not redraw the app
-                    // for each chunk.
-                    final percent = (fraction * 100).floor();
-                    if (percent == lastPercent || _disposed) return;
-                    lastPercent = percent;
-                    final progress = OutgoingSending(uploadProgress: fraction);
-                    if (_outgoing.replace(message.withDelivery(progress))) {
-                      _notify();
-                    }
-                  },
+                : onUploadProgress,
           );
+          // The account changed while the send was out. The message belongs
+          // to the last account's workspace, not this one.
+          if (!identical(repository, _repository)) return true;
           _outgoing.remove(message.channelId, message.nonce);
           _applySentMessage(sent);
           _error = null;
@@ -136,6 +161,43 @@ extension ChatControllerOutgoing on ChatController {
           if (!_disposed) _notify();
         }
       });
+
+  /// Hands [message] to the repository, as text or as a voice message.
+  Future<ChatMessage> _send(
+    OutgoingMessage message, {
+    required UploadProgressListener? onUploadProgress,
+  }) {
+    final draft = message.message;
+    final repository = _repository;
+    return switch ((message.kind, repository)) {
+      (final OutgoingText text, _) => repository.sendMessage(
+        channelId: draft.channelId,
+        authorId: draft.authorId,
+        body: draft.body,
+        nonce: message.nonce,
+        attachments: text.attachments,
+        replyToMessageId: text.replyToMessageId,
+        suppressNotifications: draft.suppressesNotifications,
+        textToSpeech: draft.isTextToSpeech,
+        onUploadProgress: onUploadProgress,
+      ),
+      (
+        OutgoingVoice(:final recording),
+        final VoiceMessageRepository repository,
+      ) =>
+        repository.sendVoiceMessage(
+          channelId: draft.channelId,
+          authorId: draft.authorId,
+          voiceMessage: recording,
+          nonce: message.nonce,
+          onUploadProgress: onUploadProgress,
+        ),
+      // The session changed to one without voice messages since the send.
+      _ => Future.error(
+        UnsupportedError('This session cannot send voice messages'),
+      ),
+    };
+  }
 
   /// Takes this client's own message out of the outgoing list when Discord
   /// echoes it with the nonce it was sent under.

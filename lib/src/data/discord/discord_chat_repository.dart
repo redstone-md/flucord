@@ -44,7 +44,6 @@ import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
-import '../../domain/voice_message_recorder.dart';
 import '../../domain/voice_message_repository.dart';
 import 'discord_thread_directory.dart';
 import 'discord_api_client.dart';
@@ -56,6 +55,8 @@ import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_mapper.dart';
+import 'discord_pinned_messages.dart';
+import 'discord_scheduled_events.dart';
 import 'discord_shared_dispatches.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
@@ -161,6 +162,10 @@ final class DiscordChatRepository
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   @override
   String? _currentMemberId;
+  @override
+  DiscordScheduledEvents get _scheduledEvents =>
+      _sharedDispatches.scheduledEvents;
+
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(
         cache: _cache,

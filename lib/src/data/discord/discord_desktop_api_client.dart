@@ -3,7 +3,6 @@ import 'dart:io';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_remote_auth.dart';
 import '../../domain/reaction_repository.dart';
-import '../../domain/voice_message_recorder.dart';
 import 'discord_captcha.dart';
 import 'discord_call_api.dart';
 import 'discord_account_connections_repository.dart';
@@ -680,17 +679,22 @@ final class DiscordDesktopApiClient
 
   /// Posts [voiceMessage] the way the official client does: it asks for an
   /// upload slot, puts the file there, then posts the message that names the
-  /// uploaded file.
+  /// uploaded file. [onUploadProgress] hears the file go to the slot.
   Future<Map<String, Object?>> createVoiceMessage({
     required String channelId,
     required PendingVoiceMessage voiceMessage,
     required String nonce,
+    UploadProgressListener? onUploadProgress,
   }) async {
     final slot = await _uploadSlot(channelId, voiceMessage);
+    final bytes = await File(voiceMessage.path).readAsBytes();
     await _rest.uploadTo(
       slot.url,
-      await File(voiceMessage.path).readAsBytes(),
-      contentType: 'audio/ogg',
+      bytes,
+      contentType: voiceMessageContentType,
+      onBodySent: onUploadProgress == null
+          ? null
+          : (sent) => onUploadProgress(sent / bytes.length),
     );
     return _rest.requestObject(
       'POST',

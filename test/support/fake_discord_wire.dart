@@ -196,6 +196,13 @@ final class FakeDiscordTransport implements DiscordUploadTransport {
   void on(String method, String path, FakeRoute route) =>
       _routes['$method $path'] = route;
 
+  final Map<String, Future<void>> _halfwayHolds = {};
+
+  /// Stops a watched body on [method] [path] halfway until [release]
+  /// completes, so a test can see an upload in progress.
+  void holdBodyHalfway(String method, String path, Future<void> release) =>
+      _halfwayHolds['$method $path'] = release;
+
   @override
   Future<DiscordHttpResponse> send({
     required String method,
@@ -213,6 +220,8 @@ final class FakeDiscordTransport implements DiscordUploadTransport {
     requests.add(request);
     if (body != null && onBodySent != null) {
       onBodySent(body.length ~/ 2);
+      final hold = _halfwayHolds.remove('$method ${uri.path}');
+      if (hold != null) await hold;
       onBodySent(body.length);
     }
     return (_routes['$method ${uri.path}'] ?? fallback)(request);

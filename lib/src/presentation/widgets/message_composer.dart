@@ -45,8 +45,12 @@ typedef SendMessageCallback =
       String? replyToMessageId,
       bool suppressNotifications,
     );
+
+/// Hands a finished recording over to be sent. The composer is done with it
+/// from here. [release] deletes the recording file: call it once the file is
+/// no longer needed.
 typedef SendVoiceMessageCallback =
-    Future<bool> Function(PendingVoiceMessage voiceMessage);
+    void Function(PendingVoiceMessage voiceMessage, void Function() release);
 
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
@@ -262,6 +266,12 @@ class MessageComposerState extends State<MessageComposer>
       }
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
+    } else if (!channelChanged &&
+        oldWidget.onSendVoiceMessage != null &&
+        widget.onSendVoiceMessage == null) {
+      // Voice messages were taken away here mid recording: there is nothing
+      // left to send it with.
+      _discardVoiceState(widget.voiceMessageRecorder);
     }
     _updateAutocompleteCatalog(channelChanged: channelChanged);
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
@@ -279,12 +289,8 @@ class MessageComposerState extends State<MessageComposer>
     unawaited(_voiceProgressSubscription?.cancel());
     _voiceLevels.dispose();
     final recorder = widget.voiceMessageRecorder;
-    final pending = _pendingVoiceMessage;
-    if ((recorder?.isRecording ?? false) && !_isUploadingVoice) {
+    if ((recorder?.isRecording ?? false) && !_isStoppingVoice) {
       unawaited(_cancelVoiceRecordingIgnoringErrors(recorder));
-    }
-    if (pending != null && !_isUploadingVoice) {
-      unawaited(_deleteVoiceMessageIgnoringErrors(recorder, pending));
     }
     _controller.dispose();
     _focusNode.dispose();
@@ -593,8 +599,8 @@ class MessageComposerState extends State<MessageComposer>
     });
     _focusNode.requestFocus();
     // A failed message stays in the timeline with Retry, so the box does not
-    // take it back, and a pasted picture stays on disk for the retry.
-    if (await send) await ClipboardAttachments.release(content.attachments);
+    // take it back.
+    await send;
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
@@ -685,15 +691,10 @@ class MessageComposerState extends State<MessageComposer>
             _VoiceMessageComposerBar(
               levels: _voiceLevels,
               isRecording: _isRecordingVoice,
-              isUploading: _isUploadingVoice,
-              hasPendingMessage: _pendingVoiceMessage != null,
-              error: _voiceError,
-              onCancel: _isUploadingVoice ? null : _cancelVoiceMessage,
-              onPrimaryAction: _isUploadingVoice
-                  ? null
-                  : _isRecordingVoice
+              onCancel: _isRecordingVoice ? _cancelVoiceMessage : null,
+              onSend: _isRecordingVoice && !_isStartingVoice
                   ? _stopAndSendVoiceMessage
-                  : _retryVoiceMessage,
+                  : null,
             )
           else
             CallbackShortcuts(

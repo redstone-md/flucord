@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
 import 'package:flucord/src/domain/chat_models.dart';
-import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 void main() {
   test('sends the exact documented voice-message multipart payload', () async {

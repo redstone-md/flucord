@@ -53,7 +53,6 @@ import '../domain/user_profile.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
-import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
 import '../domain/workspace_permissions.dart';
 import 'channel_activity_persistence.dart';
@@ -356,6 +355,8 @@ final class ChatController extends ChangeNotifier {
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
     _lastSentAt.clear();
+    // Sends of the last account: a retry would go out as the new one.
+    _outgoing.releaseAll();
     // A new store, not a cleared one: a composer closing now, or a send failing
     // late, still writes to the store of the account it belongs to.
     _drafts = MemoryComposerDraftStore();
@@ -784,12 +785,16 @@ final class ChatController extends ChangeNotifier {
   /// Shows the message in the timeline at once, as sending, and sends it after
   /// the channel's earlier sends. Returns whether Discord has it. A failed
   /// message stays in [outgoingIn], and [error] says why.
+  ///
+  /// [onReleased] runs once [attachments] are no longer needed: the message
+  /// left the queue, or could not be queued at all.
   Future<bool> sendMessage({
     required String channelId,
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    void Function()? onReleased,
   }) {
     // A refusal below must not be read as the failure of some earlier action.
     _error = null;
@@ -797,6 +802,7 @@ final class ChatController extends ChangeNotifier {
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
     if (workspace == null || (content.isEmpty && attachments.isEmpty)) {
+      onReleased?.call();
       return Future.value(false);
     }
     final answered = replyToMessageId == null
@@ -825,9 +831,12 @@ final class ChatController extends ChangeNotifier {
               : 0,
           isTextToSpeech: spoken.$1,
         ),
-        replyToMessageId: replyToMessageId,
-        attachments: attachments,
+        kind: OutgoingText(
+          replyToMessageId: replyToMessageId,
+          attachments: attachments,
+        ),
       ),
+      onLeave: onReleased,
     );
   }
 
@@ -1006,6 +1015,7 @@ final class ChatController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _outgoing.releaseAll();
     _presenceFold?.cancel();
     presenceChanges.dispose();
     _clearTyping();
