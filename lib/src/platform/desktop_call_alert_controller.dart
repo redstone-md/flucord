@@ -71,7 +71,7 @@ final class DesktopCallAlertController {
     final surface = _surface;
     final showWindow = _showWindow;
     if (surface == null || showWindow == null) return;
-    if (await _isFocusedSafely()) return;
+    if (await isWindowFocused(_isFocused)) return;
     // The ring may end at any await below; each step checks it is still on.
     if (_ring != ringing.identifier) return;
     _raised = ringing.identifier;
@@ -106,15 +106,6 @@ final class DesktopCallAlertController {
     _raised = null;
     await _guard('taskbar flash', _attention.cancel);
     await _guard('call notification', () => _gateway.dismiss(raised));
-  }
-
-  Future<bool> _isFocusedSafely() async {
-    try {
-      return await _isFocused();
-    } on Object catch (error) {
-      AppLog.warning('desktop', 'window focus unavailable', error: error);
-      return false;
-    }
   }
 
   Future<void> _guard(String feature, Future<void> Function() action) async {
