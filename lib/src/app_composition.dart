@@ -986,7 +986,6 @@ final class AppComposition {
       ? WindowsSecurityKeyCeremony()
       : const UnavailableSecurityKeyCeremony();
 
-  /// Records a constructed part for reverse-order teardown.
   /// Whether this account watches [userId]'s Stream in the room it is in.
   bool _watchesStreamOf(String userId) {
     final channelId = voice.connectedChannelId;
@@ -1003,6 +1002,7 @@ final class AppComposition {
     );
   }
 
+  /// Records a constructed part for reverse-order teardown.
   T _register<T extends ChangeNotifier>(T controller) {
     _teardown.add(controller.dispose);
     return controller;

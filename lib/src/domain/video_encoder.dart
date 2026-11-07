@@ -27,8 +27,8 @@ final class EncodedVideoFrame {
 
 /// Where the pictures come from.
 ///
-/// They share everything downstream of the capture — the same encoder, the
-/// same packetiser, the same socket — but they are not the same feature on
+/// They share everything downstream of the capture (the same encoder, the
+/// same packetiser, the same socket), but they are not the same feature on
 /// Discord: a screen or a window is a Go Live stream with its own SSRC and its
 /// own viewers, and a camera is the account's own video in the room it is
 /// sitting in, announced with `self_video` on the voice state.
