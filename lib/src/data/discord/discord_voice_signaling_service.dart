@@ -89,12 +89,11 @@ final class DiscordVoiceSignalingService
   /// Sessions Discord moved to another channel whose connection has not
   /// settled there yet. While one dials its new connection, the room is
   /// reconnecting rather than joining for the first time.
-  final Set<VoiceSessionKey> _moving = {};
-
-  /// The wait after a move for the rest of Discord's move: new credentials,
-  /// and a close of the old socket. A close in this wait is part of the move,
-  /// so it does not start the opcode 5 recovery.
-  final Map<VoiceSessionKey, Timer> _moveTimers = {};
+  ///
+  /// While its timer runs, the session waits for the rest of Discord's move:
+  /// new credentials, and a close of the old socket. A close in that wait is
+  /// part of the move, so it does not start the opcode 5 recovery.
+  final Map<VoiceSessionKey, Timer> _moves = {};
   static const _moveSettleDelay = Duration(seconds: 2);
 
   /// The channels each guild session asked for with opcode 4 that Discord
@@ -436,7 +435,7 @@ final class DiscordVoiceSignalingService
     _currentSessionId = credentials.sessionId;
     final key = credentials.sessionKey;
     if (_desiredChannels[key] != credentials.channelId) return;
-    if (_moving.contains(key) && _repeatsLiveCredentials(credentials)) {
+    if (_moves.containsKey(key) && _repeatsLiveCredentials(credentials)) {
       _endMove(key);
       return;
     }
@@ -471,8 +470,7 @@ final class DiscordVoiceSignalingService
       _desiredChannels.remove(key);
     } else {
       _desiredChannels[key] = channelId;
-      _moving.add(key);
-      _moveTimers[key] = Timer(_moveSettleDelay, () => _moveSettled(key));
+      _moves[key] = Timer(_moveSettleDelay, () => _moveSettled(key));
       // The recovery announced the old channel, and Discord could act on
       // that after the move.
       if (wasRecovering) _reannounce(key, channelId);
@@ -511,17 +509,13 @@ final class DiscordVoiceSignalingService
   /// The wait after a move ran out. A socket Discord closed in it, with no
   /// credentials to rebuild from, is recovered the usual way now.
   void _moveSettled(VoiceSessionKey key) {
-    _moveTimers.remove(key);
     if (_lastStatuses[key] == VoiceConnectionStatus.reconnecting &&
         !_pingedSessions.contains(key)) {
       _recover(key);
     }
   }
 
-  void _endMove(VoiceSessionKey key) {
-    _moving.remove(key);
-    _moveTimers.remove(key)?.cancel();
-  }
+  void _endMove(VoiceSessionKey key) => _moves.remove(key)?.cancel();
 
   /// What the room is told of [event]: while a moved session dials its new
   /// connection, the room is reconnecting, not joining for the first time.
@@ -535,7 +529,7 @@ final class DiscordVoiceSignalingService
           VoiceConnectionStatus.negotiating,
       :final error,
     )
-        when _moving.contains(key) =>
+        when _moves.containsKey(key) =>
       VoiceSignalingStatusEvent(
         VoiceConnectionStatus.reconnecting,
         error: error,
@@ -583,13 +577,13 @@ final class DiscordVoiceSignalingService
         // A close during a move is Discord ending the old socket. The move's
         // own credentials rebuild it, and [_moveSettled] covers them not
         // coming.
-        if (!_moveTimers.containsKey(key)) _recover(key);
+        if (!(_moves[key]?.isActive ?? false)) _recover(key);
       } else if (!isReconnecting) {
         _pingedSessions.remove(key);
       }
       if (event.status == VoiceConnectionStatus.failure ||
           event.status == VoiceConnectionStatus.disconnected) {
-        _moving.remove(key);
+        _endMove(key);
       }
     }
     // A transport that reached ready settles every forced cycle that led to
@@ -598,7 +592,7 @@ final class DiscordVoiceSignalingService
     if (event is VoiceTransportReadyEvent) {
       _forcedReissues.remove(key);
       _readyCredentials[key] = credentials;
-      _moving.remove(key);
+      _endMove(key);
     }
     _emit(shown);
   }
@@ -891,11 +885,11 @@ final class DiscordVoiceSignalingService
     if (_closed) return;
     _closed = true;
     await _gatewaySubscription.cancel();
-    for (final timer in [..._reissueTimers.values, ..._moveTimers.values]) {
+    for (final timer in [..._reissueTimers.values, ..._moves.values]) {
       timer.cancel();
     }
     _reissueTimers.clear();
-    _moveTimers.clear();
+    _moves.clear();
     for (final key in _clients.keys.toList(growable: false)) {
       await _closeClient(key);
     }
