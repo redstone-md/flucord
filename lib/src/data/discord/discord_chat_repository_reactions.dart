@@ -5,7 +5,7 @@ mixin _DiscordChatRepositoryReactions implements ReactionRepository {
   DiscordMapper get _mapper;
 
   @override
-  Future<ReactionUsersPage> loadReactionUsers({
+  Future<MemberPage> loadReactionUsers({
     required String channelId,
     required String messageId,
     required String emoji,

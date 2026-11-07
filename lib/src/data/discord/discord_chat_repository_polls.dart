@@ -45,7 +45,7 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
   }
 
   @override
-  Future<PollVotersPage> loadPollVoters({
+  Future<MemberPage> loadPollVoters({
     required String channelId,
     required String messageId,
     required int answerId,

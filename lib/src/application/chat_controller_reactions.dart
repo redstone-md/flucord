@@ -60,7 +60,7 @@ extension ChatControllerReactions on ChatController {
     return false;
   }
 
-  Future<ReactionUsersPage> loadReactionUsers(
+  Future<MemberPage> loadReactionUsers(
     ChatMessage message,
     MessageReaction reaction,
     DiscordReactionType type,
@@ -68,7 +68,7 @@ extension ChatControllerReactions on ChatController {
   ) {
     final repository = _repository;
     if (repository is! ReactionRepository) {
-      return Future.value(const ReactionUsersPage(users: [], hasMore: false));
+      return Future.value(const MemberPage(users: [], hasMore: false));
     }
     return (repository as ReactionRepository).loadReactionUsers(
       channelId: message.channelId,

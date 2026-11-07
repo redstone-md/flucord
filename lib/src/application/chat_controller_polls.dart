@@ -77,14 +77,14 @@ extension ChatControllerPolls on ChatController {
     });
   }
 
-  Future<PollVotersPage> loadPollVoters(
+  Future<MemberPage> loadPollVoters(
     ChatMessage message,
     PollAnswer answer,
     String? afterUserId,
   ) {
     final repository = _repository;
     if (repository is! PollRepository) {
-      return Future.value(const PollVotersPage(users: [], hasMore: false));
+      return Future.value(const MemberPage(users: [], hasMore: false));
     }
     return (repository as PollRepository).loadPollVoters(
       channelId: message.channelId,

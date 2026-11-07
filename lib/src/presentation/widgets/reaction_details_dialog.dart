@@ -13,7 +13,7 @@ import 'message_reaction_strip.dart';
 import 'flucord_dialog.dart';
 
 typedef ReactionUsersLoader =
-    Future<ReactionUsersPage> Function(
+    Future<MemberPage> Function(
       ChatMessage message,
       MessageReaction reaction,
       DiscordReactionType type,
@@ -393,5 +393,5 @@ final class _TypedReactionPage {
   const _TypedReactionPage(this.type, this.page);
 
   final DiscordReactionType type;
-  final ReactionUsersPage page;
+  final MemberPage page;
 }

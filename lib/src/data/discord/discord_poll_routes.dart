@@ -34,7 +34,7 @@ final class DiscordPollRoutes {
   );
 
   /// The users who voted for [answerId], up to [limit] after [afterUserId].
-  Future<PollVotersPage> answerVoters({
+  Future<MemberPage> answerVoters({
     required String channelId,
     required String messageId,
     required int answerId,
@@ -52,7 +52,7 @@ final class DiscordPollRoutes {
       for (final user in payload['users'] as List? ?? const [])
         if (user is Map) user.cast<String, Object?>(),
     ];
-    return PollVotersPage(
+    return MemberPage(
       users: [for (final user in users) mapper.member(user, role: 'Voted')],
       hasMore: users.length == pageLimit,
     );

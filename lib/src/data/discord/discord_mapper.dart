@@ -314,10 +314,10 @@ final class DiscordMapper {
 
   /// One page of the people who reacted, asked for [limit] at a time. A full
   /// page may have more behind it.
-  ReactionUsersPage reactionUsers(
+  MemberPage reactionUsers(
     List<Map<String, Object?>> payloads, {
     required int limit,
-  }) => ReactionUsersPage(
+  }) => MemberPage(
     users: [for (final payload in payloads) member(payload, role: 'Reacted')],
     hasMore: payloads.length == limit,
   );

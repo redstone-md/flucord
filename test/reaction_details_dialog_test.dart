@@ -19,14 +19,14 @@ void main() {
         message,
         onLoad: (_, reaction, type, _) async {
           if (reaction.emojiName == '🔥') {
-            return ReactionUsersPage(
+            return MemberPage(
               users: type == DiscordReactionType.normal
                   ? const [_jack]
                   : const [_omar],
               hasMore: false,
             );
           }
-          return const ReactionUsersPage(users: [_roman], hasMore: false);
+          return const MemberPage(users: [_roman], hasMore: false);
         },
       ),
     );
@@ -61,14 +61,14 @@ void main() {
         _message(),
         onLoad: (_, _, type, after) async {
           if (type == DiscordReactionType.burst) {
-            return const ReactionUsersPage(users: [_omar], hasMore: false);
+            return const MemberPage(users: [_omar], hasMore: false);
           }
           calls++;
           if (after == null) {
-            return const ReactionUsersPage(users: [_jack], hasMore: true);
+            return const MemberPage(users: [_jack], hasMore: true);
           }
           if (calls == 2) throw StateError('temporary failure');
-          return const ReactionUsersPage(users: [_roman], hasMore: false);
+          return const MemberPage(users: [_roman], hasMore: false);
         },
       ),
     );
@@ -96,7 +96,7 @@ void main() {
     await tester.pumpWidget(
       _host(
         _message(),
-        onLoad: (_, _, type, _) async => ReactionUsersPage(
+        onLoad: (_, _, type, _) async => MemberPage(
           users: type == DiscordReactionType.normal
               ? const [_jack, _roman]
               : const [_omar],

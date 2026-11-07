@@ -5,7 +5,7 @@ mixin _MockChatRepositoryReactions implements ReactionRepository {
   Future<void> _wait();
 
   @override
-  Future<ReactionUsersPage> loadReactionUsers({
+  Future<MemberPage> loadReactionUsers({
     required String channelId,
     required String messageId,
     required String emoji,
@@ -34,7 +34,7 @@ mixin _MockChatRepositoryReactions implements ReactionRepository {
         : users.indexWhere((member) => member.id == afterUserId);
     final start = (cursor + 1).clamp(0, users.length);
     final end = (start + limit.clamp(1, 100)).clamp(0, users.length);
-    return ReactionUsersPage(
+    return MemberPage(
       users: users.sublist(start, end),
       hasMore: end < users.length,
     );

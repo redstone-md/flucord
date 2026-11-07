@@ -54,7 +54,7 @@ mixin _MockChatRepositoryPolls implements PollRepository, PollVoteRepository {
   /// The mock keeps counts, not names, so the account stands first among
   /// its own answers and other members fill the rest of the count.
   @override
-  Future<PollVotersPage> loadPollVoters({
+  Future<MemberPage> loadPollVoters({
     required String channelId,
     required String messageId,
     required int answerId,
@@ -75,7 +75,7 @@ mixin _MockChatRepositoryPolls implements PollRepository, PollVoteRepository {
         ? 0
         : voters.indexWhere((member) => member.id == afterUserId) + 1;
     final end = (start + limit.clamp(1, 100)).clamp(0, voters.length);
-    return PollVotersPage(
+    return MemberPage(
       users: voters.sublist(start, end),
       hasMore: end < voters.length,
     );

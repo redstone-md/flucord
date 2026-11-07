@@ -12,7 +12,7 @@ import 'member_avatar.dart';
 
 /// Loads one page of the voters of [answer], after the voter [afterUserId].
 typedef PollVotersLoader =
-    Future<PollVotersPage> Function(
+    Future<MemberPage> Function(
       ChatMessage message,
       PollAnswer answer,
       String? afterUserId,

@@ -726,7 +726,7 @@ final class DiscordDesktopChatRepository
   }
 
   @override
-  Future<ReactionUsersPage> loadReactionUsers({
+  Future<MemberPage> loadReactionUsers({
     required String channelId,
     required String messageId,
     required String emoji,
@@ -856,7 +856,7 @@ final class DiscordDesktopChatRepository
   }
 
   @override
-  Future<PollVotersPage> loadPollVoters({
+  Future<MemberPage> loadPollVoters({
     required String channelId,
     required String messageId,
     required int answerId,
