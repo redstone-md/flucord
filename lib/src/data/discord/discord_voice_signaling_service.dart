@@ -423,8 +423,7 @@ final class DiscordVoiceSignalingService
     _currentSessionId = credentials.sessionId;
     final key = credentials.sessionKey;
     if (_desiredChannels[key] != credentials.channelId) return;
-    // A move on the same voice server: the connection stays.
-    if (_moving.contains(key) && _isLiveOn(credentials)) {
+    if (_moving.contains(key) && _repeatsLiveCredentials(credentials)) {
       _endMove(key);
       return;
     }
@@ -490,9 +489,10 @@ final class DiscordVoiceSignalingService
     _queueVoiceClient(latest.inChannel(channelId));
   }
 
-  /// Whether [credentials] are the ones the session's working connection
-  /// already runs on.
-  bool _isLiveOn(VoiceServerCredentials credentials) {
+  /// Whether [credentials] repeat the server update the working connection
+  /// already runs on. Discord changes the token on a channel change, even on
+  /// the same endpoint, so only a duplicate update keeps the connection.
+  bool _repeatsLiveCredentials(VoiceServerCredentials credentials) {
     final key = credentials.sessionKey;
     final live = _readyCredentials[key];
     return live != null &&

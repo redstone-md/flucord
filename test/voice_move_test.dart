@@ -26,27 +26,47 @@ import 'support/fake_voice_socket.dart';
 /// voice client run over the gateway fake and fake voice sockets; a test plays
 /// Discord on both and reads the frames, the room and the sounds.
 void main() {
-  test('a move on the same voice server keeps the connection', () async {
+  test('a move on the same endpoint reconnects with the new token', () async {
     final rig = await _MoveRig.inRoom();
+    final old = rig.dialer.dials.single.socket;
 
     rig
       ..seatSelf('voice-2')
-      // Discord repeats the credentials the connection already holds.
-      ..serverUpdate(token: 'token-1', endpoint: 'voice-a.discord.media');
-    await _flush();
+      // Discord changes the token on a channel change, even when the
+      // endpoint stays the same.
+      ..serverUpdate(token: 'token-2', endpoint: 'voice-a.discord.media');
+    await _until(() => rig.dialer.dials.length == 2);
+    final next = rig.dialer.dials.last;
+    await rig.finishHandshake(next.socket);
 
+    expect(next.uri.host, 'voice-a.discord.media');
+    expect(_identifyOn(next.socket)['channel_id'], 'voice-2');
+    expect(_identifyOn(next.socket)['token'], 'token-2');
+    expect(old.isClosed, isTrue);
     expect(rig.voice.connectedChannelId, 'voice-2');
-    expect(rig.voice.participants.map((p) => p.userId), contains('me'));
-    expect(rig.voice.participants.map((p) => p.userId), contains('friend-2'));
     expect(
       rig.voice.seatedByChannel['voice-2']!.map((seat) => seat.userId),
       contains('me'),
     );
+    expect(rig.gateway.voiceStates, isEmpty);
+    expect(rig.gateway.voicePings, 0);
+  });
+
+  test('a repeated identical voice server update after a move keeps the '
+      'connection', () async {
+    final rig = await _MoveRig.inRoom();
+
+    rig
+      ..seatSelf('voice-2')
+      // A duplicate of the update the connection already runs on.
+      ..serverUpdate(token: 'token-1', endpoint: 'voice-a.discord.media');
+    await _flush();
+
+    expect(rig.voice.connectedChannelId, 'voice-2');
+    expect(rig.voice.participants.map((p) => p.userId), contains('friend-2'));
     expect(rig.voice.connectionStatus, VoiceConnectionStatus.ready);
     expect(rig.dialer.dials, hasLength(1));
     expect(rig.dialer.dials.single.socket.isClosed, isFalse);
-    expect(rig.gateway.voiceStates, isEmpty);
-    expect(rig.gateway.voicePings, 0);
   });
 
   test('a move to another voice server reconnects there', () async {
