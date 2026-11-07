@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
+import 'package:flucord/src/domain/go_live_sources.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/go_live_media_plane.dart';
 import 'package:flucord/src/data/discord/go_live_sender.dart';
@@ -15,6 +16,7 @@ import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_share_sources.dart';
 import 'support/fake_video_decoder.dart';
 import 'support/fake_video_encoder.dart';
 
@@ -41,6 +43,7 @@ GoLiveController _controller(
   _FakePlane? plane,
   StreamController<DiscordSenderEndpoint>? endpoints,
   GoLiveSelfPreview? preview,
+  ShareSourceCatalog shareSources = const UnavailableShareSourceCatalog(),
   Duration pingInterval = const Duration(seconds: 30),
 }) {
   final media = plane ?? _FakePlane();
@@ -53,6 +56,7 @@ GoLiveController _controller(
     media: media,
     senderEndpoints: endpoints?.stream,
     selfPreview: preview,
+    shareSources: shareSources,
     pingInterval: pingInterval,
   )..reconcile();
   addTearDown(controller.dispose);
@@ -423,6 +427,87 @@ void main() {
     );
     expect(repository.ended, [_key]);
     expect(encoder.stopped, 1);
+  });
+
+  group('window sources', () {
+    final notes = FakeShareSourceCatalog(
+      windows: const [GoLiveWindow(handle: 0x2a, name: 'Notes')],
+    );
+
+    test('the picker lists every screen, then the open windows', () {
+      final controller = _controller(
+        _FakeRepository(),
+        encoder: FakeVideoEncoder(displays: 2, windows: true),
+        shareSources: notes,
+      );
+
+      expect(
+        [for (final source in controller.sources) source.sourceId],
+        ['screen:0:0', 'screen:1:0', 'window:42:0'],
+      );
+    });
+
+    test('an encoder that cannot capture a window lists only screens', () {
+      final controller = _controller(
+        _FakeRepository(),
+        encoder: FakeVideoEncoder(displays: 2),
+        shareSources: notes,
+      );
+
+      expect(
+        [for (final source in controller.sources) source.sourceId],
+        ['screen:0:0', 'screen:1:0'],
+      );
+    });
+
+    test('picking a window shares that window', () async {
+      final repository = _FakeRepository();
+      addTearDown(repository.close);
+      final encoder = FakeVideoEncoder(windows: true);
+      final controller = _controller(
+        repository,
+        encoder: encoder,
+        shareSources: notes,
+      );
+
+      expect(
+        await controller.start(
+          sourceId: 'window:42:0',
+          channelId: 'voice-1',
+          guildId: 'guild-1',
+        ),
+        isTrue,
+      );
+
+      expect(encoder.started.single.source, VideoCaptureSource.window);
+      expect(encoder.started.single.windowHandle, 0x2a);
+    });
+
+    test('a closed window ends the share with a plain reason', () async {
+      final repository = _FakeRepository();
+      addTearDown(repository.close);
+      final encoder = FakeVideoEncoder(windows: true);
+      final controller = _controller(
+        repository,
+        encoder: encoder,
+        shareSources: notes,
+      );
+      await controller.start(
+        sourceId: 'window:42:0',
+        channelId: 'voice-1',
+        guildId: 'guild-1',
+      );
+
+      encoder.fail(
+        const VideoEncoderException(VideoEncoderFailure.windowClosed),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.status, GoLiveStatus.failure);
+      expect('${controller.error}', 'The shared window was closed.');
+      expect(repository.ended, [_key]);
+      expect(encoder.stopped, 1);
+    });
   });
 
   test('a capture loss the isolate reports ends the share', () async {

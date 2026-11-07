@@ -119,9 +119,11 @@ import 'data/video/native_video_decoder_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
+import 'data/video/windows_share_sources.dart';
 import 'domain/chat_models.dart' show Member, UserActivity;
 import 'domain/attachment_download.dart';
 import 'domain/game_detection.dart';
+import 'domain/go_live_sources.dart';
 import 'domain/multi_factor_auth.dart'
     show
         SecurityKeyAccount,
@@ -533,6 +535,10 @@ final class AppComposition {
           // Not decoded while the window is behind the game or minimized.
           window: windowVisible,
         ),
+        // Windows to share next to the screens, and the picker's thumbnails.
+        shareSources: Platform.isWindows
+            ? WindowsShareSourceCatalog()
+            : const UnavailableShareSourceCatalog(),
         systemAudio: Platform.isWindows
             ? WindowsSystemAudioCapture()
             : const UnavailableSystemAudioCapture(),

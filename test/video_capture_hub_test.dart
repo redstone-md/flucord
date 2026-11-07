@@ -349,6 +349,67 @@ void main() {
     });
   });
 
+  test(
+    'a window share is a share of that window, through every restart',
+    () async {
+      final encoder = FakeVideoEncoder(windows: true);
+      final destination = _FakeDestination();
+      final hub = VideoCaptureHub(encoder: encoder, shareFrames: destination);
+      expect(hub.canShareWindows, isTrue);
+
+      final share = await hub.startWindowShare(windowHandle: 0x2a);
+      expect(encoder.started.single.source, VideoCaptureSource.window);
+      expect(encoder.started.single.windowHandle, 0x2a);
+      // Delivered where a screen share's frames go, not in-process.
+      expect(encoder.frameSinks, [_FakeDestination.sink]);
+
+      await hub.setQuality(
+        const StreamQualitySettings(shareResolution: StreamResolution.p1080),
+      );
+      await pumpEventQueue();
+      expect(encoder.started.last.source, VideoCaptureSource.window);
+      expect(encoder.started.last.windowHandle, 0x2a);
+      expect(encoder.started.last.height, 1080);
+      await share.release();
+    },
+  );
+
+  test('an encoder without window capture offers no window share', () {
+    expect(
+      VideoCaptureHub(encoder: FakeVideoEncoder()).canShareWindows,
+      isFalse,
+    );
+  });
+
+  test('a window share stays on that window through a restart', () async {
+    final encoder = FakeVideoEncoder(windows: true);
+    final destination = _FakeDestination();
+    final hub = VideoCaptureHub(encoder: encoder, shareFrames: destination);
+    expect(hub.canShareWindows, isTrue);
+
+    final share = await hub.startWindowShare(windowHandle: 0x2a);
+    expect(encoder.started.single.source, VideoCaptureSource.window);
+    expect(encoder.started.single.windowHandle, 0x2a);
+    // Delivered where a screen share's frames go, not in-process.
+    expect(encoder.frameSinks, [_FakeDestination.sink]);
+
+    await hub.setQuality(
+      const StreamQualitySettings(shareResolution: StreamResolution.p1080),
+    );
+    await pumpEventQueue();
+    expect(encoder.started.last.source, VideoCaptureSource.window);
+    expect(encoder.started.last.windowHandle, 0x2a);
+    expect(encoder.started.last.height, 1080);
+    await share.release();
+  });
+
+  test('an encoder without window capture offers no window share', () {
+    expect(
+      VideoCaptureHub(encoder: FakeVideoEncoder()).canShareWindows,
+      isFalse,
+    );
+  });
+
   test('a share starts against the native sink, a camera does not', () async {
     final encoder = FakeVideoEncoder();
     final destination = _FakeDestination();

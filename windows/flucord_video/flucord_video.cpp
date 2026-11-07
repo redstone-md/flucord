@@ -1,7 +1,9 @@
 #include "flucord_video.h"
 
+#include "capture_fit.h"
 #include "qpc_clock.h"
 #include "video_surface.h"
+#include "window_capture.h"
 
 #include <algorithm>
 #include <atomic>
@@ -9,6 +11,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -322,6 +325,8 @@ struct FlucordVideoEncoder {
   // is held is what the capture thread branches on, so a pipeline can only
   // ever have one source and cannot silently read from both.
   ComPtr<IMFSourceReader> reader;
+  // Set instead of both when the source is one window.
+  std::unique_ptr<flucord_video::WindowCapture> window;
   ComPtr<IMFTransform> encoder;
 
   // A hardware encoder MFT is driven differently: it asks for input through
@@ -702,6 +707,12 @@ enum DuplicationStage {
   kStageStopJoinCapture = 7,
   kStageStopJoinDecode = 8,
   kStageCameraOutputType = 9,
+  // The shared window was closed: the end of a window share, with no
+  // HRESULT behind it.
+  kStageWindowClosed = 10,
+  // Windows.Graphics.Capture refused to start on the window, or failed
+  // while it ran.
+  kStageWindowCapture = 11,
 };
 
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
@@ -1149,6 +1160,8 @@ struct GpuVideoPass {
     // The picture that comes out.
     int width = 0;
     int height = 0;
+    // Where in it the source is drawn, the rest black. Empty fills it all.
+    RECT destination{};
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     D3D11_VIDEO_PROCESSOR_COLOR_SPACE input{};
     D3D11_VIDEO_PROCESSOR_COLOR_SPACE output{};
@@ -1189,6 +1202,17 @@ struct GpuVideoPass {
     RECT visible = shape.visible;
     context->VideoProcessorSetStreamSourceRect(processor.Get(), 0, TRUE,
                                                &visible);
+    if (!IsRectEmpty(&shape.destination)) {
+      RECT destination = shape.destination;
+      context->VideoProcessorSetStreamDestRect(processor.Get(), 0, TRUE,
+                                               &destination);
+      // The bars around it. RGB here: the processor converts it to the
+      // output's colour space like the picture itself.
+      D3D11_VIDEO_COLOR black{};
+      black.RGBA.A = 1.0f;
+      context->VideoProcessorSetOutputBackgroundColor(processor.Get(), FALSE,
+                                                      &black);
+    }
     D3D11_VIDEO_PROCESSOR_COLOR_SPACE input = shape.input;
     context->VideoProcessorSetStreamColorSpace(processor.Get(), 0, &input);
     D3D11_VIDEO_PROCESSOR_COLOR_SPACE output = shape.output;
@@ -1313,18 +1337,35 @@ struct GpuVideoPass {
 // pixel by pixel, and only then encoding. This keeps the resize on the GPU
 // and brings back the encoder's own NV12, 1.8 MB at 720p.
 struct GpuScaler {
+  // One captured texture: its size, the part of it that is picture, and
+  // whether that part keeps its shape inside the output (a window) instead
+  // of being stretched to fill it (a display).
+  struct Source {
+    int width = 0;
+    int height = 0;
+    RECT visible{};
+    bool fit = false;
+  };
+
   bool Create(ID3D11Device* d3d,
               ID3D11DeviceContext* immediate,
-              int source_width,
-              int source_height,
+              const Source& source,
               int width,
               int height) {
     GpuVideoPass::Shape shape;
-    shape.source_width = source_width;
-    shape.source_height = source_height;
-    shape.visible = RECT{0, 0, source_width, source_height};
+    shape.source_width = source.width;
+    shape.source_height = source.height;
+    shape.visible = source.visible;
     shape.width = width;
     shape.height = height;
+    if (source.fit) {
+      const RECT& visible = source.visible;
+      const flucord_video::FitRect placed = flucord_video::FitInside(
+          visible.right - visible.left, visible.bottom - visible.top, width,
+          height);
+      shape.destination =
+          RECT{placed.left, placed.top, placed.right, placed.bottom};
+    }
     shape.format = DXGI_FORMAT_NV12;
     // Full-range RGB in (a desktop is 0-255), BT.601 studio out: the same
     // numbers the CPU converter produces, so the colours do not move between
@@ -1337,9 +1378,8 @@ struct GpuScaler {
     return SUCCEEDED(pass.Create(d3d, immediate, shape));
   }
 
-  bool Matches(int source_width, int source_height) const {
-    return pass.Matches(source_width, source_height,
-                        RECT{0, 0, source_width, source_height});
+  bool Matches(const Source& source) const {
+    return pass.Matches(source.width, source.height, source.visible);
   }
 
   // Converts one desktop texture into `nv12` (width * height * 3 / 2 bytes,
@@ -1396,6 +1436,86 @@ bool ReopenDuplication(FlucordVideoEncoder* state) {
     }
   }
   return false;
+}
+
+// The capture thread's last word, once the reason is recorded: an empty
+// frame. Not while closing, when the loop is leaving anyway; the gate check
+// is for a close that stopped waiting for this thread and answered without
+// it.
+void AnnounceCaptureEnd(FlucordVideoEncoder* state) {
+  if (!state->running.load()) return;
+  std::lock_guard<std::mutex> guard(state->deliveries.lock);
+  if (!state->deliveries.closed) {
+    state->callback(state->user_data, nullptr, 0, 0, 0);
+  }
+}
+
+// What one tick of the capture loop took from its source.
+enum class Take {
+  // A picture, held until ReleaseTaken.
+  kFrame,
+  // Nothing new since the last tick.
+  kUnchanged,
+  // The duplication was lost and opened again, on what may be a new device.
+  kReopened,
+  // The source is gone for good; the reason is recorded.
+  kEnded,
+};
+
+// Takes the desktop or the window as it is now. On kFrame, `visible` is the
+// part of `texture` that is picture, from its top-left corner.
+Take TakeFrame(FlucordVideoEncoder* state,
+               ComPtr<ID3D11Texture2D>* texture,
+               RECT* visible) {
+  using flucord_video::WindowCapture;
+  if (state->window) {
+    HRESULT error = S_OK;
+    switch (state->window->Next(texture, visible, &error)) {
+      case WindowCapture::Grab::kFrame:
+        return Take::kFrame;
+      case WindowCapture::Grab::kUnchanged:
+        return Take::kUnchanged;
+      case WindowCapture::Grab::kClosed:
+        RecordAttemptFailure(kStageWindowClosed, S_OK);
+        return Take::kEnded;
+      case WindowCapture::Grab::kFailed:
+        RecordAttemptFailure(kStageWindowCapture, error);
+        return Take::kEnded;
+    }
+    return Take::kEnded;
+  }
+
+  DXGI_OUTDUPL_FRAME_INFO info{};
+  ComPtr<IDXGIResource> resource;
+  const HRESULT hr =
+      state->duplication->AcquireNextFrame(0, &info, &resource);
+  if (hr == DXGI_ERROR_WAIT_TIMEOUT) return Take::kUnchanged;
+  if (FAILED(hr)) {
+    // The duplication is invalid: a display mode change, a fullscreen
+    // exclusive game, a driver reset, the secure desktop. That is routine,
+    // and Discord's own client reopens and carries on. Exiting here left the
+    // share "live" with nothing behind it, and nobody told. Given up, the
+    // failure OpenDuplication recorded says which step kept refusing.
+    return ReopenDuplication(state) ? Take::kReopened : Take::kEnded;
+  }
+  if (FAILED(resource.As(texture))) {
+    state->duplication->ReleaseFrame();
+    return Take::kUnchanged;
+  }
+  D3D11_TEXTURE2D_DESC desc{};
+  (*texture)->GetDesc(&desc);
+  *visible = RECT{0, 0, static_cast<LONG>(desc.Width),
+                  static_cast<LONG>(desc.Height)};
+  return Take::kFrame;
+}
+
+// Hands the picture TakeFrame answered back to its source.
+void ReleaseTaken(FlucordVideoEncoder* state) {
+  if (state->window) {
+    state->window->ReleaseFrame();
+  } else {
+    state->duplication->ReleaseFrame();
+  }
 }
 
 void CaptureLoop(FlucordVideoEncoder* state) {
@@ -1474,16 +1594,16 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       next_tick_ns = NowNs() + frame_interval_ns;
     }
 
-    // Whatever the desktop shows right now, or a timeout when nothing moved
-    // since the last tick. A desktop only produces a frame when a pixel
-    // changes, but Discord expects a stream regardless: a viewer who joins a
-    // still screen and is sent nothing sees black until somebody wiggles a
-    // window. The last converted picture goes out again instead, and the
-    // encoder's skip frames for it cost almost nothing.
-    DXGI_OUTDUPL_FRAME_INFO info{};
-    ComPtr<IDXGIResource> resource;
-    HRESULT hr = state->duplication->AcquireNextFrame(0, &info, &resource);
-    if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
+    // Whatever the source shows right now, or nothing when nothing moved
+    // since the last tick. A desktop or a window only produces a frame when
+    // a pixel changes, but Discord expects a stream regardless: a viewer who
+    // joins a still screen and is sent nothing sees black until somebody
+    // wiggles a window. The last converted picture goes out again instead,
+    // and the encoder's skip frames for it cost almost nothing.
+    ComPtr<ID3D11Texture2D> texture;
+    RECT visible{};
+    const Take take = TakeFrame(state, &texture, &visible);
+    if (take == Take::kUnchanged) {
       if (have_nv12 && !state->nv12.empty()) {
         const int64_t encode_started = NowNs();
         EncodeNv12(state, state->nv12.data(), nv12_size,
@@ -1493,24 +1613,11 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       }
       continue;
     }
-    if (FAILED(hr)) {
-      // The duplication is invalid: a display mode change, a fullscreen
-      // exclusive game, a driver reset, the secure desktop. That is routine,
-      // and Discord's own client reopens and carries on. Exiting here left
-      // the share "live" with nothing behind it, and nobody told.
-      if (!ReopenDuplication(state)) {
-        // Given up: an empty frame is the callback's word for it, and the
-        // recorded failure says which step kept refusing. Not while closing,
-        // when the loop is leaving anyway; the gate check is for a close
-        // that stopped waiting for this thread and answered without it.
-        if (state->running.load()) {
-          std::lock_guard<std::mutex> guard(state->deliveries.lock);
-          if (!state->deliveries.closed) {
-            state->callback(state->user_data, nullptr, 0, 0, 0);
-          }
-        }
-        break;
-      }
+    if (take == Take::kEnded) {
+      AnnounceCaptureEnd(state);
+      break;
+    }
+    if (take == Take::kReopened) {
       // Whatever was built on the old device is rebuilt on the next frame.
       gpu.Reset();
       gpu_available = true;
@@ -1521,20 +1628,19 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       continue;
     }
 
-    ComPtr<ID3D11Texture2D> texture;
-    if (SUCCEEDED(resource.As(&texture))) {
+    {
       D3D11_TEXTURE2D_DESC desc{};
       texture->GetDesc(&desc);
+      const GpuScaler::Source source{static_cast<int>(desc.Width),
+                                     static_cast<int>(desc.Height), visible,
+                                     state->window != nullptr};
 
       const int64_t convert_started = NowNs();
       bool converted = false;
       if (gpu_available) {
-        if (!gpu.Matches(static_cast<int>(desc.Width),
-                         static_cast<int>(desc.Height))) {
+        if (!gpu.Matches(source)) {
           gpu_available = gpu.Create(state->device.Get(), state->context.Get(),
-                                     static_cast<int>(desc.Width),
-                                     static_cast<int>(desc.Height), width,
-                                     height);
+                                     source, width, height);
           if (!gpu_available) gpu.Reset();
         }
         if (gpu_available) {
@@ -1549,7 +1655,8 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         }
       }
       if (!converted) {
-        // The CPU path: read the desktop back whole and convert it here.
+        // The CPU path: read the picture back whole and convert it here. It
+        // stretches what is visible to the output, window or not.
         if (staging == nullptr || staging_width != static_cast<int>(desc.Width) ||
             staging_height != static_cast<int>(desc.Height)) {
           D3D11_TEXTURE2D_DESC staging_desc = desc;
@@ -1573,8 +1680,8 @@ void CaptureLoop(FlucordVideoEncoder* state) {
                                             &mapped))) {
             ConvertToNv12(state, static_cast<const uint8_t*>(mapped.pData),
                           static_cast<int>(mapped.RowPitch),
-                          static_cast<int>(desc.Width),
-                          static_cast<int>(desc.Height));
+                          static_cast<int>(visible.right),
+                          static_cast<int>(visible.bottom));
             converted = true;
             state->context->Unmap(staging.Get(), 0);
           }
@@ -1591,7 +1698,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         state->timed_frames.fetch_add(1);
       }
     }
-    state->duplication->ReleaseFrame();
+    ReleaseTaken(state);
   }
   if (tick_timer != nullptr) CloseHandle(tick_timer);
 }
@@ -1630,6 +1737,8 @@ void FinishEncoderClose(FlucordVideoEncoder* encoder) {
   }
   encoder->duplication.Reset();
   encoder->reader.Reset();
+  // Stopped on the capture thread already; this only frees what is left.
+  encoder->window.reset();
   encoder->encoder.Reset();
   encoder->codec.Reset();
   encoder->encoder_events.Reset();
@@ -2514,6 +2623,86 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
     CameraLoop(raw);
     raw->worker_exit.Announce();
   });
+  *out_encoder = raw;
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_window_capture_supported(void) {
+  ComApartment com;
+  return flucord_video::WindowCapture::IsSupported() ? 1 : 0;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open_window(const FlucordVideoConfig* config,
+                          int64_t window,
+                          FlucordVideoFrameCallback callback,
+                          void* user_data,
+                          FlucordVideoEncoder** out_encoder) {
+  if (config == nullptr || callback == nullptr || out_encoder == nullptr ||
+      window == 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  if (config->width <= 0 || config->height <= 0 ||
+      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  const HWND handle = reinterpret_cast<HWND>(static_cast<intptr_t>(window));
+  if (!IsWindow(handle)) return FLUCORD_VIDEO_ERROR_NO_WINDOW;
+
+  ComApartment com;
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+  ClearFailure();
+
+  auto state = std::make_unique<FlucordVideoEncoder>();
+  state->config = *config;
+  state->callback = callback;
+  state->user_data = user_data;
+  state->window = std::make_unique<flucord_video::WindowCapture>(handle);
+
+  // The window capture draws BGRA into textures of this device, and it may
+  // sit on any display, so the device is the default adapter's.
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                               D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels,
+                               ARRAYSIZE(levels), D3D11_SDK_VERSION,
+                               &state->device, nullptr, &state->context))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+  if (FAILED(ConfigureEncoder(state.get()))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+
+  // The capture is started on its own thread, and stopped there: its WinRT
+  // objects then live in that thread's apartment from start to end. The
+  // open waits to hear whether it started.
+  state->running.store(true);
+  FlucordVideoEncoder* raw = state.release();
+  std::promise<HRESULT> started;
+  std::future<HRESULT> start_result = started.get_future();
+  raw->worker = std::thread([raw, &started]() {
+    ComApartment worker_com;
+    const HRESULT hr = raw->window->Start(raw->device.Get());
+    started.set_value(hr);
+    if (SUCCEEDED(hr)) CaptureLoop(raw);
+    raw->window->Stop();
+    raw->worker_exit.Announce();
+  });
+  const HRESULT hr = start_result.get();
+  if (FAILED(hr)) {
+    RecordAttemptFailure(kStageWindowCapture, hr);
+    raw->worker.join();
+    // Owned again, and freed before Media Foundation shuts down.
+    state.reset(raw);
+    state.reset();
+    MFShutdown();
+    return IsWindow(handle) ? FLUCORD_VIDEO_ERROR_WINDOW_REFUSED
+                            : FLUCORD_VIDEO_ERROR_NO_WINDOW;
+  }
   *out_encoder = raw;
   return FLUCORD_VIDEO_OK;
 }

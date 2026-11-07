@@ -9,14 +9,22 @@ import 'package:flucord/src/domain/video_encoder.dart';
 /// pauses, where each start was told to deliver) and emits a picture when a
 /// test says so. Failures are opted into per test.
 final class FakeVideoEncoder
-    implements VideoEncoderService, VideoBitrateControl, VideoFrameSinkControl {
+    implements
+        VideoEncoderService,
+        VideoBitrateControl,
+        VideoFrameSinkControl,
+        WindowCaptureSupport {
   FakeVideoEncoder({
     this.supported = true,
     int displays = 1,
     this.cameras = const ['Webcam'],
+    this.windows = false,
   }) : _displays = displays;
 
   final bool supported;
+
+  /// Whether this encoder offers window capture.
+  final bool windows;
   final int _displays;
   List<String> cameras;
 
@@ -88,6 +96,9 @@ final class FakeVideoEncoder
 
   @override
   bool get isSupported => supported;
+
+  @override
+  bool get canCaptureWindows => supported && windows;
 
   @override
   int get displayCount => supported ? _displays : 0;

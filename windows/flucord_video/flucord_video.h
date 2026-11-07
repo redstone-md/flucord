@@ -36,6 +36,11 @@ typedef enum {
   // Kept apart from NO_DISPLAY: a busy camera is a thing the user can fix,
   // and a missing display is not.
   FLUCORD_VIDEO_ERROR_NO_CAMERA = 5,
+  // The window to share is not there any more.
+  FLUCORD_VIDEO_ERROR_NO_WINDOW = 6,
+  // The window is there, and Windows would not capture it. The last error
+  // says why.
+  FLUCORD_VIDEO_ERROR_WINDOW_REFUSED = 7,
 } FlucordVideoStatus;
 
 typedef struct FlucordVideoEncoder FlucordVideoEncoder;
@@ -90,6 +95,24 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
                           void* user_data,
                           FlucordVideoEncoder** out_encoder);
 
+// Opens the same pipeline against one top-level window, by its HWND.
+//
+// The window alone is sent, through Windows.Graphics.Capture, whatever covers
+// it, and it is followed when it moves or changes size. It keeps its shape in
+// the stream, with black bars on the sides it does not fill. A window that
+// closes ends the capture the way a lost display does (an empty frame on the
+// callback), with flucord_video_last_error_stage at 10 and no HRESULT.
+// FLUCORD_VIDEO_ERROR_NO_WINDOW when the window is already gone.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open_window(const FlucordVideoConfig* config,
+                          int64_t window,
+                          FlucordVideoFrameCallback callback,
+                          void* user_data,
+                          FlucordVideoEncoder** out_encoder);
+
+// 1 when this Windows can capture one window (10 version 1903 or later).
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_window_capture_supported(void);
+
 // How many cameras are attached.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_count(void);
 
@@ -142,7 +165,8 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
 // the device the encoder already had, 5 handing a frame to the encoder, 6
 // reading an event from a hardware encoder, 7 joining the capture thread at
 // close, 8 joining the decode thread at close, 9 settling the camera's
-// output type. Zero when nothing has failed.
+// output type, 10 the shared window closing, 11 the window capture refusing
+// or failing. Zero when nothing has failed.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
 
 // Writes the running encoder's own description into [buffer] ("hardware:

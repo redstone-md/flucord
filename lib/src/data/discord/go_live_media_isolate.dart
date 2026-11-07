@@ -10,6 +10,7 @@ import '../../domain/video_encoder.dart';
 import '../../domain/voice_connection.dart';
 import '../dave/native_dave_service.dart';
 import '../video/native_video_bindings.dart';
+import '../video/native_video_encoder_service.dart';
 import 'discord_voice_socket_factory.dart';
 import 'go_live_media_plane.dart';
 import 'go_live_media_worker.dart';
@@ -184,8 +185,7 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
         AppLog.record(level, scope, message, error: error);
       case MediaCaptureLost(:final platformCode, :final platformStage):
         _failures.add(
-          VideoEncoderException(
-            VideoEncoderFailure.captureLost,
+          nativeCaptureEnded(
             platformCode: platformCode,
             platformStage: platformStage,
           ),

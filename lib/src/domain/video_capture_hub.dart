@@ -99,6 +99,12 @@ final class VideoCaptureHub {
   /// How many displays there are to choose from.
   int get displayCount => _encoder.displayCount;
 
+  /// Whether a single window can be shared, not only a whole display.
+  bool get canShareWindows {
+    final Object encoder = _encoder;
+    return encoder is WindowCaptureSupport && encoder.canCaptureWindows;
+  }
+
   /// The cameras attached, by name, in the order the platform lists them.
   List<String> get cameraNames => _encoder.cameraNames;
 
@@ -131,6 +137,10 @@ final class VideoCaptureHub {
   /// Starts capturing a display, delivering to the share destination.
   Future<VideoCaptureLease> startShare({int displayIndex = 0}) =>
       _start(shareSettings.onSource(displayIndex));
+
+  /// Starts capturing one window, delivering to the share destination.
+  Future<VideoCaptureLease> startWindowShare({required int windowHandle}) =>
+      _start(shareSettings.onWindow(windowHandle));
 
   /// Starts capturing a camera.
   Future<VideoCaptureLease> startCamera({int cameraIndex = 0}) =>
@@ -181,7 +191,7 @@ final class VideoCaptureHub {
     final lease = _lease;
     if (lease == null || !lease._isShare) return;
     final running = lease._settings;
-    final wanted = shareSettings.onSource(running.displayIndex);
+    final wanted = shareSettings.onSourceOf(running);
     if (wanted == running) return;
     try {
       if (running.hasShapeOf(wanted)) {
@@ -271,7 +281,7 @@ final class VideoCaptureLease {
   /// else; a restart the encoder refused arrives as an error.
   Stream<VideoEncoderSettings> get settingsChanges => _changes.stream;
 
-  bool get _isShare => _settings.source == VideoCaptureSource.display;
+  bool get _isShare => _settings.source.isShare;
 
   bool get _isLive => identical(_hub._lease, this);
 

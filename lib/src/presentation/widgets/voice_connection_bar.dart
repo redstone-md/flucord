@@ -10,7 +10,7 @@ import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
 import 'go_live_button.dart';
-import 'go_live_display_dialog.dart';
+import 'go_live_source_dialog.dart';
 import 'go_live_scope.dart';
 import 'flucord_button.dart';
 import 'flucord_icon_button.dart';
@@ -225,8 +225,11 @@ class VoiceConnectionBar extends StatelessWidget {
             goLive,
             channelId: channelId,
             guildId: controller.connectedGuildId,
-            pickSource: () =>
-                GoLiveDisplayDialog.pick(context, goLive.displays),
+            pickSource: () => GoLiveSourceDialog.pick(
+              context,
+              sources: goLive.sources,
+              thumbnails: goLive.thumbnails,
+            ),
           ),
         ),
       );
