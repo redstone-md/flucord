@@ -30,9 +30,10 @@ void main() {
   });
 
   test('the pinned list is what the tool writes', () {
+    // A Windows checkout turns the file's line ends into CRLF.
     expect(
       renderSoundAssets(discordSoundFiles),
-      File(soundAssetsPath).readAsStringSync(),
+      File(soundAssetsPath).readAsStringSync().replaceAll('\r\n', '\n'),
     );
   });
 }
