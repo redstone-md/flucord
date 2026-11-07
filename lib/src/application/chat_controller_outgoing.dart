@@ -126,13 +126,16 @@ extension ChatControllerOutgoing on ChatController {
           final shown = fraction.clamp(0.0, _uploadShownAtMost);
           // Whole percents, so a large file does not redraw the app for each
           // chunk.
+          // A transport that sends the files again starts from zero; the bar
+          // holds where it was.
           final percent = (shown * 100).floor();
-          if (percent == lastPercent || _disposed) return;
+          if (percent <= lastPercent || _disposed) return;
           lastPercent = percent;
           final progress = OutgoingSending(uploadProgress: shown);
           if (_outgoing.replace(message.withDelivery(progress))) _notify();
         }
 
+        final repository = _repository;
         try {
           final sent = await _send(
             message,
@@ -140,6 +143,9 @@ extension ChatControllerOutgoing on ChatController {
                 ? null
                 : onUploadProgress,
           );
+          // The account changed while the send was out. The message belongs
+          // to the last account's workspace, not this one.
+          if (!identical(repository, _repository)) return true;
           _outgoing.remove(message.channelId, message.nonce);
           _applySentMessage(sent);
           _error = null;
