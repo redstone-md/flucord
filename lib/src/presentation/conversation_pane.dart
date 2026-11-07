@@ -814,6 +814,10 @@ class ConversationPaneState extends State<ConversationPane> {
                     attachments: attachments,
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
+                    // A pasted picture stays on disk while a retry may
+                    // still send it.
+                    onReleased: () =>
+                        unawaited(ClipboardAttachments.release(attachments)),
                   );
                   final draft = chat.drafts.read(channel.id);
                   if (draft.replyTo?.id == replyToMessageId) {
@@ -1046,14 +1050,6 @@ class ConversationPaneState extends State<ConversationPane> {
     );
   }
 
-  /// A pasted picture stays on disk while its message may still be retried,
-  /// and goes once Discord has it.
-  Future<void> _retrySend(ChatController chat, OutgoingMessage message) async {
-    if (await chat.retrySend(message)) {
-      await ClipboardAttachments.release(message.attachments);
-    }
-  }
-
   /// What the timeline can do to a message in this session. An action the
   /// session cannot carry out is null, so no row offers it.
   MessageActions _messageActions(ChatController chat) {
@@ -1113,11 +1109,8 @@ class ConversationPaneState extends State<ConversationPane> {
       onToggleSuppressEmbeds: chat.canSuppressEmbeds
           ? chat.toggleSuppressEmbeds
           : null,
-      onRetrySend: (message) => unawaited(_retrySend(chat, message)),
-      onDiscardSend: (message) {
-        chat.discardSend(message);
-        unawaited(ClipboardAttachments.release(message.attachments));
-      },
+      onRetrySend: (message) => unawaited(chat.retrySend(message)),
+      onDiscardSend: chat.discardSend,
     );
   }
 

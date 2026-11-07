@@ -786,12 +786,16 @@ final class ChatController extends ChangeNotifier {
   /// Shows the message in the timeline at once, as sending, and sends it after
   /// the channel's earlier sends. Returns whether Discord has it. A failed
   /// message stays in [outgoingIn], and [error] says why.
+  ///
+  /// [onReleased] runs once [attachments] are no longer needed: the message
+  /// left the queue, or could not be queued at all.
   Future<bool> sendMessage({
     required String channelId,
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    void Function()? onReleased,
   }) {
     // A refusal below must not be read as the failure of some earlier action.
     _error = null;
@@ -799,6 +803,7 @@ final class ChatController extends ChangeNotifier {
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
     if (workspace == null || (content.isEmpty && attachments.isEmpty)) {
+      onReleased?.call();
       return Future.value(false);
     }
     final answered = replyToMessageId == null
@@ -830,6 +835,7 @@ final class ChatController extends ChangeNotifier {
         replyToMessageId: replyToMessageId,
         attachments: attachments,
       ),
+      onLeave: onReleased,
     );
   }
 

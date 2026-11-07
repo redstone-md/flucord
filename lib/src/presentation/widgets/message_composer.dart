@@ -593,8 +593,8 @@ class MessageComposerState extends State<MessageComposer>
     });
     _focusNode.requestFocus();
     // A failed message stays in the timeline with Retry, so the box does not
-    // take it back, and a pasted picture stays on disk for the retry.
-    if (await send) await ClipboardAttachments.release(content.attachments);
+    // take it back.
+    await send;
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is

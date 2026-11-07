@@ -154,6 +154,40 @@ void main() {
       expect(File(keptAt).existsSync(), isFalse);
     });
 
+    testSession('a failed picture stays on disk until it is deleted', (
+      tester,
+      session,
+    ) async {
+      session.transport.on(
+        'POST',
+        _sendPath,
+        (_) => jsonResponse({
+          'code': 50013,
+          'message': 'Missing Permissions',
+        }, statusCode: 403),
+      );
+      await session.openChannel(SessionHarness.channelId);
+      _clipboardHolds(tester, image: _onePixelBmp);
+      await _pressPaste(tester, session);
+      await _waitFor(tester, session, find.text('image.png'));
+      final keptAt = tester
+          .widget<PendingAttachmentStrip>(find.byType(PendingAttachmentStrip))
+          .attachments
+          .single
+          .path;
+
+      await tester.tap(find.byKey(const ValueKey('send-message')));
+      await session.settle();
+      expect(find.byKey(const ValueKey('outgoing-discard')), findsOneWidget);
+      expect(File(keptAt).existsSync(), isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('outgoing-discard')));
+      await session.settle();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+
+      expect(File(keptAt).existsSync(), isFalse);
+    });
+
     testSession('a picture that never went out is gone after sign-out', (
       tester,
       session,
